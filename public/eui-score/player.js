@@ -138,6 +138,8 @@ export async function play(midi, { at = 0, onStop, onProgress } = {}) {
   seq.eventHandler.addEvent("songEnded", "eui-score", () => {
     if (current === token) stop();
   });
+  if (output) seq.connectMIDIOutput(output);
+  else seq.connectMIDIOutput();
   if (at > 0) seq.currentTime = at;
   seq.play();
   token.stop = () => {
@@ -158,10 +160,74 @@ export async function play(midi, { at = 0, onStop, onProgress } = {}) {
     get playing() {
       return current === token;
     },
+    get paused() {
+      return seq.paused;
+    },
+    pause() {
+      if (current !== token || seq.paused) return;
+      seq.pause();
+      synth.stopAll();
+    },
+    resume() {
+      if (current === token && seq.paused) seq.play();
+    },
+    /** Speed, 1 as written: the time above stays the piece's own. */
+    get rate() {
+      return seq.playbackRate;
+    },
+    set rate(value) {
+      seq.playbackRate = value;
+    },
     stop() {
       if (current === token) stop();
     },
   };
+}
+
+// ---- Around the piece ---------------------------------------------------------------------
+
+// The metronome's clicks: wood blocks on a drum channel of their own, so
+// muting the drums leaves the beat.
+const CLICK = 14;
+
+/** The audio clock, in seconds: what `click` is scheduled against. */
+export function audioTime() {
+  return context?.currentTime ?? 0;
+}
+
+/** A metronome click at audio time `when`; `accent` for a bar's first beat. Silent before the sounds have loaded. */
+export function click(when, accent = false) {
+  if (!engine?.done) return;
+  engine.promise.then(({ synth }) => {
+    synth.midiChannels[CLICK]?.setDrums(true);
+    const key = accent ? 76 : 77;
+    synth.noteOn(CLICK, key, accent ? 120 : 90, { time: when });
+    synth.noteOff(CLICK, key, { time: when + 0.08 });
+  });
+}
+
+/** Mutes or sounds again MIDI channel `channel` of the piece. */
+export function mute(channel, muted) {
+  if (!engine?.done) return;
+  engine.promise.then(({ synth }) => synth.midiChannels[channel]?.setSystemParameter("isMuted", muted));
+}
+
+// Where the piece is sent: this browser's synthesizer, or a MIDI device
+// (GarageBand, Logic…, through the IAC bus on a Mac).
+let output = null;
+let access = null;
+
+/** The MIDI outputs the browser may use, asking the person the first time: [{ id, name }]. */
+export async function midiOutputs() {
+  if (!navigator.requestMIDIAccess) throw new Error("This browser sends no MIDI: Chrome, Edge and Firefox do, Safari does not.");
+  access ??= await navigator.requestMIDIAccess();
+  return [...access.outputs.values()].map((port) => ({ id: port.id, name: port.name }));
+}
+
+/** Plays to MIDI output `id` from the next Play on, or to this browser with null. */
+export function setOutput(id) {
+  output = id && access ? access.outputs.get(id) ?? null : null;
+  return output;
 }
 
 // The notes heard while writing sound on a channel of their own, so the

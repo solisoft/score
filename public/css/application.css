@@ -2511,6 +2511,39 @@
   .studio-status.studio-error {
     color: var(--accent-ink);
   }
+  .tool-staves {
+    display: grid;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .tool-staff {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .tool-staff span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tool-staff .tool {
+    min-width: 34px;
+    padding: 5px 7px;
+    font-size: 12px;
+  }
+  .tool-staff .tool.on {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
+  .tool-staff .tool[data-act="solo"].on {
+    background: #c98a1b;
+    border-color: #c98a1b;
+    color: #fff;
+  }
   .studio-link {
     width: min(100%, 520px);
     font: 12.5px/1.4 var(--font-mono);

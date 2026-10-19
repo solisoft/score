@@ -19,7 +19,8 @@
       <div class="studio-menu-group">
         <button type="button" class="studio-menu" data-act="undo" title="Undo (Ctrl+Z)">↶ Undo</button>
         <button type="button" class="studio-menu" data-act="redo" title="Redo (Ctrl+Y)">↷ Redo</button>
-        <button type="button" class="studio-menu studio-play" data-act="play" title="Play from the selection, or from the start (Space)">▶ Play</button>
+        <button type="button" class="studio-menu studio-play" data-act="play" title="Play from the selection, or from the start; pause (Space)">▶ Play</button>
+        <button type="button" class="studio-menu" data-act="stop" title="Stop, back to the start" hidden>■ Stop</button>
         <span class="studio-zoom">
           <button type="button" class="studio-menu" data-act="zoom-out" title="Smaller" aria-label="Zoom out">−</button>
           <span data-zoom-label>100 %</span>
@@ -39,6 +40,26 @@
           <button type="button" class="tool tool-wide" data-act="mode-select" title="Select and change notes (Esc)">Select</button>
           <button type="button" class="tool tool-wide" data-act="mode-input" title="Write notes at the cursor (N)">✎ Note input</button>
         </div>
+      </details>
+
+      <details class="tool-section" data-section="playback" open>
+        <summary><h3>Playback</h3></summary>
+        <label class="tool-field">Speed
+          <select data-play="rate">
+            <option value="0.5">50 %</option><option value="0.75">75 %</option><option value="0.9">90 %</option>
+            <option value="1" selected>100 %</option><option value="1.1">110 %</option><option value="1.25">125 %</option>
+            <option value="1.5">150 %</option>
+          </select>
+        </label>
+        <label class="tool-check"><input type="checkbox" data-play="loop"> Loop the selected bars</label>
+        <label class="tool-check"><input type="checkbox" data-play="metronome"> Metronome</label>
+        <label class="tool-check"><input type="checkbox" data-play="count-in"> Count in one bar</label>
+        <label class="tool-field">Sound to
+          <select data-play="output" title="This browser's sounds, or a MIDI device: GarageBand, Logic…">
+            <option value="">this browser</option><option value="find">MIDI devices…</option>
+          </select>
+        </label>
+        <div class="tool-staves" data-play="staves" aria-label="Mute or solo a staff"></div>
       </details>
 
       <details class="tool-section" data-section="duration" open>
@@ -323,7 +344,7 @@
             <dt>Delete</dt><dd>make rests</dd>
             <dt>Ctrl+C V X</dt><dd>copy, paste, cut</dd>
             <dt>Ctrl+Z / Y</dt><dd>undo / redo</dd>
-            <dt>Space</dt><dd>play / stop</dd>
+            <dt>Space</dt><dd>play / pause</dd>
             <dt>?</dt><dd>this sheet</dd>
           </dl>
   </dialog>

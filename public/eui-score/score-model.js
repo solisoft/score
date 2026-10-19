@@ -1654,6 +1654,22 @@ export function passAt(passes, sec) {
   return passes[k] ?? null;
 }
 
+/** The metronome's beats, every repeat played out: [{ sec, down }], `down` on each bar's first. */
+export function beats(score, passes) {
+  const out = [];
+  for (const p of passes) {
+    const [num, den] = timeAt(score, p.bar);
+    const beat = ((WHOLE / den) / M_TICKS(p.base)) * (60 / p.bpm);
+    for (let k = 0; k < num; k++) out.push({ sec: p.start + k * beat, down: k === 0 });
+  }
+  return out;
+}
+
+/** Each staff and the MIDI channel eui-score gives it: [{ lane, name, channel }], as it numbers them. */
+export function channels(score) {
+  return staffLanes(score).map((lane, k) => ({ lane, name: score.staves[lane].name || `Staff ${k + 1}`, channel: k < 9 ? k : Math.min(15, k + 1) }));
+}
+
 /** A lane's bars in the order they sound; a jump back says again the metre and the speed it returns to. */
 function playedOut(score, s, bars) {
   const first = staffNumber(score, s) === 0;

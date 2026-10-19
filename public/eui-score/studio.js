@@ -417,6 +417,15 @@ export function startStudio(root, options = {}) {
       case "undo": return undo();
       case "redo": return redo();
       case "play": return togglePlay();
+      case "stop": return stopPlay();
+      case "mute": case "solo": {
+        const lane = Number(data.lane);
+        const set = st.mix[name];
+        if (set.has(lane)) set.delete(lane);
+        else set.add(lane);
+        applyMix();
+        return renderMix();
+      }
       case "keys": {
         const sheetOfKeys = root.querySelector("[data-keys]");
         if (sheetOfKeys.open) sheetOfKeys.close();
@@ -898,7 +907,10 @@ export function startStudio(root, options = {}) {
     }
     root.querySelector('[data-act="undo"]').disabled = !st.past.length;
     root.querySelector('[data-act="redo"]').disabled = !st.future.length;
-    root.querySelector('[data-act="play"]').textContent = st.playing ? "■ Stop" : "▶ Play";
+    const handle = st.playing?.handle;
+    root.querySelector('[data-act="play"]').textContent = !st.playing ? "▶ Play" : !handle ? "■ Stop" : handle.paused ? "▶ Play" : "❚❚ Pause";
+    root.querySelector('[data-act="stop"]').hidden = !handle;
+    renderMix();
     root.querySelector("[data-zoom-label]").textContent = `${Math.round(st.zoom * 100)} %`;
     for (const tool of root.querySelectorAll(".studio-toolbox .tool, .studio-toolbox input, .studio-toolbox select")) tool.disabled = !st.score;
     fillFields();
@@ -1429,15 +1441,49 @@ export function startStudio(root, options = {}) {
   // the score with every repeat played out, and `passes` says when each bar
   // sounds on each pass: the notes light up on the second time through too.
 
+  // The Playback section's settings, kept from one visit to the next.
+  const PLAYBACK = "eui-score-studio-playback";
+  const playOption = (name) => root.querySelector(`[data-play="${name}"]`);
+  try {
+    const kept = JSON.parse(localStorage.getItem(PLAYBACK) || "{}");
+    if (kept.rate) playOption("rate").value = kept.rate;
+    playOption("metronome").checked = Boolean(kept.metronome);
+    playOption("count-in").checked = Boolean(kept.countIn);
+  } catch (error) {}
+  root.querySelector('[data-section="playback"]')?.addEventListener("change", (event) => {
+    if (event.target.dataset.play === "output") return chooseOutput(event.target);
+    if (event.target.dataset.play === "rate" && st.playing?.handle) st.playing.handle.rate = rate();
+    try {
+      localStorage.setItem(PLAYBACK, JSON.stringify({ rate: playOption("rate").value, metronome: playOption("metronome").checked, countIn: playOption("count-in").checked }));
+    } catch (error) {}
+  });
+  const rate = () => Number(playOption("rate")?.value) || 1;
+
+  /** Play; pause; play on. A second press while the sounds load gives up. */
   async function togglePlay() {
-    if (st.playing) return stopPlay();
+    const playing = st.playing;
+    if (playing?.handle) {
+      if (playing.handle.paused) {
+        playing.handle.resume();
+        playing.next = null;
+        say("Playing — Space to pause");
+      } else {
+        playing.handle.pause();
+        say("Paused — Space to play on, Stop to go back to the start");
+      }
+      return showState();
+    }
+    if (playing) return stopPlay();
     // Inside the click, before anything waits: a browser starts sound only
     // from a gesture, and a gesture does not outlive a download.
     P.unlock();
     const passes = st.score ? M.playback(st.score) : [];
-    // From the selection's bar (its first pass), or from the start.
+    // From the selection's bar (its first pass), or from the start; looped,
+    // the selected bars over and over.
+    const loop = playOption("loop")?.checked && st.score ? loopOf(passes) : null;
+    if (playOption("loop")?.checked && !loop) say("Select the bars to loop: playing from the start.");
     const from = changeBar();
-    const at = from == null ? 0 : (passes.find((p) => p.bar === from)?.start ?? 0);
+    const at = loop ? loop.start : from == null ? 0 : (passes.find((p) => p.bar === from)?.start ?? 0);
     let bytes;
     try {
       // 100 a quarter when the source sets no tempo, as the model counts.
@@ -1445,31 +1491,81 @@ export function startStudio(root, options = {}) {
     } catch (error) {
       return say(error.message ?? String(error), true);
     }
-    const playing = { handle: null, passes, times: noteTimes(passes), now: [], lit: -1, frame: 0, timer: 0 };
-    st.playing = playing;
+    const state = { handle: null, passes, times: noteTimes(passes), beats: st.score ? M.beats(st.score, passes) : [], loop, next: null, now: [], lit: -1, frame: 0, timer: 0, ticker: 0 };
+    st.playing = state;
     showState();
-    if (!P.isReady()) say("Loading the sounds…");
-    let handle;
+    const progress = (f) => st.playing === state && say(`Loading the sounds… ${Math.round(100 * f)} % (38 MB, once)`);
     try {
-      handle = await P.play(bytes, {
-        at,
-        onStop: () => st.playing === playing && stopPlay(),
-        onProgress: (f) => st.playing === playing && say(`Loading the sounds… ${Math.round(100 * f)} % (38 MB, once)`),
-      });
+      if (!P.isReady()) say("Loading the sounds…");
+      await P.prepare(progress);
+      if (st.playing !== state) return;
+      if (playOption("count-in")?.checked && passes.length) await countIn(state, at);
+      if (st.playing !== state) return;
+      state.handle = await P.play(bytes, { at, onStop: () => st.playing === state && stopPlay() });
     } catch (error) {
-      if (st.playing === playing) stopPlay();
+      if (st.playing === state) stopPlay();
       return say("The sounds could not be loaded.", true);
     }
-    if (!handle || st.playing !== playing) return;
-    playing.handle = handle;
-    say("Playing — Space to stop");
-    playing.timer = setInterval(showProgress, 200);
+    if (!state.handle || st.playing !== state) return;
+    state.handle.rate = rate();
+    applyMix();
+    say(loop ? "Looping the selected bars — Space to pause" : "Playing — Space to pause");
+    showState();
+    state.timer = setInterval(showProgress, 200);
+    state.ticker = setInterval(tick, 25);
     const follow = () => {
-      if (st.playing !== playing) return;
-      light(handle.time);
-      playing.frame = requestAnimationFrame(follow);
+      if (st.playing !== state) return;
+      light(state.handle.time);
+      state.frame = requestAnimationFrame(follow);
     };
     follow();
+  }
+
+  /** The selected bars as a loop: from their first pass to the end of that pass through the last; null with none selected. */
+  function loopOf(passes) {
+    let bars;
+    try {
+      bars = selectedBars();
+    } catch (error) {
+      return null;
+    }
+    const first = passes.findIndex((p) => p.bar === bars[0]);
+    if (first < 0) return null;
+    const last = passes.findIndex((p, k) => k >= first && p.bar === bars[1]);
+    return last < 0 ? null : { start: passes[first].start, end: passes[last].end };
+  }
+
+  /** One bar of clicks, at the speed of the bar the music starts in; resolves when it is over. */
+  function countIn(state, at) {
+    const pass = M.passAt(state.passes, at);
+    const [num, den] = M.timeAt(st.score, pass.bar);
+    const beat = ((M.WHOLE / den) / (M.WHOLE / pass.base)) * (60 / pass.bpm) / rate();
+    const t0 = P.audioTime() + 0.05;
+    for (let k = 0; k < num; k++) P.click(t0 + k * beat, k === 0);
+    say("One bar to come in…");
+    return new Promise((resolve) => setTimeout(resolve, (num * beat + 0.05) * 1000));
+  }
+
+  /** Every 25 ms: the loop's jump back, and the metronome's clicks due in the next 120 ms, each once. */
+  function tick() {
+    const state = st.playing;
+    const handle = state?.handle;
+    if (!handle || handle.paused) return;
+    const now = handle.time;
+    if (state.loop && now >= state.loop.end - 0.02) {
+      handle.time = state.loop.start;
+      state.next = null;
+      return;
+    }
+    if (!playOption("metronome")?.checked || !state.beats.length) return;
+    const beats = state.beats;
+    // After a jump — a seek, the loop — the count starts again where the music is.
+    const lost = state.next == null || (state.next > 0 && beats[state.next - 1].sec > now + 0.3) || (beats[state.next] && beats[state.next].sec < now - 0.3);
+    if (lost) state.next = Math.max(0, beats.findIndex((b) => b.sec >= now - 0.01));
+    while (state.next < beats.length && beats[state.next].sec < now + 0.12) {
+      const b = beats[state.next++];
+      if (b.sec >= now - 0.01) P.click(P.audioTime() + (b.sec - now) / handle.rate, b.down);
+    }
   }
 
   /** Lights the notes that started last, at `sec`; draws only when they change. */
@@ -1489,6 +1585,7 @@ export function startStudio(root, options = {}) {
     st.playing = null;
     if (playing) {
       clearInterval(playing.timer);
+      clearInterval(playing.ticker);
       cancelAnimationFrame(playing.frame);
       if (playing.handle) playing.handle.stop();
       else P.stop(); // still loading: it must not start after all
@@ -1614,6 +1711,74 @@ export function startStudio(root, options = {}) {
     const frame = sheet.getBoundingClientRect();
     const top = Math.max(frame.top, 120);
     if (box.top < top || box.bottom > Math.min(frame.bottom, innerHeight)) lit.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+
+  // ---- Mute, solo, and where the sound goes ----------------------------------------
+
+  st.mix = { mute: new Set(), solo: new Set() };
+
+  /** Each staff's channel muted or not: muted, or not soloed while another is. */
+  function applyMix() {
+    if (!st.score) return;
+    for (const { lane, channel } of M.channels(st.score)) {
+      P.mute(channel, st.mix.mute.has(lane) || (st.mix.solo.size > 0 && !st.mix.solo.has(lane)));
+    }
+  }
+
+  /** The Playback section's staves, a Mute and a Solo for each. */
+  function renderMix() {
+    const box = playOption("staves");
+    if (!box) return;
+    const rows = st.score ? M.channels(st.score) : [];
+    const key = JSON.stringify([rows.map((r) => r.name), [...st.mix.mute], [...st.mix.solo]]);
+    if (box.dataset.key === key) return;
+    box.dataset.key = key;
+    box.innerHTML = "";
+    if (rows.length < 2) return;
+    for (const { lane, name } of rows) {
+      const row = Object.assign(document.createElement("div"), { className: "tool-staff" });
+      row.append(Object.assign(document.createElement("span"), { textContent: name, title: name }));
+      for (const [act, letter, words] of [["mute", "M", "Mute"], ["solo", "S", "Solo"]]) {
+        const on = st.mix[act].has(lane);
+        const button = Object.assign(document.createElement("button"), { type: "button", className: `tool${on ? " on" : ""}`, textContent: letter, title: `${words} ${name}` });
+        button.dataset.act = act;
+        button.dataset.lane = String(lane);
+        button.setAttribute("aria-pressed", String(on));
+        button.setAttribute("aria-label", `${words} ${name}`);
+        row.append(button);
+      }
+      box.append(row);
+    }
+  }
+
+  /** The "Sound to" menu: this browser, or a MIDI device, found when asked for. */
+  async function chooseOutput(select) {
+    if (select.value === "") {
+      P.setOutput(null);
+      return say("The sound plays in this browser.");
+    }
+    if (select.value !== "find") {
+      P.setOutput(select.value);
+      return say(`From the next Play on, the music goes to ${select.selectedOptions[0].textContent}.`);
+    }
+    let ports = [];
+    try {
+      ports = await P.midiOutputs();
+    } catch (error) {
+      select.value = "";
+      return say(error.message ?? "The browser gave no access to MIDI devices.", true);
+    }
+    select.innerHTML = "";
+    select.append(new Option("this browser", ""));
+    for (const port of ports) select.append(new Option(port.name, port.id));
+    select.append(new Option("look again…", "find"));
+    if (!ports.length) {
+      select.value = "";
+      return say("No MIDI device found. On a Mac, open Audio MIDI Setup → MIDI Studio, and set the IAC Driver online; then look again.", true);
+    }
+    select.value = ports[0].id;
+    P.setOutput(ports[0].id);
+    say(`From the next Play on, the music goes to ${ports[0].name}. Open GarageBand (or Logic) on an instrument track to hear it.`);
   }
 
   /** When notes start, in seconds, on every pass: [{ sec, items }], in order. */

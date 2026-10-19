@@ -421,6 +421,33 @@ test("playing: every repeat played out, each pass with its ending, timed bar by 
   assert.equal(M.passAt([], 1), null);
 });
 
+test("playing: the metronome's beats follow the metre, the speed and the repeats", () => {
+  const s = M.newScore();
+  M.setTimeAt(s, 2, 3, 4);
+  M.toggleRepeat(s, 0, 0);
+  const passes = M.playback(s);
+  assert.deepEqual(M.playOrder(s), [0, 0, 1, 2, 3, 4]);
+  const b = M.beats(s, passes);
+  // Bar 0 twice and bar 1 in 4/4, bars 2 to 4 in 3/4: 21 beats, 0.6 s each.
+  assert.equal(b.length, 21);
+  assert.deepEqual(b.filter((x) => x.down).map((x) => +x.sec.toFixed(6)), [0, 2.4, 4.8, 7.2, 9, 10.8]);
+  assert.ok(Math.abs(b[20].sec - 12) < 1e-9);
+});
+
+test("playing: each staff's MIDI channel, as eui-score numbers them", () => {
+  const s = M.newScore();
+  for (let k = 0; k < 10; k++) M.addStaff(s, { name: k === 0 ? "Flute" : "" });
+  const ch = M.channels(s);
+  assert.equal(ch.length, 11);
+  assert.deepEqual(ch.map((c) => c.channel), [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11], "the tenth channel is the drums'");
+  assert.equal(ch[1].name, "Flute");
+  assert.equal(ch[0].name, "Staff 1");
+  // Read back from the MIDI itself: the eleventh staff plays on channel 11.
+  const bytes = midi(M.toLilyPond(s).source, 100, 4, 0);
+  assert.ok(bytes.some((x, i) => x === 0xcb && i > 0), "a program change on channel 11");
+  assert.ok(!bytes.some((x, i) => x === 0xc9 && bytes[i - 1] === 0), "none on the drums' channel");
+});
+
 test("playing: a jump back says again the speed and metre it returns to", () => {
   const s = M.newScore();
   M.ensureLength(s, 4 * 4 * q);
