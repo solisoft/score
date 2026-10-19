@@ -126,7 +126,8 @@ export function startStudio(root, options = {}) {
     st.past.push(before);
     if (st.past.length > 300) st.past.shift();
     if (!keepFuture) st.future = [];
-    say("");
+    if (status.dataset.fresh !== "1") say("");
+    delete status.dataset.fresh;
     saveDraft();
     draw();
     return true;
@@ -393,6 +394,16 @@ export function startStudio(root, options = {}) {
       });
       case "lyrics": return openWords("lyric");
       case "chord": return openWords("chord");
+      case "repeat": return edit((score) => {
+        const [a, b] = selectedBars();
+        M.toggleRepeat(score, a, b);
+        say(`Bars ${a + 1}–${b + 1}${(score.repeats ?? []).some((r) => r.from === a && r.to === b) ? " repeated" : ": repeat taken away"}`);
+      });
+      case "endings": return edit((score) => {
+        const [a, b] = selectedBars();
+        M.addEndings(score, a, b);
+      });
+      case "unrepeat": return edit((score) => M.removeRepeat(score, selectedBars()[0]));
       case "add-bar": return edit((score) => M.addBars(score, 1));
       case "remove-bar": return edit((score) => M.removeLastBar(score));
       case "add-staff": return edit((score) => {
@@ -411,6 +422,18 @@ export function startStudio(root, options = {}) {
       case "next": case "previous": return step(name === "next" ? 1 : -1, data.extend);
       case "head-up": case "head-down": return chordHead(name === "head-up" ? 1 : -1);
     }
+  }
+
+  /** The bars the selection (or the input cursor) spans, first and last. */
+  function selectedBars() {
+    if (st.input.on) {
+      const b = M.barAt(st.score, st.input.t);
+      return [b, b];
+    }
+    if (!st.sel) throw new Error("Select notes in the bars — click the first, Shift+click the last");
+    const a = M.barAt(st.score, Math.min(st.sel.t0, st.sel.t1));
+    const b = M.barAt(st.score, Math.max(st.sel.t0, st.sel.t1));
+    return [a, b];
   }
 
   function duration(base, dots) {
@@ -723,6 +746,9 @@ export function startStudio(root, options = {}) {
   }
 
   function say(message, error = false) {
+    // Said during an edit: it outlives the edit's own clearing.
+    status.dataset.fresh = "1";
+    queueMicrotask(() => delete status.dataset.fresh);
     status.textContent = message;
     status.classList.toggle("studio-error", error);
     return false;

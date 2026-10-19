@@ -320,6 +320,7 @@
   .tool-wide { flex: 1; font-size: 13px; }
   .tool-dyn { font: italic 700 14px/1 Georgia, serif; min-width: 36px; }
   .studio-input .tool[data-act="mode-input"] { background: #2563c9; border-color: #2563c9; }
+  .tool-hint { font-size: 12px; line-height: 1.4; color: var(--muted); margin: 4px 0 0; }
   .tool-check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-soft); margin-top: 6px; }
   .tool-field { display: grid; grid-template-columns: 78px minmax(0, 1fr); align-items: center; gap: 8px; font-size: 13px; color: var(--ink-soft); margin: 5px 0; }
   .tool-field input, .tool-field select, .tool-select {

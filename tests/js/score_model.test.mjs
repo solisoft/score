@@ -216,6 +216,60 @@ test("staves, groups and bars", () => {
   engrave(s);
 });
 
+test("repeats: written around their bars, with their endings, and read back", () => {
+  const s = M.newScore();
+  for (const [k, d] of [7, 9, 11, 12].entries()) M.write(s, 0, k * 4 * q, 4 * q, { rest: false, pitches: [{ d, alter: 0 }] });
+  M.toggleRepeat(s, 0, 1);
+  assert.match(engrave(s).source, /\\repeat volta 2 \{ c'1 \| e'1 \} \| g'1 \| a'1/);
+  assert.deepEqual(reread(s).repeats, [{ from: 0, to: 1, endings: [] }]);
+
+  // The repeat's last bar becomes the first ending; an empty second follows.
+  M.addEndings(s, 1, 1);
+  assert.deepEqual(s.repeats, [{ from: 0, to: 0, endings: [1, 1] }]);
+  assert.equal(M.barsOf(s), 5);
+  const { source } = engrave(s);
+  assert.match(source, /\\repeat volta 2 \{ c'1 \} \\alternative \{ \{ e'1 \} \{ r1 \} \} \| g'1/);
+  assert.deepEqual(reread(s).repeats, s.repeats);
+  assert.deepEqual(shape(reread(s)), shape(s), "the notes read back in place");
+
+  // A third ending, written into like any bar.
+  M.addEndings(s, 0, 0);
+  assert.deepEqual(s.repeats[0].endings, [1, 1, 1]);
+  M.write(s, 0, 2 * 4 * q, 4 * q, { rest: false, pitches: [{ d: 8, alter: 0 }] });
+  assert.match(engrave(s).source, /\\repeat volta 3 \{ c'1 \} \\alternative \{ \{ e'1 \} \{ d'1 \} \{ r1 \} \}/);
+  assert.deepEqual(reread(s).repeats, s.repeats);
+
+  M.removeRepeat(s, 0);
+  assert.deepEqual(s.repeats, []);
+  engrave(s);
+});
+
+test("repeats refuse what does not fit, and follow the bars around them", () => {
+  const s = M.newScore();
+  M.toggleRepeat(s, 1, 2);
+  assert.throws(() => M.toggleRepeat(s, 2, 3), /already in a repeat/);
+  assert.throws(() => M.addEndings(s, 3, 3), /select the bars of a repeat/);
+  assert.throws(() => M.addEndings(s, 1, 1), /up to its end/);
+  M.insertBars(s, 0, 1);
+  assert.deepEqual(s.repeats, [{ from: 2, to: 3, endings: [] }], "a bar before moves it along");
+  M.toggleRepeat(s, 2, 3);
+  M.toggleRepeat(s, 3, 4);
+  assert.throws(() => M.removeLastBar(s), /in a repeat/);
+  M.setTime(s, 2, 4);
+  assert.deepEqual(s.repeats, [{ from: 6, to: 9, endings: [] }], "in 2/4, twice the bars");
+  engrave(s);
+  M.setTime(s, 4, 4);
+  assert.deepEqual(s.repeats, [{ from: 3, to: 4, endings: [] }]);
+  M.setTime(s, 2, 4);
+  assert.throws(() => M.setTime(s, 3, 4), /inside bars/);
+});
+
+test("bar-line repeat signs read as a repeat", () => {
+  const back = M.fromParsed(JSON.parse(score_json(String.raw`{ \time 2/4 c'2 \bar ".|:" d'2 | e'2 \bar ":|." g'2 \bar "|." }`)));
+  assert.ok(back.score, back.unsupported?.join());
+  assert.deepEqual(back.score.repeats, [{ from: 1, to: 2, endings: [] }]);
+});
+
 test("every gallery piece reads into the model, or says what it uses", () => {
   const root = new URL("../../scores/", import.meta.url);
   let read = 0;

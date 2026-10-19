@@ -16,8 +16,11 @@ class ScoreAssets
     text = parts.map do |name|
       File.read("public/eui-score/#{name}") rescue name
     end.join("\n")
-    ScoreAssets.cached = Crypto.sha256(text).substring(0, 12)
-    ScoreAssets.cached
+    digest = Crypto.sha256(text).substring(0, 12)
+    # Kept for the process in production, where a deploy restarts it; read
+    # again each time elsewhere, where the files change under a running server.
+    ScoreAssets.cached = digest if getenv("APP_ENV") == "production"
+    digest
   end
 
   # A module at a stable address that loads the current version: what other

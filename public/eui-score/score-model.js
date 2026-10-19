@@ -169,7 +169,7 @@ export function emptyStaff(score, fields = {}) {
 
 /** A new score: one staff of four empty bars. */
 export function newScore(fields = {}) {
-  const score = { header: { title: "Untitled", composer: "" }, key: 0, time: [4, 4], tempo: null, group: "none", staves: [], ...fields };
+  const score = { header: { title: "Untitled", composer: "" }, key: 0, time: [4, 4], tempo: null, group: "none", staves: [], repeats: [], ...fields };
   score.staves.push({ name: "", short: "", instrument: "acoustic grand", clef: "treble", events: rests(score, 0, barLength(score) * 4) });
   return score;
 }
@@ -550,6 +550,16 @@ export function setKey(score, fifths) {
 /** A new time signature: every staff laid out again in its bars. */
 export function setTime(score, num, den) {
   const old = score.time;
+  const oldBar = barLength(score);
+  const newBar = (WHOLE * num) / den;
+  const moved = (score.repeats ?? []).map((r) => {
+    const at = (bars) => (bars * oldBar) / newBar;
+    const from = at(r.from);
+    const to = at(r.to + 1) - 1;
+    const endings = r.endings.map((n) => at(n));
+    if (![from, to, ...endings].every(Number.isInteger)) throw new Error("the repeats would fall inside bars: remove them before changing the metre");
+    return { from, to, endings };
+  });
   const laid = score.staves.map((staff) => {
     const at = starts(staff);
     return staff.events.map((ev, k) => ({ ev, t: at[k] }));
@@ -570,6 +580,7 @@ export function setTime(score, num, den) {
     }
   }
   ensureLength(score, Math.max(...score.staves.map(lengthOf)));
+  score.repeats = moved;
 }
 
 export function addStaff(score, fields = {}) {
@@ -597,6 +608,7 @@ export function removeLastBar(score) {
     const at = starts(staff);
     if (staff.events.some((ev, k) => at[k] >= from && !ev.rest)) throw new Error("the last bar is not empty");
   }
+  if (repeatAt(score, bars - 1)) throw new Error("the last bar is in a repeat: remove the repeat first");
   for (const staff of score.staves) {
     const at = starts(staff);
     staff.events = staff.events.filter((_, k) => at[k] < from);
@@ -667,35 +679,13 @@ function lyricText(staff) {
  * its staff and event.
  */
 export function toLilyPond(score) {
-  const bar = barLength(score);
   const items = [];
   const header = Object.entries(score.header).filter(([, v]) => v).map(([k, v]) => `${k} = ${quote(v)}`).join(" ");
+  const repeats = score.repeats ?? [];
   const staves = score.staves.map((staff, s) => {
-    const parts = [];
-    let t = 0;
-    let open = null;
-    staff.events.forEach((ev, i) => {
-      items.push({ staff: s, index: i });
-      const tid = ev.tuplet?.id ?? null;
-      if (open !== null && tid !== open) {
-        parts.push("}");
-        open = null;
-      }
-      if (tid !== null && open === null) {
-        parts.push(`\\tuplet ${ev.tuplet.n}/${ev.tuplet.d} {`);
-        open = tid;
-      }
-      parts.push(eventText(ev));
-      t += ticksOf(ev);
-      const last = i === staff.events.length - 1;
-      const atBar = Math.abs(t / bar - Math.round(t / bar)) < 1e-9;
-      if (atBar && open !== null && (last || staff.events[i + 1]?.tuplet?.id !== open)) {
-        parts.push("}");
-        open = null;
-      }
-      if (atBar && !last && open === null) parts.push(Math.round(t / bar) % 4 === 0 ? "|\n   " : "|");
-    });
-    if (open !== null) parts.push("}");
+    const bars = staffBars(score, staff, s, items);
+    const music = withRepeats(bars, repeats);
+    const lastRepeat = repeats.find((r) => r.endings.length === 0 && r.to === bars.length - 1);
     const name = staff.name ? `instrumentName = ${quote(staff.name)} ` : "";
     const short = staff.short ? `shortInstrumentName = ${quote(staff.short)} ` : "";
     const midi = staff.instrument ? `midiInstrument = ${quote(staff.instrument)} ` : "";
@@ -704,7 +694,9 @@ export function toLilyPond(score) {
       : "";
     const clef = CLEFS.includes(staff.clef) ? (staff.clef.includes("_") ? `"${staff.clef}"` : staff.clef) : "treble";
     const settings = name + short + midi;
-    let out = `  \\new Staff ${settings ? `\\with { ${settings}} ` : ""}{\n    \\clef ${clef} \\key ${KEYS[score.key]} \\major \\time ${score.time[0]}/${score.time[1]}${tempo}\n    ${parts.join(" ")} \\bar "|."\n  }`;
+    // A piece that ends on a repeat's end keeps its :|. sign, not a final bar.
+    const ending = lastRepeat ? "" : ' \\bar "|."';
+    let out = `  \\new Staff ${settings ? `\\with { ${settings}} ` : ""}{\n    \\clef ${clef} \\key ${KEYS[score.key]} \\major \\time ${score.time[0]}/${score.time[1]}${tempo}\n    ${music}${ending}\n  }`;
     const lyrics = lyricText(staff);
     if (lyrics) out += `\n  \\addlyrics { ${lyrics} }`;
     return out;
@@ -712,6 +704,181 @@ export function toLilyPond(score) {
   const group = { brace: "\\new PianoStaff", bracket: "\\new StaffGroup", choir: "\\new ChoirStaff" }[score.group] ?? "";
   const body = staves.length > 1 || group ? `${group ? group + " " : ""}<<\n${staves.join("\n")}\n>>` : staves[0].replace(/^ {2}/gm, "");
   return { source: (header ? `\\header { ${header} }\n` : "") + body + "\n", items };
+}
+
+/** A staff's music, a string per bar; a tuplet never leaves its bar. */
+function staffBars(score, staff, s, items) {
+  const bar = barLength(score);
+  const bars = [];
+  let current = [];
+  let t = 0;
+  let open = null;
+  staff.events.forEach((ev, i) => {
+    items.push({ staff: s, index: i });
+    const tid = ev.tuplet?.id ?? null;
+    if (open !== null && tid !== open) {
+      current.push("}");
+      open = null;
+    }
+    if (tid !== null && open === null) {
+      current.push(`\\tuplet ${ev.tuplet.n}/${ev.tuplet.d} {`);
+      open = tid;
+    }
+    current.push(eventText(ev));
+    t += ticksOf(ev);
+    if (Math.abs(t / bar - Math.round(t / bar)) < 1e-9) {
+      if (open !== null) current.push("}");
+      open = null;
+      bars.push(current.join(" "));
+      current = [];
+    }
+  });
+  if (current.length) bars.push(current.join(" ") + (open !== null ? " }" : ""));
+  return bars;
+}
+
+/** The bars joined with bar checks, each repeat around its bars and its endings after it. */
+function withRepeats(bars, repeats) {
+  const groups = [];
+  let b = 0;
+  while (b < bars.length) {
+    const r = repeats.find((x) => x.from === b);
+    if (!r) {
+      groups.push(bars[b]);
+      b++;
+      continue;
+    }
+    let text = `\\repeat volta ${Math.max(2, r.endings.length)} { ${bars.slice(r.from, r.to + 1).join(" | ")} }`;
+    let next = r.to + 1;
+    if (r.endings.length) {
+      const alts = r.endings.map((len) => {
+        const ending = bars.slice(next, next + len).join(" | ");
+        next += len;
+        return `{ ${ending} }`;
+      });
+      text += ` \\alternative { ${alts.join(" ")} }`;
+    }
+    groups.push(text);
+    b = next;
+  }
+  return groups.map((g, k) => (k > 0 && k % 4 === 0 ? "\n    " : "") + g).join(" | ").replace(/ \| \n {4}/g, " |\n    ");
+}
+
+// ---- Repeats ---------------------------------------------------------------------------------
+//
+// A repeat is bars, the same on every staff: `from` and `to` its body, and
+// `endings` the length in bars of each ending after it ("1.", "2."…).
+
+/** The repeats read from the signs the parser met, in bars; null when they do not nest as repeats do. */
+function repeatsFrom(signs) {
+  const out = [];
+  let open = null;
+  let endings = null;
+  let volta = null;
+  const close = () => {
+    if (open === null) return;
+    out.push({ from: open.from, to: open.to, endings: endings ?? [] });
+    open = null;
+    endings = null;
+  };
+  for (const { mark, at } of signs) {
+    if (mark === "start") {
+      if (open && open.to === null) return null;
+      close();
+      open = { from: at, to: null };
+    } else if (mark === "end") {
+      // A repeat's body ends here — unless an ending is running, whose own end it is.
+      if (volta !== null) continue;
+      if (!open) open = { from: 0, to: null };
+      if (open.to === null) open.to = at - 1;
+      if (!endings) close();
+    } else if (mark === "volta") {
+      if (!open) return null;
+      if (open.to === null) open.to = at - 1;
+      endings ??= [];
+      volta = at;
+    } else if (mark === "volta-end") {
+      if (volta === null) return null;
+      endings.push(at - volta);
+      volta = null;
+    }
+  }
+  close();
+  return out.every((r) => r.to >= r.from && r.endings.every((n) => n > 0)) ? out : null;
+}
+
+/** The bar a time (ticks) is in. */
+export function barAt(score, t) {
+  return Math.floor(t / barLength(score));
+}
+
+/** The repeat bar `b` is in — its body or an ending — or null. */
+export function repeatAt(score, b) {
+  return (score.repeats ?? []).find((r) => b >= r.from && b <= r.to + r.endings.reduce((x, y) => x + y, 0)) ?? null;
+}
+
+/** Bars `a`…`b` repeated; the same bars again take the repeat away. */
+export function toggleRepeat(score, a, b) {
+  const [from, to] = [Math.min(a, b), Math.max(a, b)];
+  score.repeats ??= [];
+  const same = score.repeats.findIndex((r) => r.from === from && r.to === to);
+  if (same >= 0) {
+    score.repeats.splice(same, 1);
+    return;
+  }
+  if (score.repeats.some((r) => from <= r.to + r.endings.reduce((x, y) => x + y, 0) && to >= r.from)) {
+    throw new Error("those bars are already in a repeat: remove it first");
+  }
+  if (to >= barsOf(score)) throw new Error("no such bars");
+  score.repeats.push({ from, to, endings: [] });
+  score.repeats.sort((x, y) => x.from - y.from);
+}
+
+/** The repeat around bar `b` taken away; its bars and notes stay. */
+export function removeRepeat(score, b) {
+  const r = repeatAt(score, b);
+  if (!r) throw new Error("there is no repeat there");
+  score.repeats.splice(score.repeats.indexOf(r), 1);
+}
+
+/**
+ * Endings for a repeat. Bars `a`…`b`, the last bars of a repeat, become its
+ * first ending, and as many empty bars after them its second. On a repeat
+ * that has its endings, an empty ending more is added after the last.
+ */
+export function addEndings(score, a, b) {
+  const [from, to] = [Math.min(a, b), Math.max(a, b)];
+  const r = repeatAt(score, from);
+  if (!r) throw new Error("select the bars of a repeat — its last ones become its first ending");
+  if (r.endings.length) {
+    const last = r.endings[r.endings.length - 1];
+    const at = r.to + r.endings.reduce((x, y) => x + y, 0) + 1;
+    insertBars(score, at, last);
+    r.endings.push(last);
+    return;
+  }
+  if (to !== r.to) throw new Error("the first ending is the repeat's last bars: select up to its end");
+  if (from <= r.from) throw new Error("leave a bar before the first ending");
+  const len = to - from + 1;
+  r.to = from - 1;
+  insertBars(score, to + 1, len);
+  r.endings = [len, len];
+}
+
+/** `count` bars of rests put in every staff before bar `at`; the repeats after it move along. */
+export function insertBars(score, at, count) {
+  const bar = barLength(score);
+  for (const staff of score.staves) {
+    const t = at * bar;
+    if (t > lengthOf(staff)) throw new Error("no such bar");
+    const i = t === lengthOf(staff) ? staff.events.length : eventAt(staff, t);
+    if (i < 0) throw new Error("bars must start at a bar line");
+    staff.events.splice(i, 0, ...rests(score, t, count * bar));
+  }
+  for (const r of score.repeats ?? []) {
+    if (r.from >= at) r.from += count;
+    if (r.to >= at) r.to += count;
+  }
 }
 
 // ---- Reading eui-score's parse back ---------------------------------------------------------
@@ -725,7 +892,9 @@ const CLEF_NAMES = { "G,-2,0": "treble", "G,-2,-1": "treble_8", "F,2,0": "bass",
  */
 export function fromParsed(parsed) {
   const unsupported = new Set();
-  const score = { header: { ...parsed.header }, key: 0, time: [4, 4], tempo: null, group: "none", staves: [] };
+  const score = { header: { ...parsed.header }, key: 0, time: [4, 4], tempo: null, group: "none", staves: [], repeats: [] };
+  // Where the first staff's repeat signs fall, in bars: the score's repeats.
+  const signs = [];
   const kinds = { Brace: "brace", Bracket: "bracket", Choir: "choir" };
   if (parsed.groups.length > 1) unsupported.add("nested staff groups");
   if (parsed.groups[0]) score.group = kinds[parsed.groups[0].kind] ?? "none";
@@ -754,6 +923,13 @@ export function fromParsed(parsed) {
       } else if (k === "Tempo") {
         if (started) unsupported.add("a change of tempo");
         else if (first) score.tempo = ev.tempo;
+      } else if (["RepeatStart", "RepeatEnd", "VoltaStart", "VoltaEnd", "Bar"].includes(k)) {
+        // Repeat signs, where they fall in bars — the first staff's are the score's.
+        if (!first) continue;
+        const at = lengthOf(out) / barLength(score);
+        const marks = { RepeatStart: ["start"], RepeatEnd: ["end"], VoltaStart: ["volta"], VoltaEnd: ["volta-end"], Bar: { ".|:": ["start"], ":|.": ["end"], ":|.|:": ["end", "start"] }[ev.bar] ?? [] }[k];
+        if (marks.length && !Number.isInteger(at)) unsupported.add("a repeat inside a bar");
+        for (const mark of marks) signs.push({ mark, at });
       } else if (k === "Note" || k === "Rest") {
         if (!started) {
           started = true;
@@ -799,6 +975,11 @@ export function fromParsed(parsed) {
     }
     score.staves.push(out);
     first = false;
+  }
+  if (signs.length) {
+    const repeats = repeatsFrom(signs);
+    if (repeats) score.repeats = repeats;
+    else unsupported.add("repeats this editor cannot follow");
   }
   if (unsupported.size) return { unsupported: [...unsupported] };
   if (!score.staves.length) return { unsupported: ["a piece with no staff"] };

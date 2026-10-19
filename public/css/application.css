@@ -2269,6 +2269,12 @@
     background: #2563c9;
     border-color: #2563c9;
   }
+  .tool-hint {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--muted);
+    margin: 4px 0 0;
+  }
   .tool-check {
     display: flex;
     align-items: center;
