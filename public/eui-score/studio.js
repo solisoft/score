@@ -66,6 +66,21 @@ export function startStudio(root, options = {}) {
   // For a console or a test: the studio's state, on its element.
   root.studio = st;
 
+  // The instrument menus, from INSTRUMENTS by family; the new staff's offers
+  // the piano's lower staff too, in the bass clef.
+  for (const select of root.querySelectorAll("[data-instruments]")) {
+    const families = new Map();
+    M.INSTRUMENTS.forEach((it, k) => {
+      if (!families.has(it.family)) families.set(it.family, Object.assign(document.createElement("optgroup"), { label: it.family }));
+      const group = families.get(it.family);
+      group.append(new Option(it.name, String(k)));
+      if (select.dataset.instruments === "new" && it.name === "Piano") group.append(new Option("Piano, lower staff", `${k}|bass`));
+    });
+    select.append(...families.values());
+    // A second staff is most often a melody instrument: the violin, as before.
+    if (select.dataset.instruments === "new") select.value = String(M.INSTRUMENTS.findIndex((it) => it.name === "Violin"));
+  }
+
   // ---- Model ↔ text ----------------------------------------------------------
 
   function readText(text) {
@@ -442,8 +457,9 @@ export function startStudio(root, options = {}) {
       case "add-bar": return edit((score) => M.addBars(score, 1));
       case "remove-bar": return edit((score) => M.removeLastBar(score));
       case "add-staff": return edit((score) => {
-        const [instrument, nameText, clef] = (root.querySelector('[data-field="new-staff"]').value || "acoustic grand|Piano|treble").split("|");
-        M.addStaff(score, { instrument, name: nameText, clef });
+        const [k, clef] = root.querySelector('[data-field="new-staff"]').value.split("|");
+        const it = M.INSTRUMENTS[Number(k)] ?? M.INSTRUMENTS[0];
+        M.addStaff(score, { instrument: it.sound, name: it.name, short: it.short, clef: clef || it.clef || "treble" });
         st.sel = { staff: score.staves.length - 1, t0: 0, t1: 0, head: -1 };
       });
       case "voice": return toVoice(Number(data.voice));
@@ -828,7 +844,18 @@ export function startStudio(root, options = {}) {
     set("staff-clef", staff.clef);
     set("staff-key", staff.key == null ? "" : String(staff.key));
     fillChanges(set);
-    set("staff-instrument", staff.instrument);
+    // An instrument the menu does not offer (from a source) shows as itself.
+    const instrument = root.querySelector('[data-field="staff-instrument"]');
+    if (instrument && document.activeElement !== instrument) {
+      const k = M.instrumentOf(st.score, staffOf());
+      instrument.querySelector("[data-other]")?.remove();
+      if (k < 0) {
+        const other = new Option(`Other: ${staff.instrument}`, "other");
+        other.dataset.other = "";
+        instrument.prepend(other);
+      }
+      instrument.value = k < 0 ? "other" : String(k);
+    }
     filling = false;
   }
 
@@ -898,7 +925,7 @@ export function startStudio(root, options = {}) {
         }
         case "change-clef": M.setClefAt(score, staffOf(), changeBar(), value || null); break;
         case "change-double": M.setDoubleBar(score, changeBar(), el.checked); break;
-        case "staff-instrument": staff.instrument = value; break;
+        case "staff-instrument": if (value !== "other") M.setInstrument(score, staffOf(), Number(value)); break;
       }
     });
   }

@@ -247,6 +247,54 @@ test("repeats: written around their bars, with their endings, and read back", ()
   engrave(s);
 });
 
+test("instruments: every one engraves, and plays its own sound", () => {
+  const names = new Set();
+  M.INSTRUMENTS.forEach((it, k) => {
+    assert.ok(!names.has(it.name), `${it.name} once`);
+    names.add(it.name);
+    const s = M.newScore();
+    M.write(s, 0, 0, q, C4);
+    M.setInstrument(s, 0, k);
+    assert.equal(M.instrumentOf(s, 0), k, it.name);
+    const { source } = engrave(s);
+    // The program change on the staff's channel: 0, the piano, for a name the engraver does not know.
+    const bytes = midi(source, 100, 4, 0);
+    const at = bytes.findIndex((b, i) => b === 0xc0 && i > 0 && bytes[i - 1] === 0);
+    assert.ok(at > 0, `${it.name}: a program change`);
+    if (it.sound !== "acoustic grand") assert.notEqual(bytes[at + 1], 0, `${it.name}: "${it.sound}" is a General MIDI sound`);
+  });
+});
+
+test("instruments: a staff takes the sound, the clef and the names — never a name of its own", () => {
+  const s = M.newScore();
+  M.write(s, 0, 0, q, C4);
+  const cello = M.INSTRUMENTS.findIndex((it) => it.name === "Cello");
+  const piano = M.INSTRUMENTS.findIndex((it) => it.name === "Piano");
+  // A new staff is the piano, unnamed.
+  assert.equal(M.instrumentOf(s, 0), piano);
+  M.setInstrument(s, 0, cello);
+  assert.deepEqual([s.staves[0].name, s.staves[0].short, s.staves[0].instrument, s.staves[0].clef], ["Cello", "Vc.", "cello", "bass"]);
+  // The piano keeps the staff's clef; the instrument's name replaces another instrument's.
+  M.setInstrument(s, 0, piano);
+  assert.deepEqual([s.staves[0].name, s.staves[0].instrument, s.staves[0].clef], ["Piano", "acoustic grand", "bass"]);
+  // A name the person wrote stays.
+  s.staves[0].name = "Left hand";
+  s.staves[0].short = "L.H.";
+  M.setInstrument(s, 0, cello);
+  assert.deepEqual([s.staves[0].name, s.staves[0].short, s.staves[0].instrument], ["Left hand", "L.H.", "cello"]);
+  // Voices share a sound: the name tells them apart.
+  const tenor = M.INSTRUMENTS.findIndex((it) => it.name === "Tenor");
+  s.staves[0].name = "";
+  M.setInstrument(s, 0, tenor);
+  assert.equal(M.instrumentOf(s, 0), tenor);
+  assert.equal(s.staves[0].clef, "treble_8");
+  // A sound the menu does not offer is no instrument of it; an unknown instrument is refused.
+  s.staves[0].instrument = "bagpipe";
+  assert.equal(M.instrumentOf(s, 0), -1);
+  assert.throws(() => M.setInstrument(s, 0, M.INSTRUMENTS.length), /no such instrument/);
+  assert.equal(s.staves[0].instrument, "bagpipe", "nothing changed");
+});
+
 test("playing: every repeat played out, each pass with its ending, timed bar by bar", () => {
   const s = M.newScore();
   for (const [k, d] of [7, 9, 11, 12].entries()) M.write(s, 0, k * 4 * q, 4 * q, { rest: false, pitches: [{ d, alter: 0 }] });

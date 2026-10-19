@@ -1298,6 +1298,86 @@ export function insertBars(score, at, count) {
   }
 }
 
+// ---- Instruments ------------------------------------------------------------------------------
+//
+// What the editor offers for a staff: its name, its short name, its clef,
+// and the General MIDI sound it plays (LilyPond's midiInstrument, which
+// eui-score turns into a program). A null clef keeps the staff's own: a
+// keyboard's two staves are not in the same clef.
+
+const preset = (family, name, short, sound, clef) => ({ family, name, short, sound, clef });
+
+export const INSTRUMENTS = [
+  preset("Keyboards", "Piano", "Pno.", "acoustic grand", null),
+  preset("Keyboards", "Electric piano", "E.Pno.", "electric piano 1", null),
+  preset("Keyboards", "Harpsichord", "Hpsd.", "harpsichord", null),
+  preset("Keyboards", "Organ", "Org.", "church organ", null),
+  preset("Keyboards", "Accordion", "Acc.", "accordion", null),
+  preset("Keyboards", "Celesta", "Cel.", "celesta", null),
+  preset("Strings", "Violin", "Vl.", "violin", "treble"),
+  preset("Strings", "Viola", "Va.", "viola", "alto"),
+  preset("Strings", "Cello", "Vc.", "cello", "bass"),
+  preset("Strings", "Double bass", "Cb.", "contrabass", "bass"),
+  preset("Strings", "Strings", "Str.", "string ensemble 1", null),
+  preset("Strings", "Harp", "Hp.", "orchestral harp", null),
+  preset("Woodwinds", "Piccolo", "Picc.", "piccolo", "treble"),
+  preset("Woodwinds", "Flute", "Fl.", "flute", "treble"),
+  preset("Woodwinds", "Recorder", "Rec.", "recorder", "treble"),
+  preset("Woodwinds", "Oboe", "Ob.", "oboe", "treble"),
+  preset("Woodwinds", "English horn", "E.H.", "english horn", "treble"),
+  preset("Woodwinds", "Clarinet", "Cl.", "clarinet", "treble"),
+  preset("Woodwinds", "Bassoon", "Bsn.", "bassoon", "bass"),
+  preset("Woodwinds", "Soprano sax", "S.Sax.", "soprano sax", "treble"),
+  preset("Woodwinds", "Alto sax", "A.Sax.", "alto sax", "treble"),
+  preset("Woodwinds", "Tenor sax", "T.Sax.", "tenor sax", "treble"),
+  preset("Woodwinds", "Baritone sax", "B.Sax.", "baritone sax", "treble"),
+  preset("Brass", "Trumpet", "Tpt.", "trumpet", "treble"),
+  preset("Brass", "Horn", "Hn.", "french horn", "treble"),
+  preset("Brass", "Trombone", "Tbn.", "trombone", "bass"),
+  preset("Brass", "Tuba", "Tba.", "tuba", "bass"),
+  preset("Guitars", "Guitar", "Gtr.", "acoustic guitar (nylon)", "treble_8"),
+  preset("Guitars", "Steel-string guitar", "Gtr.", "acoustic guitar (steel)", "treble_8"),
+  preset("Guitars", "Electric guitar", "E.Gtr.", "electric guitar (clean)", "treble_8"),
+  preset("Guitars", "Bass guitar", "B.Gtr.", "electric bass (finger)", "bass_8"),
+  preset("Guitars", "Banjo", "Bjo.", "banjo", "treble_8"),
+  preset("Voices", "Voice", "V.", "choir aahs", "treble"),
+  preset("Voices", "Soprano", "S.", "choir aahs", "treble"),
+  preset("Voices", "Alto", "A.", "choir aahs", "treble"),
+  preset("Voices", "Tenor", "T.", "choir aahs", "treble_8"),
+  preset("Voices", "Bass", "B.", "choir aahs", "bass"),
+  preset("Percussion", "Timpani", "Timp.", "timpani", "bass"),
+  preset("Percussion", "Glockenspiel", "Glk.", "glockenspiel", "treble"),
+  preset("Percussion", "Xylophone", "Xyl.", "xylophone", "treble"),
+  preset("Percussion", "Marimba", "Mar.", "marimba", "treble"),
+  preset("Percussion", "Vibraphone", "Vib.", "vibraphone", "treble"),
+  preset("Percussion", "Tubular bells", "T.B.", "tubular bells", "treble"),
+];
+
+/** Which of INSTRUMENTS lane `s` is — its sound and, among those sharing it, its name — or -1. */
+export function instrumentOf(score, s) {
+  const staff = score.staves[upperOf(score, s)];
+  const sound = staff.instrument || "acoustic grand";
+  const same = INSTRUMENTS.map((it, k) => (it.sound === sound ? k : -1)).filter((k) => k >= 0);
+  return same.find((k) => INSTRUMENTS[k].name === staff.name) ?? same[0] ?? -1;
+}
+
+/**
+ * Lane `s` made instrument `k` of INSTRUMENTS: its sound, its clef (unless
+ * the instrument keeps the staff's), and its names — unless the person named
+ * the staff themselves, which an instrument's name never replaces.
+ */
+export function setInstrument(score, s, k) {
+  const it = INSTRUMENTS[k];
+  if (!it) throw new Error("no such instrument");
+  const staff = score.staves[upperOf(score, s)];
+  if (!staff.name || INSTRUMENTS.some((x) => x.name === staff.name)) {
+    staff.name = it.name;
+    staff.short = it.short;
+  }
+  staff.instrument = it.sound;
+  if (it.clef) staff.clef = it.clef;
+}
+
 // ---- Playing ----------------------------------------------------------------------------------
 //
 // A repeat is played out: its bars twice, or once for each of its endings,

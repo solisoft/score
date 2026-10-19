@@ -159,19 +159,7 @@
           <button type="button" class="tool tool-wide" data-act="remove-bar" title="Take the last bar away">− Bar</button>
         </div>
         <div class="tool-row">
-          <select class="tool-select" data-field="new-staff" aria-label="Instrument of a new staff">
-            <option value="violin|Violin|treble">Violin</option>
-            <option value="viola|Viola|alto">Viola</option>
-            <option value="cello|Cello|bass">Cello</option>
-            <option value="flute|Flute|treble">Flute</option>
-            <option value="clarinet|Clarinet|treble">Clarinet</option>
-            <option value="trumpet|Trumpet|treble">Trumpet</option>
-            <option value="acoustic grand|Piano|treble">Piano (upper)</option>
-            <option value="acoustic grand|Piano|bass">Piano (lower)</option>
-            <option value="acoustic guitar (nylon)|Guitar|treble_8">Guitar</option>
-            <option value="choir aahs|Voice|treble">Voice</option>
-            <option value="acoustic bass|Bass|bass">Double bass</option>
-          </select>
+          <select class="tool-select" data-field="new-staff" data-instruments="new" aria-label="Instrument of a new staff"></select>
           <button type="button" class="tool tool-wide" data-act="add-staff">+ Staff</button>
         </div>
         <div class="tool-row">
@@ -193,6 +181,9 @@
 
       <section class="tool-section">
         <h3>This staff</h3>
+        <label class="tool-field">Instrument
+          <select data-field="staff-instrument" data-instruments="staff" title="Its sound, its clef, and its name unless you gave it one"></select>
+        </label>
         <label class="tool-field">Name <input type="text" data-field="staff-name" placeholder="Violin"></label>
         <label class="tool-field">Short <input type="text" data-field="staff-short" placeholder="Vl."></label>
         <label class="tool-field">Clef
@@ -209,16 +200,6 @@
             <% end %>
           </select>
         </label>
-        <label class="tool-field">Sound <input type="text" data-field="staff-instrument" placeholder="acoustic grand" list="studio-instruments"></label>
-        <datalist id="studio-instruments">
-          <% sounds = ["acoustic grand", "violin", "viola", "cello", "contrabass", "flute", "oboe", "clarinet", "bassoon"] %>
-          <% sounds = sounds + ["trumpet", "french horn", "trombone", "tuba", "acoustic guitar (nylon)", "electric guitar (clean)"] %>
-          <% sounds = sounds + ["acoustic bass", "choir aahs", "voice oohs", "string ensemble 1"] %>
-          <% sounds = sounds + ["timpani", "marimba", "vibraphone", "harp"] %>
-          <% for sound in sounds %>
-            <option value="<%= sound %>"></option>
-          <% end %>
-        </datalist>
       </section>
 
       <section class="tool-section" data-changes>
