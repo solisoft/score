@@ -155,7 +155,7 @@
       <section class="tool-section">
         <h3>Bars &amp; staves</h3>
         <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="add-bar" title="A bar at the end">+ Bar</button>
+          <button type="button" class="tool tool-wide" data-act="add-bar" title="A bar at the end (])">+ Bar</button>
           <button type="button" class="tool tool-wide" data-act="remove-bar" title="Take the last bar away">− Bar</button>
         </div>
         <div class="tool-row">
@@ -287,6 +287,7 @@
           <dt>N / Esc</dt><dd>note input / select</dd>
           <dt>A–G</dt><dd>write a note (Shift: add to the chord)</dd>
           <dt>0</dt><dd>rest</dd>
+          <dt>]</dt><dd>a bar at the end</dd>
           <dt>2–7</dt><dd>32nd … whole; <kbd>.</kbd> dot</dd>
           <dt>↑ ↓</dt><dd>step; Shift semitone; Ctrl octave</dd>
           <dt>← →</dt><dd>previous / next; Shift extends</dd>

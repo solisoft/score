@@ -262,9 +262,21 @@ export function startStudio(root, options = {}) {
     edit((score) => {
       const s = st.input.staff;
       if (add) {
-        if (!st.input.last) throw new Error("write a note first, then Shift+letter adds to its chord");
-        const i = M.eventAt(score.staves[st.input.last.staff], st.input.last.t);
-        M.letter(score, st.input.last.staff, i, step, true);
+        // The note just written; else the note at the cursor, or the one before it.
+        const staff = score.staves[s];
+        const at = M.starts(staff);
+        const last = st.input.last && M.eventAt(score.staves[st.input.last.staff], st.input.last.t);
+        let lane = s;
+        let i = -1;
+        if (st.input.last && last >= 0) [lane, i] = [st.input.last.staff, last];
+        else {
+          const here = at.findLastIndex((t) => t <= st.input.t);
+          const before = at.findLastIndex((t) => t < st.input.t);
+          i = staff.events[here] && !staff.events[here].rest && at[here] === st.input.t ? here : before;
+        }
+        if (i < 0 || score.staves[lane].events[i].rest) throw new Error("Shift+letter adds to a note's chord: write a note, or put the cursor on one");
+        M.letter(score, lane, i, step, true);
+        st.input.last = { staff: lane, t: M.starts(score.staves[lane])[i] };
         return;
       }
       const staff = score.staves[s];
@@ -1161,6 +1173,7 @@ export function startStudio(root, options = {}) {
     const letter = LETTERS[key.toLowerCase()];
     if (letter !== undefined && !event.altKey) return run("letter", { step: letter, add: event.shiftKey });
     if (key === "0") return run("rest");
+    if (key === "]") return run("add-bar");
     if (key === "Delete" || (key === "Backspace" && !st.input.on)) return run("rest");
     if (key === "Backspace" && st.input.on) {
       event.preventDefault();
