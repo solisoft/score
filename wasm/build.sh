@@ -12,4 +12,7 @@ wasm-bindgen --target web --no-typescript --out-dir "$out" \
 if command -v wasm-opt >/dev/null; then
   wasm-opt -Oz -o "$out/eui_score_web_bg.wasm" "$out/eui_score_web_bg.wasm"
 fi
+# The WebAssembly's own digest: the site's asset version is made from it
+# and from the JavaScript (app/services/score_assets.sl).
+sha256sum "$out/eui_score_web_bg.wasm" | cut -c1-16 > "$out/wasm.version"
 ls -l "$out"

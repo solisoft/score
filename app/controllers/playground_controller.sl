@@ -8,6 +8,7 @@ class PlaygroundController < Controller
     @source = ScoreLibrary.source_named(params["source"].to_s) ?? ScoreLibrary.source_named("solos/ode-to-joy")
     @examples = ScoreLibrary.examples
     @figure = ScoreSvg.figure(@source, 1000, 7)
+    @eui_version = ScoreAssets.version
     @title = "Playground"
     @description = "Type LilyPond, and eui-score engraves it in your browser as you type."
   end

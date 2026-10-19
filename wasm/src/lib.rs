@@ -212,3 +212,19 @@ pub fn editor_apply(src: &str, op: &str) -> Result<String, JsError> {
     let op: serde_json::Value = serde_json::from_str(op).map_err(|e| JsError::new(&e.to_string()))?;
     editor::apply(src, &op).map_err(|e| JsError::new(&e))
 }
+
+/// [`editor_view`] with any number of notes lit, `lit` being JSON:
+/// `{"items": {"3": "#b4373a"}, "heads": [[3, 0, "#e0662a"]]}`.
+#[wasm_bindgen]
+pub fn editor_view_lit(src: &str, width: f64, staff_space: f64, lit: &str) -> Result<String, JsError> {
+    let sp = if staff_space > 0.0 { staff_space } else { 7.0 };
+    let lit: serde_json::Value = serde_json::from_str(lit).unwrap_or_else(|_| serde_json::json!({}));
+    editor::view_lit(src, width, sp, &lit).map(|v| v.to_string()).map_err(|e| JsError::new(&e))
+}
+
+/// The piece as JSON for an editor's model: header, groups, and each
+/// staff's events, with what each uses that a model may not keep.
+#[wasm_bindgen]
+pub fn score_json(src: &str) -> Result<String, JsError> {
+    editor::score(src).map(|v| v.to_string()).map_err(|e| JsError::new(&e))
+}

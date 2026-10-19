@@ -47,10 +47,11 @@ describe("PagesController") do
       response = get("/embed")
       assert_eq(res_status(response), 200)
       body = res_body(response)
-      assert_contains(body, "https://score.solisoft.net/eui-score/eui-score.js")
+      assert_contains(body, "https://score.solisoft.net/eui-score.js")
+      assert_contains(body, "https://score.solisoft.net/eui-score-editor.js")
       assert_contains(body, "<eui-score src=\"/examples/ensembles/string-quartet/source.ly\"></eui-score>")
       assert_contains(body, "<script type=\"text/x-lilypond\">")
-      assert_contains(body, "<script type=\"module\" src=\"/eui-score/eui-score.js")
+      assert_contains(body, "await import(\"/eui-score/eui-score.js?v=#{ScoreAssets.version}\")")
       assert_contains(body, "<eui-score-editor id=\"embed-editor\">")
     end
   end

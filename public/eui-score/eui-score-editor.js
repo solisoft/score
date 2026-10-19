@@ -26,8 +26,9 @@
 // each edit (detail.source), `render` after each drawing (detail.ms),
 // `refuse` when an edit or the source is refused (detail.message).
 
-import { loaded } from "./eui-score.js";
-import { editor_view, editor_apply } from "./eui_score_web.js";
+const V = new URL(import.meta.url).search;
+const { loaded, engine } = await import(`./eui-score.js${V}`);
+const { editor_view, editor_apply } = engine;
 
 const STYLE = `
   eui-score-editor { display: block; outline: none; }

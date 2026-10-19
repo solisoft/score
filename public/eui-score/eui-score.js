@@ -22,9 +22,16 @@
 //   import { render, toMidi, toPdf, check } from ".../eui-score.js";
 //   const svg = await render(src, { width: 640, staffSpace: 7 });
 
-import init, { svg as engraveSvg, midi as engraveMidi, pdf as engravePdf, check as engraveCheck } from "./eui_score_web.js";
+// The files are served immutable, for a year: the version this module was
+// loaded with (`?v=…`) goes to the binding and the WebAssembly beside it, so
+// one deploy's files are never mixed with another's.
+const V = new URL(import.meta.url).search;
 
-const ready = init({ module_or_path: new URL("./eui_score_web_bg.wasm", import.meta.url) });
+/** The WebAssembly binding itself: every function the module exports. */
+export const engine = await import(`./eui_score_web.js${V}`);
+
+const ready = engine.default({ module_or_path: new URL(`./eui_score_web_bg.wasm${V}`, import.meta.url) });
+const { svg: engraveSvg, midi: engraveMidi, pdf: engravePdf, check: engraveCheck } = engine;
 
 /** Resolves once the engraver is loaded. */
 export function loaded() {

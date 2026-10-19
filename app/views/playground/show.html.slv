@@ -1,99 +1,260 @@
-<div class="wrap-fluid">
-  <header class="sandbox-head">
-    <div>
-      <span class="eyebrow">Playground</span>
-      <h1>Type it, click it, it's engraved.</h1>
+<div class="studio" id="studio" data-no-nav>
+  <div class="studio-menubar" role="menubar" aria-label="Score">
+    <div class="studio-menu-group">
+      <button type="button" class="studio-menu" data-act="new" title="A new, empty score">New</button>
+      <label class="studio-menu" title="Open a LilyPond file">Open…<input type="file" accept=".ly,.ily,.txt,text/plain" data-act="open" hidden></label>
+      <select class="studio-menu" data-act="example" aria-label="Open an example">
+        <option value="">Examples…</option>
+        <% for example in examples %>
+          <option value="<%= example["category"] %>/<%= example["slug"] %>"><%= example["title"] %> — <%= example["instrument"] %></option>
+        <% end %>
+      </select>
+      <button type="button" class="studio-menu" data-act="save-ly" title="Save the LilyPond source">Save .ly</button>
+      <button type="button" class="studio-menu" data-act="save-pdf" title="Print the A4 pages as a PDF">PDF</button>
+      <button type="button" class="studio-menu" data-act="save-midi" title="Save the MIDI file">MIDI</button>
     </div>
-    <p class="muted">
-      Edit the LilyPond on the left, or the score on the right: click a note, move it with the arrows or the
-      mouse, type A–G. eui-score, compiled to WebAssembly, engraves every change in your browser. Nothing is
-      sent or stored.
-    </p>
-  </header>
-
-  <div class="sandbox">
-    <div class="sandbox-editor">
-      <div class="sandbox-toolbar">
-        <select aria-label="Start from an example" data-no-nav
-                onchange="if (this.value) { window.location.href = this.value }">
-          <option value="">Start from an example…</option>
-          <% for example in examples %>
-            <% value = playground_path() + "?source=" + example["category"] + "/" + example["slug"] %>
-            <option value="<%= value %>"><%= example["title"] %> — <%= example["instrument"] %></option>
-          <% end %>
-        </select>
-        <span class="sandbox-status" id="sandbox-status" aria-live="polite"></span>
-      </div>
-      <textarea id="sandbox-source" wrap="off" spellcheck="false" autocapitalize="off" autocomplete="off"
-                aria-label="LilyPond source"><%= source %></textarea>
+    <div class="studio-menu-group">
+      <button type="button" class="studio-menu" data-act="undo" title="Undo (Ctrl+Z)">↶ Undo</button>
+      <button type="button" class="studio-menu" data-act="redo" title="Redo (Ctrl+Y)">↷ Redo</button>
+      <button type="button" class="studio-menu studio-play" data-act="play" title="Play from the selection, or from the start (Space)">▶ Play</button>
+      <span class="studio-zoom">
+        <button type="button" class="studio-menu" data-act="zoom-out" title="Smaller">−</button>
+        <span data-zoom-label>100 %</span>
+        <button type="button" class="studio-menu" data-act="zoom-in" title="Larger">+</button>
+      </span>
     </div>
-
-    <div class="sandbox-result">
-      <div class="score-sheet" id="sandbox-sheet">
-        <eui-score-editor id="sandbox-score"><div class="ese-sheet"><%- figure["svg"].to_s %></div></eui-score-editor>
-      </div>
-      <div class="score-actions">
-        <button type="button" class="score-btn score-btn-play" id="sandbox-play" data-score-play data-midi="<%= figure["midi"] %>"><span aria-hidden="true">▶</span> Play</button>
-        <button type="button" class="score-btn" id="sandbox-midi">MIDI</button>
-        <button type="button" class="score-btn" id="sandbox-pdf">A4 PDF</button>
-        <button type="button" class="score-btn" id="sandbox-ly">.ly</button>
-        <div class="score-player" data-score-player></div>
-      </div>
-    </div>
+    <div class="studio-state" aria-live="polite" data-state></div>
   </div>
+
+  <div class="studio-body">
+    <aside class="studio-toolbox" aria-label="Tools">
+      <section class="tool-section">
+        <h3>Mode</h3>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="mode-select" title="Select and change notes (Esc)">Select</button>
+          <button type="button" class="tool tool-wide" data-act="mode-input" title="Write notes at the cursor (N)">✎ Note input</button>
+        </div>
+      </section>
+
+      <section class="tool-section">
+        <h3>Duration</h3>
+        <div class="tool-row">
+          <button type="button" class="tool tool-glyph" data-act="duration" data-base="1" title="Whole note (7)">𝅝</button>
+          <button type="button" class="tool tool-glyph" data-act="duration" data-base="2" title="Half note (6)">𝅗𝅥</button>
+          <button type="button" class="tool tool-glyph" data-act="duration" data-base="4" title="Quarter note (5)">𝅘𝅥</button>
+          <button type="button" class="tool tool-glyph" data-act="duration" data-base="8" title="Eighth note (4)">𝅘𝅥𝅮</button>
+          <button type="button" class="tool tool-glyph" data-act="duration" data-base="16" title="Sixteenth note (3)">𝅘𝅥𝅯</button>
+          <button type="button" class="tool tool-glyph" data-act="duration" data-base="32" title="Thirty-second note (2)">𝅘𝅥𝅰</button>
+          <button type="button" class="tool" data-act="dot" title="Dotted (.)">•</button>
+        </div>
+      </section>
+
+      <section class="tool-section">
+        <h3>Notes</h3>
+        <div class="tool-row">
+          <button type="button" class="tool" data-act="letter" data-step="0" title="C">C</button>
+          <button type="button" class="tool" data-act="letter" data-step="1" title="D">D</button>
+          <button type="button" class="tool" data-act="letter" data-step="2" title="E">E</button>
+          <button type="button" class="tool" data-act="letter" data-step="3" title="F">F</button>
+          <button type="button" class="tool" data-act="letter" data-step="4" title="G">G</button>
+          <button type="button" class="tool" data-act="letter" data-step="5" title="A">A</button>
+          <button type="button" class="tool" data-act="letter" data-step="6" title="B">B</button>
+          <button type="button" class="tool" data-act="rest" title="Rest (0)">𝄽</button>
+        </div>
+        <label class="tool-check"><input type="checkbox" data-chord-mode> Add to the chord <span class="muted">(Shift)</span></label>
+      </section>
+
+      <section class="tool-section">
+        <h3>Pitch</h3>
+        <div class="tool-row">
+          <button type="button" class="tool" data-act="move" data-how="step" data-by="1" title="A step up (↑)">↑</button>
+          <button type="button" class="tool" data-act="move" data-how="step" data-by="-1" title="A step down (↓)">↓</button>
+          <button type="button" class="tool" data-act="move" data-how="semitone" data-by="1" title="A semitone up (Shift+↑)">½↑</button>
+          <button type="button" class="tool" data-act="move" data-how="semitone" data-by="-1" title="A semitone down (Shift+↓)">½↓</button>
+          <button type="button" class="tool" data-act="move" data-how="octave" data-by="1" title="An octave up (Ctrl+↑)">8↑</button>
+          <button type="button" class="tool" data-act="move" data-how="octave" data-by="-1" title="An octave down (Ctrl+↓)">8↓</button>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool" data-act="alter" data-alter="-2" title="Double flat">𝄫</button>
+          <button type="button" class="tool" data-act="alter" data-alter="-1" title="Flat (−)">♭</button>
+          <button type="button" class="tool" data-act="alter" data-alter="0" title="Natural (=)">♮</button>
+          <button type="button" class="tool" data-act="alter" data-alter="1" title="Sharp (+)">♯</button>
+          <button type="button" class="tool" data-act="alter" data-alter="2" title="Double sharp">𝄪</button>
+        </div>
+      </section>
+
+      <section class="tool-section">
+        <h3>Tuplets</h3>
+        <div class="tool-row">
+          <button type="button" class="tool" data-act="tuplet" data-n="3" title="Triplet (Ctrl+3)">3</button>
+          <button type="button" class="tool" data-act="tuplet" data-n="5" title="Quintuplet (Ctrl+5)">5</button>
+          <button type="button" class="tool" data-act="tuplet" data-n="6" title="Sextuplet (Ctrl+6)">6</button>
+          <button type="button" class="tool" data-act="tuplet" data-n="7" title="Septuplet (Ctrl+7)">7</button>
+          <button type="button" class="tool tool-wide" data-act="untuplet" title="Make the tuplet one note again">Remove</button>
+        </div>
+      </section>
+
+      <section class="tool-section">
+        <h3>Ties &amp; lines</h3>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="tie" title="Tie to the next note (T)">⁀ Tie</button>
+          <button type="button" class="tool tool-wide" data-act="slur" title="Slur the selected notes (S)">⌒ Slur</button>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="hairpin" data-kind="&lt;" title="Crescendo over the selection">𝆒 cresc.</button>
+          <button type="button" class="tool tool-wide" data-act="hairpin" data-kind="&gt;" title="Diminuendo over the selection">𝆓 dim.</button>
+        </div>
+      </section>
+
+      <section class="tool-section">
+        <h3>Articulations</h3>
+        <div class="tool-row">
+          <button type="button" class="tool" data-act="art" data-name="staccato" title="Staccato">·</button>
+          <button type="button" class="tool" data-act="art" data-name="accent" title="Accent">&gt;</button>
+          <button type="button" class="tool" data-act="art" data-name="tenuto" title="Tenuto">–</button>
+          <button type="button" class="tool" data-act="art" data-name="marcato" title="Marcato">^</button>
+          <button type="button" class="tool" data-act="art" data-name="staccatissimo" title="Staccatissimo">▾</button>
+          <button type="button" class="tool" data-act="art" data-name="fermata" title="Fermata">𝄐</button>
+        </div>
+      </section>
+
+      <section class="tool-section">
+        <h3>Dynamics</h3>
+        <div class="tool-row tool-dynamics">
+          <% for dynamic in ["ppp", "pp", "p", "mp", "mf", "f", "ff", "fff", "sfz", "fp"] %>
+            <button type="button" class="tool tool-dyn" data-act="dynamic" data-name="<%= dynamic %>" title="<%= dynamic %>"><%= dynamic %></button>
+          <% end %>
+        </div>
+      </section>
+
+      <section class="tool-section">
+        <h3>Words</h3>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="lyrics" title="Lyrics under the notes (Ctrl+L)">Lyrics</button>
+          <button type="button" class="tool tool-wide" data-act="chord" title="A chord symbol above (Ctrl+K)">Chord symbol</button>
+        </div>
+      </section>
+
+      <section class="tool-section">
+        <h3>Bars &amp; staves</h3>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="add-bar" title="A bar at the end">+ Bar</button>
+          <button type="button" class="tool tool-wide" data-act="remove-bar" title="Take the last bar away">− Bar</button>
+        </div>
+        <div class="tool-row">
+          <select class="tool-select" data-field="new-staff" aria-label="Instrument of a new staff">
+            <option value="violin|Violin|treble">Violin</option>
+            <option value="viola|Viola|alto">Viola</option>
+            <option value="cello|Cello|bass">Cello</option>
+            <option value="flute|Flute|treble">Flute</option>
+            <option value="clarinet|Clarinet|treble">Clarinet</option>
+            <option value="trumpet|Trumpet|treble">Trumpet</option>
+            <option value="acoustic grand|Piano|treble">Piano (upper)</option>
+            <option value="acoustic grand|Piano|bass">Piano (lower)</option>
+            <option value="acoustic guitar (nylon)|Guitar|treble_8">Guitar</option>
+            <option value="choir aahs|Voice|treble">Voice</option>
+            <option value="acoustic bass|Bass|bass">Double bass</option>
+          </select>
+          <button type="button" class="tool tool-wide" data-act="add-staff">+ Staff</button>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="remove-staff" title="Take the selected staff away">− This staff</button>
+        </div>
+      </section>
+
+      <section class="tool-section">
+        <h3>This staff</h3>
+        <label class="tool-field">Name <input type="text" data-field="staff-name" placeholder="Violin"></label>
+        <label class="tool-field">Short <input type="text" data-field="staff-short" placeholder="Vl."></label>
+        <label class="tool-field">Clef
+          <select data-field="staff-clef">
+            <option value="treble">Treble</option><option value="bass">Bass</option><option value="alto">Alto</option>
+            <option value="tenor">Tenor</option><option value="treble_8">Treble 8 (guitar)</option><option value="bass_8">Bass 8</option>
+          </select>
+        </label>
+        <label class="tool-field">Sound <input type="text" data-field="staff-instrument" placeholder="acoustic grand" list="studio-instruments"></label>
+        <datalist id="studio-instruments">
+          <% sounds = ["acoustic grand", "violin", "viola", "cello", "contrabass", "flute", "oboe", "clarinet", "bassoon"] %>
+          <% sounds = sounds + ["trumpet", "french horn", "trombone", "tuba", "acoustic guitar (nylon)", "electric guitar (clean)"] %>
+          <% sounds = sounds + ["acoustic bass", "choir aahs", "voice oohs", "string ensemble 1"] %>
+          <% sounds = sounds + ["timpani", "marimba", "vibraphone", "harp"] %>
+          <% for sound in sounds %>
+            <option value="<%= sound %>"></option>
+          <% end %>
+        </datalist>
+      </section>
+
+      <section class="tool-section">
+        <h3>Score</h3>
+        <label class="tool-field">Title <input type="text" data-field="title"></label>
+        <label class="tool-field">Subtitle <input type="text" data-field="subtitle"></label>
+        <label class="tool-field">Composer <input type="text" data-field="composer"></label>
+        <label class="tool-field">Key
+          <select data-field="key">
+            <% for fifths in range(-7, 8) %>
+              <option value="<%= fifths %>"><%= ["C♭", "G♭", "D♭", "A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯"][fifths + 7] %> major / <%= ["A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯", "G♯", "D♯", "A♯"][fifths + 7] %> minor</option>
+            <% end %>
+          </select>
+        </label>
+        <label class="tool-field">Metre
+          <select data-field="time">
+            <% for metre in ["2/4", "3/4", "4/4", "5/4", "2/2", "3/8", "6/8", "9/8", "12/8"] %>
+              <option value="<%= metre %>"><%= metre %></option>
+            <% end %>
+          </select>
+        </label>
+        <label class="tool-field">Tempo <input type="number" min="20" max="300" step="1" data-field="bpm"></label>
+        <label class="tool-field">Tempo text <input type="text" data-field="tempo-text" placeholder="Allegro"></label>
+        <label class="tool-field">Staves
+          <select data-field="group">
+            <option value="none">Joined by a line</option><option value="bracket">Bracket</option>
+            <option value="brace">Brace (piano)</option><option value="choir">Choir</option>
+          </select>
+        </label>
+      </section>
+
+      <details class="tool-section tool-keys">
+        <summary>Keyboard</summary>
+        <dl>
+          <dt>N / Esc</dt><dd>note input / select</dd>
+          <dt>A–G</dt><dd>write a note (Shift: add to the chord)</dd>
+          <dt>0</dt><dd>rest</dd>
+          <dt>2–7</dt><dd>32nd … whole; <kbd>.</kbd> dot</dd>
+          <dt>↑ ↓</dt><dd>step; Shift semitone; Ctrl octave</dd>
+          <dt>← →</dt><dd>previous / next; Shift extends</dd>
+          <dt>Alt+↑ ↓</dt><dd>a note of the chord</dd>
+          <dt>+ − =</dt><dd>sharp, flat, natural</dd>
+          <dt>T / S</dt><dd>tie / slur</dd>
+          <dt>Ctrl+3, 5, 6, 7</dt><dd>tuplets</dd>
+          <dt>Ctrl+L / Ctrl+K</dt><dd>lyrics / chord symbol</dd>
+          <dt>Delete</dt><dd>make rests</dd>
+          <dt>Ctrl+C V X</dt><dd>copy, paste, cut</dd>
+          <dt>Ctrl+Z / Y</dt><dd>undo / redo</dd>
+          <dt>Space</dt><dd>play / stop</dd>
+        </dl>
+      </details>
+    </aside>
+
+    <main class="studio-canvas">
+      <div class="studio-notice" data-notice hidden></div>
+      <div class="studio-sheet" data-sheet tabindex="0" aria-label="The score: click a note to select it">
+        <%- figure["svg"].to_s %>
+      </div>
+      <div class="studio-status" data-status aria-live="polite"></div>
+    </main>
+  </div>
+
+  <section class="studio-source">
+    <div class="studio-source-head">
+      <h2>LilyPond source</h2>
+      <span class="muted">Edit it here, or on the score: each follows the other.</span>
+    </div>
+    <textarea data-source wrap="off" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="LilyPond source"><%= source %></textarea>
+  </section>
+  <div hidden data-player></div>
 </div>
 
 <script type="module">
-  import { toMidi, toPdf, download } from "<%= public_path("eui-score/eui-score.js") %>";
-  import "<%= public_path("eui-score/eui-score-editor.js") %>";
-
-  const textarea = document.getElementById("sandbox-source");
-  const score = document.getElementById("sandbox-score");
-  const status = document.getElementById("sandbox-status");
-  const play = document.getElementById("sandbox-play");
-  const sheet = document.getElementById("sandbox-sheet");
-  let midiUrl = null;
-  let midiFor = null;
-
-  function title() {
-    const match = textarea.value.match(/title\s*=\s*"([^"]*)"/);
-    return (match ? match[1] : "score").trim() || "score";
-  }
-
-  async function refreshMidi() {
-    if (midiFor === textarea.value) return;
-    midiFor = textarea.value;
-    try {
-      const bytes = await toMidi(textarea.value);
-      if (midiUrl) URL.revokeObjectURL(midiUrl);
-      midiUrl = URL.createObjectURL(new Blob([bytes], { type: "audio/midi" }));
-      play.dataset.midi = midiUrl;
-    } catch (error) {}
-  }
-
-  score.addEventListener("render", (event) => {
-    sheet.classList.remove("score-sheet-refused");
-    const ms = event.detail.ms < 1 ? "under 1" : Math.round(event.detail.ms);
-    status.textContent = `${textarea.value.length} characters · engraved in ${ms} ms`;
-    refreshMidi();
-  });
-  score.addEventListener("refuse", () => sheet.classList.add("score-sheet-refused"));
-  // An edit on the score rewrites the text; the text rewrites the score.
-  score.addEventListener("change", (event) => {
-    textarea.value = event.detail.source;
-  });
-  textarea.addEventListener("input", () => {
-    score.source = textarea.value;
-  });
-  score.source = textarea.value;
-
-  document.getElementById("sandbox-midi").addEventListener("click", async () => {
-    try { download(await toMidi(textarea.value), `${title()}.mid`, "audio/midi"); } catch (error) {}
-  });
-  document.getElementById("sandbox-pdf").addEventListener("click", async () => {
-    try { download(await toPdf(textarea.value, title()), `${title()}.pdf`, "application/pdf"); } catch (error) {}
-  });
-  document.getElementById("sandbox-ly").addEventListener("click", () => {
-    download(textarea.value, `${title()}.ly`, "text/x-lilypond");
-  });
+  const { startStudio } = await import("/eui-score/studio.js?v=<%= eui_version %>");
+  startStudio(document.getElementById("studio"), { examples: "<%= examples_path() %>" });
 </script>

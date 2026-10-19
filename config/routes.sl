@@ -5,13 +5,16 @@
 # site: a module script and the WebAssembly it fetches are CORS requests.
 # So are the gallery's .ly sources, which `<eui-score src="…">` fetches.
 cors(
-  "/eui-score/*",
+  "/eui-score*",
   {"origins": "*", "methods": ["GET"]}
 )
 cors(
   "/examples/*",
   {"origins": "*", "methods": ["GET"]}
 )
+
+get("/eui-score.js", "assets#element")
+get("/eui-score-editor.js", "assets#editor")
 
 get("/", "home#index", name: "root")
 get("/health", "home#health")

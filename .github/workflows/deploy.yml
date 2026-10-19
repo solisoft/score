@@ -124,9 +124,22 @@ jobs:
         working-directory: wasm
         run: cargo test --release
 
+  # The editor's model (public/eui-score/score-model.js), engraved by the
+  # WebAssembly module the site ships.
+  editor:
+    name: score editor model tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Tests
+        run: node --test tests/js/*.test.mjs
+
   deploy:
     name: deploy score.solisoft.net
-    needs: [verify, engraver]
+    needs: [verify, engraver, editor]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:

@@ -25,6 +25,7 @@ class PagesController < Controller
 
   # GET /embed — eui-score in the browser, on any site
   def embed
+    @eui_version = ScoreAssets.version
     @title = "Embed"
     @description = "Scores on any website: one script, one <eui-score> tag, nothing to install."
   end

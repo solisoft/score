@@ -109,28 +109,46 @@ fn splice(src: &str, span: std::ops::Range<usize>, with: &str) -> String {
 /// and every head's, and what each item is. `selected` and `head` light
 /// the selection (−1 for none).
 pub fn view(src: &str, width: f64, sp: f64, selected: i64, head: i64) -> Result<Value, String> {
+    let mut lit = json!({ "items": {}, "heads": [] });
+    if selected >= 0 {
+        lit["items"][selected.to_string()] = json!("#b4373a");
+        if head >= 0 {
+            lit["heads"] = json!([[selected, head, "#e0662a"]]);
+        }
+    }
+    view_lit(src, width, sp, &lit)
+}
+
+/// [`view`] with any number of items and heads lit: `lit` is
+/// `{"items": {"3": "#colour", …}, "heads": [[item, head index, "#colour"], …]}`.
+pub fn view_lit(src: &str, width: f64, sp: f64, lit: &Value) -> Result<Value, String> {
     let eng = eui_score::engrave(src, (width / sp).max(10.0), &Layout::default()).map_err(|e| e.message)?;
     let (paths, ranges, heads) = eui_score::paths_heads(&eng, sp, 0).map_err(|e| e.message)?;
     let parsed = parse::parse(src).map_err(|e| e.message)?;
 
-    // Which paths light, and in which colour: the item, and its head.
-    let mut colour: BTreeMap<usize, &str> = BTreeMap::new();
-    if selected >= 0 {
+    // Which paths light, and in which colour: whole items, then single heads.
+    let safe = |c: &str| !c.is_empty() && c.len() < 40 && c.chars().all(|ch| ch.is_ascii_alphanumeric() || "#(),.% -".contains(ch));
+    let mut colour: BTreeMap<usize, String> = BTreeMap::new();
+    if let Some(items) = lit["items"].as_object() {
         for (item, range) in &ranges {
-            if *item as i64 == selected {
+            if let Some(c) = items.get(&item.to_string()).and_then(Value::as_str).filter(|c| safe(c)) {
                 for k in range.clone() {
-                    colour.insert(k, "#b4373a");
+                    colour.insert(k, c.to_string());
                 }
             }
         }
-        for (item, d, range) in &heads {
-            if *item as i64 == selected && head >= 0 {
-                if let Some(Found { ev, .. }) = find(&parsed, *item) {
-                    if ev.pitches.get(head as usize).map(|p| p.d) == Some(*d) {
-                        for k in range.clone() {
-                            colour.insert(k, "#e0662a");
-                        }
-                    }
+    }
+    for entry in lit["heads"].as_array().map_or(&[][..], Vec::as_slice) {
+        let (Some(item), Some(index), Some(c)) = (entry[0].as_u64(), entry[1].as_u64(), entry[2].as_str()) else { continue };
+        if !safe(c) {
+            continue;
+        }
+        let Some(Found { ev, .. }) = find(&parsed, item as usize) else { continue };
+        let Some(want) = ev.pitches.get(index as usize).map(|p| p.d) else { continue };
+        for (i, d, range) in &heads {
+            if *i as u64 == item && *d == want {
+                for k in range.clone() {
+                    colour.insert(k, c.to_string());
                 }
             }
         }
@@ -141,7 +159,7 @@ pub fn view(src: &str, width: f64, sp: f64, selected: i64, head: i64) -> Result<
     let mut right = 0.0_f64;
     let mut boxes: Vec<[f64; 4]> = Vec::with_capacity(paths.len());
     for (k, path) in paths.iter().enumerate() {
-        let lit = colour.get(&k).copied();
+        let lit = colour.get(&k).map(String::as_str);
         match path {
             Path::Rect(r) => {
                 right = right.max(r[0] + r[2]);
@@ -491,4 +509,97 @@ fn absolute(src: &str) -> Result<String, String> {
         return Err("could not write this source in absolute pitches".into());
     }
     checked(out)
+}
+
+/// The piece as the editor's model reads it: the header, the staff groups,
+/// and every staff's events with what the editor keeps of each — and, per
+/// event, what it uses that the model does not keep (`unsupported`), so the
+/// page can say so instead of losing it.
+pub fn score(src: &str) -> Result<Value, String> {
+    let parsed = parse::parse(src).map_err(|e| e.message)?;
+    let header: serde_json::Map<String, Value> = parsed.header.iter().map(|(k, v)| (k.clone(), Value::String(v.clone()))).collect();
+    let groups: Vec<Value> = parsed
+        .groups
+        .iter()
+        .map(|g| json!({ "kind": format!("{:?}", g.kind), "first": g.first, "last": g.last, "depth": g.depth, "name": g.name, "short": g.short }))
+        .collect();
+    let mut staves = Vec::new();
+    for staff in &parsed.staves {
+        let mut events = Vec::new();
+        for ev in &staff.events {
+            let mut unsupported: Vec<&str> = Vec::new();
+            match ev.k {
+                Kind::Voices | Kind::VoiceNext | Kind::VoicesEnd | Kind::Col => unsupported.push("two voices on a staff"),
+                Kind::RepeatStart | Kind::RepeatEnd | Kind::VoltaStart | Kind::VoltaEnd => unsupported.push("repeats"),
+                Kind::Partial => unsupported.push("a pickup bar"),
+                Kind::CadenzaOn | Kind::CadenzaOff => unsupported.push("a cadenza"),
+                Kind::Ottava => unsupported.push("\\ottava"),
+                Kind::Mark => unsupported.push("rehearsal marks"),
+                _ => {}
+            }
+            if !ev.fingers.is_empty() {
+                unsupported.push("fingerings");
+            }
+            if ev.phrase_on || ev.phrase_off {
+                unsupported.push("phrasing slurs");
+            }
+            if ev.arpeggio {
+                unsupported.push("arpeggios");
+            }
+            if ev.gliss {
+                unsupported.push("glissandi");
+            }
+            if ev.tremolo > 0 {
+                unsupported.push("tremolos");
+            }
+            if !ev.graces.is_empty() || ev.grace.is_some() {
+                unsupported.push("grace notes");
+            }
+            if !ev.drums.is_empty() {
+                unsupported.push("drum notes");
+            }
+            if ev.percent.is_some() {
+                unsupported.push("percent repeats");
+            }
+            let tempo = ev.tempo.as_ref().map(|t| json!({ "text": t.text, "base": t.base, "bpm": t.bpm }));
+            let chord_name: String = ev.chord_name.iter().map(|r| r.text.as_str()).collect();
+            events.push(json!({
+                "k": format!("{:?}", ev.k),
+                "i": ev.i,
+                "ticks": ev.ticks,
+                "base": ev.base,
+                "dots": ev.dots,
+                "full": ev.full,
+                "count": ev.count,
+                "pitches": ev.pitches.iter().map(|p| [p.d, p.alter]).collect::<Vec<_>>(),
+                "tie": ev.tie,
+                "slur_on": ev.slur_on,
+                "slur_off": ev.slur_off,
+                "scripts": ev.scripts.iter().map(|s| json!([s.name, s.dir])).collect::<Vec<_>>(),
+                "texts": ev.texts.iter().map(|w| json!([w.text, w.dir])).collect::<Vec<_>>(),
+                "dynamic": ev.dynamic,
+                "hairpin": ev.hairpin.map(|c| c.to_string()),
+                "hairpin_end": ev.hairpin_end,
+                "tuplet": ev.tuplet.as_ref().map(|t| json!([t.id, t.n, t.d])),
+                "chord_name": chord_name,
+                "clef": [format!("{:?}", ev.clef.sign), ev.clef.line, ev.clef.octave],
+                "fifths": ev.fifths,
+                "time": [ev.time.0, ev.time.1],
+                "tempo": tempo,
+                "bar": ev.v,
+                "unsupported": unsupported,
+            }));
+        }
+        let lyrics = staff.lyrics.as_ref().map(|syl| syl.iter().map(|s| json!({ "text": s.text, "hyphen": s.hyphen, "extend": s.extend })).collect::<Vec<_>>());
+        staves.push(json!({
+            "kind": format!("{:?}", staff.kind),
+            "name": staff.props.instrument_name,
+            "short": staff.props.short_instrument_name,
+            "instrument": staff.props.midi_instrument,
+            "lyrics": lyrics,
+            "lyrics_voice": staff.lyrics_voice,
+            "events": events,
+        }));
+    }
+    Ok(json!({ "header": header, "groups": groups, "staves": staves }))
 }

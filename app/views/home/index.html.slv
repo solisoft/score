@@ -70,7 +70,7 @@
                 about 290 KB gzipped, downloaded once.
             </p>
         </div>
-<pre class="code-block"><code>&lt;script type="module" src="https://score.solisoft.net/eui-score/eui-score.js"&gt;&lt;/script&gt;
+<pre class="code-block"><code>&lt;script type="module" src="https://score.solisoft.net/eui-score.js"&gt;&lt;/script&gt;
 
 &lt;eui-score&gt;
   &lt;script type="text/x-lilypond"&gt; \relative c' { c4 e g c | g1 \bar "|." } &lt;/script&gt;
