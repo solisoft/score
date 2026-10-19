@@ -18,7 +18,7 @@ const { loaded, toMidi, toPdf, download, engine } = await import(`./eui-score.js
 const M = await import(`./score-model.js${V}`);
 const { editor_view_lit, score_json } = engine;
 
-const COLOURS = { selection: "#b4373a", head: "#e0662a", cursor: "#2563c9", playing: "#16803c" };
+const COLOURS = { selection: "#b4373a", head: "#e0662a", cursor: "#2563c9", playing: "#0f9d47" };
 const PLAYER_SRC = "https://cdn.jsdelivr.net/combine/npm/tone@14.7.58,npm/@magenta/music@1.23.1/es6/core.js,npm/focus-visible@5,npm/html-midi-player@1.5.0";
 const DRAFT = "eui-score-studio-draft";
 const KEY_DURATIONS = { 2: 32, 3: 16, 4: 8, 5: 4, 6: 2, 7: 1 };
@@ -37,6 +37,11 @@ export function startStudio(root, options = {}) {
   svgHost.className = "studio-svg";
   svgHost.append(...sheet.childNodes);
   sheet.appendChild(svgHost);
+  // The playhead: a band over the column being played, every staff of it.
+  const playhead = document.createElement("div");
+  playhead.className = "studio-playhead";
+  playhead.hidden = true;
+  sheet.appendChild(playhead);
 
   const st = {
     score: null, // the model, or null when the text is all there is
@@ -635,6 +640,7 @@ export function startStudio(root, options = {}) {
       say(error.message ?? String(error), true);
     }
     if (wordsBox) placeWords();
+    placePlayhead();
     showState();
   }
 
@@ -1016,6 +1022,7 @@ export function startStudio(root, options = {}) {
     } catch (error) {}
     root.querySelector("[data-player]").innerHTML = "";
     st.playing = null;
+    playhead.hidden = true;
     say("");
     draw();
   }
@@ -1052,9 +1059,48 @@ export function startStudio(root, options = {}) {
     state.textContent = `Playing${bars} · ${clock(now)} / ${clock(total)} — Space to stop`;
   }
 
+  /** The band over what is sounding: as wide as its notes, as tall as its system. */
+  function placePlayhead() {
+    const now = st.playing?.now;
+    if (!now?.length || !st.view) {
+      playhead.hidden = true;
+      return;
+    }
+    const boxes = st.view.items.filter((it) => now.includes(it.item)).map((it) => it.box);
+    if (!boxes.length) {
+      playhead.hidden = true;
+      return;
+    }
+    // The system: every item whose box overlaps these notes' height band.
+    const x0 = Math.min(...boxes.map((b) => b[0]));
+    const x1 = Math.max(...boxes.map((b) => b[2]));
+    let y0 = Math.min(...boxes.map((b) => b[1]));
+    let y1 = Math.max(...boxes.map((b) => b[3]));
+    for (const it of st.view.items) {
+      const [, a, , b] = it.box;
+      if (b >= y0 - 40 && a <= y1 + 40) {
+        y0 = Math.min(y0, a);
+        y1 = Math.max(y1, b);
+      }
+    }
+    const svg = svgHost.querySelector("svg");
+    const rect = svg.getBoundingClientRect();
+    const frame = sheet.getBoundingClientRect();
+    const scale = rect.width / st.view.width;
+    const left = rect.left - frame.left + sheet.scrollLeft;
+    const top = rect.top - frame.top + sheet.scrollTop;
+    Object.assign(playhead.style, {
+      left: `${left + (x0 - 4) * scale}px`,
+      width: `${(x1 - x0 + 8) * scale}px`,
+      top: `${top + (y0 - 10) * scale}px`,
+      height: `${(y1 - y0 + 20) * scale}px`,
+    });
+    playhead.hidden = false;
+  }
+
   /** Keeps the note being played in sight. */
   function followPlaying() {
-    const lit = svgHost.querySelector(`[fill="${COLOURS.playing}"]`);
+    const lit = playhead.hidden ? null : playhead;
     if (!lit) return;
     const box = lit.getBoundingClientRect();
     const frame = sheet.getBoundingClientRect();

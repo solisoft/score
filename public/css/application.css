@@ -2366,6 +2366,19 @@
   .studio-sheet.studio-dragging {
     cursor: ns-resize;
   }
+  .studio-svg {
+    position: relative;
+    z-index: 1;
+  }
+  .studio-playhead {
+    position: absolute;
+    z-index: 0;
+    pointer-events: none;
+    border-radius: 6px;
+    background: rgba(15, 157, 71, .14);
+    box-shadow: inset 0 0 0 1.5px rgba(15, 157, 71, .45);
+    transition: left .08s linear, top .15s ease, width .08s linear;
+  }
   .studio-sheet-refused {
     background: #fffaf8;
   }
