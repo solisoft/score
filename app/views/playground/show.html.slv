@@ -139,12 +139,17 @@
         <h3>Repeats</h3>
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="repeat" title="Repeat the selected bars — the same bars again take it away">𝄆 Repeat 𝄇</button>
-          <button type="button" class="tool tool-wide" data-act="endings" title="Its last selected bars become ending 1., an empty ending 2. follows; on a repeat with endings, one more">1. 2. Endings</button>
+          <button type="button" class="tool tool-wide" data-act="ending" title="The selected bars become the next ending: 1., then 2.…">Ending 1. 2.</button>
         </div>
         <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="unrepeat" title="Take the repeat around the selection away; its bars stay">Remove repeat</button>
+          <button type="button" class="tool tool-wide" data-act="endings" title="Add an empty ending after the repeat (a bar is inserted)">+ Empty ending</button>
+          <button type="button" class="tool tool-wide" data-act="unrepeat" title="Take the repeat around the selection away; its bars stay">Remove</button>
         </div>
-        <p class="tool-hint">Select notes in the bars to repeat — click the first, Shift+click the last.</p>
+        <p class="tool-hint">
+          Drag across the bars to select them, then <b>Repeat</b>. Select the bars after it and press <b>Ending</b>
+          for 1., again for 2. On the score, drag a repeat's handles to another bar line to change where it starts,
+          ends, and how long each ending is.
+        </p>
       </section>
 
       <section class="tool-section">

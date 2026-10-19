@@ -37,6 +37,11 @@ export function startStudio(root, options = {}) {
   svgHost.className = "studio-svg";
   svgHost.append(...sheet.childNodes);
   sheet.appendChild(svgHost);
+  // Over the drawing: the selected bars, and the edges of each repeat to drag.
+  const overlay = document.createElement("div");
+  overlay.className = "studio-overlay";
+  sheet.appendChild(overlay);
+
   // The playhead: a band over the column being played, every staff of it.
   const playhead = document.createElement("div");
   playhead.className = "studio-playhead";
@@ -399,6 +404,10 @@ export function startStudio(root, options = {}) {
         M.toggleRepeat(score, a, b);
         say(`Bars ${a + 1}–${b + 1}${(score.repeats ?? []).some((r) => r.from === a && r.to === b) ? " repeated" : ": repeat taken away"}`);
       });
+      case "ending": return edit((score) => {
+        const [a, b] = selectedBars();
+        M.endingFromBars(score, a, b);
+      });
       case "endings": return edit((score) => {
         const [a, b] = selectedBars();
         M.addEndings(score, a, b);
@@ -430,7 +439,8 @@ export function startStudio(root, options = {}) {
       const b = M.barAt(st.score, st.input.t);
       return [b, b];
     }
-    if (!st.sel) throw new Error("Select notes in the bars — click the first, Shift+click the last");
+    if (!st.sel) throw new Error("Select the bars — drag across them, or click the first and Shift+click the last");
+    if (st.sel.bars) return st.sel.bars;
     const a = M.barAt(st.score, Math.min(st.sel.t0, st.sel.t1));
     const b = M.barAt(st.score, Math.max(st.sel.t0, st.sel.t1));
     return [a, b];
@@ -603,6 +613,22 @@ export function startStudio(root, options = {}) {
     wordsBox.box.select();
   }
 
+  /** Where the drawing is: its origin in the sheet's pixels, and its scale. */
+  function geometry() {
+    const svg = svgHost.querySelector("svg");
+    if (!svg || !st.view) return null;
+    const rect = svg.getBoundingClientRect();
+    const frame = sheet.getBoundingClientRect();
+    const scale = rect.width / st.view.width;
+    const y0 = st.view.y0 ?? 0;
+    return {
+      scale,
+      rect,
+      // A point of the drawing, in the sheet's pixels.
+      at: (x, y) => ({ x: rect.left - frame.left + sheet.scrollLeft + x * scale, y: rect.top - frame.top + sheet.scrollTop + (y - y0) * scale }),
+    };
+  }
+
   function closeWords() {
     wordsBox?.box.remove();
     wordsBox = null;
@@ -612,16 +638,12 @@ export function startStudio(root, options = {}) {
     if (!wordsBox || !st.view) return;
     const k = st.items.findIndex((it) => it.staff === wordsBox.s && M.starts(st.score.staves[it.staff])[it.index] === wordsBox.t);
     const item = st.view.items.find((it) => it.item === k);
-    if (!item) return;
-    const svg = svgHost.querySelector("svg");
-    const rect = svg.getBoundingClientRect();
-    const frame = sheet.getBoundingClientRect();
-    const scale = rect.width / st.view.width;
+    const g = geometry();
+    if (!item || !g) return;
     const [x0, y0, , y1] = item.box;
-    const left = rect.left - frame.left + sheet.scrollLeft;
-    const top = rect.top - frame.top + sheet.scrollTop;
-    wordsBox.box.style.left = `${left + x0 * scale - 6}px`;
-    wordsBox.box.style.top = wordsBox.kind === "lyric" ? `${top + y1 * scale + 8}px` : `${Math.max(0, top + y0 * scale - 36)}px`;
+    const corner = g.at(x0, wordsBox.kind === "lyric" ? y1 : y0);
+    wordsBox.box.style.left = `${corner.x - 6}px`;
+    wordsBox.box.style.top = wordsBox.kind === "lyric" ? `${corner.y + 8}px` : `${Math.max(0, corner.y - 36)}px`;
   }
 
   // ---- Drawing ------------------------------------------------------------------
@@ -663,6 +685,7 @@ export function startStudio(root, options = {}) {
       say(error.message ?? String(error), true);
     }
     if (wordsBox) placeWords();
+    placeOverlay();
     placePlayhead();
     showState();
   }
@@ -764,12 +787,52 @@ export function startStudio(root, options = {}) {
 
   // ---- Pointer ------------------------------------------------------------------
 
+  /** The drawing's point under the pointer. */
   function point(event) {
-    const svg = sheet.querySelector("svg");
-    if (!svg || !st.view) return null;
-    const rect = svg.getBoundingClientRect();
-    const scale = rect.width / st.view.width;
-    return { x: (event.clientX - rect.left) / scale, y: (event.clientY - rect.top) / scale, scale };
+    const g = geometry();
+    if (!g) return null;
+    return { x: (event.clientX - g.rect.left) / g.scale, y: (event.clientY - g.rect.top) / g.scale + (st.view.y0 ?? 0), scale: g.scale };
+  }
+
+  /** The bar under a point of the drawing, and the staff it is nearest: { bar, staff } or null. */
+  function barHit(p) {
+    for (const b of st.view.bars ?? []) {
+      const [x0, y0, x1, y1] = b.box;
+      // Above and below the staves too, where the chord names and the words are.
+      const pad = (y1 - y0) * 0.35;
+      if (p.x < x0 - 2 || p.x > x1 + 4 || p.y < y0 - pad || p.y > y1 + pad) continue;
+      const tops = b.staves;
+      let staff = 0;
+      tops.forEach((top, k) => {
+        if (Math.abs(p.y - (top + 16)) < Math.abs(p.y - (tops[staff] + 16))) staff = k;
+      });
+      return { bar: b.bar, staff: Math.min(staff, st.score.staves.length - 1) };
+    }
+    return null;
+  }
+
+  /** Bars `a`…`b` of staff `s` selected, all their notes. */
+  function selectBars(s, a, b) {
+    const staff = st.score.staves[s];
+    const bar = M.barLength(st.score);
+    const [from, to] = [Math.min(a, b), Math.max(a, b)];
+    const at = M.starts(staff);
+    const last = Math.max(...at.filter((t) => t < (to + 1) * bar));
+    st.sel = { staff: s, t0: from * bar, t1: last, head: -1, bars: [from, to] };
+    say("");
+    draw();
+  }
+
+  /** The bar line nearest x, as the bar that starts (`side` "start") or ends ("end") there. */
+  function nearestBarLine(p, side) {
+    let best = null;
+    for (const b of st.view.bars ?? []) {
+      const [x0, y0, x1, y1] = b.box;
+      const x = side === "start" ? x0 : x1;
+      const d = Math.hypot(p.x - x, p.y < y0 ? y0 - p.y : p.y > y1 ? p.y - y1 : 0);
+      if (!best || d < best.d) best = { bar: b.bar, d };
+    }
+    return best?.bar ?? null;
   }
 
   /** The note under the pointer: the nearest notehead within a few pixels, else the nearest note or rest. */
@@ -796,8 +859,26 @@ export function startStudio(root, options = {}) {
     sheet.focus({ preventScroll: true });
     if (!st.score || !st.view) return;
     const p = point(event);
+    // A repeat's edge, taken to be moved.
+    const grip = event.target.closest(".studio-grip");
+    if (grip) {
+      st.grip = { i: Number(grip.dataset.repeat), edge: grip.dataset.edge, base: snapshot(), moved: false };
+      sheet.setPointerCapture(event.pointerId);
+      event.preventDefault();
+      return;
+    }
     const found = p && hit(p);
     if (!found) {
+      // The empty part of a bar: it is selected, and a drag selects the bars it crosses.
+      const on = p && !st.input.on ? barHit(p) : null;
+      if (on) {
+        const keep = event.shiftKey && st.sel?.bars && st.sel.staff === on.staff;
+        const from = keep ? st.sel.bars[0] : on.bar;
+        st.barDrag = { s: on.staff, a: from };
+        selectBars(on.staff, from, on.bar);
+        sheet.setPointerCapture(event.pointerId);
+        return;
+      }
       if (!st.input.on) {
         st.sel = null;
         draw();
@@ -817,13 +898,30 @@ export function startStudio(root, options = {}) {
     select(s, i, chord ? found.head : -1, event.shiftKey);
     if (!ev.rest && !event.shiftKey) {
       const head = found.head >= 0 ? found.head : 0;
-      st.drag = { y: event.clientY, scale: p.scale, s, t: M.starts(st.score.staves[s])[i], head: chord ? head : -1, by: 0, chromatic: event.shiftKey, base: snapshot() };
+      st.drag = { x: event.clientX, y: event.clientY, at: p, scale: p.scale, s, t: M.starts(st.score.staves[s])[i], head: chord ? head : -1, by: 0, chromatic: event.shiftKey, base: snapshot() };
       sheet.setPointerCapture(event.pointerId);
     }
   });
 
   sheet.addEventListener("pointermove", (event) => {
+    if (st.barDrag) {
+      const on = point(event) && barHit(point(event));
+      if (on && on.bar !== st.sel?.bars?.[1]) selectBars(st.barDrag.s, st.barDrag.a, on.bar);
+      return;
+    }
+    if (st.grip) return moveGrip(event);
     if (!st.drag) return;
+    // Sideways from a note, not up or down: the drag selects bars instead.
+    const across = Math.abs(event.clientX - st.drag.x);
+    if (st.drag.by === 0 && across > 14 && across > 2 * Math.abs(event.clientY - st.drag.y)) {
+      const on = barHit(st.drag.at);
+      if (on) {
+        st.drag = null;
+        st.barDrag = { s: on.staff, a: on.bar };
+        const now = barHit(point(event)) ?? on;
+        return selectBars(on.staff, on.bar, now.bar);
+      }
+    }
     const half = 4 * st.zoom * st.drag.scale;
     const by = Math.round((st.drag.y - event.clientY) / half);
     if (by === st.drag.by) return;
@@ -842,7 +940,51 @@ export function startStudio(root, options = {}) {
     draw();
   });
 
+  /** A repeat's edge dragged to the bar line nearest the pointer — a preview, kept on release. */
+  function moveGrip(event) {
+    const p = point(event);
+    if (!p) return;
+    const { i, edge, base } = st.grip;
+    const score = JSON.parse(base).score;
+    const r = score.repeats[i];
+    const bar = nearestBarLine(p, edge === "from" ? "start" : "end");
+    if (bar == null) return;
+    const next = {};
+    if (edge === "from") next.from = bar;
+    else if (edge === "to") next.to = bar;
+    else {
+      const k = Number(edge.split(":")[1]);
+      const start = r.to + 1 + r.endings.slice(0, k).reduce((x, y) => x + y, 0);
+      next.endings = r.endings.map((n, j) => (j === k ? bar - start + 1 : n));
+    }
+    try {
+      M.setRepeat(score, i, next);
+    } catch (error) {
+      return say(error.message, true);
+    }
+    st.grip.moved = true;
+    st.score = score;
+    writeText();
+    say("");
+    draw();
+  }
+
   const endDrag = () => {
+    if (st.barDrag) {
+      st.barDrag = null;
+      return;
+    }
+    if (st.grip) {
+      const grip = st.grip;
+      st.grip = null;
+      if (grip.moved) {
+        st.past.push(grip.base);
+        st.future = [];
+        saveDraft();
+        draw();
+      }
+      return;
+    }
     const drag = st.drag;
     st.drag = null;
     sheet.classList.remove("studio-dragging");
@@ -1085,6 +1227,46 @@ export function startStudio(root, options = {}) {
     state.textContent = `Playing${bars} · ${clock(now)} / ${clock(total)} — Space to stop`;
   }
 
+  /** The selected bars' boxes, and a handle on every edge of every repeat. */
+  function placeOverlay() {
+    overlay.innerHTML = "";
+    const g = geometry();
+    if (!g || !st.score || st.input.on) return;
+    const boxOf = (bar) => st.view.bars?.find((b) => b.bar === bar)?.box;
+    const add = (className, x0, y0, x1, y1, props = {}) => {
+      const a = g.at(x0, y0);
+      const b = g.at(x1, y1);
+      const el = Object.assign(document.createElement("div"), { className, ...props });
+      Object.assign(el.style, { left: `${a.x}px`, top: `${a.y}px`, width: `${Math.max(2, b.x - a.x)}px`, height: `${b.y - a.y}px` });
+      overlay.appendChild(el);
+      return el;
+    };
+    if (st.sel?.bars) {
+      for (let bar = st.sel.bars[0]; bar <= st.sel.bars[1]; bar++) {
+        const box = boxOf(bar);
+        if (box) add("studio-bar-selected", box[0], box[1], box[2] + 3, box[3]);
+      }
+    }
+    (st.score.repeats ?? []).forEach((r, i) => {
+      const grip = (bar, side, edge, label) => {
+        const box = boxOf(bar);
+        if (!box) return;
+        const x = side === "start" ? box[0] : box[2] + 2;
+        const el = add("studio-grip", x - 5 / g.scale, box[1], x + 5 / g.scale, box[3], { title: `${label} — drag to another bar line` });
+        el.dataset.repeat = String(i);
+        el.dataset.edge = edge;
+        el.innerHTML = `<span>${label}</span>`;
+      };
+      grip(r.from, "start", "from", "𝄆");
+      grip(r.to, "end", "to", r.endings.length ? "𝄇 1." : "𝄇");
+      let end = r.to;
+      r.endings.forEach((n, k) => {
+        end += n;
+        grip(end, "end", `ending:${k}`, `${k + 1}.`);
+      });
+    });
+  }
+
   /** The band over what is sounding: as wide as its notes, as tall as its system. */
   function placePlayhead() {
     const now = st.playing?.now;
@@ -1109,18 +1291,11 @@ export function startStudio(root, options = {}) {
         y1 = Math.max(y1, b);
       }
     }
-    const svg = svgHost.querySelector("svg");
-    const rect = svg.getBoundingClientRect();
-    const frame = sheet.getBoundingClientRect();
-    const scale = rect.width / st.view.width;
-    const left = rect.left - frame.left + sheet.scrollLeft;
-    const top = rect.top - frame.top + sheet.scrollTop;
-    Object.assign(playhead.style, {
-      left: `${left + (x0 - 4) * scale}px`,
-      width: `${(x1 - x0 + 8) * scale}px`,
-      top: `${top + (y0 - 10) * scale}px`,
-      height: `${(y1 - y0 + 20) * scale}px`,
-    });
+    const g = geometry();
+    if (!g) return;
+    const a = g.at(x0 - 4, y0 - 10);
+    const b = g.at(x1 + 4, y1 + 10);
+    Object.assign(playhead.style, { left: `${a.x}px`, width: `${b.x - a.x}px`, top: `${a.y}px`, height: `${b.y - a.y}px` });
     playhead.hidden = false;
   }
 

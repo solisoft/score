@@ -294,7 +294,10 @@
   .studio-play { background: var(--ink); color: var(--paper); }
   .studio-play:hover:not(:disabled) { background: var(--accent); color: #fff; }
   .studio-zoom { display: inline-flex; align-items: center; gap: 2px; font-size: 13px; color: var(--muted); margin-left: 6px; }
-  .studio-state { margin-left: auto; font-size: 13px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .studio-state {
+    margin-left: auto; flex: 1 1 12em; min-width: 0; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: 13px; color: var(--ink-soft); font-variant-numeric: tabular-nums;
+  }
   .studio-input .studio-state { color: #2563c9; font-weight: 600; }
 
   .studio-progress {
@@ -343,6 +346,17 @@
   .studio-sheet svg { display: block; max-width: 100%; height: auto; }
   .studio-sheet.studio-dragging { cursor: ns-resize; }
   .studio-svg { position: relative; z-index: 1; }
+  .studio-overlay { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+  .studio-bar-selected { position: absolute; background: rgba(37, 99, 201, .1); box-shadow: inset 0 0 0 1.5px rgba(37, 99, 201, .45); border-radius: 4px; }
+  .studio-grip {
+    position: absolute; pointer-events: auto; cursor: ew-resize; border-radius: 6px;
+    background: linear-gradient(to right, transparent 40%, rgba(37, 99, 201, .55) 40%, rgba(37, 99, 201, .55) 60%, transparent 60%);
+  }
+  .studio-grip:hover { background: linear-gradient(to right, transparent 30%, #2563c9 30%, #2563c9 70%, transparent 70%); }
+  .studio-grip span {
+    position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%); white-space: nowrap;
+    font: 700 11px/16px var(--font-sans); color: #fff; background: #2563c9; border-radius: 8px; padding: 0 6px;
+  }
   .studio-playhead {
     position: absolute; z-index: 0; pointer-events: none; border-radius: 6px;
     background: rgba(15, 157, 71, .14); box-shadow: inset 0 0 0 1.5px rgba(15, 157, 71, .45);

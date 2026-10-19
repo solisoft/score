@@ -865,6 +865,51 @@ export function addEndings(score, a, b) {
   r.endings = [len, len];
 }
 
+/** The last bar a repeat spans, endings included. */
+export function repeatEnd(r) {
+  return r.to + r.endings.reduce((x, y) => x + y, 0);
+}
+
+/**
+ * Repeat `i` given new bounds — what dragging its edges does: a body from
+ * `from` to `to`, and each ending's length. Refused when it would leave the
+ * score, overlap another repeat, or leave a part with no bar.
+ */
+export function setRepeat(score, i, next) {
+  const r = score.repeats?.[i];
+  if (!r) throw new Error("there is no such repeat");
+  const candidate = { from: next.from ?? r.from, to: next.to ?? r.to, endings: [...(next.endings ?? r.endings)] };
+  if (candidate.from < 0 || candidate.to < candidate.from) throw new Error("a repeat keeps one bar at least");
+  if (candidate.endings.some((n) => !Number.isInteger(n) || n < 1)) throw new Error("an ending keeps one bar at least");
+  if (repeatEnd(candidate) >= barsOf(score)) throw new Error("the repeat would run past the last bar");
+  const others = score.repeats.filter((_, k) => k !== i);
+  if (others.some((o) => candidate.from <= repeatEnd(o) && repeatEnd(candidate) >= o.from)) throw new Error("the repeat would run into another one");
+  score.repeats[i] = candidate;
+}
+
+/**
+ * Bars `a`…`b` made the next ending of the repeat before them: right after
+ * its last part, they are its next ending; the last bars of a repeat with no
+ * endings become its first ending ("1."), its body ending before them.
+ */
+export function endingFromBars(score, a, b) {
+  const [from, to] = [Math.min(a, b), Math.max(a, b)];
+  const len = to - from + 1;
+  const repeats = score.repeats ?? [];
+  const after = repeats.findIndex((r) => repeatEnd(r) + 1 === from);
+  if (after >= 0) {
+    const r = repeats[after];
+    setRepeat(score, after, { endings: r.endings.length ? [...r.endings, len] : [len] });
+    return;
+  }
+  const inside = repeats.findIndex((r) => !r.endings.length && to === r.to && from > r.from);
+  if (inside >= 0) {
+    setRepeat(score, inside, { to: from - 1, endings: [len] });
+    return;
+  }
+  throw new Error("select the bars right after a repeat (its next ending), or a repeat's last bars (its first ending)");
+}
+
 /** `count` bars of rests put in every staff before bar `at`; the repeats after it move along. */
 export function insertBars(score, at, count) {
   const bar = barLength(score);

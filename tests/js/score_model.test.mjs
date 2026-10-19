@@ -264,6 +264,24 @@ test("repeats refuse what does not fit, and follow the bars around them", () => 
   assert.throws(() => M.setTime(s, 3, 4), /inside bars/);
 });
 
+test("a repeat's edges move, and selected bars become its endings", () => {
+  const s = M.newScore();
+  M.addBars(s, 4);
+  M.toggleRepeat(s, 0, 3);
+  M.endingFromBars(s, 2, 3);
+  assert.deepEqual(s.repeats, [{ from: 0, to: 1, endings: [2] }], "its last bars: ending 1.");
+  M.endingFromBars(s, 4, 4);
+  assert.deepEqual(s.repeats, [{ from: 0, to: 1, endings: [2, 1] }], "the bar after: ending 2.");
+  assert.throws(() => M.endingFromBars(s, 7, 7), /right after a repeat/);
+  M.setRepeat(s, 0, { endings: [1, 3] });
+  assert.match(engrave(s).source, /\\repeat volta 2 \{ r1 \| r1 \} \\alternative \{ \{ r1 \} \{ r1 \| r1 \| r1 \} \}/);
+  assert.deepEqual(reread(s).repeats, s.repeats);
+  assert.throws(() => M.setRepeat(s, 0, { to: -1 }), /one bar/);
+  assert.throws(() => M.setRepeat(s, 0, { endings: [1, 9] }), /past the last bar/);
+  M.toggleRepeat(s, 6, 7);
+  assert.throws(() => M.setRepeat(s, 0, { endings: [1, 5] }), /into another/);
+});
+
 test("bar-line repeat signs read as a repeat", () => {
   const back = M.fromParsed(JSON.parse(score_json(String.raw`{ \time 2/4 c'2 \bar ".|:" d'2 | e'2 \bar ":|." g'2 \bar "|." }`)));
   assert.ok(back.score, back.unsupported?.join());
