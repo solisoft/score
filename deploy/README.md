@@ -33,6 +33,9 @@ ENV
 - Soli on the server must be ≥ 2.26.0 (the `eui_score_*` builtins); the
   workflow pins and tests 2.28.2 and warns when the server differs.
 - No database: the site has no models.
+- The players' sounds, `public/soundfonts/MuseScore_General.sf3` (38 MB),
+  are not in git: the workflow fetches them with `deploy/soundfont.sh`
+  before its rsync. A local checkout runs that script once.
 
 ## On GitHub (once)
 

@@ -65,11 +65,13 @@
             </p>
             <p>
                 Music glyphs: Emmentaler (OFL). Score text: TeX Gyre Schola (GUST Font License).
+                Sounds: <a href="/soundfonts/MuseScore_General_License.txt">MuseScore_General</a> (MIT), played by
+                <a href="https://github.com/spessasus/spessasynth_lib">SpessaSynth</a> (Apache 2.0).
                 Built with <a href="https://solisoft.net">Soli</a>.
             </p>
         </div>
     </footer>
 
-    <script defer src="<%= public_path("js/score.js") %>"></script>
+    <script defer src="<%= public_path("js/score.js") %>" data-player="<%= public_path("eui-score/player.js") %>"></script>
 </body>
 </html>

@@ -1513,19 +1513,37 @@
   .score-player:empty {
     display: none;
   }
-  .score-player midi-player {
+  .score-player-note {
     display: block;
-    width: 100%;
     margin-top: 4px;
+    font-size: 13px;
+    color: var(--muted);
   }
-  .score-player midi-player::part(control-panel) {
-    background: var(--paper-deep);
+  .score-progress {
+    position: relative;
+    margin-top: 4px;
+    height: 26px;
     border: 1px solid var(--line);
     border-radius: 999px;
+    background: var(--paper-deep);
+    overflow: hidden;
+    cursor: pointer;
   }
-  .score-player midi-player::part(play-button) {
-    background: var(--ink);
-    color: var(--paper);
+  .score-progress-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0;
+    background: color-mix(in srgb, #16803c 22%, transparent);
+    border-right: 2px solid #16803c;
+    transition: width .25s linear;
+  }
+  .score-progress-text {
+    position: relative;
+    display: block;
+    padding: 0 14px;
+    font: 600 12px/26px var(--font-sans);
+    color: #135f2e;
+    font-variant-numeric: tabular-nums;
   }
   .score-source {
     margin-top: 12px;

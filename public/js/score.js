@@ -2,74 +2,117 @@
 //
 // One set of listeners on `document`, installed once per tab: instant
 // navigation swaps <body> and keeps `document`, so delegation keeps working
-// on every page without re-running anything. The MIDI player
-// (html-midi-player, over Magenta and Tone.js) is a megabyte and a half, so
-// it is fetched on the first click on "Play", never before.
+// on every page without re-running anything. The player
+// (/eui-score/player.js: SpessaSynth and the MuseScore_General sounds) is
+// fetched on the first click on "Play", never before; the sounds are 38 MB
+// the first time, then kept by the browser.
 (function () {
   if (window.__soliScoreUi) return;
   window.__soliScoreUi = true;
 
-  var PLAYER_SRC =
-    "https://cdn.jsdelivr.net/combine/npm/tone@14.7.58,npm/@magenta/music@1.23.1/es6/core.js,npm/focus-visible@5,npm/html-midi-player@1.5.0";
-  var loading = null;
-  var players = [];
+  // Its address, versioned, from the layout: this script is not a module.
+  var PLAYER_SRC = (document.currentScript && document.currentScript.getAttribute("data-player")) || "/eui-score/player.js";
+  var PLAY_LABEL = '<span aria-hidden="true">▶</span> Play';
+  var STOP_LABEL = '<span aria-hidden="true">■</span> Stop';
+  var player = null;
+  var playing = null; // { button, slot, handle, timer }
 
   function loadPlayer() {
-    if (window.customElements && customElements.get("midi-player")) return Promise.resolve();
-    if (!loading) {
-      loading = new Promise(function (resolve, reject) {
-        var script = document.createElement("script");
-        script.src = PLAYER_SRC;
-        script.onload = resolve;
-        script.onerror = function () {
-          loading = null;
-          reject(new Error("player"));
-        };
-        document.head.appendChild(script);
-      }).then(function () {
-        return customElements.whenDefined("midi-player");
+    player = player || import(PLAYER_SRC).catch(function (error) {
+      player = null;
+      throw error;
+    });
+    return player;
+  }
+
+  function clock(sec) {
+    var s = Math.max(0, Math.floor(sec));
+    return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  }
+
+  /** The bar under the buttons: how far the piece has played; a click plays from there. */
+  function showProgress(state) {
+    var bar = state.slot.querySelector(".score-progress");
+    if (!bar) {
+      state.slot.innerHTML =
+        '<div class="score-progress" role="progressbar" aria-label="Playing">' +
+        '<div class="score-progress-fill"></div><span class="score-progress-text"></span></div>';
+      bar = state.slot.firstChild;
+      bar.addEventListener("click", function (event) {
+        var handle = state.handle;
+        if (!handle || !handle.duration) return;
+        var rect = bar.getBoundingClientRect();
+        handle.time = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) * handle.duration;
       });
     }
-    return loading;
+    var handle = state.handle;
+    if (!handle) return;
+    var total = handle.duration || 0;
+    var now = Math.min(Math.max(0, handle.time || 0), total);
+    bar.querySelector(".score-progress-fill").style.width = total ? (100 * now) / total + "%" : "0";
+    bar.querySelector(".score-progress-text").textContent = clock(now) + " / " + clock(total);
+  }
+
+  function reset(state) {
+    clearInterval(state.timer);
+    state.button.disabled = false;
+    state.button.innerHTML = PLAY_LABEL;
+    state.slot.innerHTML = "";
+    if (playing === state) playing = null;
   }
 
   function stopAll() {
-    players.forEach(function (player) {
-      try {
-        if (player.playing) player.stop();
-      } catch (e) {}
-    });
-    players = players.filter(function (player) {
-      return player.isConnected;
-    });
+    if (playing && playing.handle) playing.handle.stop();
+    else if (playing) reset(playing);
   }
 
   function play(button) {
     var slot = button.parentElement.querySelector("[data-score-player]");
     if (!slot) return;
-    var label = button.innerHTML;
-    button.disabled = true;
-    button.textContent = "Loading…";
-    loadPlayer()
-      .then(function () {
-        stopAll();
-        slot.innerHTML = "";
-        var player = document.createElement("midi-player");
-        player.setAttribute("sound-font", "");
-        player.setAttribute("src", button.getAttribute("data-midi"));
-        player.addEventListener("load", function () {
-          try {
-            player.start();
-          } catch (e) {}
-        }, { once: true });
-        slot.appendChild(player);
-        players.push(player);
-        button.hidden = true;
+    // A second click stops it.
+    if (playing && playing.button === button) {
+      var was = playing;
+      if (was.handle) was.handle.stop();
+      else {
+        reset(was);
+        if (player) player.then(function (p) { p.stop(); });
+      }
+      return;
+    }
+    stopAll();
+    var state = { button: button, slot: slot, handle: null, timer: 0 };
+    playing = state;
+    // A context made inside the click may play; one made after a download may
+    // not: the player is given this one.
+    var context = window.AudioContext ? new AudioContext() : null;
+    button.innerHTML = STOP_LABEL;
+    slot.innerHTML = '<span class="score-player-note">Loading the player…</span>';
+    Promise.all([loadPlayer(), fetch(button.getAttribute("data-midi")).then(function (r) { return r.arrayBuffer(); })])
+      .then(function (both) {
+        var p = both[0];
+        if (playing !== state) {
+          if (context) context.close();
+          return null;
+        }
+        p.unlock(context || undefined);
+        if (!p.isReady()) slot.innerHTML = '<span class="score-player-note">Loading the sounds… (38 MB, once)</span>';
+        return p.play(both[1], {
+          onStop: function () { reset(state); },
+          onProgress: function (f) {
+            if (playing === state) slot.innerHTML = '<span class="score-player-note">Loading the sounds… ' + Math.round(100 * f) + " % (38 MB, once)</span>";
+          },
+        });
+      })
+      .then(function (handle) {
+        if (!handle || playing !== state) return;
+        state.handle = handle;
+        showProgress(state);
+        state.timer = setInterval(function () { showProgress(state); }, 250);
       })
       .catch(function () {
-        button.disabled = false;
-        button.innerHTML = label;
+        reset(state);
         button.title = "The player could not be loaded.";
+        slot.innerHTML = '<span class="score-player-note">The player could not be loaded.</span>';
       });
   }
 

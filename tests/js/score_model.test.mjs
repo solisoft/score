@@ -6,7 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
-import init, { editor_view, score_json } from "../../public/eui-score/eui_score_web.js";
+import init, { editor_view, midi, score_json } from "../../public/eui-score/eui_score_web.js";
 import * as M from "../../public/eui-score/score-model.js";
 
 await init({ module_or_path: readFileSync(new URL("../../public/eui-score/eui_score_web_bg.wasm", import.meta.url)) });
@@ -245,6 +245,72 @@ test("repeats: written around their bars, with their endings, and read back", ()
   M.removeRepeat(s, 0);
   assert.deepEqual(s.repeats, []);
   engrave(s);
+});
+
+test("playing: every repeat played out, each pass with its ending, timed bar by bar", () => {
+  const s = M.newScore();
+  for (const [k, d] of [7, 9, 11, 12].entries()) M.write(s, 0, k * 4 * q, 4 * q, { rest: false, pitches: [{ d, alter: 0 }] });
+  // Nothing repeated: the bars as written.
+  assert.deepEqual(M.playOrder(s), [0, 1, 2, 3]);
+
+  // A repeat without endings sounds twice.
+  M.toggleRepeat(s, 0, 1);
+  assert.deepEqual(M.playOrder(s), [0, 1, 0, 1, 2, 3]);
+  const twice = M.toLilyPond(s, { unfold: true }).source;
+  assert.doesNotMatch(twice, /\\repeat|\\alternative/);
+  assert.match(twice, /c'1 \| e'1 \| c'1 \| e'1 \| g'1 \| a'1 \\bar "\|\."/);
+  midi(twice, 100, 4, 0);
+
+  // With endings: the body, ending 1, the body, ending 2.
+  M.removeRepeat(s, 0);
+  M.toggleRepeat(s, 0, 1);
+  M.addEndings(s, 1, 1);
+  assert.deepEqual(s.repeats, [{ from: 0, to: 0, endings: [1, 1] }]);
+  assert.deepEqual(M.playOrder(s), [0, 1, 0, 2, 3, 4]);
+  assert.match(M.toLilyPond(s, { unfold: true }).source, /c'1 \| e'1 \| c'1 \| r1 \| g'1/);
+
+  // Three passes, one ending each; LilyPond's own count is kept apart.
+  M.addEndings(s, 0, 0);
+  assert.deepEqual(M.playOrder(s), [0, 1, 0, 2, 0, 3, 4, 5]);
+  assert.doesNotMatch(engrave(s).source, /c'1 \| e'1 \| c'1/, "the engraving keeps its repeat signs");
+
+  // Timed at 100 a quarter when no tempo is set: 4/4 bars of 2.4 s.
+  const passes = M.playback(s);
+  assert.equal(passes.length, 8);
+  assert.deepEqual(passes.map((p) => p.bar), M.playOrder(s));
+  assert.ok(Math.abs(passes[7].end - 8 * 2.4) < 1e-9);
+  // Bar 0's first beat sounds on each of the three passes; the third beat, 1.2 s later.
+  assert.deepEqual(M.playedAt(s, passes, 0).map((x) => +x.toFixed(6)), [0, 4.8, 9.6]);
+  assert.deepEqual(M.playedAt(s, passes, 2 * q).map((x) => +x.toFixed(6)), [1.2, 6, 10.8]);
+  assert.equal(M.passAt(passes, 5).bar, 0);
+  assert.equal(M.passAt(passes, 7.3).bar, 2);
+  assert.equal(M.passAt(passes, 99).bar, 5);
+  assert.equal(M.passAt([], 1), null);
+});
+
+test("playing: a jump back says again the speed and metre it returns to", () => {
+  const s = M.newScore();
+  M.ensureLength(s, 4 * 4 * q);
+  M.setTempoAt(s, 1, { text: "", base: 4, bpm: 50 });
+  M.toggleRepeat(s, 0, 1);
+  // Bar 1 is twice as slow; back to bar 0, the speed is 100 again.
+  const passes = M.playback(s);
+  assert.deepEqual(passes.map((p) => +(p.end - p.start).toFixed(6)), [2.4, 4.8, 2.4, 4.8, 4.8, 4.8]);
+  const source = M.toLilyPond(s, { unfold: true }).source;
+  assert.match(source, /\\tempo 4 = 50 r1 \| \\tempo 4 = 100 r1 \| \\tempo 4 = 50 r1/);
+  midi(source, 100, 4, 0);
+
+  // A metre change inside the repeat: the bar played again is in its own metre.
+  const m = M.newScore();
+  M.ensureLength(m, 4 * 4 * q);
+  M.setTempoAt(m, 1, { text: "", base: 4, bpm: 50 });
+  M.setTimeAt(m, 1, 3, 4);
+  M.toggleRepeat(m, 0, 1);
+  const metre = M.toLilyPond(m, { unfold: true }).source;
+  assert.match(metre, /\\time 3\/4 [^|]*\| \\time 4\/4 [^|]*r1 \| \\time 3\/4/);
+  midi(metre, 100, 4, 0);
+  const bar1 = M.playback(m)[1];
+  assert.ok(Math.abs(bar1.end - bar1.start - 3.6) < 1e-9, "a 3/4 bar at 50 a quarter");
 });
 
 test("repeats refuse what does not fit, and follow the bars around them", () => {

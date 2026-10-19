@@ -12,7 +12,16 @@ class ScoreAssets
   static def version
     return ScoreAssets.cached unless ScoreAssets.cached.blank?
 
-    parts = ["eui-score.js", "eui-score-editor.js", "studio.js", "score-model.js", "eui_score_web.js", "wasm.version"]
+    parts = [
+      "eui-score.js",
+      "eui-score-editor.js",
+      "studio.js",
+      "score-model.js",
+      "player.js",
+      "vendor/README.md",
+      "eui_score_web.js",
+      "wasm.version"
+    ]
     text = parts.map do |name|
       File.read("public/eui-score/#{name}") rescue name
     end.join("\n")

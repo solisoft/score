@@ -10,4 +10,22 @@ describe("ScoreAssets") do
     assert_eq(entry["status"], 200)
     assert_contains(entry["body"], "/eui-score/studio.js?v=#{ScoreAssets.version}")
   end
+
+  test("ships the player, its synthesizer and the sounds' licence; no player from a CDN") do
+    shipped = [
+      "player.js",
+      "vendor/spessasynth.js",
+      "vendor/spessasynth_processor.min.js",
+      "vendor/SPESSASYNTH_LICENSE"
+    ]
+    shipped.each do |name|
+      assert(File.exists("public/eui-score/#{name}"), name)
+    end
+    assert_contains(File.read("public/soundfonts/MuseScore_General_License.txt"), "MIT license")
+    ["public/eui-score/studio.js", "public/js/score.js"].each do |path|
+      code = File.read(path)
+      assert_not(code.contains("cdn.jsdelivr.net"), path)
+      assert_contains(code, "player.js")
+    end
+  end
 end

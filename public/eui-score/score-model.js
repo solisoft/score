@@ -996,9 +996,10 @@ function lyricText(staff) {
  * `items` maps each note and rest, in the order eui-score numbers them, to
  * its lane and event. `open` lists bars of second voices to write even when
  * they hold only rests — where the page is writing in them — as
- * `[{ staff: lane, bar }]`.
+ * `[{ staff: lane, bar }]`. `unfold` plays every repeat out, for the MIDI:
+ * no repeat signs, the bars in the order they sound (see `playOrder`).
  */
-export function toLilyPond(score, { open = [] } = {}) {
+export function toLilyPond(score, { open = [], unfold = false } = {}) {
   const items = [];
   const header = Object.entries(score.header).filter(([, v]) => v).map(([k, v]) => `${k} = ${quote(v)}`).join(" ");
   const repeats = score.repeats ?? [];
@@ -1013,8 +1014,8 @@ export function toLilyPond(score, { open = [] } = {}) {
       items.push(...bar.items, ...(shown ? other.items : []));
       return changesText(score, s, b) + (shown ? `<< { ${bar.text} } \\\\ { ${other.text} } >>` : bar.text);
     });
-    const music = withRepeats(bars, repeats);
-    const lastRepeat = repeats.find((r) => r.endings.length === 0 && r.to === bars.length - 1);
+    const music = unfold ? playedOut(score, s, bars) : withRepeats(bars, repeats);
+    const lastRepeat = !unfold && repeats.find((r) => r.endings.length === 0 && r.to === bars.length - 1);
     const name = staff.name ? `instrumentName = ${quote(staff.name)} ` : "";
     const short = staff.short ? `shortInstrumentName = ${quote(staff.short)} ` : "";
     const midi = staff.instrument ? `midiInstrument = ${quote(staff.instrument)} ` : "";
@@ -1295,6 +1296,100 @@ export function insertBars(score, at, count) {
     if (r.from >= at) r.from += count;
     if (r.to >= at) r.to += count;
   }
+}
+
+// ---- Playing ----------------------------------------------------------------------------------
+//
+// A repeat is played out: its bars twice, or once for each of its endings,
+// each pass followed by its ending — as LilyPond's \unfoldRepeats does, the
+// first ending standing in for the passes that have none. The MIDI is
+// written from the score played out (`toLilyPond(score, { unfold: true })`),
+// and `playback` says when each bar sounds on each pass.
+
+/** The bars in the order they sound, every repeat played out. */
+export function playOrder(score) {
+  const total = barsOf(score);
+  const order = [];
+  const span = (from, n) => Array.from({ length: n }, (_, k) => from + k);
+  let b = 0;
+  while (b < total) {
+    const r = (score.repeats ?? []).find((x) => x.from === b);
+    if (!r) {
+      order.push(b++);
+      continue;
+    }
+    const passes = Math.max(2, r.endings.length);
+    const starts = [];
+    let next = r.to + 1;
+    for (const n of r.endings) {
+      starts.push(next);
+      next += n;
+    }
+    for (let pass = 0; pass < passes; pass++) {
+      order.push(...span(r.from, r.to + 1 - r.from));
+      if (!r.endings.length) continue;
+      const e = Math.max(0, pass - (passes - r.endings.length));
+      order.push(...span(starts[e], r.endings[e]));
+    }
+    b = next;
+  }
+  return order;
+}
+
+/** The beat and its speed in bar `b`, as secondsAt counts them: 100 a quarter when none is set. */
+function speedAt(score, b) {
+  let bpm = score.tempo?.bpm || 100;
+  let base = score.tempo?.base || 4;
+  for (const c of score.changes ?? []) {
+    if (c.bar > b || !c.tempo?.bpm) continue;
+    bpm = c.tempo.bpm;
+    base = c.tempo.base || base;
+  }
+  return { bpm, base };
+}
+
+/** Every pass through a bar, in the order they sound: [{ bar, start, end, bpm, base }], in seconds. */
+export function playback(score) {
+  let sec = 0;
+  return playOrder(score).map((bar) => {
+    const { bpm, base } = speedAt(score, bar);
+    const start = sec;
+    sec += (barLength(score, bar) / M_TICKS(base)) * (60 / bpm);
+    return { bar, start, end: sec, bpm, base };
+  });
+}
+
+/** When time `t` (ticks) sounds, in seconds, on each pass through its bar. */
+export function playedAt(score, passes, t) {
+  const bar = barAt(score, t);
+  const into = t - barStart(score, bar);
+  return passes.filter((p) => p.bar === bar).map((p) => p.start + (into / M_TICKS(p.base)) * (60 / p.bpm));
+}
+
+/** The pass sounding at `sec`, or the last one when the music is over; null for an empty score. */
+export function passAt(passes, sec) {
+  let k = 0;
+  while (k + 1 < passes.length && passes[k + 1].start <= sec + 1e-6) k++;
+  return passes[k] ?? null;
+}
+
+/** A lane's bars in the order they sound; a jump back says again the metre and the speed it returns to. */
+function playedOut(score, s, bars) {
+  const first = staffNumber(score, s) === 0;
+  let previous = -1;
+  return playOrder(score)
+    .map((b) => {
+      let jump = "";
+      if (previous >= 0 && b !== previous + 1) {
+        const [was, now] = [timeAt(score, previous), timeAt(score, b)];
+        if (was[0] !== now[0] || was[1] !== now[1]) jump += `\\time ${now[0]}/${now[1]} `;
+        const [before, after] = [speedAt(score, previous), speedAt(score, b)];
+        if (first && (before.bpm !== after.bpm || before.base !== after.base)) jump += `\\tempo ${after.base} = ${after.bpm} `;
+      }
+      previous = b;
+      return jump + bars[b];
+    })
+    .join(" | ");
 }
 
 // ---- Reading eui-score's parse back ---------------------------------------------------------

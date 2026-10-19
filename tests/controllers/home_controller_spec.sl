@@ -19,6 +19,13 @@ describe("HomeController") do
       assert_eq(piano["count"], ScoreLibrary.examples_in("piano").length)
     end
 
+    test("hands the page the player, served here, and credits its sounds") do
+      body = res_body(get("/"))
+      assert_contains(body, "data-player=\"/eui-score/player.js?v=")
+      assert_contains(body, "href=\"/soundfonts/MuseScore_General_License.txt\"")
+      assert_not(body.contains("html-midi-player"))
+    end
+
     test("carries its share tags") do
       body = res_body(get("/"))
       assert_contains(body, "<meta property=\"og:title\"")

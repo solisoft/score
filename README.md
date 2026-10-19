@@ -14,6 +14,12 @@ soli serve . --dev
 
 Your app will be available at [http://localhost:5011](http://localhost:5011)
 
+Play needs the sounds, too heavy for git (38 MB) — fetch them once:
+
+```bash
+deploy/soundfont.sh
+```
+
 ### Production Server
 
 Start the production server:

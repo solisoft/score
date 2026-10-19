@@ -16,10 +16,10 @@
 const V = new URL(import.meta.url).search;
 const { loaded, toMidi, toPdf, download, engine } = await import(`./eui-score.js${V}`);
 const M = await import(`./score-model.js${V}`);
+const P = await import(`./player.js${V}`);
 const { editor_view_lit, score_json } = engine;
 
 const COLOURS = { selection: "#b4373a", head: "#e0662a", cursor: "#2563c9", playing: "#0f9d47" };
-const PLAYER_SRC = "https://cdn.jsdelivr.net/combine/npm/tone@14.7.58,npm/@magenta/music@1.23.1/es6/core.js,npm/focus-visible@5,npm/html-midi-player@1.5.0";
 const DRAFT = "eui-score-studio-draft";
 const KEY_DURATIONS = { 2: 32, 3: 16, 4: 8, 5: 4, 6: 2, 7: 1 };
 const LETTERS = { c: 0, d: 1, e: 2, f: 3, g: 4, a: 5, b: 6 };
@@ -1260,74 +1260,76 @@ export function startStudio(root, options = {}) {
   new ResizeObserver(() => draw()).observe(sheet);
 
   // ---- Playing --------------------------------------------------------------------
-
-  let playerLoading = null;
-  function loadPlayer() {
-    if (customElements.get("midi-player")) return Promise.resolve();
-    playerLoading ??= new Promise((resolve, reject) => {
-      const script = Object.assign(document.createElement("script"), { src: PLAYER_SRC, onload: resolve, onerror: reject });
-      document.head.appendChild(script);
-    }).then(() => customElements.whenDefined("midi-player"));
-    return playerLoading;
-  }
+  //
+  // player.js plays the MIDI with MuseScore_General. The MIDI is written from
+  // the score with every repeat played out, and `passes` says when each bar
+  // sounds on each pass: the notes light up on the second time through too.
 
   async function togglePlay() {
     if (st.playing) return stopPlay();
     // Inside the click, before anything waits: a browser starts sound only
     // from a gesture, and a gesture does not outlive a download.
-    try {
-      window.Tone?.start?.();
-    } catch (error) {}
+    P.unlock();
+    const passes = st.score ? M.playback(st.score) : [];
+    // From the selection's bar (its first pass), or from the start.
+    const from = changeBar();
+    const at = from == null ? 0 : (passes.find((p) => p.bar === from)?.start ?? 0);
     let bytes;
     try {
-      bytes = await toMidi(st.text);
+      // 100 a quarter when the source sets no tempo, as the model counts.
+      bytes = await toMidi(st.score ? M.toLilyPond(st.score, { unfold: true }).source : st.text, { bpm: 100, beat: 4 });
     } catch (error) {
       return say(error.message ?? String(error), true);
     }
-    say("Loading the player…");
-    try {
-      await loadPlayer();
-    } catch (error) {
-      return say("The player could not be loaded.", true);
-    }
-    const holder = root.querySelector("[data-player]");
-    holder.innerHTML = "";
-    const player = document.createElement("midi-player");
-    player.setAttribute("sound-font", "");
-    player.src = URL.createObjectURL(new Blob([bytes], { type: "audio/midi" }));
-    holder.appendChild(player);
-    st.playing = { player, now: [], times: noteTimes(), timer: null };
-    player.addEventListener("note", (event) => {
-      const at = event.detail.note.startTime;
-      const now = st.playing?.times.filter((n) => Math.abs(n.sec - at) < 0.02).map((n) => n.item) ?? [];
-      if (now.length && st.playing) {
-        st.playing.now = now;
-        draw().then(followPlaying);
-      }
-    });
-    st.playing.timer = setInterval(showProgress, 200);
-    player.addEventListener("stop", () => {
-      const quick = st.playing && (player.currentTime || 0) < 0.05;
-      stopPlay();
-      if (quick) say("The browser kept the sound off — press Play again.", true);
-    });
-    player.addEventListener("load", () => {
-      try {
-        player.start();
-        say("Playing — Space to stop");
-      } catch (error) {}
-    }, { once: true });
+    const playing = { handle: null, passes, times: noteTimes(passes), now: [], lit: -1, frame: 0, timer: 0 };
+    st.playing = playing;
     showState();
+    if (!P.isReady()) say("Loading the sounds…");
+    let handle;
+    try {
+      handle = await P.play(bytes, {
+        at,
+        onStop: () => st.playing === playing && stopPlay(),
+        onProgress: (f) => st.playing === playing && say(`Loading the sounds… ${Math.round(100 * f)} % (38 MB, once)`),
+      });
+    } catch (error) {
+      if (st.playing === playing) stopPlay();
+      return say("The sounds could not be loaded.", true);
+    }
+    if (!handle || st.playing !== playing) return;
+    playing.handle = handle;
+    say("Playing — Space to stop");
+    playing.timer = setInterval(showProgress, 200);
+    const follow = () => {
+      if (st.playing !== playing) return;
+      light(handle.time);
+      playing.frame = requestAnimationFrame(follow);
+    };
+    follow();
+  }
+
+  /** Lights the notes that started last, at `sec`; draws only when they change. */
+  function light(sec) {
+    const playing = st.playing;
+    const times = playing.times;
+    let k = -1;
+    while (k + 1 < times.length && times[k + 1].sec <= sec + 0.01) k++;
+    if (k === playing.lit) return;
+    playing.lit = k;
+    playing.now = k < 0 ? [] : times[k].items;
+    draw().then(followPlaying);
   }
 
   function stopPlay() {
-    clearInterval(st.playing?.timer);
-    progress.hidden = true;
-    try {
-      st.playing?.player.stop();
-    } catch (error) {}
-    root.querySelector("[data-player]").innerHTML = "";
+    const playing = st.playing;
     st.playing = null;
+    if (playing) {
+      clearInterval(playing.timer);
+      cancelAnimationFrame(playing.frame);
+      if (playing.handle) playing.handle.stop();
+      else P.stop(); // still loading: it must not start after all
+    }
+    progress.hidden = true;
     playhead.hidden = true;
     say("");
     draw();
@@ -1341,23 +1343,23 @@ export function startStudio(root, options = {}) {
   progress.innerHTML = '<div class="studio-progress-fill"></div><span class="studio-progress-text"></span>';
   root.querySelector(".studio-menubar").after(progress);
   progress.addEventListener("click", (event) => {
-    const player = st.playing?.player;
-    if (!player?.duration) return;
+    const handle = st.playing?.handle;
+    if (!handle?.duration) return;
     const rect = progress.getBoundingClientRect();
-    player.currentTime = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) * player.duration;
+    handle.time = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) * handle.duration;
   });
 
   const clock = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;
 
   function showProgress() {
-    const player = st.playing?.player;
-    if (!player) return;
-    const now = player.currentTime || 0;
-    const total = player.duration || 0;
+    const handle = st.playing?.handle;
+    if (!handle) return;
+    const total = handle.duration || 0;
+    const now = Math.min(Math.max(0, handle.time || 0), total);
     progress.hidden = false;
     progress.querySelector(".studio-progress-fill").style.width = total ? `${(100 * now) / total}%` : "0";
-    const bar = st.score ? Math.min(M.barsOf(st.score), M.barAt(st.score, M.ticksAtSeconds(st.score, now)) + 1) : 0;
-    const bars = st.score ? ` · bar ${bar} of ${M.barsOf(st.score)}` : "";
+    const pass = M.passAt(st.playing.passes, now);
+    const bars = pass && st.score ? ` · bar ${pass.bar + 1} of ${M.barsOf(st.score)}` : "";
     progress.querySelector(".studio-progress-text").textContent = `${clock(now)} / ${clock(total)}${bars}`;
     state.textContent = `Playing${bars} · ${clock(now)} / ${clock(total)} — Space to stop`;
   }
@@ -1444,20 +1446,21 @@ export function startStudio(root, options = {}) {
     if (box.top < top || box.bottom > Math.min(frame.bottom, innerHeight)) lit.scrollIntoView({ block: "center", behavior: "smooth" });
   }
 
-  /** When each item starts, in seconds, at the score's tempo. */
-  function noteTimes() {
+  /** When notes start, in seconds, on every pass: [{ sec, items }], in order. */
+  function noteTimes(passes) {
     if (!st.score) return [];
-    const out = [];
+    const at = new Map();
+    const starts = st.score.staves.map((staff) => M.starts(staff));
     st.items.forEach(({ staff, index }, item) => {
-      const t = M.starts(st.score.staves[staff])[index];
-      if (!st.score.staves[staff].events[index].rest) out.push({ item, sec: M.secondsAt(st.score, t) });
+      if (st.score.staves[staff].events[index].rest) return;
+      for (const sec of M.playedAt(st.score, passes, starts[staff][index])) {
+        const key = Math.round(sec * 1000);
+        if (!at.has(key)) at.set(key, { sec, items: [] });
+        at.get(key).items.push(item);
+      }
     });
-    return out;
+    return [...at.values()].sort((a, b) => a.sec - b.sec);
   }
-
-  // The player is heavy: fetched once the page is idle, so that Play plays
-  // at once — and within the click that asked for it.
-  setTimeout(() => loadPlayer().catch(() => {}), 2500);
 
   // ---- Start ---------------------------------------------------------------------
 

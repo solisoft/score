@@ -320,7 +320,6 @@
     </div>
     <textarea data-source wrap="off" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="LilyPond source"><%= source %></textarea>
   </section>
-  <div hidden data-player></div>
 </div>
 
 <script type="module">

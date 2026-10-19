@@ -180,6 +180,18 @@ jobs:
           ssh "$USER@$HOST" "test -f '$SITES_DIR/$DOMAIN/app.infos' && test -f '$SITES_DIR/$DOMAIN/.env'" \
             || { echo "$SITES_DIR/$DOMAIN must hold app.infos and .env — see deploy/README.md" >&2; exit 1; }
 
+      # The players' sounds are not in git (38 MB): fetched, checked against
+      # their SHA-256, kept between runs. Before the rsync, which would
+      # otherwise take them off the server.
+      - name: Keep the sounds between runs
+        uses: actions/cache@v4
+        with:
+          path: public/soundfonts/MuseScore_General.sf3
+          key: soundfont-${{ hashFiles('deploy/soundfont.sh') }}
+
+      - name: Fetch the sounds
+        run: deploy/soundfont.sh
+
       # --delete-delay: what leaves the repository leaves the server. The
       # exclusions keep what lives only on the server, and what has no
       # business there (the Rust crate, tests, agent notes).

@@ -40,3 +40,6 @@ coverage/
 # The EUI publisher key: clients pin it, and it signs the manifest. Never public.
 config/eui_publisher.pkcs8
 /wasm/target/
+
+# The players' sounds: fetched by deploy/soundfont.sh, too heavy for git
+/public/soundfonts/*.sf3
