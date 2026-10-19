@@ -247,6 +247,16 @@ test("repeats: written around their bars, with their endings, and read back", ()
   engrave(s);
 });
 
+test("sharing: a score goes into a link and comes back the same", async () => {
+  const text = readFileSync(new URL("../../scores/ensembles/symphony-5.ly", import.meta.url), "utf8") + "\n% Été, «ça», 𝄞\n";
+  const code = await M.shareCode(text);
+  assert.match(code, /^[A-Za-z0-9_-]+$/, "only what a URL keeps as it is");
+  assert.ok(code.length < text.length, `smaller than the text (${code.length} for ${text.length})`);
+  assert.equal(await M.fromShareCode(code), text);
+  // A code that is not one is refused, not read as something else.
+  await assert.rejects(() => M.fromShareCode("not-a-score"));
+});
+
 test("a refusal points at its line: the brace left open, or the engraver's own place", () => {
   const refusal = (text) => {
     try {

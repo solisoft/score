@@ -388,6 +388,7 @@ export function startStudio(root, options = {}) {
       case "zoom-out": st.zoom = Math.max(0.5, Math.round((st.zoom - 0.1) * 10) / 10); return draw();
       case "save-ly": return download(st.text, `${fileName()}.ly`, "text/x-lilypond");
       case "save-pdf": return toPdf(st.text, title()).then((pdf) => download(pdf, `${fileName()}.pdf`, "application/pdf")).catch((e) => refuse(e));
+      case "share": return share();
       case "save-midi": return toMidi(st.text).then((m) => download(m, `${fileName()}.mid`, "audio/midi")).catch((e) => refuse(e));
       case "mode-select": return setInput(false);
       case "mode-input": return setInput(true);
@@ -965,6 +966,21 @@ export function startStudio(root, options = {}) {
         case "staff-instrument": if (value !== "other") M.setInstrument(score, staffOf(), Number(value)); break;
       }
     });
+  }
+
+  /** Copies a link holding the score; where the clipboard is refused, shows it to copy by hand. */
+  async function share() {
+    const link = `${location.origin}${location.pathname}#s=${await M.shareCode(st.text)}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      return say("Link copied: whoever opens it gets this score. It lives in the link, not on the site.");
+    } catch (error) {
+      say("Copy this link:");
+      const field = Object.assign(document.createElement("input"), { type: "text", value: link, readOnly: true, className: "studio-link" });
+      field.setAttribute("aria-label", "Link to this score");
+      status.append(" ", field);
+      field.select();
+    }
   }
 
   /** A refusal of the text: its line, and a button that selects that place in the source. */
@@ -1562,20 +1578,32 @@ export function startStudio(root, options = {}) {
 
   let start = sourceBox.value;
   const fromExample = new URLSearchParams(location.search).has("source");
-  if (!fromExample) {
-    try {
-      const draft = localStorage.getItem(DRAFT);
-      if (draft) start = draft;
-    } catch (error) {}
-  }
-  sourceBox.value = start;
+  // A shared link: its score, which then becomes this browser's draft; the
+  // link itself leaves the address bar, so a reload keeps the edits.
+  const shared = /^#s=([A-Za-z0-9_-]+)$/.exec(location.hash)?.[1];
+  let opening = Promise.resolve(null);
+  let draft = null;
+  try {
+    draft = localStorage.getItem(DRAFT);
+  } catch (error) {}
+  if (shared) {
+    opening = M.fromShareCode(shared).then((text) => (text.trim() ? text : null)).catch(() => null);
+    history.replaceState(null, "", location.pathname + location.search);
+  } else if (!fromExample && draft) start = draft;
   // The engraver reads the source: nothing is read before it has loaded.
-  loaded().then(() => {
+  Promise.all([loaded(), opening]).then(([, sharedText]) => {
+    if (sharedText != null) start = sharedText;
+    // A link that holds no score opens what would have opened without it.
+    else if (shared && draft) start = draft;
+    sourceBox.value = start;
     readText(start);
     if (st.score) writeText();
-    return draw();
-  }).then(() => {
-    if (!fromExample && start !== sourceBox.defaultValue) say("Your last score, kept in this browser. New starts afresh.");
+    if (sharedText != null) saveDraft();
+    return draw().then(() => sharedText);
+  }).then((sharedText) => {
+    if (shared && sharedText == null) say(`That link holds no score: here is ${draft ? "your last one" : "the starting one"}.`, true);
+    else if (sharedText != null) say("A shared score. Your changes stay in this browser; Share makes a new link.");
+    else if (!fromExample && start !== sourceBox.defaultValue) say("Your last score, kept in this browser. New starts afresh.");
     else say("Click a note to select it, or press N and type A–G to write.");
   });
   return st;

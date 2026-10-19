@@ -1298,6 +1298,27 @@ export function insertBars(score, at, count) {
   }
 }
 
+// ---- Sharing ----------------------------------------------------------------------------------
+//
+// A score travels in a link: its text, deflated, in base64url, after `#s=`.
+// The part after # never reaches the server, so the score is in the link
+// and nowhere else.
+
+/** The text as a link's code. */
+export async function shareCode(text) {
+  const bytes = new Uint8Array(await new Response(new Blob([text]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer());
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/** The text a link's code holds; throws on a code that is not one. */
+export async function fromShareCode(code) {
+  const binary = atob(code.replace(/-/g, "+").replace(/_/g, "/"));
+  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+  return new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text();
+}
+
 // ---- Refusals ---------------------------------------------------------------------------------
 
 /**

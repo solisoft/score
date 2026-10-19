@@ -14,6 +14,7 @@
         <button type="button" class="studio-menu" data-act="save-ly" title="Save the LilyPond source">Save .ly</button>
         <button type="button" class="studio-menu" data-act="save-pdf" title="Print the A4 pages as a PDF">PDF</button>
         <button type="button" class="studio-menu" data-act="save-midi" title="Save the MIDI file">MIDI</button>
+        <button type="button" class="studio-menu" data-act="share" title="Copy a link that opens this score">Share</button>
       </div>
       <div class="studio-menu-group">
         <button type="button" class="studio-menu" data-act="undo" title="Undo (Ctrl+Z)">↶ Undo</button>
