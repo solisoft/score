@@ -1443,17 +1443,20 @@ export function startStudio(root, options = {}) {
       playhead.hidden = true;
       return;
     }
-    // The system: every item whose box overlaps these notes' height band.
+    // The line the notes are on: its bars' boxes, every staff of it, and
+    // nothing of the line above or below — the notes' own boxes too, for
+    // those drawn above or below the staves.
     const x0 = Math.min(...boxes.map((b) => b[0]));
     const x1 = Math.max(...boxes.map((b) => b[2]));
     let y0 = Math.min(...boxes.map((b) => b[1]));
     let y1 = Math.max(...boxes.map((b) => b[3]));
-    for (const it of st.view.items) {
-      const [, a, , b] = it.box;
-      if (b >= y0 - 40 && a <= y1 + 40) {
-        y0 = Math.min(y0, a);
-        y1 = Math.max(y1, b);
-      }
+    const { staff, index } = st.items[now[0]] ?? {};
+    const bar = st.score && staff != null ? M.barAt(st.score, M.starts(st.score.staves[staff])[index]) : -1;
+    const system = st.view.bars?.find((b) => b.bar === bar)?.system;
+    for (const b of st.view.bars ?? []) {
+      if (system == null || b.system !== system) continue;
+      y0 = Math.min(y0, b.box[1]);
+      y1 = Math.max(y1, b.box[3]);
     }
     const g = geometry();
     if (!g) return;
