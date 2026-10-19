@@ -1,0 +1,30 @@
+<div class="wrap">
+  <header class="page-head">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="<%= examples_path() %>">Examples</a><span>/</span>
+      <a href="<%= example_category_path(category["slug"]) %>"><%= category["title"] %></a><span>/</span>
+      <span><%= example["title"] %></span>
+    </nav>
+    <h1><%= example["title"] %></h1>
+    <p class="lead"><%= example["about"] %></p>
+    <p class="muted" style="margin-top: 8px"><%= example["instrument"] %> · <%= example["composer"] %></p>
+    <div class="chips" style="margin-top: 14px">
+      <% for feature in example["shows"] %>
+        <span class="chip"><%= feature %></span>
+      <% end %>
+    </div>
+  </header>
+
+  <% pdf_url = example_pdf_path(example["category"], example["slug"]) %>
+  <% figure_opts = {"name": example["category"] + "/" + example["slug"], "sandbox": playground_path(), "pdf": pdf_url} %>
+  <%- score_figure(figure, figure_opts) %>
+
+  <nav class="example-nav" aria-label="Neighbouring examples">
+    <% unless previous_example.nil? %>
+      <a href="<%= example_path(previous_example["category"], previous_example["slug"]) %>"><small>← Previous</small><%= previous_example["title"] %></a>
+    <% end %>
+    <% unless next_example.nil? %>
+      <a class="next" href="<%= example_path(next_example["category"], next_example["slug"]) %>"><small>Next →</small><%= next_example["title"] %></a>
+    <% end %>
+  </nav>
+</div>

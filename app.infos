@@ -1,0 +1,16 @@
+# How soli-proxy runs this app locally (proxy/sites/score.solisoft.test is a
+# symlink to this project). Production keeps its own copy on the server.
+name = "score.solisoft.test"
+domain = "score.solisoft.test"
+
+# `--strict-port`: the proxy health-checks the port it assigned, so an app
+# that quietly moved to port+1 would read as unhealthy.
+start_script = "soli serve . --port $PORT --workers $WORKERS --strict-port"
+workers = 2
+stop_script = ""
+
+health_check = "/health"
+graceful_timeout = 30
+
+port_range_start = 20000
+port_range_end = 30000

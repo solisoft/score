@@ -1,0 +1,231 @@
+<div class="wrap">
+  <header class="page-head">
+    <span class="eyebrow">Embed</span>
+    <h1>Scores on any website</h1>
+    <p class="lead">
+      eui-score also comes as <strong>WebAssembly</strong>: the same engraver, compiled for the browser. One
+      <code>&lt;script&gt;</code> tag, one <code>&lt;eui-score&gt;</code> tag, and your page engraves LilyPond by
+      itself — no server, no account, nothing to install. Every score on this page is engraved that way, in your
+      browser.
+    </p>
+  </header>
+
+  <div class="doc-layout">
+    <aside class="toc" aria-label="Contents">
+      <p class="toc-title">On this page</p>
+      <ol>
+        <li><a href="#start">In two tags</a></li>
+        <li><a href="#why-script">Why a &lt;script&gt;</a></li>
+        <li><a href="#file">From a .ly file</a></li>
+        <li><a href="#size">Size and width</a></li>
+        <li><a href="#colour">Colour</a></li>
+        <li><a href="#api">The JavaScript API</a></li>
+        <li><a href="#events">Events</a></li>
+        <li><a href="#frameworks">React, Vue, Svelte…</a></li>
+        <li><a href="#self-host">Hosting it yourself</a></li>
+        <li><a href="#server">Or on the server</a></li>
+      </ol>
+    </aside>
+
+    <div class="prose">
+      <section class="doc-section" id="start">
+        <h2>In two tags<a class="anchor" href="#start">#</a></h2>
+        <p>Load the module once, anywhere in the page:</p>
+<pre class="code-block"><code>&lt;script type="module" src="https://score.solisoft.net/eui-score/eui-score.js"&gt;&lt;/script&gt;</code></pre>
+        <p>Then put a score where it should appear:</p>
+<pre class="code-block"><code>&lt;eui-score&gt;
+  &lt;script type="text/x-lilypond"&gt;
+    \header { title = "Minuet" composer = "J. S. Bach" }
+    \relative c'' { \key g \major \time 3/4
+      d4( g,8 a b c | d4) g,-. g-. | e'4( c8 d e fis | g4) g,-. g-. \bar "|." }
+  &lt;/script&gt;
+&lt;/eui-score&gt;</code></pre>
+        <p>Which gives, engraved just now by your browser:</p>
+        <div class="score-sheet">
+          <eui-score>
+            <script type="text/x-lilypond">
+              \header { title = "Minuet" composer = "J. S. Bach" }
+              \relative c'' { \key g \major \time 3/4
+                d4( g,8 a b c | d4) g,-. g-. | e'4( c8 d e fis | g4) g,-. g-. \bar "|." }
+            </script>
+          </eui-score>
+        </div>
+        <p>
+          The module is 18 KB of JavaScript; the engraver, <strong>555 KB of WebAssembly (207 KB gzipped)</strong>,
+          is downloaded once and cached, however many scores the page holds.
+        </p>
+      </section>
+
+      <section class="doc-section" id="why-script">
+        <h2>Why a &lt;script type="text/x-lilypond"&gt;<a class="anchor" href="#why-script">#</a></h2>
+        <p>
+          LilyPond is full of angle brackets: <code>&lt;c e g&gt;</code> is a chord, <code>&lt;&lt; … &gt;&gt;</code>
+          joins staves. Written as they are in a page, the browser would read them as HTML tags and the source would
+          arrive mangled. The content of a <code>&lt;script&gt;</code> of an unknown type is neither run nor parsed:
+          it arrives intact. A source without angle brackets may also be the element's own text.
+        </p>
+<pre class="code-block"><code>&lt;eui-score&gt;\relative c' { c4 d e f | g1 \bar "|." }&lt;/eui-score&gt;</code></pre>
+        <div class="score-sheet"><eui-score>\relative c' { c4 d e f | g1 \bar "|." }</eui-score></div>
+      </section>
+
+      <section class="doc-section" id="file">
+        <h2>From a .ly file<a class="anchor" href="#file">#</a></h2>
+        <p>
+          <code>src</code> fetches the source: a file on your site, or any address that allows cross-origin
+          reads. The gallery's pieces are served that way, at
+          <code>/examples/&lt;family&gt;/&lt;piece&gt;/source.ly</code>:
+        </p>
+<pre class="code-block"><code>&lt;eui-score src="https://score.solisoft.net/examples/ensembles/string-quartet/source.ly"&gt;&lt;/eui-score&gt;</code></pre>
+        <div class="score-sheet"><eui-score src="<%= example_source_path("ensembles", "string-quartet") %>"></eui-score></div>
+      </section>
+
+      <section class="doc-section" id="size">
+        <h2>Size and width<a class="anchor" href="#size">#</a></h2>
+        <p>
+          By default the score takes the width of its element, and is engraved again when that changes: bars are
+          broken into systems that fit. <code>staff-space</code> sets the size (px between two staff lines, 7 by
+          default); <code>width</code> fixes a width in px.
+        </p>
+<pre class="code-block"><code>&lt;eui-score staff-space="10" src="…"&gt;&lt;/eui-score&gt;
+&lt;eui-score width="420" src="…"&gt;&lt;/eui-score&gt;</code></pre>
+        <p>
+          <label for="embed-size">staff-space: <strong id="embed-size-value">7</strong> px</label><br>
+          <input id="embed-size" type="range" min="4" max="14" step="0.5" value="7" style="width: 100%; max-width: 360px">
+        </p>
+        <div class="score-sheet"><eui-score id="embed-sized" src="<%= example_source_path("piano", "minuet-in-g") %>"></eui-score></div>
+      </section>
+
+      <section class="doc-section" id="colour">
+        <h2>Colour<a class="anchor" href="#colour">#</a></h2>
+        <p>
+          The ink is <code>currentColor</code>: the score takes the colour of the text around it, so it follows a
+          light or dark theme with nothing to do.
+        </p>
+<pre class="code-block"><code>&lt;eui-score style="color: #8b2b2c"&gt;…&lt;/eui-score&gt;</code></pre>
+        <div class="score-sheet" style="color: #8b2b2c">
+          <eui-score><script type="text/x-lilypond">\relative c'' { \key d \major fis4\mf fis g a | a g fis e | d d e fis | e4. d8 d2 \bar "|." }</script></eui-score>
+        </div>
+        <div class="score-sheet" style="background: #1d1914; color: #f3efe6; margin-top: 12px">
+          <eui-score><script type="text/x-lilypond">\relative c'' { \key d \major fis4\mf fis g a | a g fis e | d d e fis | e4. d8 d2 \bar "|." }</script></eui-score>
+        </div>
+      </section>
+
+      <section class="doc-section" id="api">
+        <h2>The JavaScript API<a class="anchor" href="#api">#</a></h2>
+        <p>To drive the engraving from your own code, the module exports its functions:</p>
+<pre class="code-block"><code>import { render, toMidi, toPdf, check, download }
+  from "https://score.solisoft.net/eui-score/eui-score.js";
+
+const svg = await render(source, { width: 640, staffSpace: 7, marks: { "2": "crimson" } });
+element.innerHTML = svg;                          // an SVG string
+
+const midi = await toMidi(source, { bpm: 96 });   // a Uint8Array, a Standard MIDI File
+download(midi, "minuet.mid", "audio/midi");
+
+const pdf = await toPdf(source, "Minuet");        // the A4 pages, as a PDF
+download(pdf, "minuet.pdf", "application/pdf");
+
+await check("{ c'64 }");   // "score: the duration 64 is not one this draws (…) (at character 5)"</code></pre>
+        <div class="table-scroll">
+          <table class="ref-table">
+            <thead><tr><th>Function</th><th>Answers</th></tr></thead>
+            <tbody>
+              <tr><td><code>render(src, opts)</code></td><td>The SVG. <code>width</code>, <code>staffSpace</code>, and <code>marks</code>: item number (notes and rests, from 0) → a CSS colour. Rejects with the engraver's refusal.</td></tr>
+              <tr><td><code>toMidi(src, opts)</code></td><td>The MIDI file. <code>bpm</code> and <code>beat</code> for a source with no tempo, <code>program</code> for a staff with no instrument.</td></tr>
+              <tr><td><code>toPdf(src, title)</code></td><td>The vector A4 PDF, as a string.</td></tr>
+              <tr><td><code>check(src)</code></td><td>The refusal, or <code>""</code> when the source can be engraved.</td></tr>
+              <tr><td><code>download(data, name, type)</code></td><td>Offers a file to save.</td></tr>
+              <tr><td><code>loaded()</code></td><td>A promise that resolves once the WebAssembly is ready.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Try it: <button type="button" class="score-btn" id="embed-pdf">the minuet's PDF, made here</button>
+          <button type="button" class="score-btn" id="embed-midi">its MIDI</button>
+        </p>
+      </section>
+
+      <section class="doc-section" id="events">
+        <h2>Events<a class="anchor" href="#events">#</a></h2>
+        <p>
+          The element fires <code>render</code> after each engraving (<code>detail.width</code>, and
+          <code>detail.ms</code> it took) and <code>refuse</code> when the source is refused (<code>detail</code>:
+          the message, which is also shown in place of the score). Its <code>source</code> property reads and
+          replaces the LilyPond: that is all a live editor needs, like the <a href="<%= playground_path() %>">playground</a>.
+        </p>
+<pre class="code-block"><code>const score = document.querySelector("eui-score");
+textarea.addEventListener("input", () =&gt; { score.source = textarea.value; });
+score.addEventListener("refuse", (event) =&gt; console.warn(event.detail));</code></pre>
+        <div class="score-sheet score-sheet-refused">
+          <eui-score><script type="text/x-lilypond">{ c'4 d'4 \glissando e'4 }</script></eui-score>
+        </div>
+      </section>
+
+      <section class="doc-section" id="frameworks">
+        <h2>React, Vue, Svelte…<a class="anchor" href="#frameworks">#</a></h2>
+        <p>
+          <code>&lt;eui-score&gt;</code> is a standard HTML element (a <em>custom element</em>): any framework that
+          can write HTML can use it. Pass the source through the <code>source</code> property, or call
+          <code>render()</code> and place the SVG yourself.
+        </p>
+<pre class="code-block"><code>// React
+function Score({ source }) {
+  const ref = useRef(null);
+  useEffect(() =&gt; { ref.current.source = source; }, [source]);
+  return &lt;eui-score ref={ref} /&gt;;
+}</code></pre>
+      </section>
+
+      <section class="doc-section" id="self-host">
+        <h2>Hosting it yourself<a class="anchor" href="#self-host">#</a></h2>
+        <p>Three files, side by side in any static folder; the module finds the WebAssembly next to itself:</p>
+        <ul>
+          <li><a href="<%= public_path("eui-score/eui-score.js") %>" download>eui-score.js</a> — the element and the API;</li>
+          <li><a href="<%= public_path("eui-score/eui_score_web.js") %>" download>eui_score_web.js</a> — the binding generated by wasm-bindgen;</li>
+          <li><a href="<%= public_path("eui-score/eui_score_web_bg.wasm") %>" download>eui_score_web_bg.wasm</a> — the engraver.</li>
+        </ul>
+        <p>
+          Serve the <code>.wasm</code> as <code>application/wasm</code> (almost every server does). From another
+          origin than yours, the files need an <code>Access-Control-Allow-Origin</code> header: score.solisoft.net
+          sends one for them and for the gallery's sources.
+        </p>
+        <p>
+          The module is built from the <code>eui-score</code> crate by <code>wasm/build.sh</code>
+          (<code>wasm-bindgen</code>, target <code>wasm32-unknown-unknown</code>): the same code EUI's
+          <code>score()</code> widget and Soli's native functions call.
+        </p>
+      </section>
+
+      <section class="doc-section" id="server">
+        <h2>Or on the server<a class="anchor" href="#server">#</a></h2>
+        <p>
+          Engraving in the browser means downloading the engraver. For a page that must show without JavaScript or
+          be indexed — like this site's <a href="<%= examples_path() %>">gallery</a> — a Soli application engraves
+          on the server with <code>eui_score_layout</code> and <code>eui_score_bands</code> (see the
+          <a href="<%= guide_path() %>#server">guide</a>). The drawing is the same to the pixel: it is the same
+          engraver.
+        </p>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="<%= public_path("eui-score/eui-score.js") %>"></script>
+<script type="module">
+  import { toPdf, toMidi, download } from "<%= public_path("eui-score/eui-score.js") %>";
+
+  const slider = document.getElementById("embed-size");
+  const sized = document.getElementById("embed-sized");
+  slider.addEventListener("input", () => {
+    document.getElementById("embed-size-value").textContent = slider.value;
+    sized.setAttribute("staff-space", slider.value);
+  });
+
+  const minuet = () => document.getElementById("embed-sized").source;
+  document.getElementById("embed-pdf").addEventListener("click", async () => {
+    download(await toPdf(minuet(), "Minuet"), "minuet.pdf", "application/pdf");
+  });
+  document.getElementById("embed-midi").addEventListener("click", async () => {
+    download(await toMidi(minuet()), "minuet.mid", "audio/midi");
+  });
+</script>

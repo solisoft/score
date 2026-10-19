@@ -1,0 +1,57 @@
+<div class="wrap-narrow">
+  <header class="page-head">
+    <span class="eyebrow">Limits</span>
+    <h1>What eui-score does not engrave</h1>
+    <p class="lead">
+      Anything outside the subset is refused, with the character where the engraver stopped. The messages below
+      are not copied in: each source is handed to the engraver when this page is shown, and its answer is what
+      gets printed.
+    </p>
+  </header>
+
+  <div class="prose">
+    <% for refusal in refusals %>
+      <div class="refusal">
+        <h3><%= refusal["what"] %></h3>
+        <pre><code><%- score_highlight(refusal["src"]) %></code></pre>
+        <% if refusal["message"].nil? %>
+          <p class="muted">Accepted by this version of the engraver.</p>
+        <% else %>
+          <p class="score-error"><%= refusal["message"] %></p>
+        <% end %>
+      </div>
+    <% end %>
+
+    <h2>What is written another way</h2>
+    <ul>
+      <li>
+        <strong>Guitar</strong>: no tablature and no octave treble clef. Guitar is written in the treble clef, an
+        octave above how it sounds, as in most printed music; chord names go in as text, <code>^"Am"</code>.
+        See <a href="<%= example_category_path("guitar") %>">the examples</a>.
+      </li>
+      <li>
+        <strong>Drums</strong>: no percussion staff and no cross noteheads. A groove is written in position
+        notation on a two-voice staff — hands on top, feet below — and timpani, which are tuned, in the bass
+        clef. See <a href="<%= example_category_path("drums") %>">the examples</a>.
+      </li>
+      <li>
+        <strong>Pickup bars</strong>: without <code>\partial</code>, the upbeat goes in a first bar filled out
+        with rests.
+      </li>
+      <li>
+        <strong>Transposing instruments</strong>: write them at concert pitch (there is no <code>\transpose</code>).
+      </li>
+      <li>
+        <strong>Lyrics</strong>: one verse per staff; for a second verse, a second staff.
+      </li>
+      <li>
+        <strong>Layout</strong>: no grace notes and no cross-staff notation, and a greedy page breaker, simpler
+        than LilyPond's.
+      </li>
+    </ul>
+    <div class="callout">
+      Not sure? Paste your source into the <a href="<%= playground_path() %>">playground</a>: the engraver's
+      message points at the exact character where it stops.
+    </div>
+  </div>
+</div>

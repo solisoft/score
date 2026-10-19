@@ -1,0 +1,102 @@
+# ScoreLibrary: the catalogue, and the only door to the files under scores/.
+
+describe("ScoreLibrary") do
+  describe("the catalogue") do
+    test("lists six families, each with pieces") do
+      slugs = ScoreLibrary.categories.map do |cat|
+        cat["slug"]
+      end
+      assert_eq(slugs, [
+        "solos",
+        "voice",
+        "piano",
+        "guitar",
+        "drums",
+        "ensembles"
+      ])
+      ScoreLibrary.categories.each do |cat|
+        assert_gt(ScoreLibrary.examples_in(cat["slug"]).length, 2, cat["slug"])
+      end
+    end
+
+    test("files every example under a family that exists") do
+      ScoreLibrary.examples.each do |example|
+        assert_not_null(ScoreLibrary.category(example["category"]), example["slug"])
+      end
+    end
+
+    test("gives every example a unique address") do
+      addresses = ScoreLibrary.examples.map do |example|
+        example["category"] + "/" + example["slug"]
+      end
+      assert_eq(addresses.uniq().length, addresses.length)
+    end
+
+    test("has a source the engraver accepts behind every example") do
+      ScoreLibrary.examples.each do |example|
+        laid = eui_score_layout(ScoreLibrary.source(example), 120, {})
+        assert_null(laid["error"], example["slug"])
+      end
+    end
+  end
+
+  describe("lookups") do
+    test("finds a family and a piece") do
+      assert_eq(ScoreLibrary.category("piano")["title"], "Piano")
+      assert_eq(ScoreLibrary.example("piano", "waltz")["title"], "Little Waltz")
+    end
+
+    test("answers nil for an unknown family or piece") do
+      assert_null(ScoreLibrary.category("harpe"))
+      assert_null(ScoreLibrary.example("piano", "nocturne"))
+      assert_null(ScoreLibrary.example("solos", "waltz"))
+      assert_eq(ScoreLibrary.examples_in("harpe").length, 0)
+    end
+  end
+
+  describe("source_named") do
+    test("reads a snippet and a gallery piece") do
+      assert_contains(ScoreLibrary.source_named("syntax/notes"), "c'4")
+      assert_contains(ScoreLibrary.source_named("piano/waltz"), "Little Waltz")
+    end
+
+    test("refuses names that would leave scores/") do
+      assert_null(ScoreLibrary.source_named("../config/routes"))
+      assert_null(ScoreLibrary.source_named("syntax/../../.env"))
+      assert_null(ScoreLibrary.source_named("/etc/passwd"))
+    end
+
+    test("refuses unknown, malformed, blank and oversized names") do
+      assert_null(ScoreLibrary.source_named("syntax/unknown"))
+      assert_null(ScoreLibrary.source_named("piano/nocturne"))
+      assert_null(ScoreLibrary.source_named("piano"))
+      assert_null(ScoreLibrary.source_named("piano/waltz/x"))
+      assert_null(ScoreLibrary.source_named("Piano/Valse"))
+      assert_null(ScoreLibrary.source_named(""))
+      assert_null(ScoreLibrary.source_named(nil))
+      assert_null(ScoreLibrary.source_named("piano/" + "a" * 80))
+    end
+  end
+
+  describe("snippets") do
+    test("holds every file of scores/syntax by name, all engravable") do
+      snippets = ScoreLibrary.snippets
+      assert_hash_has_key(snippets, "notes")
+      assert_hash_has_key(snippets, "voices")
+      assert_gt(snippets.keys.length, 25)
+      snippets.keys.each do |name|
+        assert_null(eui_score_layout(snippets[name], 100, {})["error"], name)
+      end
+    end
+  end
+
+  describe("refusals") do
+    test("are all refused by the engraver, each with a position") do
+      ScoreLibrary.refusals.each do |refusal|
+        message = eui_score_layout(refusal["src"], 100, {})["error"]
+        assert_not_null(message, refusal["what"])
+        assert_contains(message, "(at character ")
+      end
+    end
+  end
+end

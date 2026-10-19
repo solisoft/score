@@ -1,0 +1,13 @@
+<a class="example-card" href="<%= example_path(example["category"], example["slug"]) %>">
+  <div class="example-preview"><img src="<%= example_preview_path(example["category"], example["slug"]) %>" alt="" loading="lazy" decoding="async"></div>
+  <div class="example-body">
+    <h3><%= example["title"] %></h3>
+    <span class="example-meta"><%= example["instrument"] %> · <%= example["composer"] %></span>
+    <p><%= example["about"] %></p>
+    <div class="chips">
+      <% for feature in example["shows"] %>
+        <span class="chip"><%= feature %></span>
+      <% end %>
+    </div>
+  </div>
+</a>

@@ -39,3 +39,4 @@ coverage/
 
 # The EUI publisher key: clients pin it, and it signs the manifest. Never public.
 config/eui_publisher.pkcs8
+/wasm/target/

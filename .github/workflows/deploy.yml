@@ -1,0 +1,196 @@
+# Verify, then deploy the site to score.solisoft.net.
+#
+# The server-side contract (soli-proxy, already installed there):
+#   1. rsync this app into <sites_dir>/<domain>/ — that folder and nothing else;
+#   2. `soli-proxy deploy`: the proxy starts the idle slot, waits for its
+#      health check, moves the traffic across, then stops the old slot.
+#
+# No database step: the site has no models. The browser engraver
+# (public/eui-score/) is committed, built by wasm/build.sh, so a deploy needs
+# no Rust. See deploy/README.md for the one-time server setup.
+name: verify & deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Two pushes close together must not cross in the middle of an rsync, and a
+# deployment already running is never interrupted.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  # Pinned, so CI tests what the server runs. The eui_score_* builtins the
+  # site engraves with are in every release since 2.26.0.
+  SOLI_VERSION: "2.28.2"
+  # `soli test` resets its test databases on SoliDB before it starts.
+  SOLIDB_VERSION: "2.3.1"
+
+jobs:
+  verify:
+    name: fmt + lint + boot + suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install soli and SoliDB (pinned)
+        run: |
+          set -euo pipefail
+          fetch() {
+            local name="$1" repo="$2" want="$3" tmp got
+            tmp="$(mktemp -d)"
+            curl -fsSL "https://github.com/$repo/releases/download/v$want/$name-linux-amd64.tar.gz" -o "$tmp/pkg.tar.gz"
+            tar -xzf "$tmp/pkg.tar.gz" -C "$tmp"
+            sudo install -m 0755 "$(find "$tmp" -type f -name "$name" -perm -u+x | head -1)" "/usr/local/bin/$name"
+            got="$("$name" --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+            [ "$got" = "$want" ] || { echo "$name: $got installed, $want expected" >&2; exit 1; }
+          }
+          fetch soli   solisoft/soli_lang "$SOLI_VERSION"
+          fetch solidb solisoft/solidb    "$SOLIDB_VERSION"
+
+      - name: Format
+        run: soli fmt --check
+
+      - name: Lint
+        run: soli lint
+
+      # The browser engraver is committed, not built here: make sure it is.
+      - name: The browser engraver is there
+        run: |
+          set -euo pipefail
+          for f in eui-score.js eui_score_web.js eui_score_web_bg.wasm; do
+            [ -s "public/eui-score/$f" ] || { echo "public/eui-score/$f is missing — run wasm/build.sh" >&2; exit 1; }
+          done
+
+      # Booting compiles every handler and view: a syntax error, a missing
+      # view or a broken route fails here, not in production.
+      - name: The app boots and engraves
+        run: |
+          set -euo pipefail
+          soli serve . --port 19555 --workers 1 > /tmp/boot.log 2>&1 &
+          pid=$!
+          code=000
+          for i in $(seq 1 45); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' -m 2 http://127.0.0.1:19555/health || echo 000)"
+            [ "$code" = "200" ] && break
+            kill -0 $pid 2>/dev/null || break
+            sleep 1
+          done
+          for path in / /examples /examples/piano/waltz /examples/piano/waltz/score.pdf /embed /playground; do
+            got="$(curl -s -o /dev/null -w '%{http_code}' -m 10 "http://127.0.0.1:19555$path" || echo 000)"
+            echo "$path -> $got"
+            [ "$got" = "200" ] || code="$got"
+          done
+          kill $pid 2>/dev/null || true
+          if [ "$code" != "200" ]; then
+            tail -60 /tmp/boot.log >&2
+            exit 1
+          fi
+
+      - name: Start SoliDB
+        run: |
+          set -euo pipefail
+          val() { grep -E "^$1=" .env.test | head -1 | cut -d= -f2- | tr -d '"'; }
+          export SOLIDB_ADMIN_PASSWORD="$(val SOLIDB_PASSWORD)"
+          mkdir -p "$RUNNER_TEMP/solidb-data"
+          solidb --host 127.0.0.1 --port 6745 --data-dir "$RUNNER_TEMP/solidb-data" > "$RUNNER_TEMP/solidb.log" 2>&1 &
+          for i in $(seq 1 40); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' -m 2 http://127.0.0.1:6745/_api/databases || true)"
+            [ "${code:-000}" != "000" ] && exit 0
+            sleep 0.5
+          done
+          tail -40 "$RUNNER_TEMP/solidb.log" >&2
+          exit 1
+
+      - name: Suite, coverage at least 90 %
+        run: soli test --coverage --coverage-min 90.0
+
+  deploy:
+    name: deploy score.solisoft.net
+    needs: verify
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://${{ vars.DEPLOY_DOMAIN || 'score.solisoft.net' }}
+    env:
+      HOST: ${{ secrets.DEPLOY_HOST }}
+      USER: ${{ vars.DEPLOY_USER || 'rocky' }}
+      SITES_DIR: ${{ vars.DEPLOY_SITES_DIR || '/home/rocky/sites' }}
+      # The routing rules soli-proxy takes with -c (proxy.conf, not config.toml).
+      PROXY_CONF: ${{ vars.DEPLOY_PROXY_CONF || '/home/rocky/proxy.conf' }}
+      DOMAIN: ${{ vars.DEPLOY_DOMAIN || 'score.solisoft.net' }}
+      # The `name` in the server's app.infos.
+      APP: ${{ vars.DEPLOY_APP || 'score' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the configuration
+        run: |
+          set -euo pipefail
+          [ -n "$HOST" ] || { echo "secret DEPLOY_HOST is missing" >&2; exit 1; }
+          echo "Target: $USER@$HOST:$SITES_DIR/$DOMAIN"
+
+      - name: Prepare SSH
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_DEPLOY_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # known_hosts, not StrictHostKeyChecking=no: host verification stays on.
+          printf '%s\n' "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      # The site is created by hand once (app.infos + .env); this workflow
+      # creates nothing on the server.
+      - name: Check the site exists on the server
+        run: |
+          ssh "$USER@$HOST" "test -f '$SITES_DIR/$DOMAIN/app.infos' && test -f '$SITES_DIR/$DOMAIN/.env'" \
+            || { echo "$SITES_DIR/$DOMAIN must hold app.infos and .env — see deploy/README.md" >&2; exit 1; }
+
+      # --delete-delay: what leaves the repository leaves the server. The
+      # exclusions keep what lives only on the server, and what has no
+      # business there (the Rust crate, tests, agent notes).
+      - name: Sync the files
+        run: |
+          set -euo pipefail
+          rsync -rlzv --delete-delay --delay-updates \
+            --exclude='.git/' --exclude='.github/' --exclude='.claude/' \
+            --exclude='wasm/' --exclude='tests/' --exclude='coverage/' --exclude='tmp/' \
+            --exclude='.env' --exclude='.env.*' --exclude='app.infos' --exclude='restart.txt' \
+            ./ "$USER@$HOST:$SITES_DIR/$DOMAIN/"
+
+      - name: Note the version the server runs
+        run: |
+          installed="$(ssh "$USER@$HOST" 'soli --version' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+          echo "server: $installed — pinned: $SOLI_VERSION"
+          if [ "$installed" != "$SOLI_VERSION" ]; then
+            echo "::warning::the server runs Soli $installed; this run tested $SOLI_VERSION"
+          fi
+
+      # `soli-proxy deploy` rather than touching restart.txt: it waits for
+      # the new slot and fails loudly when it cannot start.
+      - name: Switch the blue-green slot
+        run: ssh "$USER@$HOST" "soli-proxy deploy -c '$PROXY_CONF' '$APP' 2>&1"
+
+      # After a switch the proxy balances across both slot ports; restart
+      # brings both up on the new code.
+      - name: Bring both slots up
+        run: ssh "$USER@$HOST" "soli-proxy restart -c '$PROXY_CONF' '$APP'"
+
+      # End to end, through the proxy, with the real hostname.
+      - name: Check the site through the proxy
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            sleep 4
+            codes="$(ssh "$USER@$HOST" "for p in /health / /examples /eui-score/eui_score_web_bg.wasm; do curl -sk -m 8 --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{http_code} ' \"https://$DOMAIN\$p\"; done" || true)"
+            echo "attempt $attempt: $codes"
+            [ "$codes" = "200 200 200 200 " ] && exit 0
+          done
+          echo "The site does not answer through the proxy:" >&2
+          echo "  ssh $USER@$HOST 'soli-proxy logs -c $PROXY_CONF $APP'" >&2
+          exit 1

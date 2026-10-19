@@ -1,0 +1,90 @@
+<div class="wrap-fluid">
+  <header class="sandbox-head">
+    <div>
+      <span class="eyebrow">Playground</span>
+      <h1>Type it, it's engraved.</h1>
+    </div>
+    <p class="muted">
+      Type LilyPond on the left: eui-score, compiled to WebAssembly, engraves it on the right at every keystroke,
+      in your browser, at the width of the window. Nothing is sent or stored.
+    </p>
+  </header>
+
+  <div class="sandbox">
+    <div class="sandbox-editor">
+      <div class="sandbox-toolbar">
+        <select aria-label="Start from an example" data-no-nav
+                onchange="if (this.value) { window.location.href = this.value }">
+          <option value="">Start from an example…</option>
+          <% for example in examples %>
+            <% value = playground_path() + "?source=" + example["category"] + "/" + example["slug"] %>
+            <option value="<%= value %>"><%= example["title"] %> — <%= example["instrument"] %></option>
+          <% end %>
+        </select>
+        <span class="sandbox-status" id="sandbox-status" aria-live="polite"></span>
+      </div>
+      <textarea id="sandbox-source" wrap="off" spellcheck="false" autocapitalize="off" autocomplete="off"
+                aria-label="LilyPond source"><%= source %></textarea>
+    </div>
+
+    <div class="sandbox-result">
+      <div class="score-sheet" id="sandbox-sheet">
+        <eui-score id="sandbox-score"><%- figure["svg"].to_s %></eui-score>
+      </div>
+      <div class="score-actions">
+        <button type="button" class="score-btn score-btn-play" id="sandbox-play" data-score-play data-midi="<%= figure["midi"] %>"><span aria-hidden="true">▶</span> Play</button>
+        <button type="button" class="score-btn" id="sandbox-midi">MIDI</button>
+        <button type="button" class="score-btn" id="sandbox-pdf">A4 PDF</button>
+        <div class="score-player" data-score-player></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { toMidi, toPdf, download } from "<%= public_path("eui-score/eui-score.js") %>";
+
+  const textarea = document.getElementById("sandbox-source");
+  const score = document.getElementById("sandbox-score");
+  const status = document.getElementById("sandbox-status");
+  const play = document.getElementById("sandbox-play");
+  const sheet = document.getElementById("sandbox-sheet");
+  let midiUrl = null;
+
+  function title() {
+    const match = textarea.value.match(/title\s*=\s*"([^"]*)"/);
+    return (match ? match[1] : "score").trim() || "score";
+  }
+
+  async function refreshMidi() {
+    try {
+      const bytes = await toMidi(textarea.value);
+      if (midiUrl) URL.revokeObjectURL(midiUrl);
+      midiUrl = URL.createObjectURL(new Blob([bytes], { type: "audio/midi" }));
+      play.dataset.midi = midiUrl;
+    } catch (error) {}
+  }
+
+  score.addEventListener("render", (event) => {
+    sheet.classList.remove("score-sheet-refused");
+    const ms = event.detail.ms < 1 ? "under 1" : Math.round(event.detail.ms);
+    status.textContent = `${textarea.value.length} characters · engraved in ${ms} ms`;
+    refreshMidi();
+  });
+  score.addEventListener("refuse", () => {
+    sheet.classList.add("score-sheet-refused");
+    status.textContent = "refused";
+  });
+
+  textarea.addEventListener("input", () => {
+    score.source = textarea.value;
+  });
+  score.source = textarea.value;
+
+  document.getElementById("sandbox-midi").addEventListener("click", async () => {
+    try { download(await toMidi(textarea.value), `${title()}.mid`, "audio/midi"); } catch (error) {}
+  });
+  document.getElementById("sandbox-pdf").addEventListener("click", async () => {
+    try { download(await toPdf(textarea.value, title()), `${title()}.pdf`, "application/pdf"); } catch (error) {}
+  });
+</script>

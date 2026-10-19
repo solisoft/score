@@ -1,0 +1,76 @@
+# The gallery: families of pieces, each piece engraved with its source.
+class ExamplesController < Controller
+  # GET /examples — every family, every piece
+  def index
+    @title = "Examples"
+    @description = "Solos, voice, piano, guitar, drums and ensembles: scores engraved by eui-score."
+    @sections = ScoreLibrary.categories.map do |cat|
+      cat.merge({"examples": ScoreLibrary.examples_in(cat["slug"])})
+    end
+  end
+
+  # GET /examples/:category — one family
+  def category
+    @category = ScoreLibrary.category(params["category"])
+    halt(404, "Unknown category") if @category.nil?
+
+    @examples = ScoreLibrary.examples_in(@category["slug"])
+    @categories = ScoreLibrary.categories
+    @title = @category["title"]
+    @description = @category["lead"]
+  end
+
+  # GET /examples/:category/:slug — one piece, engraved, with its source
+  def show
+    @example = ScoreLibrary.example(params["category"], params["slug"])
+    halt(404, "Unknown example") if @example.nil?
+
+    @category = ScoreLibrary.category(@example["category"])
+    @figure = ScoreSvg.figure(ScoreLibrary.source(@example), 1040, 7)
+    siblings = ScoreLibrary.examples_in(@example["category"])
+    position = siblings.index_of(@example)
+    @previous_example = position > 0 ? siblings[position - 1] : nil
+    @next_example = position + 1 < siblings.length ? siblings[position + 1] : nil
+    @title = "#{this.example["title"]} — #{this.example["instrument"]}"
+    @description = @example["about"]
+  end
+
+  # GET /examples/:category/:slug/score.pdf — the piece on A4
+  def pdf
+    example = ScoreLibrary.example(params["category"], params["slug"])
+    halt(404, "Unknown example") if example.nil?
+
+    document = eui_score_pdf(ScoreLibrary.source(example), example["title"])
+    disposition = "inline; filename=\"#{example["slug"]}.pdf\""
+    {
+      "status": 200,
+      "headers": {"Content-Type": "application/pdf", "Content-Disposition": disposition},
+      "body": document
+    }
+  end
+
+  # GET /examples/:category/:slug/preview.svg — the gallery card's preview
+  def preview
+    example = ScoreLibrary.example(params["category"], params["slug"])
+    halt(404, "Unknown example") if example.nil?
+
+    {
+      "status": 200,
+      "headers": {"Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=3600"},
+      "body": ScoreSvg.preview(ScoreLibrary.source(example))
+    }
+  end
+
+  # GET /examples/:category/:slug/source.ly — the LilyPond itself, for
+  # `<eui-score src="…">` on any site
+  def source
+    example = ScoreLibrary.example(params["category"], params["slug"])
+    halt(404, "Unknown example") if example.nil?
+
+    {
+      "status": 200,
+      "headers": {"Content-Type": "text/x-lilypond; charset=utf-8", "Cache-Control": "public, max-age=3600"},
+      "body": ScoreLibrary.source(example)
+    }
+  end
+end

@@ -1,0 +1,293 @@
+<% sandbox = playground_path() %>
+<div class="wrap">
+  <header class="page-head">
+    <span class="eyebrow">Reference</span>
+    <h1>The syntax, construct by construct</h1>
+    <p class="lead">
+      eui-score reads a subset of the LilyPond language: the part you write every day. Each example below is
+      engraved live by the engraver from the source shown under it; open it in the playground to change it.
+    </p>
+  </header>
+
+  <div class="doc-layout">
+    <aside class="toc" aria-label="Contents">
+      <p class="toc-title">Contents</p>
+      <ol>
+        <li><a href="#notes">Notes and octaves</a></li>
+        <li><a href="#relative">Relative mode</a></li>
+        <li><a href="#accidentals">Accidentals</a></li>
+        <li><a href="#durations">Durations</a></li>
+        <li><a href="#rests">Rests</a></li>
+        <li><a href="#chords">Chords</a></li>
+        <li><a href="#ties-slurs">Ties and slurs</a></li>
+        <li><a href="#beams">Beams</a></li>
+        <li><a href="#clefs">Clefs</a></li>
+        <li><a href="#keys">Key signatures</a></li>
+        <li><a href="#time-signatures">Time signatures</a></li>
+        <li><a href="#changes">Changes mid-piece</a></li>
+        <li><a href="#tempo">Tempo</a></li>
+        <li><a href="#bar-lines">Bar lines</a></li>
+        <li><a href="#repeats">Repeats</a></li>
+        <li><a href="#tuplets">Triplets and tuplets</a></li>
+        <li><a href="#dynamics">Dynamics and hairpins</a></li>
+        <li><a href="#articulations">Articulations and text</a></li>
+        <li><a href="#lyrics">Lyrics</a></li>
+        <li><a href="#voices">Two voices</a></li>
+        <li><a href="#staves">Several staves</a></li>
+        <li><a href="#header">Header</a></li>
+        <li><a href="#breaks">Line breaks</a></li>
+        <li><a href="#score-block">The \score block</a></li>
+      </ol>
+    </aside>
+
+    <div class="prose">
+      <section class="doc-section" id="notes">
+        <h2>Notes and octaves<a class="anchor" href="#notes">#</a></h2>
+        <p>
+          A note is a letter, <code>c</code> to <code>b</code>, followed by its duration. Unmarked, <code>c</code>
+          is the C an octave below middle C; each apostrophe raises it an octave (<code>c'</code> is middle C,
+          <code>c''</code> the one above), each comma lowers it. A bar check <code>|</code> confirms that a bar
+          ends there.
+        </p>
+        <%- score_snippet(figures, "notes", sandbox) %>
+        <%- score_snippet(figures, "octaves", sandbox) %>
+      </section>
+
+      <section class="doc-section" id="relative">
+        <h2>Relative mode<a class="anchor" href="#relative">#</a></h2>
+        <p>
+          Inside <code>\relative c' { … }</code>, every note takes the octave closest to the one before it: you
+          only write an apostrophe or a comma to leap more than a fourth. It is the quickest way to write a
+          melody.
+        </p>
+        <%- score_snippet(figures, "relative", sandbox) %>
+      </section>
+
+      <section class="doc-section" id="accidentals">
+        <h2>Accidentals<a class="anchor" href="#accidentals">#</a></h2>
+        <p>
+          LilyPond's Dutch names: <code>is</code> for sharp, <code>es</code> for flat, doubled for double
+          accidentals (<code>fisis</code>, <code>beses</code>); <code>ees</code> and <code>es</code>,
+          <code>aes</code> and <code>as</code> are both accepted. An accidental is printed according to the key
+          signature and the notes already altered in the bar, as LilyPond does.
+        </p>
+        <%- score_snippet(figures, "accidentals", sandbox) %>
+      </section>
+
+      <section class="doc-section" id="durations">
+        <h2>Durations<a class="anchor" href="#durations">#</a></h2>
+        <p>
+          <code>1</code> whole, <code>2</code> half, <code>4</code> quarter, <code>8</code> eighth,
+          <code>16</code> sixteenth, <code>32</code> thirty-second; one or two dots after the number. A note
+          without a duration takes the previous one. Spacing is LilyPond's: 1.2 staff spaces more each time a
+          duration doubles.
+        </p>
+        <%- score_snippet(figures, "durations", sandbox) %>
+      </section>
+
+      <section class="doc-section" id="rests">
+        <h2>Rests<a class="anchor" href="#rests">#</a></h2>
+        <p>
+          <code>r</code> is a rest of the written duration; <code>R1</code> a whole-bar rest, centred.
+          <code>R1*8</code> counts eight bars; under <code>\compressEmptyMeasures</code> they become a single bar
+          with "8" above it (church rests up to ten bars, a wide bar beyond), still counted in the bar numbers.
+        </p>
+        <%- score_snippet(figures, "rests", sandbox) %>
+        <%- score_snippet(figures, "empty-bars", sandbox) %>
+      </section>
+
+      <section class="doc-section" id="chords">
+        <h2>Chords<a class="anchor" href="#chords">#</a></h2>
+        <p>Notes between <code>&lt;</code> and <code>&gt;</code> sound together; the duration follows the closing bracket.</p>
+        <%- score_snippet(figures, "chords", sandbox) %>
+      </section>
+
+      <section class="doc-section" id="ties-slurs">
+        <h2>Ties and slurs<a class="anchor" href="#ties-slurs">#</a></h2>
+        <p>
+          <code>~</code> ties a note into the next one of the same pitch. <code>( … )</code> slurs a phrase: the
+          curve thickens in the middle and rises over the notes in its way, to the height LilyPond would give it.
+        </p>
+        <%- score_snippet(figures, "ties-slurs", sandbox) %>
+      </section>
+
+      <section class="doc-section" id="beams">
+        <h2>Beams<a class="anchor" href="#beams">#</a></h2>
+        <p>
+          Eighths are beamed automatically by the time signature. <code>[ … ]</code> forces a group by hand. The
+          beam's slope is quantised so that it sits on, straddles or hangs from a staff line.
+        </p>
+        <%- score_snippet(figures, "beams", sandbox) %>
+      </section>
+
+      <section class="doc-section" id="clefs">
+        <h2>Clefs<a class="anchor" href="#clefs">#</a></h2>
+        <p>
+          <code>\clef treble</code> (or <code>violin</code>, <code>G</code>), <code>\clef bass</code>
+          (<code>F</code>) and <code>\clef alto</code> (<code>C</code>). Other clefs are refused.
+        </p>
+        <%- score_snippet(figures, "clefs", sandbox) %>
+      </section>
+
+      <section class="doc-section" id="keys">
+        <h2>Key signatures<a class="anchor" href="#keys">#</a></h2>
+        <p>
+          <code>\key g \major</code>, <code>\key a \minor</code>… A key change cancels the old key with naturals,
+          as LilyPond does.
+        </p>
+        <%- score_snippet(figures, "keys", sandbox) %>
+      </section>
+
+      <section class="doc-section" id="time-signatures">
+        <h2>Time signatures<a class="anchor" href="#time-signatures">#</a></h2>
+        <p>
+          <code>\time 3/4</code>, <code>6/8</code>, <code>2/2</code>… from 1 to 12 beats, on 1, 2, 4, 8 or 16.
+          4/4 is written with LilyPond's C. A note that runs past its bar line is refused: write two tied notes.
+        </p>
+        <%- score_snippet(figures, "time-signatures", sandbox) %>
+      </section>
+
+      <section class="doc-section" id="changes">
+        <h2>Changes mid-piece<a class="anchor" href="#changes">#</a></h2>
+        <p>
+          Clef, key and time signature may change at any bar. A change that opens a line is announced at the end
+          of the line before it, after its bar line.
+        </p>
+        <%- score_snippet(figures, "changes", sandbox) %>
+      </section>
+
+      <section class="doc-section" id="tempo">
+        <h2>Tempo<a class="anchor" href="#tempo">#</a></h2>
+        <p>
+          <code>\tempo "Allegro" 4 = 132</code> prints the word, the beat, or both; the MIDI follows every tempo
+          change.
+        </p>
+        <%- score_snippet(figures, "tempo", sandbox) %>
+      </section>
+
+      <section class="doc-section" id="bar-lines">
+        <h2>Bar lines<a class="anchor" href="#bar-lines">#</a></h2>
+        <p>
+          <code>\bar "|"</code>, <code>"||"</code> (double bar), <code>"|."</code> (final bar), and the repeat
+          signs alone: <code>".|:"</code>, <code>":|."</code>, <code>":|.|:"</code>.
+        </p>
+        <%- score_snippet(figures, "bar-lines", sandbox) %>
+      </section>
+
+      <section class="doc-section" id="repeats">
+        <h2>Repeats<a class="anchor" href="#repeats">#</a></h2>
+        <p>
+          <code>\repeat volta 2 { … }</code> puts a passage between repeat signs;
+          <code>\alternative { { … } { … } }</code> adds the "1." and "2." endings under their brackets. A repeat
+          that falls on a line break moves to the start of the next line.
+        </p>
+        <%- score_snippet(figures, "repeats", sandbox) %>
+      </section>
+
+      <section class="doc-section" id="tuplets">
+        <h2>Triplets and tuplets<a class="anchor" href="#tuplets">#</a></h2>
+        <p>
+          <code>\tuplet 3/2 { … }</code>: three notes in the time of two. <code>\tuplet 6/4</code> for a sextuplet,
+          <code>\tuplet 3/2 4 { … }</code> for one group per quarter, and the older <code>\times 2/3</code>. The
+          number is in italics on the stem side, with a bracket unless a beam holds the group.
+        </p>
+        <%- score_snippet(figures, "tuplets", sandbox) %>
+      </section>
+
+      <section class="doc-section" id="dynamics">
+        <h2>Dynamics and hairpins<a class="anchor" href="#dynamics">#</a></h2>
+        <p>
+          <code>\pp</code> to <code>\ff</code> (and <code>\ppp</code>… <code>\ffff</code>, <code>\sf</code>,
+          <code>\sfz</code>, <code>\fp</code>, <code>\rfz</code>…) in the music font's own letters.
+          <code>\&lt;</code> and <code>\&gt;</code> open a hairpin that runs to <code>\!</code>, the next dynamic
+          or the next hairpin. Neighbouring dynamics and hairpins share one line under the staff; the MIDI turns
+          them into volumes, note by note.
+        </p>
+        <%- score_snippet(figures, "dynamics", sandbox) %>
+      </section>
+
+      <section class="doc-section" id="articulations">
+        <h2>Articulations and text<a class="anchor" href="#articulations">#</a></h2>
+        <p>
+          <code>-.</code> staccato, <code>-&gt;</code> accent, <code>--</code> tenuto, <code>-^</code> marcato,
+          <code>-!</code> staccatissimo, <code>-_</code> portato, <code>\fermata</code>. <code>^</code> and
+          <code>_</code> instead of the dash choose the side. <code>^"dolce"</code> and <code>_"cresc."</code>
+          put a word above or below — which is also how chord names are written.
+        </p>
+        <%- score_snippet(figures, "articulations", sandbox) %>
+      </section>
+
+      <section class="doc-section" id="lyrics">
+        <h2>Lyrics<a class="anchor" href="#lyrics">#</a></h2>
+        <p>
+          <code>\addlyrics { … }</code> after a staff's music: one syllable per note, <code>--</code> between two
+          syllables of a word, <code>__</code> for an extender line over a melisma. One verse per staff.
+        </p>
+        <%- score_snippet(figures, "lyrics", sandbox) %>
+      </section>
+
+      <section class="doc-section" id="voices">
+        <h2>Two voices on one staff<a class="anchor" href="#voices">#</a></h2>
+        <p>
+          <code>&lt;&lt; { … } \\ { … } &gt;&gt;</code>: the first voice has its stems up, the second down. Both
+          must fill the same duration. Commands that belong to the staff (clef, key, time signature) go in the
+          first voice.
+        </p>
+        <%- score_snippet(figures, "voices", sandbox) %>
+      </section>
+
+      <section class="doc-section" id="staves">
+        <h2>Several staves<a class="anchor" href="#staves">#</a></h2>
+        <p>
+          <code>\new PianoStaff</code> (or <code>GrandStaff</code>) draws the piano's brace, bar lines through the
+          staves; <code>\new StaffGroup</code> a bracket, bar lines through; <code>\new ChoirStaff</code> a
+          bracket, bar lines staff by staff; a plain <code>&lt;&lt; … &gt;&gt;</code> only the line that joins
+          them. Groups nest.
+        </p>
+        <p>
+          <code>\new Staff \with { instrumentName = "Violin" shortInstrumentName = "Vl." midiInstrument = "violin" }</code>
+          names a staff — the full name before the first line, the short one before the others — and picks its
+          General MIDI sound by LilyPond's names. All staves must have the same bars.
+        </p>
+        <%- score_snippet(figures, "piano-staff", sandbox) %>
+        <%- score_snippet(figures, "staff-group", sandbox) %>
+        <%- score_snippet(figures, "choir-staff", sandbox) %>
+        <%- score_snippet(figures, "nested-groups", sandbox) %>
+      </section>
+
+      <section class="doc-section" id="header">
+        <h2>Header<a class="anchor" href="#header">#</a></h2>
+        <p>
+          <code>\header { title = … subtitle = … composer = … arranger = … poet = … }</code> before the music sets
+          LilyPond's title block: the title centred, large and bold, the composer flush right, the poet left, in
+          TeX Gyre Schola as LilyPond does.
+        </p>
+        <%- score_snippet(figures, "header", sandbox) %>
+      </section>
+
+      <section class="doc-section" id="breaks">
+        <h2>Line and page breaks<a class="anchor" href="#breaks">#</a></h2>
+        <p>
+          Bars are broken into systems that fit the width. <code>\break</code> ends a line at its bar line,
+          <code>\pageBreak</code> a page (on a screen, a line). Every line after the first opens with its bar
+          number.
+        </p>
+        <%- score_snippet(figures, "breaks", sandbox) %>
+      </section>
+
+      <section class="doc-section" id="score-block">
+        <h2>The \score block<a class="anchor" href="#score-block">#</a></h2>
+        <p>
+          A file written for LilyPond is read as it is: <code>\version</code>, and
+          <code>\score { … \layout { } \midi { } }</code> around the music. <code>%</code> comments are ignored.
+        </p>
+        <%- score_snippet(figures, "score-block", sandbox) %>
+        <div class="callout">
+          <strong>Everything else is refused, with its position.</strong> A score that silently lost a note would
+          look almost right — the most expensive way to be wrong. The <a href="<%= limits_path() %>">Limits</a>
+          page lists what is not engraved and the engraver's exact message.
+        </div>
+      </section>
+    </div>
+  </div>
+</div>

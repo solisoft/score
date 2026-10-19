@@ -1,0 +1,269 @@
+<% sandbox = playground_path() %>
+<div class="wrap">
+  <header class="page-head">
+    <span class="eyebrow">Guide</span>
+    <h1>EUI's score viewer</h1>
+    <p class="lead">
+      <strong>eui-score</strong> is the engraver behind the <code>score()</code> widget of the EUI catalogue: a
+      subset of the LilyPond language, laid out as LilyPond lays it out, drawn as paths; the same source played
+      as a MIDI file and printed as a PDF.
+    </p>
+  </header>
+
+  <div class="doc-layout">
+    <aside class="toc" aria-label="Contents">
+      <p class="toc-title">On this page</p>
+      <ol>
+        <li><a href="#what">What it is</a></li>
+        <li><a href="#show">Showing a score</a></li>
+        <li><a href="#width">Width and systems</a></li>
+        <li><a href="#marks">Highlighted notes</a></li>
+        <li><a href="#a4">On A4 paper</a></li>
+        <li><a href="#midi">Listening: MIDI</a></li>
+        <li><a href="#pdf">Printing: PDF</a></li>
+        <li><a href="#server">On a Soli server</a></li>
+        <li><a href="#rust">From Rust</a></li>
+        <li><a href="#fidelity">Faithful to LilyPond</a></li>
+        <li><a href="#speed">Speed</a></li>
+        <li><a href="#editor">The editor</a></li>
+      </ol>
+    </aside>
+
+    <div class="prose">
+      <section class="doc-section" id="what">
+        <h2>What it is<a class="anchor" href="#what">#</a></h2>
+        <p>
+          A score, in EUI, is not an image: it is a list of paths. Staff lines, stems and bar lines are
+          rectangles; everything curved — noteheads, clefs, accidentals, flags, beams, slurs that thicken towards
+          the middle — is an outline cut from <strong>Emmentaler</strong>, LilyPond's music font. Titles and tempo
+          marks are drawn the same way, from the letters of <strong>TeX Gyre Schola</strong>. No font travels and
+          no text node is involved: every glyph lands at the size and the place the engraving wants, to the
+          hundredth of a pixel.
+        </p>
+        <p>
+          The Rust crate <code>eui-score</code> is a function-for-function port of the engraver written in Soli
+          (<code>eui_builders_score.sl</code>). Its golden tests hold it to the original on the 26 pieces of the
+          corpus: every path to the hundredth of a pixel, the MIDI and the PDF to the byte, and its 44 refusals
+          word for word, position included. Compiled to WebAssembly, it also runs in the browser:
+          <a href="<%= embed_path() %>">two tags are enough to show scores on any website</a>.
+        </p>
+        <div class="callout">
+          <strong>Refuse rather than draw it wrong.</strong> A source the engraver cannot set is refused with the
+          character where it stopped — <code>score: … (at character N)</code> — never half drawn.
+        </div>
+      </section>
+
+      <section class="doc-section" id="show">
+        <h2>Showing a score<a class="anchor" href="#show">#</a></h2>
+        <p>In an EUI view, the score is a widget like any other:</p>
+<pre class="code-block"><code>score("\\relative c' { \\key g \\major \\time 3/4 g'4( a b) | d2. \\bar \"|.\" }",
+      {"width": 640})</code></pre>
+        <%- score_figure(hello, {"name": "syntax/hello", "sandbox": sandbox, "source": "none"}) %>
+        <p>
+          It is drawn as canvases: one for the titles, one per system. An edit redraws and resends only the system
+          it touches — each system keeps its paths under a signature of what it draws.
+        </p>
+        <div class="table-scroll">
+          <table class="ref-table">
+            <thead><tr><th>Option</th><th>Default</th><th>What it does</th></tr></thead>
+            <tbody>
+              <tr><td><code>width</code></td><td>600</td><td>Width in logical px; bars are broken into systems that fit it.</td></tr>
+              <tr><td><code>staff_space</code></td><td>8</td><td>Logical px between two staff lines: the size of the engraving.</td></tr>
+              <tr><td><code>colour</code></td><td><code>text.default</code></td><td>The ink, a colour role: the score follows the light or dark theme.</td></tr>
+              <tr><td><code>marks</code></td><td><code>{}</code></td><td>Item number (notes and rests from 0, as a string) → the role to draw it in.</td></tr>
+              <tr><td><code>page</code></td><td>absent</td><td><code>"a4"</code> lays the music out on A4 sheets at LilyPond's staff size.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="doc-section" id="width">
+        <h2>Width and systems<a class="anchor" href="#width">#</a></h2>
+        <p>
+          The same source at two widths: the engraver breaks the bars into lines, justifies every full line and
+          leaves the last at its natural width. Lines after the first open with their bar number; a key or time
+          change at the start of a line is announced at the end of the one before.
+        </p>
+        <%- score_figure(narrow, {"source": "none", "caption": "\"Little Waltz\", width 440, staff_space 5.5"}) %>
+        <% wide_caption = "The same, width 1000, staff_space 6.5" %>
+        <%- score_figure(wide, {"name": "piano/waltz", "sandbox": sandbox, "source": "closed", "caption": wide_caption}) %>
+      </section>
+
+      <section class="doc-section" id="marks">
+        <h2>Highlighted notes<a class="anchor" href="#marks">#</a></h2>
+        <p>
+          <code>marks</code> draws some items again in another colour: that is how an editor shows its selection,
+          and a player the note that is sounding. Items are the notes and rests, numbered from 0 in source order.
+          Here item 1 (the A) and item 3 (the D):
+        </p>
+<pre class="code-block"><code>score(src, {"width": 640, "marks": {"1": "accent.base", "3": "warning.base"}})</code></pre>
+        <%- score_figure(marked, {"source": "none"}) %>
+        <p>
+          The highlight is a copy of the item's paths laid over the untouched system: when the playhead moves,
+          only that layer changes. On Beethoven's Fifth in full score, a playhead step sends 3.5 to 8.9 KB instead
+          of the system's 267 KB.
+        </p>
+      </section>
+
+      <section class="doc-section" id="a4">
+        <h2>On A4 paper<a class="anchor" href="#a4">#</a></h2>
+        <p>
+          With <code>"page": "a4"</code>, the music is laid out as LilyPond would at its default staff size (20 pt,
+          a staff space of 1.764 mm): 10 mm side margins and 5 mm at the top, the first system indented 15 mm,
+          12 spaces from staff to staff, LilyPond's page breaks. Full pages are spread to the bottom margin; pages
+          after the first carry their number at the outer top corner. <code>score()</code> then answers a column
+          of sheets <code>width</code> px wide.
+        </p>
+<pre class="code-block"><code>score(src, {"width": 794, "page": "a4"})</code></pre>
+      </section>
+
+      <section class="doc-section" id="midi">
+        <h2>Listening: MIDI<a class="anchor" href="#midi">#</a></h2>
+        <p>
+          <code>score_midi(src, opts)</code> writes the same source as a Standard MIDI File, as LilyPond's
+          <code>\midi</code> block would: time signatures, keys and tempos; one note per tie; dynamics as volumes
+          by LilyPond's own values, a hairpin moving the volume note by note, accents louder and staccatos
+          shorter. One track per staff, each on its own channel with its <code>midiInstrument</code>. On the EUI
+          gallery pieces its notes, times and lengths are LilyPond 2.24's, note for note.
+        </p>
+<pre class="code-block"><code>bytes = score_midi(src, {"bpm": 96, "beat": 4, "program": 0})   # a list of bytes</code></pre>
+        <p>
+          <code>bpm</code> and <code>beat</code> give a tempo to a source that has none; <code>program</code> a
+          General MIDI instrument to a staff that names none. Every score on this site has a <strong>Play</strong>
+          button that plays this file.
+        </p>
+      </section>
+
+      <section class="doc-section" id="pdf">
+        <h2>Printing: PDF<a class="anchor" href="#pdf">#</a></h2>
+        <p>
+          <code>score_pdf(src)</code> writes the A4 pages as a PDF: the same paths as the screen, as vectors at
+          five points a staff space, every letter an outline so no font is embedded, the title in the document's
+          information and in each page's footer with its number. The result is an ASCII string: a
+          <code>file_save</code> handler can answer with it as it is.
+        </p>
+        <p>
+          Try it: <a href="<%= example_pdf_path("ensembles", "symphony-5") %>">Beethoven's Fifth as a PDF</a>, or
+          <a href="<%= example_pdf_path("piano", "minuet-in-g") %>">the Minuet in G</a>.
+        </p>
+      </section>
+
+      <section class="doc-section" id="server">
+        <h2>On a Soli server<a class="anchor" href="#server">#</a></h2>
+        <p>
+          The native engraver is available to every Soli application (the <code>eui</code> feature, in the
+          published binaries) through four functions. The <code>score()</code> widget takes them when they are
+          there and engraves in Soli otherwise; both draw the same.
+        </p>
+        <div class="table-scroll">
+          <table class="ref-table">
+            <thead><tr><th>Function</th><th>Answers</th></tr></thead>
+            <tbody>
+              <tr><td><code>eui_score_layout(src, width, layout)</code></td><td>The layout, <code>width</code> in staff spaces: systems, pages, and for every bar its items with their x and heads — enough to place and hit-test. A refused source answers <code>{"error": message}</code>.</td></tr>
+              <tr><td><code>eui_score_bands(laid, sp, opts, total)</code></td><td>A page as bands, one canvas each, at <code>sp</code> px a staff space: <code>paths</code> in the ink, <code>lit</code> for the items of <code>opts["marks"]</code>.</td></tr>
+              <tr><td><code>eui_score_midi(src, opts)</code></td><td>The MIDI file, as a list of bytes.</td></tr>
+              <tr><td><code>eui_score_pdf(src, title)</code></td><td>The A4 PDF, as a string.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          A path is an array: <code>[1, ink, x, y, w, h, 0]</code> for a rectangle, <code>[5, ink, commands…]</code>
+          for an outline, where <code>0</code> is a move, <code>1</code> a line, <code>2</code> a quadratic,
+          <code>3</code> a cubic and <code>4</code> a close. This site's server-side pages use nothing else: each
+          score is engraved per request and turned into SVG in a few dozen lines.
+        </p>
+<pre class="code-block"><code>laid = eui_score_layout(src, width / staff_space, {})
+return {"error": laid["error"]} if laid.has_key("error")
+
+total = (laid["height"] * staff_space).ceil()
+eui_score_bands(laid, staff_space, {"colour": "ink"}, total).each do |band|
+  band["paths"].each do |shape|
+    # shape[0] == 1: a &lt;rect&gt;, otherwise a &lt;path d="M… L… Q… C… Z"&gt;
+    # moved down by band["y"]
+  end
+end</code></pre>
+      </section>
+
+      <section class="doc-section" id="rust">
+        <h2>From Rust<a class="anchor" href="#rust">#</a></h2>
+        <p>The crate has one dependency, <code>serde_json</code>, to read the font data.</p>
+<pre class="code-block"><code>let eng = eui_score::engrave(src, 80.0, &amp;eui_score::Layout::default())?;  // 80 staff spaces wide
+let (paths, ranges) = eui_score::paths(&amp;eng, 8.0, 0)?;   // page 0, 8 px a staff space
+let bands = eui_score::bands(&amp;eng, 8.0, 0, total_px)?;   // the same, as bands
+
+let a4 = eui_score::engrave_a4(src)?;                     // the music on A4
+let midi: Vec&lt;u8&gt; = eui_score::midi(src, &amp;eui_score::MidiOptions::default())?;
+let pdf: String = eui_score::pdf(src, "Title")?;</code></pre>
+        <p>
+          Every length inside is in staff spaces, y down, a staff's top line at 0 and its bottom one at 4; paths
+          are in pixels at <code>sp</code> px a staff space. A whole note (<code>WHOLE</code>) is 26,880 ticks: a
+          double-dotted thirty-second lands on a whole number, and so does any of them in a triplet, quintuplet,
+          sextuplet or septuplet.
+        </p>
+      </section>
+
+      <section class="doc-section" id="fidelity">
+        <h2>Faithful to LilyPond<a class="anchor" href="#fidelity">#</a></h2>
+        <p>
+          The rules are LilyPond's wherever they can be stated in a line, and the thicknesses are its defaults at
+          staff size 20:
+        </p>
+        <ul>
+          <li>spacing from the most common shortest note, 1.2 spaces more for each doubling;</li>
+          <li>stems of 3.5 spaces that reach the middle line;</li>
+          <li>eighths beamed by the metre, a beam placed so its stems average their ideal length, then quantised to sit, straddle or hang on a line;</li>
+          <li>slurs that level their ends before arching over a note in the way, at the height <code>height-limit · 2/π · atan(π/2 · ratio / height-limit · width)</code>;</li>
+          <li>staff line 0.1 space, stem 0.13, beam 0.48, thin bar line 0.19, thick bar line 0.6.</li>
+        </ul>
+        <p>
+          Set beside LilyPond 2.24 at the same staff size, EUI's three reference pieces come out within 2 % of its
+          widths.
+        </p>
+      </section>
+
+      <section class="doc-section" id="speed">
+        <h2>Speed<a class="anchor" href="#speed">#</a></h2>
+        <p>
+          Measured on the exposition of Beethoven's Fifth (12 systems, 10,518 paths at 900 px), against the
+          original Soli engraver:
+        </p>
+        <div class="table-scroll">
+          <table class="ref-table">
+            <thead><tr><th>Step</th><th>eui-score</th><th>Soli engraver</th></tr></thead>
+            <tbody>
+              <tr><td>Engraving</td><td><strong>1.9 ms</strong></td><td>338 ms</td></tr>
+              <tr><td>Drawing the paths</td><td><strong>2.4 ms</strong></td><td>639 ms</td></tr>
+              <tr><td>MIDI file</td><td><strong>1.4 ms</strong></td><td>182 ms</td></tr>
+              <tr><td>PDF of the A4 pages</td><td><strong>47 ms</strong></td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          That is the difference between an edit that redraws a symphony in the next frame and one that takes a
+          fifth of a second. <a href="<%= example_path("ensembles", "symphony-5") %>">See it engraved →</a>
+        </p>
+      </section>
+
+      <section class="doc-section" id="editor">
+        <h2>The score editor<a class="anchor" href="#editor">#</a></h2>
+        <p>
+          EUI's demo application (<code>examples/demo-app</code>) serves an editor built on this engraver: A–G
+          writes a note, 2–7 are the durations as MuseScore numbers them, the arrows move and select, a click
+          selects a note and a second click moves it. The LilyPond source beside the staff can be edited or pasted;
+          a note written across a bar line is split and tied for you.
+        </p>
+        <ul>
+          <li><strong>Score</strong>: titles, clef, key, metre and tempo, for the whole piece or from the selected bar;</li>
+          <li><strong>Bars</strong>: repeats (<code>[</code> and <code>]</code>), line and page breaks;</li>
+          <li><strong>Expression</strong>: dynamics, hairpins, articulations, text above or below;</li>
+          <li><strong>Tracks</strong>: one instrument per track, volume, pan, mute, bracket or brace grouping, and the full score under the sheet;</li>
+          <li>triplets (Ctrl+3) and sextuplets (Ctrl+6), sixty undos, <strong>PDF</strong> and <strong>MIDI</strong> export, playback mixed to <code>.wav</code> by the server.</li>
+        </ul>
+        <p>
+          To write without installing anything, this site's <a href="<%= sandbox %>">playground</a> engraves your
+          LilyPond as you type.
+        </p>
+      </section>
+    </div>
+  </div>
+</div>
