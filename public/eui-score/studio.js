@@ -72,6 +72,22 @@ export function startStudio(root, options = {}) {
     if (!button.hasAttribute("aria-label") && !/\p{L}{2}/u.test(button.textContent)) button.setAttribute("aria-label", button.title.replace(/\s*\(.*\)\s*$/, ""));
   }
 
+  // The toolbox's sections fold, and stay as the person left them.
+  const FOLDED = "eui-score-studio-folded";
+  let folded = {};
+  try {
+    folded = JSON.parse(localStorage.getItem(FOLDED) || "{}");
+  } catch (error) {}
+  for (const section of root.querySelectorAll("details[data-section]")) {
+    if (folded[section.dataset.section]) section.open = false;
+    section.addEventListener("toggle", () => {
+      folded[section.dataset.section] = !section.open;
+      try {
+        localStorage.setItem(FOLDED, JSON.stringify(folded));
+      } catch (error) {}
+    });
+  }
+
   // The instrument menus, from INSTRUMENTS by family; the new staff's offers
   // the piano's lower staff too, in the bass clef.
   for (const select of root.querySelectorAll("[data-instruments]")) {
@@ -1198,7 +1214,7 @@ export function startStudio(root, options = {}) {
     // Ctrl+Alt+1, 2: the voice, as MuseScore has it; event.code, since Alt changes the key.
     if (mod && event.altKey && ["Digit1", "Digit2", "Numpad1", "Numpad2"].includes(event.code)) return run("voice", { voice: event.code.slice(-1) });
     if (mod && ["3", "5", "6", "7"].includes(key)) return run("tuplet", { n: key });
-    if (key === " " && !event.target.closest("button")) return run("play");
+    if (key === " " && !event.target.closest("button, summary")) return run("play");
     if (key === "?") return run("keys");
     if (mod) return;
     if (key === "Escape") {

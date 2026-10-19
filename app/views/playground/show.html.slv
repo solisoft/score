@@ -29,16 +29,16 @@
 
   <div class="studio-body">
     <aside class="studio-toolbox" aria-label="Tools">
-      <section class="tool-section">
-        <h3>Mode</h3>
+      <details class="tool-section" data-section="mode" open>
+        <summary><h3>Mode</h3></summary>
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="mode-select" title="Select and change notes (Esc)">Select</button>
           <button type="button" class="tool tool-wide" data-act="mode-input" title="Write notes at the cursor (N)">✎ Note input</button>
         </div>
-      </section>
+      </details>
 
-      <section class="tool-section">
-        <h3>Duration</h3>
+      <details class="tool-section" data-section="duration" open>
+        <summary><h3>Duration</h3></summary>
         <div class="tool-row">
           <button type="button" class="tool tool-glyph" data-act="duration" data-base="1" title="Whole note (7)">𝅝</button>
           <button type="button" class="tool tool-glyph" data-act="duration" data-base="2" title="Half note (6)">𝅗𝅥</button>
@@ -48,10 +48,10 @@
           <button type="button" class="tool tool-glyph" data-act="duration" data-base="32" title="Thirty-second note (2)">𝅘𝅥𝅰</button>
           <button type="button" class="tool" data-act="dot" title="Dotted (.)">•</button>
         </div>
-      </section>
+      </details>
 
-      <section class="tool-section">
-        <h3>Notes</h3>
+      <details class="tool-section" data-section="notes" open>
+        <summary><h3>Notes</h3></summary>
         <div class="tool-row">
           <button type="button" class="tool" data-act="letter" data-step="0" title="C">C</button>
           <button type="button" class="tool" data-act="letter" data-step="1" title="D">D</button>
@@ -63,10 +63,10 @@
           <button type="button" class="tool" data-act="rest" title="Rest (0)">𝄽</button>
         </div>
         <label class="tool-check"><input type="checkbox" data-chord-mode> Add to the chord <span class="muted">(Shift)</span></label>
-      </section>
+      </details>
 
-      <section class="tool-section">
-        <h3>Pitch</h3>
+      <details class="tool-section" data-section="pitch" open>
+        <summary><h3>Pitch</h3></summary>
         <div class="tool-row">
           <button type="button" class="tool" data-act="move" data-how="step" data-by="1" title="A step up (↑)">↑</button>
           <button type="button" class="tool" data-act="move" data-how="step" data-by="-1" title="A step down (↓)">↓</button>
@@ -82,10 +82,10 @@
           <button type="button" class="tool" data-act="alter" data-alter="1" title="Sharp (+)">♯</button>
           <button type="button" class="tool" data-act="alter" data-alter="2" title="Double sharp">𝄪</button>
         </div>
-      </section>
+      </details>
 
-      <section class="tool-section">
-        <h3>Tuplets</h3>
+      <details class="tool-section" data-section="tuplets" open>
+        <summary><h3>Tuplets</h3></summary>
         <div class="tool-row">
           <button type="button" class="tool" data-act="tuplet" data-n="3" title="Triplet (Ctrl+3)">3</button>
           <button type="button" class="tool" data-act="tuplet" data-n="5" title="Quintuplet (Ctrl+5)">5</button>
@@ -93,10 +93,10 @@
           <button type="button" class="tool" data-act="tuplet" data-n="7" title="Septuplet (Ctrl+7)">7</button>
           <button type="button" class="tool tool-wide" data-act="untuplet" title="Make the tuplet one note again">Remove</button>
         </div>
-      </section>
+      </details>
 
-      <section class="tool-section">
-        <h3>Ties &amp; lines</h3>
+      <details class="tool-section" data-section="ties-and-lines" open>
+        <summary><h3>Ties &amp; lines</h3></summary>
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="tie" title="Tie to the next note (T)">⁀ Tie</button>
           <button type="button" class="tool tool-wide" data-act="slur" title="Slur the selected notes (S)">⌒ Slur</button>
@@ -105,10 +105,10 @@
           <button type="button" class="tool tool-wide" data-act="hairpin" data-kind="&lt;" title="Crescendo over the selection">𝆒 cresc.</button>
           <button type="button" class="tool tool-wide" data-act="hairpin" data-kind="&gt;" title="Diminuendo over the selection">𝆓 dim.</button>
         </div>
-      </section>
+      </details>
 
-      <section class="tool-section">
-        <h3>Articulations</h3>
+      <details class="tool-section" data-section="articulations" open>
+        <summary><h3>Articulations</h3></summary>
         <div class="tool-row">
           <button type="button" class="tool" data-act="art" data-name="staccato" title="Staccato">·</button>
           <button type="button" class="tool" data-act="art" data-name="accent" title="Accent">&gt;</button>
@@ -117,10 +117,10 @@
           <button type="button" class="tool" data-act="art" data-name="staccatissimo" title="Staccatissimo">▾</button>
           <button type="button" class="tool" data-act="art" data-name="fermata" title="Fermata">𝄐</button>
         </div>
-      </section>
+      </details>
 
-      <section class="tool-section">
-        <h3>Dynamics</h3>
+      <details class="tool-section" data-section="dynamics" open>
+        <summary><h3>Dynamics</h3></summary>
         <div class="tool-row tool-dynamics">
           <% dynamics = {"ppp": "pianississimo", "pp": "pianissimo", "p": "piano", "mp": "mezzo-piano", "mf": "mezzo-forte", "f": "forte"} %>
           <% dynamics = dynamics.merge({"ff": "fortissimo", "fff": "fortississimo", "sfz": "sforzando", "fp": "forte-piano"}) %>
@@ -128,18 +128,18 @@
             <button type="button" class="tool tool-dyn" data-act="dynamic" data-name="<%= dynamic %>" title="<%= dynamics[dynamic] %>" aria-label="<%= dynamics[dynamic] %>"><%= dynamic %></button>
           <% end %>
         </div>
-      </section>
+      </details>
 
-      <section class="tool-section">
-        <h3>Words</h3>
+      <details class="tool-section" data-section="words" open>
+        <summary><h3>Words</h3></summary>
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="lyrics" title="Lyrics under the notes (Ctrl+L)">Lyrics</button>
           <button type="button" class="tool tool-wide" data-act="chord" title="A chord symbol above (Ctrl+K)">Chord symbol</button>
         </div>
-      </section>
+      </details>
 
-      <section class="tool-section">
-        <h3>Repeats</h3>
+      <details class="tool-section" data-section="repeats" open>
+        <summary><h3>Repeats</h3></summary>
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="repeat" title="Repeat the selected bars — the same bars again take it away">𝄆 Repeat 𝄇</button>
           <button type="button" class="tool tool-wide" data-act="ending" title="The selected bars become the next ending: 1., then 2.…">Ending 1. 2.</button>
@@ -153,10 +153,10 @@
           for 1., again for 2. On the score, drag a repeat's handles to another bar line to change where it starts,
           ends, and how long each ending is.
         </p>
-      </section>
+      </details>
 
-      <section class="tool-section">
-        <h3>Bars &amp; staves</h3>
+      <details class="tool-section" data-section="bars-and-staves" open>
+        <summary><h3>Bars &amp; staves</h3></summary>
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="add-bar" title="A bar at the end (])">+ Bar</button>
           <button type="button" class="tool tool-wide" data-act="remove-bar" title="Take the last bar away">− Bar</button>
@@ -168,10 +168,10 @@
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="remove-staff" title="Take the selected staff away">− This staff</button>
         </div>
-      </section>
+      </details>
 
-      <section class="tool-section">
-        <h3>Voices</h3>
+      <details class="tool-section" data-section="voices" open>
+        <summary><h3>Voices</h3></summary>
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="voice" data-voice="1" title="Write and select in the first voice, stems up (Ctrl+Alt+1)">Voice 1</button>
           <button type="button" class="tool tool-wide" data-act="voice" data-voice="2" title="Write and select in the second voice, stems down (Ctrl+Alt+2)">Voice 2</button>
@@ -180,10 +180,10 @@
           <button type="button" class="tool tool-wide" data-act="voice-remove" title="Take this staff's second voice away, its notes with it">Remove voice 2</button>
         </div>
         <p class="tool-hint">Voice 2 writes under voice 1 on the same staff. A bar shows two voices where voice 2 has notes.</p>
-      </section>
+      </details>
 
-      <section class="tool-section">
-        <h3>This staff</h3>
+      <details class="tool-section" data-section="this-staff" open>
+        <summary><h3>This staff</h3></summary>
         <label class="tool-field">Instrument
           <select data-field="staff-instrument" data-instruments="staff" title="Its sound, its clef, and its name unless you gave it one"></select>
         </label>
@@ -203,10 +203,10 @@
             <% end %>
           </select>
         </label>
-      </section>
+      </details>
 
-      <section class="tool-section" data-changes>
-        <h3>From bar <span data-change-bar>—</span></h3>
+      <details class="tool-section" data-changes data-section="from-bar" open>
+        <summary><h3>From bar <span data-change-bar>—</span></h3></summary>
         <p class="tool-hint" data-change-hint>Select a bar, or put the cursor in it: what changes here goes on to the next change.</p>
         <label class="tool-field">Key
           <select data-field="change-key">
@@ -234,10 +234,10 @@
           </select>
         </label>
         <label class="tool-check"><input type="checkbox" data-field="change-double"> Double bar line before it</label>
-      </section>
+      </details>
 
-      <section class="tool-section">
-        <h3>Score</h3>
+      <details class="tool-section" data-section="score" open>
+        <summary><h3>Score</h3></summary>
         <label class="tool-field">Title <input type="text" data-field="title"></label>
         <label class="tool-field">Subtitle <input type="text" data-field="subtitle"></label>
         <label class="tool-field">Composer <input type="text" data-field="composer"></label>
@@ -263,7 +263,7 @@
             <option value="brace">Brace (piano)</option><option value="choir">Choir</option>
           </select>
         </label>
-      </section>
+      </details>
 
     </aside>
 
