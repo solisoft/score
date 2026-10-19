@@ -95,7 +95,10 @@ def _score_actions(figure, opts)
   buttons = []
   midi = figure["midi"]
   unless midi.nil?
-    buttons.push("<button type=\"button\" class=\"score-btn score-btn-play\" data-score-play data-midi=\"#{midi}\">"
+    # The source rides along: a piece with repeats is played out in the
+    # browser (public/js/score.js), the server's MIDI playing them once.
+    play_attrs = "data-score-play data-midi=\"#{midi}\" data-src=\"#{html_escape(figure["src"])}\""
+    buttons.push("<button type=\"button\" class=\"score-btn score-btn-play\" #{play_attrs}>"
     + "<span aria-hidden=\"true\">▶</span> Play</button>")
     buttons.push("<a class=\"score-btn\" href=\"#{midi}\" download=\"#{html_escape(file_name)}.mid\">MIDI</a>")
   end

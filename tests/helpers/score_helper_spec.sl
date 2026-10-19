@@ -48,6 +48,14 @@ describe("score_figure") do
     assert_contains(html, "<details class=\"score-source\" open>")
   end
 
+  test("hands Play the source, escaped, even when the source is not shown") do
+    figure = ScoreSvg.figure("\\header { title = \"<b>A & B</b>\" } { \\repeat volta 2 { c'4 d' e' f' } }", 600, 7)
+    html = score_figure(figure, {"source": "none"})
+    assert_contains(html, "data-src=\"\\header { title = &quot;&lt;b&gt;A &amp; B&lt;/b&gt;&quot; }")
+    assert_contains(html, "\\repeat volta 2")
+    assert_not(html.contains("<b>A"))
+  end
+
   test("leaves out the sandbox link without a sandbox, and the source on request") do
     figure = ScoreSvg.figure("{ c'4 d' }", 600, 7)
     html = score_figure(

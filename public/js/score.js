@@ -11,7 +11,10 @@
   window.__soliScoreUi = true;
 
   // Its address, versioned, from the layout: this script is not a module.
-  var PLAYER_SRC = (document.currentScript && document.currentScript.getAttribute("data-player")) || "/eui-score/player.js";
+  var script = document.currentScript;
+  var PLAYER_SRC = (script && script.getAttribute("data-player")) || "/eui-score/player.js";
+  var ENGINE_SRC = (script && script.getAttribute("data-engine")) || "/eui-score/eui-score.js";
+  var MODEL_SRC = (script && script.getAttribute("data-model")) || "/eui-score/score-model.js";
   var PLAY_LABEL = '<span aria-hidden="true">▶</span> Play';
   var STOP_LABEL = '<span aria-hidden="true">■</span> Stop';
   var player = null;
@@ -23,6 +26,33 @@
       throw error;
     });
     return player;
+  }
+
+  /**
+   * The piece's MIDI: the server's, or — for a piece with repeats, which the
+   * server plays once — written here with every repeat played out, as the
+   * playground plays it. A source the editor's model cannot read keeps the
+   * server's.
+   */
+  function midiOf(button) {
+    var server = function () {
+      return fetch(button.getAttribute("data-midi")).then(function (r) {
+        return r.arrayBuffer();
+      });
+    };
+    var src = button.getAttribute("data-src");
+    if (!src || !/\\repeat\b/.test(src)) return server();
+    return Promise.all([import(ENGINE_SRC), import(MODEL_SRC)])
+      .then(function (mods) {
+        var E = mods[0];
+        var M = mods[1];
+        return E.loaded().then(function () {
+          var read = M.fromParsed(JSON.parse(E.engine.score_json(src)));
+          if (!read.score) return server();
+          return E.toMidi(M.toLilyPond(read.score, { unfold: true }).source);
+        });
+      })
+      .catch(server);
   }
 
   function clock(sec) {
@@ -87,7 +117,7 @@
     var context = window.AudioContext ? new AudioContext() : null;
     button.innerHTML = STOP_LABEL;
     slot.innerHTML = '<span class="score-player-note">Loading the player…</span>';
-    Promise.all([loadPlayer(), fetch(button.getAttribute("data-midi")).then(function (r) { return r.arrayBuffer(); })])
+    Promise.all([loadPlayer(), midiOf(button)])
       .then(function (both) {
         var p = both[0];
         if (playing !== state) {

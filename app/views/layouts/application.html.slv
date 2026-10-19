@@ -72,6 +72,7 @@
         </div>
     </footer>
 
-    <script defer src="<%= public_path("js/score.js") %>" data-player="<%= public_path("eui-score/player.js") %>"></script>
+    <script defer src="<%= public_path("js/score.js") %>" data-player="<%= public_path("eui-score/player.js") %>"
+      data-engine="<%= public_path("eui-score/eui-score.js") %>" data-model="<%= public_path("eui-score/score-model.js") %>"></script>
 </body>
 </html>
