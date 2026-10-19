@@ -8,7 +8,10 @@
    decides their ink. */
 
 @theme {
-  --font-sans: Inter, system-ui, sans-serif;
+  /* Noto Music after Inter: the music signs (♩ 𝄽 𝄫 𝄐 𝄆…) are in no system
+     font of macOS or Windows. Google Fonts serves it by Unicode range, so
+     a page without a music sign never downloads it. */
+  --font-sans: Inter, "Noto Music", system-ui, sans-serif;
   --font-serif: Fraunces, Georgia, serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }

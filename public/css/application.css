@@ -3,7 +3,7 @@
 @layer theme, base, components, utilities;
 @layer theme {
   :root, :host {
-    --font-sans: Inter, system-ui, sans-serif;
+    --font-sans: Inter, "Noto Music", system-ui, sans-serif;
     --font-serif: Fraunces, Georgia, serif;
     --font-mono: "JetBrains Mono", ui-monospace, monospace;
     --color-red-50: oklch(97.1% 0.013 17.38);
