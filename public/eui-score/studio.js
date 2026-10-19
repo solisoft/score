@@ -406,7 +406,13 @@ export function startStudio(root, options = {}) {
       });
       case "ending": return edit((score) => {
         const [a, b] = selectedBars();
-        M.endingFromBars(score, a, b);
+        const ending = M.endingFromBars(score, a, b);
+        const r = score.repeats.find((x) => x.to < a && M.repeatEnd(x) >= b);
+        const at = (k) => r.to + 2 + r.endings.slice(0, k).reduce((x, y) => x + y, 0);
+        const bars = (k) => (r.endings[k] > 1 ? `bars ${at(k)}–${at(k) + r.endings[k] - 1}` : `bar ${at(k)}`);
+        say(ending === 1
+          ? `Ending 1: ${bars(0)} · ending 2: ${bars(1)} — drag the 2. handle to change it`
+          : `Ending ${ending + 1}: ${bars(ending)}`);
       });
       case "endings": return edit((score) => {
         const [a, b] = selectedBars();

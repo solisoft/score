@@ -881,6 +881,7 @@ export function setRepeat(score, i, next) {
   const candidate = { from: next.from ?? r.from, to: next.to ?? r.to, endings: [...(next.endings ?? r.endings)] };
   if (candidate.from < 0 || candidate.to < candidate.from) throw new Error("a repeat keeps one bar at least");
   if (candidate.endings.some((n) => !Number.isInteger(n) || n < 1)) throw new Error("an ending keeps one bar at least");
+  if (candidate.endings.length === 1) throw new Error("a repeat has two endings at least, or none");
   if (repeatEnd(candidate) >= barsOf(score)) throw new Error("the repeat would run past the last bar");
   const others = score.repeats.filter((_, k) => k !== i);
   if (others.some((o) => candidate.from <= repeatEnd(o) && repeatEnd(candidate) >= o.from)) throw new Error("the repeat would run into another one");
@@ -896,18 +897,23 @@ export function endingFromBars(score, a, b) {
   const [from, to] = [Math.min(a, b), Math.max(a, b)];
   const len = to - from + 1;
   const repeats = score.repeats ?? [];
-  const after = repeats.findIndex((r) => repeatEnd(r) + 1 === from);
-  if (after >= 0) {
-    const r = repeats[after];
-    setRepeat(score, after, { endings: r.endings.length ? [...r.endings, len] : [len] });
-    return;
+  // Right after a repeat's endings: one more.
+  const next = repeats.findIndex((r) => r.endings.length && repeatEnd(r) + 1 === from);
+  if (next >= 0) {
+    const count = repeats[next].endings.length;
+    setRepeat(score, next, { endings: [...repeats[next].endings, len] });
+    return count;
   }
-  const inside = repeats.findIndex((r) => !r.endings.length && to === r.to && from > r.from);
-  if (inside >= 0) {
-    setRepeat(score, inside, { to: from - 1, endings: [len] });
-    return;
-  }
-  throw new Error("select the bars right after a repeat (its next ending), or a repeat's last bars (its first ending)");
+  // Otherwise the bars become the first ending, and as many bars after them the
+  // second: one ending alone would be the last time through, with no repeat sign.
+  const plain = repeats.findIndex((r) => !r.endings.length && (repeatEnd(r) + 1 === from || (from > r.from && to === r.to)));
+  if (plain < 0) throw new Error("select the bars right after a repeat, or its last bars: they become its first ending");
+  const r = repeats[plain];
+  const body = from > r.to ? r.to : from - 1;
+  const taken = repeats.some((o) => o !== r && o.from <= to + len && repeatEnd(o) > to);
+  if (taken || to + len >= barsOf(score)) insertBars(score, to + 1, len);
+  setRepeat(score, plain, { to: body, endings: [len, len] });
+  return 1;
 }
 
 /** `count` bars of rests put in every staff before bar `at`; the repeats after it move along. */

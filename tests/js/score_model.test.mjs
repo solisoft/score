@@ -268,11 +268,13 @@ test("a repeat's edges move, and selected bars become its endings", () => {
   const s = M.newScore();
   M.addBars(s, 4);
   M.toggleRepeat(s, 0, 3);
-  M.endingFromBars(s, 2, 3);
-  assert.deepEqual(s.repeats, [{ from: 0, to: 1, endings: [2] }], "its last bars: ending 1.");
-  M.endingFromBars(s, 4, 4);
-  assert.deepEqual(s.repeats, [{ from: 0, to: 1, endings: [2, 1] }], "the bar after: ending 2.");
-  assert.throws(() => M.endingFromBars(s, 7, 7), /right after a repeat/);
+  assert.equal(M.endingFromBars(s, 2, 3), 1);
+  assert.deepEqual(s.repeats, [{ from: 0, to: 1, endings: [2, 2] }], "its last bars: ending 1., the two after: 2.");
+  assert.equal(M.barsOf(s), 8, "the bars after it are taken, none added");
+  assert.equal(M.endingFromBars(s, 6, 6), 2);
+  assert.deepEqual(s.repeats, [{ from: 0, to: 1, endings: [2, 2, 1] }], "the bar after: ending 3.");
+  assert.throws(() => M.endingFromBars(s, 9, 9), /right after a repeat/);
+  assert.throws(() => M.setRepeat(s, 0, { endings: [1] }), /two endings/);
   M.setRepeat(s, 0, { endings: [1, 3] });
   assert.match(engrave(s).source, /\\repeat volta 2 \{ r1 \| r1 \} \\alternative \{ \{ r1 \} \{ r1 \| r1 \| r1 \} \}/);
   assert.deepEqual(reread(s).repeats, s.repeats);
@@ -280,6 +282,17 @@ test("a repeat's edges move, and selected bars become its endings", () => {
   assert.throws(() => M.setRepeat(s, 0, { endings: [1, 9] }), /past the last bar/);
   M.toggleRepeat(s, 6, 7);
   assert.throws(() => M.setRepeat(s, 0, { endings: [1, 5] }), /into another/);
+});
+
+test("the bar after a plain repeat is its first ending, and the bar after that its second", () => {
+  const s = M.newScore();
+  M.toggleRepeat(s, 0, 2);
+  M.endingFromBars(s, 3, 3);
+  assert.deepEqual(s.repeats, [{ from: 0, to: 2, endings: [1, 1] }]);
+  assert.equal(M.barsOf(s), 5, "the piece ended at ending 1.: a bar is added for ending 2.");
+  const text = engrave(s).source;
+  assert.match(text, /\\alternative \{ \{ r1 \} \{ r1 \} \}/);
+  assert.deepEqual(reread(s).repeats, s.repeats);
 });
 
 test("bar-line repeat signs read as a repeat", () => {
