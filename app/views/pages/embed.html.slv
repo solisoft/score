@@ -21,6 +21,7 @@
         <li><a href="#colour">Colour</a></li>
         <li><a href="#api">The JavaScript API</a></li>
         <li><a href="#events">Events</a></li>
+        <li><a href="#editor">An editable score</a></li>
         <li><a href="#frameworks">React, Vue, Svelte…</a></li>
         <li><a href="#self-host">Hosting it yourself</a></li>
         <li><a href="#server">Or on the server</a></li>
@@ -51,7 +52,7 @@
           </eui-score>
         </div>
         <p>
-          The module is 18 KB of JavaScript; the engraver, <strong>555 KB of WebAssembly (207 KB gzipped)</strong>,
+          The module is 26 KB of JavaScript; the engraver, <strong>826 KB of WebAssembly (290 KB gzipped)</strong>,
           is downloaded once and cached, however many scores the page holds.
         </p>
       </section>
@@ -161,6 +162,47 @@ score.addEventListener("refuse", (event) =&gt; console.warn(event.detail));</cod
         </div>
       </section>
 
+      <section class="doc-section" id="editor">
+        <h2>An editable score<a class="anchor" href="#editor">#</a></h2>
+        <p>
+          <code>&lt;eui-score-editor&gt;</code> is the same score, editable with the mouse and the keyboard. Click a
+          note — this one is live:
+        </p>
+<pre class="code-block"><code>&lt;script type="module" src="https://score.solisoft.net/eui-score/eui-score-editor.js"&gt;&lt;/script&gt;
+
+&lt;eui-score-editor&gt;
+  &lt;script type="text/x-lilypond"&gt;{ \key g \major \time 3/4 g'4 a' b' | d''2 r4 | &lt;g' b'&gt;2. \bar "|." }&lt;/script&gt;
+&lt;/eui-score-editor&gt;</code></pre>
+        <div class="score-sheet">
+          <eui-score-editor id="embed-editor"><script type="text/x-lilypond">{ \key g \major \time 3/4 g'4 a' b' | d''2 r4 | <g' b'>2. \bar "|." }</script></eui-score-editor>
+        </div>
+        <div class="table-scroll">
+          <table class="ref-table">
+            <thead><tr><th>Do</th><th>To</th></tr></thead>
+            <tbody>
+              <tr><td>Click, <code>←</code> <code>→</code></td><td>Select a note or a rest. <code>Alt+↑</code> <code>Alt+↓</code> choose one note of a chord.</td></tr>
+              <tr><td><code>↑</code> <code>↓</code>, or drag</td><td>Move the note a step in the key; with <code>Shift</code> a semitone, with <code>Ctrl</code> an octave.</td></tr>
+              <tr><td><code>A</code>–<code>G</code></td><td>Write that note in place of the selection: a rest becomes a note of its length.</td></tr>
+              <tr><td><code>Shift</code>+<code>A</code>–<code>G</code></td><td>Add that note above the chord.</td></tr>
+              <tr><td><code>R</code>, <code>Delete</code></td><td>The note becomes a rest; a chord's selected note leaves the chord.</td></tr>
+              <tr><td><code>+</code> <code>−</code> <code>=</code></td><td>Sharp, flat, natural.</td></tr>
+              <tr><td><code>Ctrl+Z</code>, <code>Ctrl+Y</code></td><td>Undo, redo. <strong>+ Bar</strong> adds a bar of rests at the end, to write into.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          The LilyPond text stays the only state. Each edit is made by eui-score's own edit functions — those EUI's
+          score editor uses — which rewrite only the characters that spell a note, and each result is engraved
+          before it is kept: an edit the engraver would refuse is refused, with its reason. Notes are written in place
+          of rests, as in MuseScore, so a bar never runs over. A source in <code>\relative</code> is written out in
+          absolute pitches on its first edit, since a relative pitch depends on the notes before it.
+        </p>
+<pre class="code-block"><code>const editor = document.querySelector("eui-score-editor");
+editor.addEventListener("change", (event) =&gt; save(event.detail.source));
+editor.source = "{ c'4 d' e' f' }";       // replace the music
+editor.edit({ op: "move", item: 0, how: "step", by: 1 });   // or edit it from code</code></pre>
+      </section>
+
       <section class="doc-section" id="frameworks">
         <h2>React, Vue, Svelte…<a class="anchor" href="#frameworks">#</a></h2>
         <p>
@@ -178,9 +220,10 @@ function Score({ source }) {
 
       <section class="doc-section" id="self-host">
         <h2>Hosting it yourself<a class="anchor" href="#self-host">#</a></h2>
-        <p>Three files, side by side in any static folder; the module finds the WebAssembly next to itself:</p>
+        <p>Three files (four with the editor), side by side in any static folder; the module finds the WebAssembly next to itself:</p>
         <ul>
           <li><a href="<%= public_path("eui-score/eui-score.js") %>" download>eui-score.js</a> — the element and the API;</li>
+          <li><a href="<%= public_path("eui-score/eui-score-editor.js") %>" download>eui-score-editor.js</a> — the editable score, optional;</li>
           <li><a href="<%= public_path("eui-score/eui_score_web.js") %>" download>eui_score_web.js</a> — the binding generated by wasm-bindgen;</li>
           <li><a href="<%= public_path("eui-score/eui_score_web_bg.wasm") %>" download>eui_score_web_bg.wasm</a> — the engraver.</li>
         </ul>
@@ -211,6 +254,7 @@ function Score({ source }) {
 </div>
 
 <script type="module" src="<%= public_path("eui-score/eui-score.js") %>"></script>
+<script type="module" src="<%= public_path("eui-score/eui-score-editor.js") %>"></script>
 <script type="module">
   import { toPdf, toMidi, download } from "<%= public_path("eui-score/eui-score.js") %>";
 

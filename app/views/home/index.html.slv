@@ -67,7 +67,7 @@
             <h2>Two tags, and your page engraves.</h2>
             <p class="lead">
                 Compiled to WebAssembly, the same engraver runs in the browser: no server, no account,
-                207 KB gzipped, downloaded once.
+                about 290 KB gzipped, downloaded once.
             </p>
         </div>
 <pre class="code-block"><code>&lt;script type="module" src="https://score.solisoft.net/eui-score/eui-score.js"&gt;&lt;/script&gt;

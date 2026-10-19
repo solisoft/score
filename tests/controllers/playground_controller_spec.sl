@@ -5,15 +5,16 @@ describe("PlaygroundController") do
       assert_eq(res_status(response), 200)
       assert_contains(assigns()["source"], "Ode to Joy")
       body = res_body(response)
-      assert_contains(body, "<eui-score id=\"sandbox-score\"><svg")
+      assert_contains(body, "<eui-score-editor id=\"sandbox-score\"><div class=\"ese-sheet\"><svg")
       assert_contains(body, "Allegro assai")
       assert_not(body.contains("class=\"score-sheet score-sheet-refused\""))
     end
 
-    test("engraves in the browser, with the WebAssembly module") do
+    test("engraves and edits in the browser, with the WebAssembly module") do
       body = res_body(get("/playground"))
       assert_contains(body, "<script type=\"module\">")
       assert_contains(body, "eui-score/eui-score.js")
+      assert_contains(body, "eui-score/eui-score-editor.js")
       assert_contains(body, "data-midi=\"data:audio/midi;base64,")
     end
 

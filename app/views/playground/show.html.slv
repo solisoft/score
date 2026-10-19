@@ -2,11 +2,12 @@
   <header class="sandbox-head">
     <div>
       <span class="eyebrow">Playground</span>
-      <h1>Type it, it's engraved.</h1>
+      <h1>Type it, click it, it's engraved.</h1>
     </div>
     <p class="muted">
-      Type LilyPond on the left: eui-score, compiled to WebAssembly, engraves it on the right at every keystroke,
-      in your browser, at the width of the window. Nothing is sent or stored.
+      Edit the LilyPond on the left, or the score on the right: click a note, move it with the arrows or the
+      mouse, type A–G. eui-score, compiled to WebAssembly, engraves every change in your browser. Nothing is
+      sent or stored.
     </p>
   </header>
 
@@ -29,12 +30,13 @@
 
     <div class="sandbox-result">
       <div class="score-sheet" id="sandbox-sheet">
-        <eui-score id="sandbox-score"><%- figure["svg"].to_s %></eui-score>
+        <eui-score-editor id="sandbox-score"><div class="ese-sheet"><%- figure["svg"].to_s %></div></eui-score-editor>
       </div>
       <div class="score-actions">
         <button type="button" class="score-btn score-btn-play" id="sandbox-play" data-score-play data-midi="<%= figure["midi"] %>"><span aria-hidden="true">▶</span> Play</button>
         <button type="button" class="score-btn" id="sandbox-midi">MIDI</button>
         <button type="button" class="score-btn" id="sandbox-pdf">A4 PDF</button>
+        <button type="button" class="score-btn" id="sandbox-ly">.ly</button>
         <div class="score-player" data-score-player></div>
       </div>
     </div>
@@ -43,6 +45,7 @@
 
 <script type="module">
   import { toMidi, toPdf, download } from "<%= public_path("eui-score/eui-score.js") %>";
+  import "<%= public_path("eui-score/eui-score-editor.js") %>";
 
   const textarea = document.getElementById("sandbox-source");
   const score = document.getElementById("sandbox-score");
@@ -50,6 +53,7 @@
   const play = document.getElementById("sandbox-play");
   const sheet = document.getElementById("sandbox-sheet");
   let midiUrl = null;
+  let midiFor = null;
 
   function title() {
     const match = textarea.value.match(/title\s*=\s*"([^"]*)"/);
@@ -57,6 +61,8 @@
   }
 
   async function refreshMidi() {
+    if (midiFor === textarea.value) return;
+    midiFor = textarea.value;
     try {
       const bytes = await toMidi(textarea.value);
       if (midiUrl) URL.revokeObjectURL(midiUrl);
@@ -71,11 +77,11 @@
     status.textContent = `${textarea.value.length} characters · engraved in ${ms} ms`;
     refreshMidi();
   });
-  score.addEventListener("refuse", () => {
-    sheet.classList.add("score-sheet-refused");
-    status.textContent = "refused";
+  score.addEventListener("refuse", () => sheet.classList.add("score-sheet-refused"));
+  // An edit on the score rewrites the text; the text rewrites the score.
+  score.addEventListener("change", (event) => {
+    textarea.value = event.detail.source;
   });
-
   textarea.addEventListener("input", () => {
     score.source = textarea.value;
   });
@@ -86,5 +92,8 @@
   });
   document.getElementById("sandbox-pdf").addEventListener("click", async () => {
     try { download(await toPdf(textarea.value, title()), `${title()}.pdf`, "application/pdf"); } catch (error) {}
+  });
+  document.getElementById("sandbox-ly").addEventListener("click", () => {
+    download(textarea.value, `${title()}.ly`, "text/x-lilypond");
   });
 </script>

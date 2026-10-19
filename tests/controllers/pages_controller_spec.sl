@@ -51,6 +51,7 @@ describe("PagesController") do
       assert_contains(body, "<eui-score src=\"/examples/ensembles/string-quartet/source.ly\"></eui-score>")
       assert_contains(body, "<script type=\"text/x-lilypond\">")
       assert_contains(body, "<script type=\"module\" src=\"/eui-score/eui-score.js")
+      assert_contains(body, "<eui-score-editor id=\"embed-editor\">")
     end
   end
 end

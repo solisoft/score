@@ -18,6 +18,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use eui_score::{Layout, MidiOptions, Path};
 use wasm_bindgen::prelude::*;
 
+pub mod editor;
+
 /// Distinguishes the `<defs>` ids of two scores on one page.
 static ENGRAVINGS: AtomicU32 = AtomicU32::new(0);
 
@@ -189,4 +191,24 @@ pub fn check(src: &str) -> String {
         Ok(_) => String::new(),
         Err(e) => e.message,
     }
+}
+
+/// What an editor draws and hit-tests, as JSON: `svg`, `width`, `height`,
+/// `editable` ("yes", or why not), and `items` — each note or rest with its
+/// `item` number, `kind` and `box` [x0, y0, x1, y1] in the SVG's pixels,
+/// and each notehead's `index`, `d`, `alter` and `box`. `selected` and
+/// `head` (−1 for none) are drawn in the selection's colours.
+#[wasm_bindgen]
+pub fn editor_view(src: &str, width: f64, staff_space: f64, selected: i32, head: i32) -> Result<String, JsError> {
+    let sp = if staff_space > 0.0 { staff_space } else { 7.0 };
+    editor::view(src, width, sp, selected.into(), head.into()).map(|v| v.to_string()).map_err(|e| JsError::new(&e))
+}
+
+/// One edit, as JSON (`{"op": "move", "item": 3, "how": "step", "by": 1}`…),
+/// applied to `src`: the new source, which the engraver accepts, or the
+/// reason it would not.
+#[wasm_bindgen]
+pub fn editor_apply(src: &str, op: &str) -> Result<String, JsError> {
+    let op: serde_json::Value = serde_json::from_str(op).map_err(|e| JsError::new(&e.to_string()))?;
+    editor::apply(src, &op).map_err(|e| JsError::new(&e))
 }

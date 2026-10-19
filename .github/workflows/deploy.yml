@@ -7,7 +7,8 @@
 #
 # No database step: the site has no models. The browser engraver
 # (public/eui-score/) is committed, built by wasm/build.sh, so a deploy needs
-# no Rust. See deploy/README.md for the one-time server setup.
+# no Rust to deploy; the `engraver` job only tests it. See deploy/README.md
+# for the one-time server setup.
 name: verify & deploy
 
 on:
@@ -108,9 +109,24 @@ jobs:
       - name: Suite, coverage at least 90 %
         run: soli test --coverage --coverage-min 90.0
 
+  # The browser engraver's editing half (wasm/src/editor.rs), tested natively
+  # against every gallery piece: the edits the playground makes.
+  engraver:
+    name: browser engraver + editor tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: wasm
+      - name: Tests
+        working-directory: wasm
+        run: cargo test --release
+
   deploy:
     name: deploy score.solisoft.net
-    needs: verify
+    needs: [verify, engraver]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
