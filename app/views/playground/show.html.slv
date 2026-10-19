@@ -67,6 +67,7 @@
           <button type="button" class="tool" data-act="rest" title="Rest (0)">𝄽</button>
         </div>
         <label class="tool-check"><input type="checkbox" data-chord-mode> Add to the chord <span class="muted">(Shift)</span></label>
+        <label class="tool-check"><input type="checkbox" data-hear checked> Hear the notes</label>
       </details>
 
       <details class="tool-section" data-section="pitch" open>

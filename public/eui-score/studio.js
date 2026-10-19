@@ -260,6 +260,34 @@ export function startStudio(root, options = {}) {
     else st.sel = { staff: s, t0: t, t1: t, head };
     say("");
     draw();
+    if (!extend) hear();
+  }
+
+  // ---- Hearing the notes ----------------------------------------------------------
+
+  const HEAR = "eui-score-studio-hear";
+  const hearBox = root.querySelector("[data-hear]");
+  try {
+    if (hearBox && localStorage.getItem(HEAR) === "off") hearBox.checked = false;
+  } catch (error) {}
+  hearBox?.addEventListener("change", () => {
+    try {
+      localStorage.setItem(HEAR, hearBox.checked ? "on" : "off");
+    } catch (error) {}
+  });
+
+  /** Sounds the note the tools act on — its selected head, or the whole chord — with its staff's instrument. */
+  function hear() {
+    if (!hearBox?.checked || st.playing || !st.score) return;
+    const t = target();
+    const ev = t && st.score.staves[t.s]?.events[t.i];
+    if (!ev || ev.rest || !ev.pitches.length) return;
+    const heads = t.head >= 0 && ev.pitches[t.head] ? [ev.pitches[t.head]] : ev.pitches;
+    const sound = st.score.staves[M.upperOf(st.score, t.s)]?.instrument;
+    if (!P.preview(heads.map((p) => M.midiKey(p.d, p.alter)), M.programOf(sound)) && !P.isReady()) {
+      say("Loading the sounds, to hear the notes… (38 MB, once)");
+      P.prepare().then(() => say("The notes sound as you write them; Hear the notes turns it off.")).catch(() => {});
+    }
   }
 
   /** The one event the tools act on: the selection's first, or the note just written. */
@@ -374,7 +402,16 @@ export function startStudio(root, options = {}) {
 
   // ---- Actions ------------------------------------------------------------------
 
+  // What changes or moves to a note sounds it, as the person works.
+  const SOUNDING = new Set(["letter", "move", "alter", "head-up", "head-down", "next", "previous"]);
+
   function act(name, data = {}) {
+    const done = doAct(name, data);
+    if (SOUNDING.has(name)) Promise.resolve(done).then(hear);
+    return done;
+  }
+
+  function doAct(name, data = {}) {
     switch (name) {
       case "new": return load(M.toLilyPond(M.newScore()).source, "A new score.");
       case "undo": return undo();

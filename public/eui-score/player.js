@@ -164,6 +164,31 @@ export async function play(midi, { at = 0, onStop, onProgress } = {}) {
   };
 }
 
+// The notes heard while writing sound on a channel of their own, so the
+// piece's channels keep their instruments.
+const PREVIEW = 15;
+
+/**
+ * Sounds `keys` (MIDI keys, a chord) briefly with General MIDI `program` —
+ * the note just written or selected. Before the sounds have loaded, it
+ * starts loading them and stays silent: the next note is heard.
+ */
+export function preview(keys, program = 0) {
+  if (!engine?.done) {
+    prepare().catch(() => {});
+    return false;
+  }
+  engine.promise.then(({ ctx, synth }) => {
+    ctx.resume().catch(() => {});
+    synth.programChange(PREVIEW, program);
+    for (const key of keys) synth.noteOn(PREVIEW, key, 90);
+    setTimeout(() => {
+      for (const key of keys) synth.noteOff(PREVIEW, key);
+    }, 450);
+  });
+  return true;
+}
+
 /** Stops what is playing, if anything. */
 export function stop() {
   const was = current;

@@ -346,6 +346,7 @@ test("instruments: every one engraves, and plays its own sound", () => {
     const at = bytes.findIndex((b, i) => b === 0xc0 && i > 0 && bytes[i - 1] === 0);
     assert.ok(at > 0, `${it.name}: a program change`);
     if (it.sound !== "acoustic grand") assert.notEqual(bytes[at + 1], 0, `${it.name}: "${it.sound}" is a General MIDI sound`);
+    assert.equal(M.programOf(it.sound), bytes[at + 1], `${it.name}: the program the engraver writes`);
   });
 });
 
