@@ -88,6 +88,13 @@ export function startStudio(root, options = {}) {
     });
   }
 
+  // The intervals to transpose by; a major second by default.
+  const intervalMenu = root.querySelector("[data-transpose-interval]");
+  if (intervalMenu) {
+    M.INTERVALS.forEach((it, k) => intervalMenu.append(new Option(it.name, String(k))));
+    intervalMenu.value = String(M.INTERVALS.findIndex((it) => it.name === "major second"));
+  }
+
   // The instrument menus, from INSTRUMENTS by family; the new staff's offers
   // the piano's lower staff too, in the bass clef.
   for (const select of root.querySelectorAll("[data-instruments]")) {
@@ -389,6 +396,20 @@ export function startStudio(root, options = {}) {
       case "save-ly": return download(st.text, `${fileName()}.ly`, "text/x-lilypond");
       case "save-pdf": return toPdf(st.text, title()).then((pdf) => download(pdf, `${fileName()}.pdf`, "application/pdf")).catch((e) => refuse(e));
       case "share": return share();
+      case "transpose": {
+        const it = M.INTERVALS[Number(root.querySelector("[data-transpose-interval]").value)];
+        const way = Number(root.querySelector("[data-transpose-way]").value);
+        const by = { steps: way * it.steps, semitones: way * it.semitones };
+        const words = `${way > 0 ? "up" : "down"} a${/^[ao]/.test(it.name) ? "n" : ""} ${it.name}`;
+        if (data.scope === "score") {
+          if (edit((score) => M.transpose(score, by))) say(`The score, ${words}.`);
+          return;
+        }
+        const r = range();
+        if (!r) return say("Select the notes to transpose, or transpose the score", true);
+        if (edit((score) => M.transpose(score, { ...by, s: r.s, a: r.a, b: r.b }))) say(`${r.b - r.a + 1} selected, ${words}.`);
+        return;
+      }
       case "save-midi": return toMidi(st.text).then((m) => download(m, `${fileName()}.mid`, "audio/midi")).catch((e) => refuse(e));
       case "mode-select": return setInput(false);
       case "mode-input": return setInput(true);

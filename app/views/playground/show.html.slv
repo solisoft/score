@@ -86,6 +86,16 @@
           <button type="button" class="tool" data-act="alter" data-alter="1" title="Sharp (+)">♯</button>
           <button type="button" class="tool" data-act="alter" data-alter="2" title="Double sharp">𝄪</button>
         </div>
+        <div class="tool-row tool-transpose">
+          <select class="tool-select" data-transpose-interval aria-label="Interval to transpose by"></select>
+          <select class="tool-select" data-transpose-way aria-label="Up or down">
+            <option value="1">up</option><option value="-1">down</option>
+          </select>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="transpose" data-scope="selection" title="Transpose the selected notes">Transpose notes</button>
+          <button type="button" class="tool tool-wide" data-act="transpose" data-scope="score" title="Transpose the whole score, its key and chord symbols">Transpose score</button>
+        </div>
       </details>
 
       <details class="tool-section" data-section="tuplets" open>

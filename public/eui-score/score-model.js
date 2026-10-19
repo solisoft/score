@@ -247,6 +247,85 @@ export function movePitch(p, how, by, fifths) {
   return { d, alter: keyAlters(fifths)[mod7(d)] };
 }
 
+// ---- Transposing ------------------------------------------------------------------------------
+
+/** The intervals the editor transposes by: how many letters, how many semitones. */
+export const INTERVALS = [
+  { name: "minor second", steps: 1, semitones: 1 },
+  { name: "major second", steps: 1, semitones: 2 },
+  { name: "minor third", steps: 2, semitones: 3 },
+  { name: "major third", steps: 2, semitones: 4 },
+  { name: "perfect fourth", steps: 3, semitones: 5 },
+  { name: "augmented fourth", steps: 3, semitones: 6 },
+  { name: "perfect fifth", steps: 4, semitones: 7 },
+  { name: "minor sixth", steps: 5, semitones: 8 },
+  { name: "major sixth", steps: 5, semitones: 9 },
+  { name: "minor seventh", steps: 6, semitones: 10 },
+  { name: "major seventh", steps: 6, semitones: 11 },
+  { name: "octave", steps: 7, semitones: 12 },
+];
+
+const mod12 = (n) => ((n % 12) + 12) % 12;
+
+/** A pitch moved by `steps` letters and `semitones`; respelled only past a double sharp or flat. */
+export function transposePitch(p, steps, semitones) {
+  const d = p.d + steps;
+  const key = midiKey(p.d, p.alter) + semitones;
+  const alter = key - midiKey(d, 0);
+  if (alter >= -2 && alter <= 2) return { d, alter };
+  return spellKey(0, key, Math.sign(semitones) || 1);
+}
+
+/** How far round the circle of fifths an interval moves a key: the nearest way. */
+function fifthsOf(steps, semitones) {
+  for (const f of [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6]) {
+    if (mod7(f * 4) === mod7(steps) && mod12(f * 7) === mod12(semitones)) return f;
+  }
+  return 0;
+}
+
+/**
+ * Transposes by `steps` letters and `semitones` (negative: down) — lane `s`'s
+ * events `a`…`b`, or, with no `s`, the whole score with its keys and its
+ * chord symbols. A key pushed past seven sharps or flats is read as its
+ * enharmonic twin (D♯ major as E♭), and the notes are spelled to match it.
+ */
+export function transpose(score, { steps, semitones, s = null, a = 0, b = Infinity }) {
+  if (s == null) {
+    let f = fifthsOf(steps, semitones);
+    const to = score.key + f;
+    if (Math.abs(to) > 7) {
+      // The twin twelve fifths round is one letter over: up a letter when it
+      // takes sharps away, down one when it takes flats away.
+      const twin = f - 12 * Math.sign(to);
+      steps += Math.sign(to);
+      f = twin;
+    }
+    const clamp = (k) => Math.max(-7, Math.min(7, k));
+    score.key = clamp(score.key + f);
+    for (const staff of score.staves) if (staff.key != null) staff.key = clamp(staff.key + f);
+    for (const c of score.changes ?? []) if (c.key != null) c.key = clamp(c.key + f);
+  }
+  const lanes = s == null ? score.staves.map((_, k) => k) : [s];
+  for (const lane of lanes) {
+    const events = score.staves[lane].events;
+    events.forEach((ev, i) => {
+      if (s != null && (i < a || i > b)) return;
+      if (!ev.rest) ev.pitches = ev.pitches.map((p) => transposePitch(p, steps, semitones));
+      if (s == null && ev.chord) ev.chord = transposeChord(ev.chord, steps, semitones);
+    });
+  }
+}
+
+/** A chord symbol's root and bass moved: "F#m7/C#" up a major second is "G#m7/D#". */
+export function transposeChord(text, steps, semitones) {
+  const letter = (name, sign) => {
+    const p = transposePitch({ d: 7 + "CDEFGAB".indexOf(name), alter: { "#": 1, "♯": 1, b: -1, "♭": -1 }[sign] ?? 0 }, steps, semitones);
+    return "CDEFGAB"[mod7(p.d)] + ({ 1: "#", 2: "##", "-1": "b", "-2": "bb" }[p.alter] ?? "");
+  };
+  return text.replace(/^([A-G])([#♯b♭]?)/, (_, name, sign) => letter(name, sign)).replace(/\/([A-G])([#♯b♭]?)/, (_, name, sign) => "/" + letter(name, sign));
+}
+
 /** The pitch of step `step` (0 = C … 6 = B) nearest `near`, as the key alters it. */
 export function nearestPitch(step, near, fifths) {
   const base = near - mod7(near) + step;

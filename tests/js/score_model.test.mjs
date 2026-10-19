@@ -247,6 +247,44 @@ test("repeats: written around their bars, with their endings, and read back", ()
   engrave(s);
 });
 
+test("transposing: by an interval, the key with it, spelled as the new key spells", () => {
+  const names = (score, s = 0) => score.staves[s].events.filter((e) => !e.rest).map((e) => e.pitches.map((p) => M.pitchName(p.d, p.alter)).join("+"));
+  const interval = (name) => M.INTERVALS.find((i) => i.name === name);
+  const s = M.newScore({ key: 2 });
+  // D major: f♯ a d', and a chord symbol.
+  for (const [k, [d, alter]] of [[7 + 3, 1], [7 + 5, 0], [14 + 1, 0]].entries()) M.write(s, 0, k * q, q, { rest: false, pitches: [{ d, alter }] });
+  M.setChordSymbol(s, 0, 0, "F#m7/C#");
+  const up = interval("major second");
+  M.transpose(s, { steps: up.steps, semitones: up.semitones });
+  assert.equal(s.key, 4, "D major up a major second is E major");
+  assert.deepEqual(names(s).slice(0, 3), ["G♯4", "B4", "E5"]);
+  assert.equal(s.staves[0].events[0].chord, "G#m7/D#");
+  engrave(s);
+  // Down a minor third, the selection only: the key stays.
+  const m3 = interval("minor third");
+  M.transpose(s, { steps: -m3.steps, semitones: -m3.semitones, s: 0, a: 1, b: 1 });
+  assert.equal(s.key, 4);
+  assert.deepEqual(names(s).slice(0, 3), ["G♯4", "G♯4", "E5"]);
+  // Past seven sharps: C♯ major up a major second is E♭ major, not D♯ — and its notes are flats.
+  const cs = M.newScore({ key: 7 });
+  M.write(cs, 0, 0, q, { rest: false, pitches: [{ d: 7, alter: 1 }] });
+  M.transpose(cs, { steps: up.steps, semitones: up.semitones });
+  assert.equal(cs.key, -3);
+  assert.deepEqual(names(cs).slice(0, 1), ["E♭4"]);
+  // An octave changes no letter and no key.
+  const o = interval("octave");
+  M.transpose(cs, { steps: o.steps, semitones: o.semitones });
+  assert.equal(cs.key, -3);
+  assert.deepEqual(names(cs).slice(0, 1), ["E♭5"]);
+  // Every interval up and back down gives the piece back.
+  for (const it of M.INTERVALS) {
+    const before = JSON.stringify(s);
+    M.transpose(s, { steps: it.steps, semitones: it.semitones });
+    M.transpose(s, { steps: -it.steps, semitones: -it.semitones });
+    assert.equal(JSON.stringify(s), before, it.name);
+  }
+});
+
 test("sharing: a score goes into a link and comes back the same", async () => {
   const text = readFileSync(new URL("../../scores/ensembles/symphony-5.ly", import.meta.url), "utf8") + "\n% Été, «ça», 𝄞\n";
   const code = await M.shareCode(text);
