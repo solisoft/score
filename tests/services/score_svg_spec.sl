@@ -18,6 +18,13 @@ describe("ScoreSvg") do
       assert_gt(svg.split("<use ").length - 1, svg.split("<path id=").length - 1)
     end
 
+    test("is as tall as its ink: a staff of rests keeps its clef whole") do
+      svg = ScoreSvg.engrave("{ \\clef treble r1 | r1 }", 600, 8, 0, {})["svg"]
+      height = svg.split("height=\"")[1].split("\"")[0].to_i
+      laid = eui_score_layout("{ \\clef treble r1 | r1 }", 75, {})
+      assert_gt(height, (laid["height"] * 8).ceil())
+    end
+
     test("crops the drawing to its ink, not to the width asked for") do
       svg = ScoreSvg.engrave("{ c'4 }", 900, 7, 0, {})["svg"]
       width = svg.split("width=\"")[1].split("\"")[0].to_i

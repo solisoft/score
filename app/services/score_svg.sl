@@ -36,6 +36,7 @@ class ScoreSvg
     lit = []
     right = 0
     bottom = 0
+    ink = 0
     bands.each do |band|
       top = band["y"]
       next if max_height > 0 && top > 0 && top >= max_height
@@ -45,6 +46,7 @@ class ScoreSvg
         if shape[0] == 1
           shapes.push(ScoreSvg.rect(shape, top, nil))
           right = [right, shape[2] + shape[4]].max()
+          ink = [ink, top + shape[3] + shape[5]].max()
           next
         end
 
@@ -55,12 +57,15 @@ class ScoreSvg
         end
         shapes.push(ScoreSvg.use(glyph_ids[outline["d"]], outline, top))
         right = [right, outline["right"]].max()
+        ink = [ink, top + outline["low"]].max()
       end
       band["lit"].each do |shape|
         lit.push(ScoreSvg.lit(shape, top))
       end
     end
-    height = max_height > 0 ? [bottom, total].min() : total
+    # As tall as the ink, not only the systems: a clef reaches below a staff
+    # of rests, and was cut.
+    height = max_height > 0 ? [bottom, total].min() : [total, (ink + 2).ceil()].max()
     view_width = (right + 2).ceil()
     svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 #{view_width} #{height}\" "
     + "width=\"#{view_width}\" height=\"#{height}\" role=\"img\" aria-label=\"Partition\">"
@@ -126,13 +131,14 @@ class ScoreSvg
     svg.replace("fill=\"currentColor\"", "fill=\"#111\"")
   end
 
-  # A kind-5 path as SVG's `d`, relative to its first point ("x", "y"), and
-  # its rightmost x.
+  # A kind-5 path as SVG's `d`, relative to its first point ("x", "y"), its
+  # rightmost x and its lowest y.
   static def outline(shape)
     origin_x = shape[3]
     origin_y = shape[4]
     parts = []
     right = 0
+    low = 0
     i = 2
     n = shape.length
     while i < n
@@ -149,6 +155,7 @@ class ScoreSvg
         x = shape[i + 1 + pair * 2]
         y = shape[i + 2 + pair * 2]
         right = x if x > right
+        low = y if y > low
         coords.push("#{ScoreSvg.px(x - origin_x)} #{ScoreSvg.px(y - origin_y)}")
       end
       parts.push(["M", "L", "Q", "C"][cmd] + coords.join(" "))
@@ -158,7 +165,8 @@ class ScoreSvg
       "d": parts.join(""),
       "x": origin_x,
       "y": origin_y,
-      "right": right
+      "right": right,
+      "low": low
     }
   end
 

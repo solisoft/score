@@ -191,10 +191,15 @@ pub fn view_lit(src: &str, width: f64, sp: f64, lit: &Value) -> Result<Value, St
             }
         }
     }
-    let total = (eng.height * sp).ceil();
+    // The drawing's height is its ink's, not only the system's: a clef
+    // reaches below a staff of rests, and was cut.
+    let ink_top = boxes.iter().map(|b| b[1]).fold(0.0_f64, f64::min).floor() - 2.0;
+    let ink_bottom = boxes.iter().map(|b| b[3]).fold(eng.height * sp, f64::max).ceil() + 2.0;
+    let y0 = ink_top.min(0.0);
+    let total = ink_bottom - y0;
     let w = (right + 2.0).ceil();
     let svg = format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {w} {total}\" width=\"{w}\" height=\"{total}\" role=\"img\" aria-label=\"Score\"><defs>{defs}</defs><g fill=\"currentColor\">{body}</g>{over}</svg>"
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 {y0} {w} {total}\" width=\"{w}\" height=\"{total}\" role=\"img\" aria-label=\"Score\"><defs>{defs}</defs><g fill=\"currentColor\">{body}</g>{over}</svg>"
     );
 
     let union = |range: &std::ops::Range<usize>, acc: Option<[f64; 4]>| {
@@ -227,11 +232,26 @@ pub fn view_lit(src: &str, width: f64, sp: f64, lit: &Value) -> Result<Value, St
             .collect();
         items.push(json!({ "item": item, "kind": kind, "box": b, "heads": head_list }));
     }
-    Ok(json!({ "svg": svg, "width": w, "height": total, "items": items, "editable": not_editable(src).unwrap_or("yes") }))
+    // Every bar's box, in the SVG's pixels: from its start to its bar line,
+    // as tall as its system — what a drag across the score selects, and
+    // where a repeat's edges can be taken and moved.
+    let mut bar_boxes = Vec::new();
+    for (k, sys) in eng.systems.iter().enumerate() {
+        let Some(line) = sys.lines.first() else { continue };
+        let Some(staff_bars) = eng.staves.first() else { continue };
+        let last = sys.offsets.last().copied().unwrap_or(0.0);
+        let (y0, y1) = ((sys.top - 1.0) * sp, (sys.top + last + 5.0) * sp);
+        let staves: Vec<f64> = if sys.offsets.is_empty() { vec![sys.top * sp] } else { sys.offsets.iter().map(|o| (sys.top + o) * sp).collect() };
+        for b in line.bars.clone() {
+            let Some(bar) = staff_bars.get(b) else { continue };
+            bar_boxes.push(json!({ "bar": b, "system": k, "box": [bar.x0 * sp, y0, bar.x1 * sp, y1], "staves": staves }));
+        }
+    }
+    Ok(json!({ "svg": svg, "width": w, "height": total, "y0": y0, "items": items, "bars": bar_boxes, "editable": not_editable(src).unwrap_or("yes") }))
 }
 
 /// The bounding box of an outline's points.
-fn fill_box(cmds: &[f64]) -> [f64; 4] {
+pub(crate) fn fill_box(cmds: &[f64]) -> [f64; 4] {
     let mut b = [f64::MAX, f64::MAX, f64::MIN, f64::MIN];
     let mut i = 0;
     while i < cmds.len() {

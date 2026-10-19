@@ -122,17 +122,20 @@ pub fn svg(src: &str, width: f64, staff_space: f64, marks: &str) -> Result<Strin
     let mut body = String::new();
     let mut over = String::new();
     let mut right = 0.0_f64;
+    let mut bottom = 0.0_f64;
     for band in &bands {
         let top = band.y as f64;
         for path in &band.paths {
             match path {
                 Path::Rect(r) => {
                     right = right.max(r[0] + r[2]);
+                    bottom = bottom.max(top + r[1] + r[3]);
                     rect(&mut body, r, top, None);
                 }
                 Path::Fill(cmds) => {
                     let (d, x, y, r) = outline(cmds);
                     right = right.max(r);
+                    bottom = bottom.max(top + editor::fill_box(cmds)[3]);
                     let next = glyph_ids.len();
                     let n = *glyph_ids.entry(d.clone()).or_insert_with(|| {
                         let _ = write!(defs, "<path id=\"es{id}-{next}\" d=\"{d}\"/>");
@@ -164,8 +167,10 @@ pub fn svg(src: &str, width: f64, staff_space: f64, marks: &str) -> Result<Strin
         }
     }
     let w = (right + 2.0).ceil() as i64;
+    // As tall as the ink: a clef reaches below a staff of rests.
+    let height = (total as f64).max(bottom.ceil() + 2.0) as i64;
     Ok(format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {w} {total}\" width=\"{w}\" height=\"{total}\" role=\"img\" aria-label=\"Partition\"><defs>{defs}</defs><g fill=\"currentColor\">{body}</g>{over}</svg>"
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {w} {height}\" width=\"{w}\" height=\"{height}\" role=\"img\" aria-label=\"Partition\"><defs>{defs}</defs><g fill=\"currentColor\">{body}</g>{over}</svg>"
     ))
 }
 

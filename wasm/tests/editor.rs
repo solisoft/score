@@ -98,3 +98,31 @@ fn every_gallery_piece_can_be_written_out_and_viewed() {
         }
     }
 }
+
+#[test]
+fn every_bar_has_a_box_and_its_notes_stand_in_it() {
+    let v = view(TUNE, 600.0, 8.0, -1, -1).unwrap();
+    let bars = v["bars"].as_array().unwrap();
+    assert_eq!(bars.len(), 3);
+    let bar_of_item = [0, 0, 0, 1, 1, 2];
+    for item in v["items"].as_array().unwrap() {
+        let k = item["item"].as_u64().unwrap() as usize;
+        let b = item["box"].as_array().unwrap();
+        let cx = (b[0].as_f64().unwrap() + b[2].as_f64().unwrap()) / 2.0;
+        let bar = bars[bar_of_item[k]]["box"].as_array().unwrap();
+        assert!(cx > bar[0].as_f64().unwrap() && cx < bar[2].as_f64().unwrap(), "item {k} at {cx} outside bar {}", bar_of_item[k]);
+    }
+}
+
+#[test]
+fn a_staff_of_rests_keeps_its_clef_whole() {
+    let src = "{ \\clef treble \\time 4/4 r1 | r1 }";
+    let v = view(src, 600.0, 8.0, -1, -1).unwrap();
+    let svg = v["svg"].as_str().unwrap();
+    let vb: Vec<f64> = svg.split("viewBox=\"").nth(1).unwrap().split('"').next().unwrap().split(' ').map(|n| n.parse().unwrap()).collect();
+    // A treble clef reaches some 1.5 spaces over its staff and 1.5 under it.
+    let staff_top = v["bars"][0]["staves"][0].as_f64().unwrap();
+    let clef_bottom = staff_top + 8.0 * (4.0 + 1.5);
+    assert!(vb[1] <= staff_top - 8.0 * 1.5, "the drawing starts at {} — the clef reaches higher", vb[1]);
+    assert!(vb[1] + vb[3] >= clef_bottom, "the drawing stops at {} — the clef reaches {clef_bottom}", vb[1] + vb[3]);
+}
