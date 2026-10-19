@@ -357,6 +357,12 @@ export function startStudio(root, options = {}) {
       case "undo": return undo();
       case "redo": return redo();
       case "play": return togglePlay();
+      case "keys": {
+        const sheetOfKeys = root.querySelector("[data-keys]");
+        if (sheetOfKeys.open) sheetOfKeys.close();
+        else sheetOfKeys.showModal();
+        return;
+      }
       case "zoom-in": st.zoom = Math.min(2, Math.round((st.zoom + 0.1) * 10) / 10); return draw();
       case "zoom-out": st.zoom = Math.max(0.5, Math.round((st.zoom - 0.1) * 10) / 10); return draw();
       case "save-ly": return download(st.text, `${fileName()}.ly`, "text/x-lilypond");
@@ -1173,7 +1179,8 @@ export function startStudio(root, options = {}) {
   // ---- Keyboard -------------------------------------------------------------------
 
   root.addEventListener("keydown", (event) => {
-    const field = event.target.closest("input, textarea, select");
+    // In a field, or in the shortcuts sheet (whose Esc closes it): not the score's keys.
+    const field = event.target.closest("input, textarea, select, dialog");
     if (field) return;
     const key = event.key;
     const mod = event.ctrlKey || event.metaKey;
@@ -1192,6 +1199,7 @@ export function startStudio(root, options = {}) {
     if (mod && event.altKey && ["Digit1", "Digit2", "Numpad1", "Numpad2"].includes(event.code)) return run("voice", { voice: event.code.slice(-1) });
     if (mod && ["3", "5", "6", "7"].includes(key)) return run("tuplet", { n: key });
     if (key === " " && !event.target.closest("button")) return run("play");
+    if (key === "?") return run("keys");
     if (mod) return;
     if (key === "Escape") {
       event.preventDefault();
@@ -1223,6 +1231,11 @@ export function startStudio(root, options = {}) {
     if (key === "k" || key === "K") return run("chord");
     if (key === "t" || key === "T") return run("tie");
     if (key === "s" || key === "S") return run("slur");
+  });
+
+  // The shortcuts sheet closes on a click outside it, as on Esc.
+  root.querySelector("[data-keys]")?.addEventListener("click", (event) => {
+    if (event.target === event.currentTarget) event.currentTarget.close();
   });
 
   // Ctrl+arrows move by octaves; the browser keeps Ctrl+↑ for itself otherwise.

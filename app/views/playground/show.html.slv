@@ -22,6 +22,7 @@
         <span data-zoom-label>100 %</span>
         <button type="button" class="studio-menu" data-act="zoom-in" title="Larger" aria-label="Zoom in">+</button>
       </span>
+      <button type="button" class="studio-menu" data-act="keys" title="Keyboard shortcuts (?)">Keys</button>
     </div>
     <div class="studio-state" aria-live="polite" data-state></div>
   </div>
@@ -264,27 +265,6 @@
         </label>
       </section>
 
-      <details class="tool-section tool-keys">
-        <summary>Keyboard</summary>
-        <dl>
-          <dt>N / Esc</dt><dd>note input / select</dd>
-          <dt>A–G</dt><dd>write a note (Shift: add to the chord)</dd>
-          <dt>0</dt><dd>rest</dd>
-          <dt>]</dt><dd>a bar at the end</dd>
-          <dt>2–7</dt><dd>32nd … whole; <kbd>.</kbd> dot</dd>
-          <dt>↑ ↓</dt><dd>step; Shift semitone; Ctrl octave</dd>
-          <dt>← →</dt><dd>previous / next; Shift extends</dd>
-          <dt>Alt+↑ ↓</dt><dd>a note of the chord</dd>
-          <dt>+ − =</dt><dd>sharp, flat, natural</dd>
-          <dt>T / S</dt><dd>tie / slur</dd>
-          <dt>Ctrl+3, 5, 6, 7</dt><dd>tuplets</dd>
-          <dt>Ctrl+L / Ctrl+K</dt><dd>lyrics / chord symbol</dd>
-          <dt>Delete</dt><dd>make rests</dd>
-          <dt>Ctrl+C V X</dt><dd>copy, paste, cut</dd>
-          <dt>Ctrl+Z / Y</dt><dd>undo / redo</dd>
-          <dt>Space</dt><dd>play / stop</dd>
-        </dl>
-      </details>
     </aside>
 
     <main class="studio-canvas">
@@ -303,6 +283,32 @@
     </div>
     <textarea data-source wrap="off" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="LilyPond source"><%= source %></textarea>
   </section>
+
+  <dialog class="studio-keys" data-keys aria-labelledby="studio-keys-title">
+    <div class="studio-keys-head">
+      <h2 id="studio-keys-title">Keyboard</h2>
+      <button type="button" class="studio-menu" data-act="keys" aria-label="Close">×</button>
+    </div>
+          <dl>
+            <dt>N / Esc</dt><dd>note input / select</dd>
+            <dt>A–G</dt><dd>write a note (Shift: add to the chord)</dd>
+            <dt>0</dt><dd>rest</dd>
+            <dt>]</dt><dd>a bar at the end</dd>
+            <dt>2–7</dt><dd>32nd … whole; <kbd>.</kbd> dot</dd>
+            <dt>↑ ↓</dt><dd>step; Shift semitone; Ctrl octave</dd>
+            <dt>← →</dt><dd>previous / next; Shift extends</dd>
+            <dt>Alt+↑ ↓</dt><dd>a note of the chord</dd>
+            <dt>+ − =</dt><dd>sharp, flat, natural</dd>
+            <dt>T / S</dt><dd>tie / slur</dd>
+            <dt>Ctrl+3, 5, 6, 7</dt><dd>tuplets</dd>
+            <dt>Ctrl+L / Ctrl+K</dt><dd>lyrics / chord symbol</dd>
+            <dt>Delete</dt><dd>make rests</dd>
+            <dt>Ctrl+C V X</dt><dd>copy, paste, cut</dd>
+            <dt>Ctrl+Z / Y</dt><dd>undo / redo</dd>
+            <dt>Space</dt><dd>play / stop</dd>
+            <dt>?</dt><dd>this sheet</dd>
+          </dl>
+  </dialog>
 </div>
 
 <script type="module">
