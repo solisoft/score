@@ -18,9 +18,9 @@
       <button type="button" class="studio-menu" data-act="redo" title="Redo (Ctrl+Y)">↷ Redo</button>
       <button type="button" class="studio-menu studio-play" data-act="play" title="Play from the selection, or from the start (Space)">▶ Play</button>
       <span class="studio-zoom">
-        <button type="button" class="studio-menu" data-act="zoom-out" title="Smaller">−</button>
+        <button type="button" class="studio-menu" data-act="zoom-out" title="Smaller" aria-label="Zoom out">−</button>
         <span data-zoom-label>100 %</span>
-        <button type="button" class="studio-menu" data-act="zoom-in" title="Larger">+</button>
+        <button type="button" class="studio-menu" data-act="zoom-in" title="Larger" aria-label="Zoom in">+</button>
       </span>
     </div>
     <div class="studio-state" aria-live="polite" data-state></div>
@@ -121,8 +121,10 @@
       <section class="tool-section">
         <h3>Dynamics</h3>
         <div class="tool-row tool-dynamics">
-          <% for dynamic in ["ppp", "pp", "p", "mp", "mf", "f", "ff", "fff", "sfz", "fp"] %>
-            <button type="button" class="tool tool-dyn" data-act="dynamic" data-name="<%= dynamic %>" title="<%= dynamic %>"><%= dynamic %></button>
+          <% dynamics = {"ppp": "pianississimo", "pp": "pianissimo", "p": "piano", "mp": "mezzo-piano", "mf": "mezzo-forte", "f": "forte"} %>
+          <% dynamics = dynamics.merge({"ff": "fortissimo", "fff": "fortississimo", "sfz": "sforzando", "fp": "forte-piano"}) %>
+          <% for dynamic in dynamics.keys %>
+            <button type="button" class="tool tool-dyn" data-act="dynamic" data-name="<%= dynamic %>" title="<%= dynamics[dynamic] %>" aria-label="<%= dynamics[dynamic] %>"><%= dynamic %></button>
           <% end %>
         </div>
       </section>

@@ -66,6 +66,12 @@ export function startStudio(root, options = {}) {
   // For a console or a test: the studio's state, on its element.
   root.studio = st;
 
+  // A button drawn with a sign (𝅘𝅥, ♭, ↑, 3) tells a screen reader what it
+  // does: its title, without the key in brackets.
+  for (const button of root.querySelectorAll("button[title]")) {
+    if (!button.hasAttribute("aria-label") && !/\p{L}{2}/u.test(button.textContent)) button.setAttribute("aria-label", button.title.replace(/\s*\(.*\)\s*$/, ""));
+  }
+
   // The instrument menus, from INSTRUMENTS by family; the new staff's offers
   // the piano's lower staff too, in the bass clef.
   for (const select of root.querySelectorAll("[data-instruments]")) {
@@ -800,6 +806,10 @@ export function startStudio(root, options = {}) {
     const second = st.score ? M.isLower(st.score, staffOf()) : false;
     root.querySelector('[data-act="voice"][data-voice="1"]')?.classList.toggle("on", Boolean(st.score) && !second);
     root.querySelector('[data-act="voice"][data-voice="2"]')?.classList.toggle("on", second);
+    // The toggles say whether they are on.
+    for (const button of root.querySelectorAll('[data-act="duration"], [data-act="dot"], [data-act^="mode-"], [data-act="voice"]')) {
+      button.setAttribute("aria-pressed", String(button.classList.contains("on")));
+    }
     root.querySelector('[data-act="undo"]').disabled = !st.past.length;
     root.querySelector('[data-act="redo"]').disabled = !st.future.length;
     root.querySelector('[data-act="play"]').textContent = st.playing ? "■ Stop" : "▶ Play";
