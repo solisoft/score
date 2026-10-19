@@ -1,34 +1,37 @@
 <div class="studio" id="studio" data-no-nav>
   <div class="studio-menubar" role="menubar" aria-label="Score">
-    <div class="studio-menu-group">
-      <button type="button" class="studio-menu" data-act="new" title="A new, empty score">New</button>
-      <label class="studio-menu" title="Open a LilyPond file">Open…<input type="file" accept=".ly,.ily,.txt,text/plain" data-act="open" hidden></label>
-      <select class="studio-menu" data-act="example" aria-label="Open an example">
-        <option value="">Examples…</option>
-        <% for example in examples %>
-          <option value="<%= example["category"] %>/<%= example["slug"] %>"><%= example["title"] %> — <%= example["instrument"] %></option>
-        <% end %>
-      </select>
-      <button type="button" class="studio-menu" data-act="save-ly" title="Save the LilyPond source">Save .ly</button>
-      <button type="button" class="studio-menu" data-act="save-pdf" title="Print the A4 pages as a PDF">PDF</button>
-      <button type="button" class="studio-menu" data-act="save-midi" title="Save the MIDI file">MIDI</button>
-    </div>
-    <div class="studio-menu-group">
-      <button type="button" class="studio-menu" data-act="undo" title="Undo (Ctrl+Z)">↶ Undo</button>
-      <button type="button" class="studio-menu" data-act="redo" title="Redo (Ctrl+Y)">↷ Redo</button>
-      <button type="button" class="studio-menu studio-play" data-act="play" title="Play from the selection, or from the start (Space)">▶ Play</button>
-      <span class="studio-zoom">
-        <button type="button" class="studio-menu" data-act="zoom-out" title="Smaller" aria-label="Zoom out">−</button>
-        <span data-zoom-label>100 %</span>
-        <button type="button" class="studio-menu" data-act="zoom-in" title="Larger" aria-label="Zoom in">+</button>
-      </span>
-      <button type="button" class="studio-menu" data-act="keys" title="Keyboard shortcuts (?)">Keys</button>
+    <button type="button" class="studio-menu studio-tools-toggle" data-act="tools" aria-expanded="false" aria-controls="studio-toolbox">Tools</button>
+    <div class="studio-menu-scroll">
+      <div class="studio-menu-group">
+        <button type="button" class="studio-menu" data-act="new" title="A new, empty score">New</button>
+        <label class="studio-menu" title="Open a LilyPond file">Open…<input type="file" accept=".ly,.ily,.txt,text/plain" data-act="open" hidden></label>
+        <select class="studio-menu" data-act="example" aria-label="Open an example">
+          <option value="">Examples…</option>
+          <% for example in examples %>
+            <option value="<%= example["category"] %>/<%= example["slug"] %>"><%= example["title"] %> — <%= example["instrument"] %></option>
+          <% end %>
+        </select>
+        <button type="button" class="studio-menu" data-act="save-ly" title="Save the LilyPond source">Save .ly</button>
+        <button type="button" class="studio-menu" data-act="save-pdf" title="Print the A4 pages as a PDF">PDF</button>
+        <button type="button" class="studio-menu" data-act="save-midi" title="Save the MIDI file">MIDI</button>
+      </div>
+      <div class="studio-menu-group">
+        <button type="button" class="studio-menu" data-act="undo" title="Undo (Ctrl+Z)">↶ Undo</button>
+        <button type="button" class="studio-menu" data-act="redo" title="Redo (Ctrl+Y)">↷ Redo</button>
+        <button type="button" class="studio-menu studio-play" data-act="play" title="Play from the selection, or from the start (Space)">▶ Play</button>
+        <span class="studio-zoom">
+          <button type="button" class="studio-menu" data-act="zoom-out" title="Smaller" aria-label="Zoom out">−</button>
+          <span data-zoom-label>100 %</span>
+          <button type="button" class="studio-menu" data-act="zoom-in" title="Larger" aria-label="Zoom in">+</button>
+        </span>
+        <button type="button" class="studio-menu" data-act="keys" title="Keyboard shortcuts (?)">Keys</button>
+      </div>
     </div>
     <div class="studio-state" aria-live="polite" data-state></div>
   </div>
 
   <div class="studio-body">
-    <aside class="studio-toolbox" aria-label="Tools">
+    <aside class="studio-toolbox" id="studio-toolbox" aria-label="Tools">
       <details class="tool-section" data-section="mode" open>
         <summary><h3>Mode</h3></summary>
         <div class="tool-row">

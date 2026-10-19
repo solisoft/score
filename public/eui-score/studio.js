@@ -380,6 +380,11 @@ export function startStudio(root, options = {}) {
         return;
       }
       case "zoom-in": st.zoom = Math.min(2, Math.round((st.zoom + 0.1) * 10) / 10); return draw();
+      case "tools": {
+        const open = root.classList.toggle("studio-tools-open");
+        root.querySelector('[data-act="tools"]').setAttribute("aria-expanded", String(open));
+        return;
+      }
       case "zoom-out": st.zoom = Math.max(0.5, Math.round((st.zoom - 0.1) * 10) / 10); return draw();
       case "save-ly": return download(st.text, `${fileName()}.ly`, "text/x-lilypond");
       case "save-pdf": return toPdf(st.text, title()).then((pdf) => download(pdf, `${fileName()}.pdf`, "application/pdf")).catch((e) => say(e.message ?? String(e), true));
@@ -1408,6 +1413,9 @@ export function startStudio(root, options = {}) {
   progress.hidden = true;
   progress.innerHTML = '<div class="studio-progress-fill"></div><span class="studio-progress-text"></span>';
   root.querySelector(".studio-menubar").after(progress);
+  // On a narrow screen the menu bar wraps: the progress bar sticks under it, however tall.
+  const menubar = root.querySelector(".studio-menubar");
+  new ResizeObserver(() => root.style.setProperty("--studio-menubar-h", `${menubar.offsetHeight}px`)).observe(menubar);
   progress.addEventListener("click", (event) => {
     const handle = st.playing?.handle;
     if (!handle?.duration) return;
