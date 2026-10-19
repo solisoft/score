@@ -221,6 +221,37 @@
         </datalist>
       </section>
 
+      <section class="tool-section" data-changes>
+        <h3>From bar <span data-change-bar>—</span></h3>
+        <p class="tool-hint" data-change-hint>Select a bar, or put the cursor in it: what changes here goes on to the next change.</p>
+        <label class="tool-field">Key
+          <select data-field="change-key">
+            <option value="">As before</option>
+            <% for fifths in range(-7, 8) %>
+              <option value="<%= fifths %>"><%= ["C♭", "G♭", "D♭", "A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯"][fifths + 7] %> major / <%= ["A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯", "G♯", "D♯", "A♯"][fifths + 7] %> minor</option>
+            <% end %>
+          </select>
+        </label>
+        <label class="tool-field">Metre
+          <select data-field="change-time">
+            <option value="">As before</option>
+            <% for metre in ["2/4", "3/4", "4/4", "5/4", "2/2", "3/8", "6/8", "9/8", "12/8"] %>
+              <option value="<%= metre %>"><%= metre %></option>
+            <% end %>
+          </select>
+        </label>
+        <label class="tool-field">Tempo <input type="number" min="20" max="300" step="1" data-field="change-bpm" placeholder="as before"></label>
+        <label class="tool-field">Tempo text <input type="text" data-field="change-tempo-text" placeholder="a tempo, rit., Presto…"></label>
+        <label class="tool-field">Clef
+          <select data-field="change-clef">
+            <option value="">As before</option>
+            <option value="treble">Treble</option><option value="bass">Bass</option><option value="alto">Alto</option>
+            <option value="tenor">Tenor</option><option value="treble_8">Treble 8 (guitar)</option><option value="bass_8">Bass 8</option>
+          </select>
+        </label>
+        <label class="tool-check"><input type="checkbox" data-field="change-double"> Double bar line before it</label>
+      </section>
+
       <section class="tool-section">
         <h3>Score</h3>
         <label class="tool-field">Title <input type="text" data-field="title"></label>

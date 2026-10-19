@@ -49,9 +49,136 @@ export function ticksOf(ev) {
   return ev.tuplet ? (written * ev.tuplet.d) / ev.tuplet.n : written;
 }
 
-export function barLength(score) {
-  return (WHOLE * score.time[0]) / score.time[1];
+// ---- Bars --------------------------------------------------------------------------
+//
+// Bars may change metre: `score.changes` lists, by bar (1 and on), what
+// changes at its start — { bar, key, time, tempo }, each field optional — and
+// a staff's `clefs` its own changes of clef, { bar, clef }. Bar 0's are the
+// score's and the staff's own settings. Every bar line is found here.
+
+/** Where each metre starts: [{ bar, start, len, time }], the first at bar 0. */
+function metres(score) {
+  const out = [{ bar: 0, start: 0, len: (WHOLE * score.time[0]) / score.time[1], time: score.time }];
+  for (const c of score.changes ?? []) {
+    if (!c.time) continue;
+    const prev = out[out.length - 1];
+    out.push({ bar: c.bar, start: prev.start + (c.bar - prev.bar) * prev.len, len: (WHOLE * c.time[0]) / c.time[1], time: c.time });
+  }
+  return out;
 }
+
+function metreOfBar(score, b) {
+  const all = metres(score);
+  let k = all.length - 1;
+  while (k > 0 && all[k].bar > b) k--;
+  return all[k];
+}
+
+/** Bar `b`'s length in ticks (bar 0's by default). */
+export function barLength(score, b = 0) {
+  return metreOfBar(score, b).len;
+}
+
+/** Where bar `b` starts, in ticks. */
+export function barStart(score, b) {
+  const m = metreOfBar(score, b);
+  return m.start + (b - m.bar) * m.len;
+}
+
+/** The bar a time (ticks) is in. */
+export function barAt(score, t) {
+  const all = metres(score);
+  let k = all.length - 1;
+  while (k > 0 && all[k].start > t + 1e-6) k--;
+  return all[k].bar + Math.floor((t - all[k].start) / all[k].len + 1e-9);
+}
+
+/** The first bar line after `t`. */
+export function nextBarLine(score, t) {
+  return barStart(score, barAt(score, t) + 1);
+}
+
+export function isBarLine(score, t) {
+  return Math.abs(barStart(score, barAt(score, t)) - t) < 1e-6;
+}
+
+/** The metre bar `b` is in. */
+export function timeAt(score, b) {
+  return metreOfBar(score, b).time;
+}
+
+/** What changes at the start of bar `b`, or null. */
+export function changeAt(score, b) {
+  return (score.changes ?? []).find((c) => c.bar === b) ?? null;
+}
+
+/** The score's key in bar `b`, as its changes leave it. */
+function scoreKeyAt(score, b) {
+  let key = score.key;
+  for (const c of score.changes ?? []) if (c.bar <= b && c.key != null) key = c.key;
+  return key;
+}
+
+/** The tempo in force in bar `b`: { text, base, bpm }, or null. */
+export function tempoAt(score, b) {
+  let tempo = score.tempo;
+  for (const c of score.changes ?? []) if (c.bar <= b && c.tempo) tempo = { ...(tempo ?? {}), ...c.tempo, text: c.tempo.text ?? "" };
+  return tempo;
+}
+
+/** The clef lane `s` is in during bar `b`. */
+export function clefAt(score, s, b) {
+  const staff = score.staves[upperOf(score, s)];
+  let clef = staff.clef;
+  for (const c of staff.clefs ?? []) if (c.bar <= b) clef = c.clef;
+  return clef;
+}
+
+/** Field `field` of bar `b`'s change set to `value`; null takes it away. */
+function setChange(score, b, field, value) {
+  score.changes ??= [];
+  let c = changeAt(score, b);
+  if (!c) {
+    if (value == null) return;
+    c = { bar: b };
+    score.changes.push(c);
+    score.changes.sort((x, y) => x.bar - y.bar);
+  }
+  if (value == null) delete c[field];
+  else c[field] = value;
+  if (Object.keys(c).length === 1) score.changes.splice(score.changes.indexOf(c), 1);
+}
+
+/** When `t` sounds, in seconds, with the tempo changes on the way (100 a quarter when none is set). */
+export function secondsAt(score, t) {
+  const marks = [{ at: 0, tempo: score.tempo }, ...(score.changes ?? []).filter((c) => c.tempo?.bpm).map((c) => ({ at: barStart(score, c.bar), tempo: tempoAt(score, c.bar) }))];
+  let sec = 0;
+  let bpm = score.tempo?.bpm || 100;
+  let base = score.tempo?.base || 4;
+  let from = 0;
+  for (const m of marks.slice(1)) {
+    if (m.at >= t) break;
+    sec += ((m.at - from) / M_TICKS(base)) * (60 / bpm);
+    from = m.at;
+    bpm = m.tempo.bpm || bpm;
+    base = m.tempo.base || base;
+  }
+  return sec + ((t - from) / M_TICKS(base)) * (60 / bpm);
+}
+
+/** The time (ticks) sounding at `sec`: secondsAt backwards. */
+export function ticksAtSeconds(score, sec) {
+  let lo = 0;
+  let hi = Math.max(WHOLE, ...score.staves.map(lengthOf));
+  for (let k = 0; k < 40; k++) {
+    const mid = (lo + hi) / 2;
+    if (secondsAt(score, mid) < sec) lo = mid;
+    else hi = mid;
+  }
+  return lo;
+}
+
+const M_TICKS = (base) => WHOLE / base;
 
 /** `ticks` as written values, longest first; [] when it cannot be written. */
 export function spellDuration(ticks) {
@@ -152,11 +279,10 @@ function cloneEvent(ev, fields = {}) {
 /** Rests filling `ticks` from `at`, cut at the bar lines. */
 function rests(score, at, ticks) {
   const out = [];
-  const bar = barLength(score);
   let t = at;
   const end = at + ticks;
-  while (t < end) {
-    const piece = Math.min(end, (Math.floor(t / bar) + 1) * bar) - t;
+  while (t < end - 1e-6) {
+    const piece = Math.min(end, nextBarLine(score, t)) - t;
     for (const v of spellDuration(piece)) out.push(makeEvent({ base: v.base, dots: v.dots }));
     t += piece;
   }
@@ -164,13 +290,13 @@ function rests(score, at, ticks) {
 }
 
 export function emptyStaff(score, fields = {}) {
-  return { name: "", short: "", instrument: "acoustic grand", clef: "treble", events: rests(score, 0, barLength(score) * barsOf(score)), ...fields };
+  return { name: "", short: "", instrument: "acoustic grand", clef: "treble", events: rests(score, 0, barStart(score, barsOf(score))), ...fields };
 }
 
 /** A new score: one staff of four empty bars. */
 export function newScore(fields = {}) {
   const score = { header: { title: "Untitled", composer: "" }, key: 0, time: [4, 4], tempo: null, group: "none", staves: [], repeats: [], ...fields };
-  score.staves.push({ name: "", short: "", instrument: "acoustic grand", clef: "treble", events: rests(score, 0, barLength(score) * 4) });
+  score.staves.push({ name: "", short: "", instrument: "acoustic grand", clef: "treble", events: rests(score, 0, barStart(score, 4)) });
   return score;
 }
 
@@ -190,7 +316,7 @@ export function lengthOf(staff) {
 
 export function barsOf(score) {
   const first = score.staves[0];
-  return first ? Math.round(lengthOf(first) / barLength(score)) : 4;
+  return first ? barAt(score, lengthOf(first)) : 4;
 }
 
 /** The index of the event that starts at `t`, or −1. */
@@ -234,12 +360,11 @@ function cut(score, staff, t) {
  * on the last piece of a whole or a tail.
  */
 function pieces(score, ev, at, ticks, role) {
-  const bar = barLength(score);
   const out = [];
   let t = at;
   const end = at + ticks;
-  while (t < end) {
-    const piece = Math.min(end, (Math.floor(t / bar) + 1) * bar) - t;
+  while (t < end - 1e-6) {
+    const piece = Math.min(end, nextBarLine(score, t)) - t;
     for (const v of spellDuration(piece)) out.push(cloneEvent(ev, { base: v.base, dots: v.dots, tuplet: null }));
     t += piece;
   }
@@ -256,8 +381,7 @@ function pieces(score, ev, at, ticks, role) {
 
 /** Every staff made `ticks` long at least, in whole bars of rests. */
 export function ensureLength(score, ticks) {
-  const bar = barLength(score);
-  const want = Math.ceil(ticks / bar) * bar;
+  const want = ticks > 0 ? nextBarLine(score, ticks - 1) : 0;
   for (const staff of score.staves) {
     const have = lengthOf(staff);
     if (have < want) staff.events.push(...rests(score, have, want - have));
@@ -302,7 +426,6 @@ const sameNote = (a, b) => Boolean(a && b && !a.rest && !b.rest && a.pitches.len
 
 /** Rests side by side in a bar, with nothing on them, written as few as can be. */
 export function tidy(score, staff) {
-  const bar = barLength(score);
   const at = starts(staff);
   const out = [];
   let run = null;
@@ -313,7 +436,7 @@ export function tidy(score, staff) {
   };
   staff.events.forEach((ev, i) => {
     const plain = ev.rest && !ev.tuplet && !ev.dynamic && !ev.hairpin && !ev.hairpinEnd && !ev.texts.length && !ev.chord && !ev.arts.length;
-    const sameBar = run && Math.floor(at[i] / bar) === Math.floor(run.start / bar);
+    const sameBar = run && barAt(score, at[i]) === barAt(score, run.start);
     if (plain && sameBar) {
       run.ticks += ticksOf(ev);
       run.events.push(ev);
@@ -347,7 +470,7 @@ export function previousPitch(score, s, i) {
 export function move(score, s, i, how, by, head = -1) {
   const ev = noteOf(score, s, i);
   if (ev.rest) throw new Error("select a note");
-  const moved = ev.pitches.map((p, k) => (head < 0 || k === head ? movePitch(p, how, by, keyOf(score, s)) : p));
+  const moved = ev.pitches.map((p, k) => (head < 0 || k === head ? movePitch(p, how, by, keyOf(score, s, starts(score.staves[s])[i])) : p));
   if (!moved.every(reachable)) throw new Error("that is as far as it goes");
   ev.pitches = sortPitches(moved);
 }
@@ -356,7 +479,7 @@ export function move(score, s, i, how, by, head = -1) {
 export function letter(score, s, i, step, add = false, head = -1) {
   const ev = noteOf(score, s, i);
   if (ev.rest) {
-    const p = nearestPitch(step, previousPitch(score, s, i), keyOf(score, s));
+    const p = nearestPitch(step, previousPitch(score, s, i), keyOf(score, s, starts(score.staves[s])[i]));
     Object.assign(ev, { rest: false, pitches: [p] });
     return;
   }
@@ -364,13 +487,13 @@ export function letter(score, s, i, step, add = false, head = -1) {
     const top = Math.max(...ev.pitches.map((p) => p.d));
     let d = top - mod7(top) + step;
     if (d <= top) d += 7;
-    const p = { d, alter: keyAlters(keyOf(score, s))[mod7(d)] };
+    const p = { d, alter: keyAlters(keyOf(score, s, starts(score.staves[s])[i]))[mod7(d)] };
     if (!reachable(p)) throw new Error("that is as far as it goes");
     if (!ev.pitches.some((q) => q.d === p.d)) ev.pitches = sortPitches([...ev.pitches, p]);
     return;
   }
   const k = head >= 0 && head < ev.pitches.length ? head : 0;
-  const p = nearestPitch(step, ev.pitches[k].d, keyOf(score, s));
+  const p = nearestPitch(step, ev.pitches[k].d, keyOf(score, s, starts(score.staves[s])[i]));
   ev.pitches = sortPitches(ev.pitches.map((q, j) => (j === k ? p : q)));
 }
 
@@ -600,9 +723,11 @@ export function staffNumber(score, s) {
   return staffLanes(score).indexOf(upperOf(score, s));
 }
 
-/** The key lane `s` is written in. */
-export function keyOf(score, s) {
-  return score.staves[upperOf(score, s)]?.key ?? score.key;
+/** The key lane `s` is written in at time `t`: the score's then, moved as far as the staff's own. */
+export function keyOf(score, s, t = 0) {
+  const staff = score.staves[upperOf(score, s)];
+  const own = staff?.key == null ? 0 : staff.key - score.key;
+  return Math.max(-7, Math.min(7, scoreKeyAt(score, barAt(score, t)) + own));
 }
 
 /** A second voice on the staff of lane `s`, rests to begin with; answers its lane. */
@@ -626,41 +751,147 @@ function sounding(events) {
   return events.some((ev) => !ev.rest || ev.dynamic || ev.hairpin || ev.hairpinEnd || ev.texts.length || ev.chord || ev.arts.length);
 }
 
-/** A new time signature: every staff laid out again in its bars. */
+/** A new time signature for the whole piece's first metre. */
 export function setTime(score, num, den) {
-  const old = score.time;
-  const oldBar = barLength(score);
-  const newBar = (WHOLE * num) / den;
-  const moved = (score.repeats ?? []).map((r) => {
-    const at = (bars) => (bars * oldBar) / newBar;
-    const from = at(r.from);
-    const to = at(r.to + 1) - 1;
-    const endings = r.endings.map((n) => at(n));
-    if (![from, to, ...endings].every(Number.isInteger)) throw new Error("the repeats would fall inside bars: remove them before changing the metre");
-    return { from, to, endings };
-  });
-  const laid = score.staves.map((staff) => {
+  setTimeAt(score, 0, num, den);
+}
+
+/**
+ * Metre `num`/`den` from bar `b` on, up to the next change of metre: the
+ * music there is laid out again in bars of the new metre, ties across the
+ * new bar lines. What else is counted in bars (repeats, the other changes,
+ * clefs) keeps its place in time, and must fall on a bar line still.
+ */
+export function setTimeAt(score, b, num, den) {
+  // Worked on a copy: a refusal halfway leaves the score as it was.
+  const work = structuredClone(score);
+  retime(work, b, num, den);
+  Object.assign(score, work);
+}
+
+function retime(score, b, num, den) {
+  const bars = barsOf(score);
+  if (b < 0 || b >= bars) throw new Error("no such bar");
+  if (![1, 2, 4, 8, 16].includes(den) || !Number.isInteger(num) || num < 1 || num > 32) throw new Error("no such metre");
+  const len = (WHOLE * num) / den;
+  const old = { time: score.time, changes: structuredClone(score.changes ?? []) };
+  const from = barStart(old, b);
+  const next = old.changes.find((c) => c.bar > b && c.time);
+  const total = lengthOf(score.staves[0]);
+  const to = next ? barStart(old, next.bar) : total;
+  if (next && (to - from) % len !== 0) throw new Error(`the bars up to the next change of metre would not make whole bars of ${num}/${den}`);
+  const grown = (next ? to - from : Math.ceil((to - from) / len) * len) - (to - from);
+  for (const staff of score.staves) {
     const at = starts(staff);
-    return staff.events.map((ev, k) => ({ ev, t: at[k] }));
+    if (staff.events.some((ev, k) => ev.tuplet && at[k] >= from && at[k] < to)) throw new Error("move or remove the tuplets in those bars before changing the metre");
+  }
+  // Everything counted in bars, as times.
+  const tick = (bar) => barStart(old, bar);
+  const marks = old.changes.filter((c) => c.bar !== b).map((c) => ({ ...c, at: tick(c.bar) }));
+  marks.push({ ...(old.changes.find((c) => c.bar === b) ?? {}), bar: b, at: from, time: [num, den] });
+  marks.sort((x, y) => x.at - y.at);
+  const repeats = (score.repeats ?? []).map((r) => ({ from: tick(r.from), to: tick(r.to + 1), ends: r.endings.map((_, k) => tick(r.to + 1 + r.endings.slice(0, k + 1).reduce((x, y) => x + y, 0))) }));
+  const clefs = score.staves.map((staff) => (staff.clefs ?? []).map((c) => ({ ...c, at: tick(c.bar) })));
+  // The new bars: each mark's bar counted in the new metres.
+  const shift = (t) => (t > from ? t + grown : t);
+  let seg = { bar: 0, at: 0, len: b === 0 ? len : (WHOLE * score.time[0]) / score.time[1] };
+  const changes = [];
+  for (const m of marks) {
+    const at = shift(m.at);
+    const rel = (at - seg.at) / seg.len;
+    if (!Number.isInteger(rel)) throw new Error("the changes of key, tempo or clef there would fall inside bars: move them first");
+    const bar = seg.bar + rel;
+    const { at: _, ...change } = m;
+    change.bar = bar;
+    if (bar === 0) {
+      score.time = change.time ?? score.time;
+    } else {
+      // A metre that is the one in force already is no change.
+      if (change.time && change.time[0] === (seg.time ?? score.time)[0] && change.time[1] === (seg.time ?? score.time)[1]) delete change.time;
+      if (Object.keys(change).length > 1) changes.push(change);
+    }
+    if (m.time) seg = { bar, at, len: (WHOLE * m.time[0]) / m.time[1], time: m.time };
+  }
+  if (b === 0) {
+    score.time = [num, den];
+    for (const s2 of staffLanes(score)) delete score.staves[s2].time;
+  }
+  score.changes = changes;
+  const barOf = (t) => {
+    const at = shift(t);
+    if (!isBarLine(score, at)) throw new Error("the repeats would fall inside bars: remove them before changing the metre");
+    return barAt(score, at);
+  };
+  const moved = repeats.map((r) => {
+    const f = barOf(r.from);
+    const t = barOf(r.to) - 1;
+    let last = t + 1;
+    const endings = r.ends.map((e) => {
+      const end = barOf(e);
+      const n = end - last;
+      last = end;
+      return n;
+    });
+    return { from: f, to: t, endings };
   });
-  score.time = [num, den];
-  for (const s of staffLanes(score)) delete score.staves[s].time;
-  const bar = barLength(score);
-  for (const [s, staff] of score.staves.entries()) {
-    const total = lengthOf(staff);
-    staff.events = rests(score, 0, Math.ceil(total / bar) * bar);
-    for (const { ev, t } of laid[s]) {
-      if (ev.rest && !ev.dynamic && !ev.texts.length) continue;
-      if (ev.tuplet) {
-        score.time = old;
-        throw new Error("move or remove the tuplets before changing the metre");
-      }
+  clefs.forEach((list, k) => {
+    if (!list.length) return;
+    score.staves[k].clefs = list.map((c) => {
+      const at = shift(c.at);
+      if (!isBarLine(score, at)) throw new Error("the changes of key, tempo or clef there would fall inside bars: move them first");
+      return { bar: barAt(score, at), clef: c.clef };
+    });
+  });
+  // The music of those bars, laid out again.
+  for (const [k, staff] of score.staves.entries()) {
+    const at = starts(staff);
+    const before = staff.events.filter((_, i) => at[i] < from);
+    const inside = staff.events.map((ev, i) => ({ ev, t: at[i] })).filter(({ t }) => t >= from && t < to);
+    const after = staff.events.filter((_, i) => at[i] >= to);
+    staff.events = [...before, ...rests(score, from, to - from + grown), ...after];
+    for (const { ev, t } of inside) {
+      if (ev.rest && !ev.dynamic && !ev.texts.length && !ev.chord && !ev.hairpin && !ev.hairpinEnd) continue;
       const { id, base, dots, ...content } = ev;
-      write(score, s, t, ticksOf(ev), content);
+      write(score, k, t, ticksOf(ev), content);
     }
   }
   ensureLength(score, Math.max(...score.staves.map(lengthOf)));
   score.repeats = moved;
+}
+
+/** The key from bar `b` on (bar 0: the score's key); the key in force already takes the change away. */
+export function setKeyAt(score, b, fifths) {
+  if (b <= 0) return setKey(score, fifths);
+  const to = fifths == null ? null : Math.max(-7, Math.min(7, fifths));
+  setChange(score, b, "key", to === scoreKeyAt(score, b - 1) ? null : to);
+}
+
+/** A double bar line before bar `b`, or none. */
+export function setDoubleBar(score, b, on) {
+  if (b <= 0 || b >= barsOf(score)) throw new Error("a double bar goes between two bars");
+  setChange(score, b, "line", on ? "||" : null);
+}
+
+/** The tempo from bar `b` on — { text, base, bpm }, bpm 0 for words alone; null takes it away. */
+export function setTempoAt(score, b, tempo) {
+  const kept = tempo && (tempo.text || tempo.bpm) ? { text: tempo.text ?? "", base: tempo.base || 4, bpm: tempo.bpm || 0 } : null;
+  if (b <= 0) score.tempo = kept;
+  else setChange(score, b, "tempo", kept);
+}
+
+/** Lane `s`'s staff in clef `clef` from bar `b` on; the clef in force already takes the change away. */
+export function setClefAt(score, s, b, clef) {
+  const staff = score.staves[upperOf(score, s)];
+  if (!staff) throw new Error("no such staff");
+  if (clef != null && !CLEFS.includes(clef)) throw new Error("no such clef");
+  if (b <= 0) {
+    if (clef) staff.clef = clef;
+    return;
+  }
+  const kept = (staff.clefs ?? []).filter((c) => c.bar !== b);
+  staff.clefs = kept;
+  if (clef && clef !== clefAt(score, s, b - 1)) staff.clefs = [...kept, { bar: b, clef }].sort((x, y) => x.bar - y.bar);
+  if (!staff.clefs.length) delete staff.clefs;
 }
 
 export function addStaff(score, fields = {}) {
@@ -681,15 +912,14 @@ export function removeStaff(score, s) {
 
 /** Bars of rests added at the end of every staff. */
 export function addBars(score, count = 1) {
-  ensureLength(score, (barsOf(score) + count) * barLength(score));
+  ensureLength(score, barStart(score, barsOf(score) + count));
 }
 
 /** The last bar taken away when it holds nothing but rests. */
 export function removeLastBar(score) {
-  const bar = barLength(score);
   const bars = barsOf(score);
   if (bars < 2) throw new Error("a score keeps one bar at least");
-  const from = (bars - 1) * bar;
+  const from = barStart(score, bars - 1);
   for (const staff of score.staves) {
     const at = starts(staff);
     if (staff.events.some((ev, k) => at[k] >= from && !ev.rest)) throw new Error("the last bar is not empty");
@@ -698,7 +928,9 @@ export function removeLastBar(score) {
   for (const staff of score.staves) {
     const at = starts(staff);
     staff.events = staff.events.filter((_, k) => at[k] < from);
+    if (staff.clefs) staff.clefs = staff.clefs.filter((c) => c.bar < bars - 1);
   }
+  score.changes = (score.changes ?? []).filter((c) => c.bar < bars - 1);
 }
 
 // ---- LilyPond ---------------------------------------------------------------------
@@ -779,17 +1011,15 @@ export function toLilyPond(score, { open = [] } = {}) {
       const other = second[b];
       const shown = other && (sounding(other.events) || open.some((o) => o.staff === lower && o.bar === b));
       items.push(...bar.items, ...(shown ? other.items : []));
-      return shown ? `<< { ${bar.text} } \\\\ { ${other.text} } >>` : bar.text;
+      return changesText(score, s, b) + (shown ? `<< { ${bar.text} } \\\\ { ${other.text} } >>` : bar.text);
     });
     const music = withRepeats(bars, repeats);
     const lastRepeat = repeats.find((r) => r.endings.length === 0 && r.to === bars.length - 1);
     const name = staff.name ? `instrumentName = ${quote(staff.name)} ` : "";
     const short = staff.short ? `shortInstrumentName = ${quote(staff.short)} ` : "";
     const midi = staff.instrument ? `midiInstrument = ${quote(staff.instrument)} ` : "";
-    const tempo = s === 0 && score.tempo && (score.tempo.text || score.tempo.bpm)
-      ? ` \\tempo ${score.tempo.text ? quote(score.tempo.text) + " " : ""}${score.tempo.bpm ? `${score.tempo.base} = ${score.tempo.bpm}` : ""}`.trimEnd()
-      : "";
-    const clef = CLEFS.includes(staff.clef) ? (staff.clef.includes("_") ? `"${staff.clef}"` : staff.clef) : "treble";
+    const tempo = s === 0 && score.tempo && (score.tempo.text || score.tempo.bpm) ? ` ${tempoText(score.tempo)}` : "";
+    const clef = clefText(staff.clef);
     const time = staff.time ?? score.time;
     const settings = name + short + midi;
     // A piece that ends on a repeat's end keeps its :|. sign, not a final bar.
@@ -825,9 +1055,25 @@ export function toLilyPond(score, { open = [] } = {}) {
   return { source: (header ? `\\header { ${header} }\n` : "") + body + "\n", items };
 }
 
+const clefText = (clef) => (CLEFS.includes(clef) ? (clef.includes("_") ? `"${clef}"` : clef) : "treble");
+const tempoText = (tempo) => `\\tempo ${tempo.text ? quote(tempo.text) + " " : ""}${tempo.bpm ? `${tempo.base} = ${tempo.bpm}` : ""}`.trimEnd();
+
+/** What staff `s` writes at the start of bar `b` for what changes there. */
+function changesText(score, s, b) {
+  if (b === 0) return "";
+  const parts = [];
+  const clef = (score.staves[s].clefs ?? []).find((c) => c.bar === b);
+  if (clef) parts.push(`\\clef ${clefText(clef.clef)}`);
+  const c = changeAt(score, b);
+  if (c?.key != null) parts.push(`\\key ${KEYS[keyOf(score, s, barStart(score, b))]} \\major`);
+  if (c?.time) parts.push(`\\time ${c.time[0]}/${c.time[1]}`);
+  if (c?.tempo && staffNumber(score, s) === 0) parts.push(tempoText(c.tempo));
+  if (c?.line) parts.unshift(`\\bar "${c.line}"`);
+  return parts.length ? parts.join(" ") + " " : "";
+}
+
 /** A lane's music, a string per bar, with its events and items; a tuplet never leaves its bar. */
 function staffBars(score, staff, s) {
-  const bar = barLength(score);
   const bars = [];
   let current = { parts: [], items: [], events: [] };
   let t = 0;
@@ -852,7 +1098,7 @@ function staffBars(score, staff, s) {
     }
     current.parts.push(eventText(ev));
     t += ticksOf(ev);
-    if (Math.abs(t / bar - Math.round(t / bar)) < 1e-9) close();
+    if (Math.abs(t - barStart(score, bars.length + 1)) < 1e-6) close();
   });
   if (current.parts.length) close();
   return bars;
@@ -926,11 +1172,6 @@ function repeatsFrom(signs) {
   }
   close();
   return out.every((r) => r.to >= r.from && r.endings.every((n) => n > 0)) ? out : null;
-}
-
-/** The bar a time (ticks) is in. */
-export function barAt(score, t) {
-  return Math.floor(t / barLength(score));
 }
 
 /** The repeat bar `b` is in — its body or an ending — or null. */
@@ -1039,13 +1280,16 @@ export function endingFromBars(score, a, b) {
 
 /** `count` bars of rests put in every staff before bar `at`; the repeats after it move along. */
 export function insertBars(score, at, count) {
-  const bar = barLength(score);
+  const t = barStart(score, at);
+  if (score.staves.some((staff) => t > lengthOf(staff))) throw new Error("no such bar");
+  // What changes from bar `at` moves along: the new bars keep the metre before them.
+  for (const c of score.changes ?? []) if (c.bar >= at) c.bar += count;
+  for (const staff of score.staves) for (const c of staff.clefs ?? []) if (c.bar >= at) c.bar += count;
+  const ticks = barStart(score, at + count) - t;
   for (const staff of score.staves) {
-    const t = at * bar;
-    if (t > lengthOf(staff)) throw new Error("no such bar");
     const i = t === lengthOf(staff) ? staff.events.length : eventAt(staff, t);
     if (i < 0) throw new Error("bars must start at a bar line");
-    staff.events.splice(i, 0, ...rests(score, t, count * bar));
+    staff.events.splice(i, 0, ...rests(score, t, ticks));
   }
   for (const r of score.repeats ?? []) {
     if (r.from >= at) r.from += count;
@@ -1064,7 +1308,7 @@ const CLEF_NAMES = { "G,-2,0": "treble", "G,-2,-1": "treble_8", "F,2,0": "bass",
  */
 export function fromParsed(parsed) {
   const unsupported = new Set();
-  const score = { header: { ...parsed.header }, key: 0, time: [4, 4], tempo: null, group: "none", groups: [], staves: [], repeats: [] };
+  const score = { header: { ...parsed.header }, key: 0, time: [4, 4], tempo: null, group: "none", groups: [], staves: [], repeats: [], changes: [] };
   // Where the first staff's repeat signs fall, in bars: the score's repeats.
   const signs = [];
   const kinds = { Brace: "brace", Bracket: "bracket", Choir: "choir" };
@@ -1090,20 +1334,41 @@ export function fromParsed(parsed) {
     for (const ev of staff.events) {
       ev.unsupported.forEach((u) => unsupported.add(u));
       const k = ev.k;
+      // A change after the first note is the bar's it starts: the first staff
+      // writes the score's changes, the others must change with it.
+      const here = lengthOf(lane);
+      const bar = isBarLine(score, here) ? barAt(score, here) : -1;
       if (k === "Clef") {
         const name = CLEF_NAMES[ev.clef.join(",")];
         if (!name) unsupported.add("this clef");
-        if (started) unsupported.add("a change of clef");
-        else out.clef = name ?? "treble";
+        if (!started || bar === 0) out.clef = name ?? "treble";
+        else if (bar < 0) unsupported.add("a change of clef inside a bar");
+        else {
+          out.clefs = [...(out.clefs ?? []).filter((c) => c.bar !== bar), { bar, clef: name ?? "treble" }];
+        }
       } else if (k === "Key") {
-        if (started && ev.fifths !== key) unsupported.add("a change of key");
-        key = ev.fifths;
+        if (!started) key = ev.fifths;
+        else if (bar < 0) unsupported.add("a change of key inside a bar");
+        else if (first) setChange(score, bar, "key", ev.fifths === scoreKeyAt(score, bar - 1) ? null : ev.fifths);
+        else if (ev.fifths !== Math.max(-7, Math.min(7, scoreKeyAt(score, bar) + (out.key ?? score.key) - score.key))) unsupported.add("staves changing key apart");
       } else if (k === "Time") {
-        if (started && (ev.time[0] !== time?.[0] || ev.time[1] !== time?.[1])) unsupported.add("a change of metre");
-        time = ev.time;
+        if (!started) time = ev.time;
+        else if (bar < 0) unsupported.add("a change of metre inside a bar");
+        else if (first) {
+          const was = timeAt(score, bar);
+          if (bar > 0 && (ev.time[0] !== was[0] || ev.time[1] !== was[1])) setChange(score, bar, "time", ev.time);
+        } else {
+          const want = timeAt(score, bar);
+          if (ev.time[0] !== want[0] || ev.time[1] !== want[1]) unsupported.add("staves changing metre apart");
+        }
       } else if (k === "Tempo") {
-        if (started) unsupported.add("a change of tempo");
-        else if (first) score.tempo = ev.tempo;
+        if (!started) {
+          if (first) score.tempo = ev.tempo;
+        } else if (bar < 0) unsupported.add("a change of tempo inside a bar");
+        else if (first) {
+          if (bar === 0) score.tempo = ev.tempo;
+          else setChange(score, bar, "tempo", { text: ev.tempo.text ?? "", base: ev.tempo.base || 4, bpm: ev.tempo.bpm || 0 });
+        }
       } else if (k === "Voices") {
         if (voices) unsupported.add("voices inside voices");
         voices = 1;
@@ -1121,9 +1386,11 @@ export function fromParsed(parsed) {
       } else if (["RepeatStart", "RepeatEnd", "VoltaStart", "VoltaEnd", "Bar"].includes(k)) {
         // Repeat signs, where they fall in bars — the first staff's are the score's.
         if (!first) continue;
-        const at = lengthOf(out) / barLength(score);
+        const at = bar >= 0 ? bar : barAt(score, here) + 0.5;
         const marks = { RepeatStart: ["start"], RepeatEnd: ["end"], VoltaStart: ["volta"], VoltaEnd: ["volta-end"], Bar: { ".|:": ["start"], ":|.": ["end"], ":|.|:": ["end", "start"] }[ev.bar] ?? [] }[k];
         if (marks.length && !Number.isInteger(at)) unsupported.add("a repeat inside a bar");
+        // A double bar line between sections: the bar after it keeps it.
+        if (k === "Bar" && ev.bar === "||" && bar > 0) setChange(score, bar, "line", "||");
         for (const mark of marks) signs.push({ mark, at });
       } else if (k === "Note" || k === "Rest") {
         if (!started) {
@@ -1189,8 +1456,9 @@ export function fromParsed(parsed) {
   }
   if (unsupported.size) return { unsupported: [...unsupported] };
   if (!score.staves.length) return { unsupported: ["a piece with no staff"] };
-  const bar = barLength(score);
-  ensureLength(score, Math.max(...score.staves.map(lengthOf), bar));
-  if (score.staves.some((st) => lengthOf(st) % bar !== 0)) return { unsupported: ["a bar left unfinished"] };
+  ensureLength(score, Math.max(...score.staves.map(lengthOf), barStart(score, 1)));
+  if (score.staves.some((st) => !isBarLine(score, lengthOf(st)))) return { unsupported: ["a bar left unfinished"] };
+  // A double bar at the very end is the final bar line, written anyway.
+  score.changes = score.changes.filter((c) => c.bar < barsOf(score));
   return { score };
 }

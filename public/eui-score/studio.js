@@ -175,6 +175,14 @@ export function startStudio(root, options = {}) {
 
   // ---- Selection, in times -------------------------------------------------------
 
+  /** The bar the changes section acts on: the cursor's, or the selection's first; null when none. */
+  function changeBar() {
+    if (!st.score) return null;
+    if (st.input.on) return Math.min(M.barAt(st.score, st.input.t), M.barsOf(st.score) - 1);
+    if (!st.sel) return null;
+    return st.sel.bars?.[0] ?? M.barAt(st.score, Math.min(st.sel.t0, st.sel.t1));
+  }
+
   function staffOf() {
     return st.input.on ? st.input.staff : st.sel?.staff ?? 0;
   }
@@ -807,8 +815,43 @@ export function startStudio(root, options = {}) {
     set("staff-short", staff.short);
     set("staff-clef", staff.clef);
     set("staff-key", staff.key == null ? "" : String(staff.key));
+    fillChanges(set);
     set("staff-instrument", staff.instrument);
     filling = false;
+  }
+
+  const KEY_NAMES = ["C♭", "G♭", "D♭", "A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯"];
+
+  /** The changes section: the bar's own changes, and what is in force there otherwise. */
+  function fillChanges(set) {
+    const b = changeBar();
+    const section = root.querySelector("[data-changes]");
+    if (!section) return;
+    const on = b != null && b > 0;
+    section.querySelector("[data-change-bar]").textContent = b == null ? "—" : String(b + 1);
+    section.querySelector("[data-change-hint]").textContent = b == null
+      ? "Select a bar, or put the cursor in it: what changes here goes on to the next change."
+      : b === 0 ? "Bar 1 is the piece's start: its key, metre and tempo are under Score, its clef under This staff." : "What changes here goes on to the next change.";
+    for (const el of section.querySelectorAll("[data-field]")) el.disabled = !on;
+    if (!on) return;
+    const s = staffOf();
+    const c = M.changeAt(st.score, b);
+    const was = { key: M.keyOf(st.score, s, M.barStart(st.score, b - 1)), time: M.timeAt(st.score, b - 1), clef: M.clefAt(st.score, s, b - 1), tempo: M.tempoAt(st.score, b - 1) };
+    const first = (field, text) => {
+      const option = section.querySelector(`[data-field="${field}"] option[value=""]`);
+      if (option) option.textContent = `As before: ${text}`;
+    };
+    first("change-key", `${KEY_NAMES[was.key + 7]} major`);
+    first("change-time", was.time.join("/"));
+    first("change-clef", was.clef.replace("_8", " 8"));
+    section.querySelector('[data-field="change-bpm"]').placeholder = was.tempo?.bpm ? `as before: ${was.tempo.bpm}` : "as before";
+    set("change-key", c?.key == null ? "" : String(c.key));
+    set("change-time", c?.time ? c.time.join("/") : "");
+    set("change-bpm", c?.tempo?.bpm || "");
+    set("change-tempo-text", c?.tempo?.text || "");
+    set("change-clef", (st.score.staves[M.upperOf(st.score, s)].clefs ?? []).find((x) => x.bar === b)?.clef ?? "");
+    const double = section.querySelector('[data-field="change-double"]');
+    if (double) double.checked = c?.line === "||";
   }
 
   function onField(event) {
@@ -828,6 +871,21 @@ export function startStudio(root, options = {}) {
         case "staff-short": staff.short = value; break;
         case "staff-clef": staff.clef = value; break;
         case "staff-key": M.setStaffKey(score, staffOf(), value === "" ? score.key : Number(value)); break;
+        case "change-key": M.setKeyAt(score, changeBar(), value === "" ? null : Number(value)); break;
+        case "change-time": {
+          const b = changeBar();
+          const [n, d] = value ? value.split("/").map(Number) : M.timeAt(score, b - 1);
+          M.setTimeAt(score, b, n, d);
+          break;
+        }
+        case "change-bpm": case "change-tempo-text": {
+          const b = changeBar();
+          const here = M.changeAt(score, b)?.tempo ?? { text: "", base: M.tempoAt(score, b - 1)?.base || 4, bpm: 0 };
+          M.setTempoAt(score, b, el.dataset.field === "change-bpm" ? { ...here, bpm: Number(value) || 0 } : { ...here, text: value });
+          break;
+        }
+        case "change-clef": M.setClefAt(score, staffOf(), changeBar(), value || null); break;
+        case "change-double": M.setDoubleBar(score, changeBar(), el.checked); break;
         case "staff-instrument": staff.instrument = value; break;
       }
     });
@@ -880,11 +938,10 @@ export function startStudio(root, options = {}) {
   /** Bars `a`…`b` of staff `s` selected, all their notes. */
   function selectBars(s, a, b) {
     const staff = st.score.staves[s];
-    const bar = M.barLength(st.score);
     const [from, to] = [Math.min(a, b), Math.max(a, b)];
     const at = M.starts(staff);
-    const last = Math.max(...at.filter((t) => t < (to + 1) * bar));
-    st.sel = { staff: s, t0: from * bar, t1: last, head: -1, bars: [from, to] };
+    const last = Math.max(...at.filter((t) => t < M.barStart(st.score, to + 1)));
+    st.sel = { staff: s, t0: M.barStart(st.score, from), t1: last, head: -1, bars: [from, to] };
     say("");
     draw();
   }
@@ -1156,7 +1213,7 @@ export function startStudio(root, options = {}) {
       el.value = "";
       return;
     }
-    if (el.matches("select[data-field], input[type=number][data-field]")) onField(event);
+    if (el.matches("select[data-field], input[type=number][data-field], input[type=checkbox][data-field]")) onField(event);
   });
   root.addEventListener("input", (event) => {
     if (event.target.matches('input[type="text"][data-field]')) onField(event);
@@ -1286,10 +1343,7 @@ export function startStudio(root, options = {}) {
     const total = player.duration || 0;
     progress.hidden = false;
     progress.querySelector(".studio-progress-fill").style.width = total ? `${(100 * now) / total}%` : "0";
-    const bpm = st.score?.tempo?.bpm || 100;
-    const base = st.score?.tempo?.base || 4;
-    const ticks = (now * bpm * M.WHOLE) / (60 * base);
-    const bar = st.score ? Math.min(M.barsOf(st.score), Math.floor(ticks / M.barLength(st.score)) + 1) : 0;
+    const bar = st.score ? Math.min(M.barsOf(st.score), M.barAt(st.score, M.ticksAtSeconds(st.score, now)) + 1) : 0;
     const bars = st.score ? ` · bar ${bar} of ${M.barsOf(st.score)}` : "";
     progress.querySelector(".studio-progress-text").textContent = `${clock(now)} / ${clock(total)}${bars}`;
     state.textContent = `Playing${bars} · ${clock(now)} / ${clock(total)} — Space to stop`;
@@ -1380,12 +1434,10 @@ export function startStudio(root, options = {}) {
   /** When each item starts, in seconds, at the score's tempo. */
   function noteTimes() {
     if (!st.score) return [];
-    const bpm = st.score.tempo?.bpm || 100;
-    const base = st.score.tempo?.base || 4;
     const out = [];
     st.items.forEach(({ staff, index }, item) => {
       const t = M.starts(st.score.staves[staff])[index];
-      if (!st.score.staves[staff].events[index].rest) out.push({ item, sec: ((t / M.WHOLE) * base * 60) / bpm });
+      if (!st.score.staves[staff].events[index].rest) out.push({ item, sec: M.secondsAt(st.score, t) });
     });
     return out;
   }

@@ -359,6 +359,65 @@ test("staff groups nest, and a staff keeps a key of its own", () => {
   assert.deepEqual(metres(String.raw`<< \new Staff { \time 3/4 c'2. } \new Staff { \time 4/4 c'1 } >>`).unsupported, ["staves whose bars last differently"]);
 });
 
+test("key, metre and tempo change anywhere, and read back", () => {
+  const back = M.fromParsed(JSON.parse(score_json(readFileSync(new URL("../../scores/piano/little-suite.ly", import.meta.url), "utf8"))));
+  assert.ok(back.score, back.unsupported?.join());
+  const s = back.score;
+  assert.deepEqual(s.changes.map((c) => [c.bar, c.key, c.time.join("/"), c.tempo.text, c.line]), [
+    [16, -2, "4/4", "Andante", "||"], [24, 2, "6/8", "Vivace", "||"], [32, -1, "5/4", "Maestoso", "||"], [44, 3, "2/2", "Presto", "||"],
+  ]);
+  assert.equal(M.barStart(s, 16), 16 * M.barLength(s));
+  assert.equal(M.barLength(s, 24), M.notated(8) * 6);
+  assert.equal(M.barAt(s, M.barStart(s, 25) + 1), 25);
+  const { source } = engrave(s);
+  assert.match(source, /\| *\n? *\\bar "\|\|" \\key bes \\major \\time 4\/4 \\tempo "Andante" 4 = 72 f'4\(/);
+  assert.deepEqual(reread(s).changes, s.changes);
+  // A letter in the new key is spelled in it: F sharp in D major.
+  const i = M.eventAt(s.staves[0], M.barStart(s, 24));
+  M.letter(s, 0, i, 3);
+  assert.equal(s.staves[0].events[i].pitches[0].alter, 1);
+  assert.equal(M.tempoAt(s, 30).bpm, 160);
+  assert.ok(M.secondsAt(s, M.barStart(s, 17)) > M.secondsAt(s, M.barStart(s, 16)));
+  assert.ok(Math.abs(M.ticksAtSeconds(s, M.secondsAt(s, M.barStart(s, 30))) - M.barStart(s, 30)) < 1);
+});
+
+test("a metre from a bar on lays the music out again, up to the next change", () => {
+  const s = M.newScore();
+  M.write(s, 0, 0, 2 * M.WHOLE, C4);
+  M.setTimeAt(s, 1, 3, 4);
+  assert.deepEqual(s.changes, [{ bar: 1, time: [3, 4] }]);
+  assert.equal(M.barsOf(s), 5, "three bars of 4/4 make four of 3/4");
+  assert.match(engrave(s).source, /c'1~ \| \\time 3\/4 c'2\.~ \| c'4 r2 \| r2\. \|/);
+  M.setKeyAt(s, 2, 2);
+  M.setTempoAt(s, 2, { text: "Vivo", base: 4, bpm: 140 });
+  M.setClefAt(s, 0, 3, "bass");
+  M.setDoubleBar(s, 3, true);
+  assert.match(engrave(s).source, /\\key d \\major \\tempo "Vivo" 4 = 140 c'4 r2 \| \\bar "\|\|" \\clef bass r2\./);
+  assert.deepEqual(reread(s).changes, s.changes);
+  assert.deepEqual(reread(s).staves[0].clefs, [{ bar: 3, clef: "bass" }]);
+  M.setKeyAt(s, 2, 0);
+  assert.equal(M.changeAt(s, 2).key, undefined, "the key in force already: no change");
+  M.setClefAt(s, 0, 3, "treble");
+  assert.equal(s.staves[0].clefs, undefined);
+  // Back to 4/4 from bar 1: the tempo of bar 2 would fall inside a bar.
+  assert.throws(() => M.setTimeAt(s, 1, 4, 4), /inside bars/);
+  assert.equal(M.barsOf(s), 5, "a refusal changes nothing");
+  M.setTempoAt(s, 2, null);
+  M.setDoubleBar(s, 3, false);
+  assert.deepEqual(s.changes, [{ bar: 1, time: [3, 4] }]);
+  M.setTimeAt(s, 1, 4, 4);
+  assert.equal(M.changeAt(s, 1), null, "the metre in force already: no change");
+  assert.equal(M.barsOf(s), 4);
+  // A middle stretch must make whole bars of the new metre.
+  M.setTimeAt(s, 3, 3, 4);
+  assert.throws(() => M.setTimeAt(s, 1, 3, 4), /whole bars of 3\/4/);
+  M.insertBars(s, 1, 1);
+  assert.equal(M.changeAt(s, 4).time.join("/"), "3/4", "the changes move with the bars");
+  M.tupletAt(s, 0, M.barStart(s, 1), M.notated(4), 3);
+  assert.throws(() => M.setTimeAt(s, 1, 2, 4), /tuplets/);
+  assert.throws(() => M.setDoubleBar(s, 0, true), /between two bars/);
+});
+
 test("bar-line repeat signs read as a repeat", () => {
   const back = M.fromParsed(JSON.parse(score_json(String.raw`{ \time 2/4 c'2 \bar ".|:" d'2 | e'2 \bar ":|." g'2 \bar "|." }`)));
   assert.ok(back.score, back.unsupported?.join());
