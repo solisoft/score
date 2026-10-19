@@ -276,7 +276,7 @@ export function startStudio(root, options = {}) {
         st.input.t += len;
       } else {
         const near = M.previousPitch(score, s, i < 0 ? staff.events.length : i);
-        const content = step === null ? { rest: true } : { rest: false, pitches: [M.nearestPitch(step, near, score.key)] };
+        const content = step === null ? { rest: true } : { rest: false, pitches: [M.nearestPitch(step, near, M.keyOf(score, s))] };
         M.write(score, s, st.input.t, inputTicks(), content);
         st.input.last = step === null ? null : { staff: s, t: st.input.t };
         st.input.t += inputTicks();
@@ -425,6 +425,17 @@ export function startStudio(root, options = {}) {
         const [instrument, nameText, clef] = (root.querySelector('[data-field="new-staff"]').value || "acoustic grand|Piano|treble").split("|");
         M.addStaff(score, { instrument, name: nameText, clef });
         st.sel = { staff: score.staves.length - 1, t0: 0, t1: 0, head: -1 };
+      });
+      case "voice": return toVoice(Number(data.voice));
+      case "voice-remove": return edit((score) => {
+        const s = staffOf();
+        const upper = M.upperOf(score, s);
+        M.removeVoice(score, s);
+        // The lanes after the one taken away move up by one.
+        const moved = (lane) => (lane === upper + 1 ? upper : lane > upper + 1 ? lane - 1 : lane);
+        if (st.sel) st.sel = { ...st.sel, staff: moved(st.sel.staff), head: -1 };
+        st.input.staff = moved(st.input.staff);
+        say("Voice 2 taken away");
       });
       case "remove-staff": return edit((score) => {
         M.removeStaff(score, staffOf());
@@ -674,14 +685,17 @@ export function startStudio(root, options = {}) {
 
   async function draw() {
     await loaded();
+    // Drawn: the text, with the second voice's bars opened where the page writes in them.
+    let shown = st.text;
     if (st.score) {
-      const { items } = M.toLilyPond(st.score);
+      const { source, items } = M.toLilyPond(st.score, { open: openBars() });
       st.items = items;
+      shown = source;
     }
     const width = Math.max(320, Math.floor(sheet.clientWidth - 2));
     const space = 8 * st.zoom;
     try {
-      st.view = JSON.parse(editor_view_lit(st.text, width, space, st.score ? lit() : "{}"));
+      st.view = JSON.parse(editor_view_lit(shown, width, space, st.score ? lit() : "{}"));
       svgHost.innerHTML = st.view.svg;
       sheet.classList.remove("studio-sheet-refused");
     } catch (error) {
@@ -696,6 +710,46 @@ export function startStudio(root, options = {}) {
     showState();
   }
 
+  /** The bars of a second voice the cursor or the selection is in: written even while they are rests. */
+  function openBars() {
+    const s = st.input.on ? st.input.staff : st.sel?.staff;
+    if (s == null || !M.isLower(st.score, s)) return [];
+    const [t0, t1] = st.input.on ? [st.input.t, st.input.t] : [Math.min(st.sel.t0, st.sel.t1), Math.max(st.sel.t0, st.sel.t1)];
+    const last = M.barsOf(st.score) - 1;
+    const out = [];
+    for (let bar = Math.min(M.barAt(st.score, t0), last); bar <= Math.min(M.barAt(st.score, t1), last); bar++) out.push({ staff: s, bar });
+    return out;
+  }
+
+  /** The cursor or the selection moved to the other voice of its staff, at the same time; voice 2 made when needed. */
+  function toVoice(voice) {
+    if (!st.score) return;
+    const s = staffOf();
+    const upper = M.upperOf(st.score, s);
+    let lane = upper;
+    if (voice === 2) {
+      lane = M.lowerOf(st.score, upper);
+      if (lane < 0) {
+        // A voice of rests: nothing in the text changes, so no step to undo.
+        lane = M.addVoice(st.score, upper);
+        if (st.input.on && st.input.staff > upper) st.input.staff++;
+      }
+    }
+    if (st.input.on) {
+      st.input.staff = lane;
+      st.input.last = null;
+    } else if (st.sel) {
+      const at = M.starts(st.score.staves[lane]);
+      const t = Math.min(st.sel.t0, st.sel.t1);
+      const start = Math.max(...at.filter((x) => x <= t));
+      st.sel = { staff: lane, t0: start, t1: start, head: -1 };
+    } else {
+      st.sel = { staff: lane, t0: 0, t1: 0, head: -1 };
+    }
+    say(voice === 2 ? "Voice 2: notes written now go under voice 1, stems down" : "Voice 1");
+    draw();
+  }
+
   function showState() {
     root.classList.toggle("studio-input", st.input.on);
     root.classList.toggle("studio-text-only", !st.score);
@@ -707,6 +761,9 @@ export function startStudio(root, options = {}) {
     root.querySelector('[data-act="dot"]')?.classList.toggle("on", st.input.dots > 0);
     root.querySelector('[data-act="mode-input"]')?.classList.toggle("on", st.input.on);
     root.querySelector('[data-act="mode-select"]')?.classList.toggle("on", !st.input.on);
+    const second = st.score ? M.isLower(st.score, staffOf()) : false;
+    root.querySelector('[data-act="voice"][data-voice="1"]')?.classList.toggle("on", Boolean(st.score) && !second);
+    root.querySelector('[data-act="voice"][data-voice="2"]')?.classList.toggle("on", second);
     root.querySelector('[data-act="undo"]').disabled = !st.past.length;
     root.querySelector('[data-act="redo"]').disabled = !st.future.length;
     root.querySelector('[data-act="play"]').textContent = st.playing ? "■ Stop" : "▶ Play";
@@ -716,7 +773,7 @@ export function startStudio(root, options = {}) {
     // What is selected, in words.
     const value = `${({ 1: "whole", 2: "half", 4: "quarter", 8: "eighth", 16: "16th", 32: "32nd" })[st.input.base]}${st.input.dots ? ", dotted" : ""}`;
     if (st.playing) showProgress();
-    else if (st.input.on) state.textContent = `Note input · ${value} · A–G write, 0 rest, Esc to stop`;
+    else if (st.input.on) state.textContent = `Note input${M.isLower(st.score, st.input.staff) ? " · voice 2" : ""} · ${value} · A–G write, 0 rest, Esc to stop`;
     else {
       const r = range();
       if (!r) state.textContent = st.score ? "Click a note to select it · N to write notes" : "Text only";
@@ -724,7 +781,7 @@ export function startStudio(root, options = {}) {
       else {
         const ev = r.staff.events[r.a];
         const len = ({ 1: "whole", 2: "half", 4: "quarter", 8: "eighth", 16: "16th", 32: "32nd" })[ev.base] + (ev.dots ? " dotted" : "") + (ev.tuplet ? ` (${ev.tuplet.n}-tuplet)` : "");
-        state.textContent = ev.rest ? `Rest · ${len}` : `${ev.pitches.length > 1 ? "Chord" : "Note"} ${ev.pitches.map((p, k) => (k === st.sel.head ? `[${M.pitchName(p.d, p.alter)}]` : M.pitchName(p.d, p.alter))).join(" ")} · ${len}`;
+        state.textContent = (M.isLower(st.score, r.s) ? "Voice 2 · " : "") + (ev.rest ? `Rest · ${len}` : `${ev.pitches.length > 1 ? "Chord" : "Note"} ${ev.pitches.map((p, k) => (k === st.sel.head ? `[${M.pitchName(p.d, p.alter)}]` : M.pitchName(p.d, p.alter))).join(" ")} · ${len}`);
       }
     }
   }
@@ -737,7 +794,7 @@ export function startStudio(root, options = {}) {
       const el = root.querySelector(`[data-field="${field}"]`);
       if (el && document.activeElement !== el) el.value = value ?? "";
     };
-    const staff = st.score.staves[staffOf()] ?? st.score.staves[0];
+    const staff = st.score.staves[M.upperOf(st.score, staffOf())] ?? st.score.staves[0];
     set("title", st.score.header.title);
     set("subtitle", st.score.header.subtitle);
     set("composer", st.score.header.composer);
@@ -749,6 +806,7 @@ export function startStudio(root, options = {}) {
     set("staff-name", staff.name);
     set("staff-short", staff.short);
     set("staff-clef", staff.clef);
+    set("staff-key", staff.key == null ? "" : String(staff.key));
     set("staff-instrument", staff.instrument);
     filling = false;
   }
@@ -758,7 +816,7 @@ export function startStudio(root, options = {}) {
     if (!el || filling || el.dataset.field === "new-staff") return;
     const value = el.value;
     edit((score) => {
-      const staff = score.staves[staffOf()] ?? score.staves[0];
+      const staff = score.staves[M.upperOf(score, staffOf())] ?? score.staves[0];
       switch (el.dataset.field) {
         case "title": case "subtitle": case "composer": score.header[el.dataset.field] = value; break;
         case "key": M.setKey(score, Number(value)); break;
@@ -769,6 +827,7 @@ export function startStudio(root, options = {}) {
         case "staff-name": staff.name = value; break;
         case "staff-short": staff.short = value; break;
         case "staff-clef": staff.clef = value; break;
+        case "staff-key": M.setStaffKey(score, staffOf(), value === "" ? score.key : Number(value)); break;
         case "staff-instrument": staff.instrument = value; break;
       }
     });
@@ -812,7 +871,8 @@ export function startStudio(root, options = {}) {
       tops.forEach((top, k) => {
         if (Math.abs(p.y - (top + 16)) < Math.abs(p.y - (tops[staff] + 16))) staff = k;
       });
-      return { bar: b.bar, staff: Math.min(staff, st.score.staves.length - 1) };
+      const lanes = M.staffLanes(st.score);
+      return { bar: b.bar, staff: lanes[Math.min(staff, lanes.length - 1)] };
     }
     return null;
   }
@@ -1022,6 +1082,8 @@ export function startStudio(root, options = {}) {
     if (mod && key.toLowerCase() === "v") return run("paste");
     if (mod && key.toLowerCase() === "l") return run("lyrics");
     if (mod && key.toLowerCase() === "k") return run("chord");
+    // Ctrl+Alt+1, 2: the voice, as MuseScore has it; event.code, since Alt changes the key.
+    if (mod && event.altKey && ["Digit1", "Digit2", "Numpad1", "Numpad2"].includes(event.code)) return run("voice", { voice: event.code.slice(-1) });
     if (mod && ["3", "5", "6", "7"].includes(key)) return run("tuplet", { n: key });
     if (key === " " && !event.target.closest("button")) return run("play");
     if (mod) return;

@@ -180,6 +180,18 @@
       </section>
 
       <section class="tool-section">
+        <h3>Voices</h3>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="voice" data-voice="1" title="Write and select in the first voice, stems up (Ctrl+Alt+1)">Voice 1</button>
+          <button type="button" class="tool tool-wide" data-act="voice" data-voice="2" title="Write and select in the second voice, stems down (Ctrl+Alt+2)">Voice 2</button>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="voice-remove" title="Take this staff's second voice away, its notes with it">Remove voice 2</button>
+        </div>
+        <p class="tool-hint">Voice 2 writes under voice 1 on the same staff. A bar shows two voices where voice 2 has notes.</p>
+      </section>
+
+      <section class="tool-section">
         <h3>This staff</h3>
         <label class="tool-field">Name <input type="text" data-field="staff-name" placeholder="Violin"></label>
         <label class="tool-field">Short <input type="text" data-field="staff-short" placeholder="Vl."></label>
@@ -187,6 +199,14 @@
           <select data-field="staff-clef">
             <option value="treble">Treble</option><option value="bass">Bass</option><option value="alto">Alto</option>
             <option value="tenor">Tenor</option><option value="treble_8">Treble 8 (guitar)</option><option value="bass_8">Bass 8</option>
+          </select>
+        </label>
+        <label class="tool-field">Key
+          <select data-field="staff-key">
+            <option value="">The score's</option>
+            <% for fifths in range(-7, 8) %>
+              <option value="<%= fifths %>"><%= ["C♭", "G♭", "D♭", "A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯"][fifths + 7] %> major / <%= ["A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯", "G♯", "D♯", "A♯"][fifths + 7] %> minor</option>
+            <% end %>
           </select>
         </label>
         <label class="tool-field">Sound <input type="text" data-field="staff-instrument" placeholder="acoustic grand" list="studio-instruments"></label>

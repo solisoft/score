@@ -20,9 +20,12 @@ function engrave(score) {
   } catch (e) {
     throw new Error(`${e.message ?? e}\n${source}`);
   }
-  const notes = score.staves.reduce((n, st) => n + st.events.length, 0);
-  assert.equal(items.length, notes, "one item per event");
-  assert.equal(view.items.length, notes, `the engraver sees every event\n${source}`);
+  // Every event of a staff's first voice is an item; a second voice's, in the bars it is written in.
+  const upper = score.staves.reduce((n, st) => n + (st.voice === 2 ? 0 : st.events.length), 0);
+  assert.equal(items.filter((it) => score.staves[it.staff].voice !== 2).length, upper, "one item per event");
+  assert.ok(items.every((it) => score.staves[it.staff].events[it.index]), "every item is an event");
+  assert.equal(new Set(items.map((it) => `${it.staff}:${it.index}`)).size, items.length, "no event twice");
+  assert.equal(view.items.length, items.length, `the engraver sees every item\n${source}`);
   return { source, view };
 }
 
@@ -293,6 +296,67 @@ test("the bar after a plain repeat is its first ending, and the bar after that i
   const text = engrave(s).source;
   assert.match(text, /\\alternative \{ \{ r1 \} \{ r1 \} \}/);
   assert.deepEqual(reread(s).repeats, s.repeats);
+});
+
+test("a second voice is a lane of its own, written in the bars where it sounds", () => {
+  const back = M.fromParsed(JSON.parse(score_json(readFileSync(new URL("../../scores/syntax/voices.ly", import.meta.url), "utf8"))));
+  assert.ok(back.score, back.unsupported?.join());
+  const s = back.score;
+  assert.equal(s.staves.length, 2);
+  assert.equal(s.staves[1].voice, 2);
+  assert.deepEqual(M.staffLanes(s), [0]);
+  assert.equal(M.upperOf(s, 1), 0);
+  assert.equal(M.lowerOf(s, 0), 1);
+  assert.equal(M.lengthOf(s.staves[1]), M.lengthOf(s.staves[0]), "the voices last as long");
+  const { source } = engrave(s);
+  assert.match(source, /<< \{ b'4 c''4 d''2 \} \\\\ \{ g'4 a'4 b'2 \} >> \| << \{ c''8 b'8 a'8 g'8 fis'2 \} \\\\ \{ e'4 e'4 d'2 \} >> \| g'1/);
+  assert.deepEqual(reread(s).staves.map((l) => l.events.length), s.staves.map((l) => l.events.length));
+});
+
+test("a voice is added, written in, opened where it is empty, and taken away", () => {
+  const s = M.newScore();
+  const lane = M.addVoice(s, 0);
+  assert.equal(lane, 1);
+  assert.equal(M.addVoice(s, 1), 1, "a staff has two voices at most");
+  assert.doesNotMatch(engrave(s).source, /\\\\/, "a voice of rests is not written");
+  assert.match(M.toLilyPond(s, { open: [{ staff: 1, bar: 2 }] }).source, /r1 \| r1 \| << \{ r1 \} \\\\ \{ r1 \} >> \| r1/, "where the page writes in it, it is");
+  M.write(s, lane, M.notated(4), M.notated(2), { rest: false, pitches: [{ d: 5, alter: 0 }] });
+  assert.match(engrave(s).source, /<< \{ r1 \} \\\\ \{ r4 a2 r4 \} >> \| r1/);
+  assert.throws(() => M.setLyric(s, lane, 1, "la"), /first voice/);
+  M.addStaff(s);
+  assert.deepEqual(M.staffLanes(s), [0, 2]);
+  assert.equal(M.staffNumber(s, 2), 1);
+  M.removeVoice(s, 0);
+  assert.equal(s.staves.length, 2);
+  assert.throws(() => M.removeVoice(s, 0), /one voice/);
+});
+
+test("staff groups nest, and a staff keeps a key of its own", () => {
+  const back = M.fromParsed(JSON.parse(score_json(readFileSync(new URL("../../scores/ensembles/chamber-orchestra.ly", import.meta.url), "utf8"))));
+  assert.ok(back.score, back.unsupported?.join());
+  const s = back.score;
+  assert.equal(s.group, "none");
+  assert.deepEqual(s.groups.map((g) => [g.kind, g.first, g.last]), [["bracket", 0, 1], ["bracket", 2, 4]]);
+  const { source } = engrave(s);
+  assert.equal(source.match(/\\new StaffGroup <</g).length, 2);
+  assert.deepEqual(reread(s).groups, s.groups);
+  M.removeStaff(s, 0);
+  assert.deepEqual(s.groups.map((g) => [g.first, g.last]), [[0, 0], [1, 3]], "the groups close up");
+
+  const horns = M.fromParsed(JSON.parse(score_json(readFileSync(new URL("../../scores/ensembles/symphony-5.ly", import.meta.url), "utf8")))).score;
+  assert.ok(horns);
+  const corni = M.staffLanes(horns).find((l) => horns.staves[l].name === "Corni");
+  assert.equal(M.keyOf(horns, corni), -3, "the horns in E flat");
+  assert.equal(M.keyOf(horns, 0), horns.key);
+  M.setKey(horns, horns.key + 1);
+  assert.equal(M.keyOf(horns, corni), -2, "they move with the score's key");
+  M.setStaffKey(horns, corni, horns.key);
+  assert.equal(horns.staves[corni].key, undefined, "the score's key again");
+  const metres = (src) => M.fromParsed(JSON.parse(score_json(src)));
+  const six = metres(String.raw`<< \new Staff { \time 3/4 c'2. } \new Staff { \time 6/8 c'2. } >>`).score;
+  assert.deepEqual(six.staves[1].time, [6, 8], "6/8 beside 3/4: bars as long");
+  assert.match(engrave(six).source, /\\time 6\/8/);
+  assert.deepEqual(metres(String.raw`<< \new Staff { \time 3/4 c'2. } \new Staff { \time 4/4 c'1 } >>`).unsupported, ["staves whose bars last differently"]);
 });
 
 test("bar-line repeat signs read as a repeat", () => {

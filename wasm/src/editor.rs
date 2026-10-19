@@ -549,7 +549,6 @@ pub fn score(src: &str) -> Result<Value, String> {
         for ev in &staff.events {
             let mut unsupported: Vec<&str> = Vec::new();
             match ev.k {
-                Kind::Voices | Kind::VoiceNext | Kind::VoicesEnd | Kind::Col => unsupported.push("two voices on a staff"),
                 Kind::Partial => unsupported.push("a pickup bar"),
                 Kind::CadenzaOn | Kind::CadenzaOff => unsupported.push("a cadenza"),
                 Kind::Ottava => unsupported.push("\\ottava"),

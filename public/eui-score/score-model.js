@@ -339,7 +339,7 @@ function noteOf(score, s, i) {
 export function previousPitch(score, s, i) {
   const events = score.staves[s].events;
   for (let k = i - 1; k >= 0; k--) if (!events[k].rest) return events[k].pitches[0].d;
-  const clef = score.staves[s].clef;
+  const clef = score.staves[upperOf(score, s)].clef;
   return clef.startsWith("bass") ? 3 : clef === "alto" ? 7 : clef === "tenor" ? 5 : 13;
 }
 
@@ -347,7 +347,7 @@ export function previousPitch(score, s, i) {
 export function move(score, s, i, how, by, head = -1) {
   const ev = noteOf(score, s, i);
   if (ev.rest) throw new Error("select a note");
-  const moved = ev.pitches.map((p, k) => (head < 0 || k === head ? movePitch(p, how, by, score.key) : p));
+  const moved = ev.pitches.map((p, k) => (head < 0 || k === head ? movePitch(p, how, by, keyOf(score, s)) : p));
   if (!moved.every(reachable)) throw new Error("that is as far as it goes");
   ev.pitches = sortPitches(moved);
 }
@@ -356,7 +356,7 @@ export function move(score, s, i, how, by, head = -1) {
 export function letter(score, s, i, step, add = false, head = -1) {
   const ev = noteOf(score, s, i);
   if (ev.rest) {
-    const p = nearestPitch(step, previousPitch(score, s, i), score.key);
+    const p = nearestPitch(step, previousPitch(score, s, i), keyOf(score, s));
     Object.assign(ev, { rest: false, pitches: [p] });
     return;
   }
@@ -364,13 +364,13 @@ export function letter(score, s, i, step, add = false, head = -1) {
     const top = Math.max(...ev.pitches.map((p) => p.d));
     let d = top - mod7(top) + step;
     if (d <= top) d += 7;
-    const p = { d, alter: keyAlters(score.key)[mod7(d)] };
+    const p = { d, alter: keyAlters(keyOf(score, s))[mod7(d)] };
     if (!reachable(p)) throw new Error("that is as far as it goes");
     if (!ev.pitches.some((q) => q.d === p.d)) ev.pitches = sortPitches([...ev.pitches, p]);
     return;
   }
   const k = head >= 0 && head < ev.pitches.length ? head : 0;
-  const p = nearestPitch(step, ev.pitches[k].d, score.key);
+  const p = nearestPitch(step, ev.pitches[k].d, keyOf(score, s));
   ev.pitches = sortPitches(ev.pitches.map((q, j) => (j === k ? p : q)));
 }
 
@@ -470,6 +470,7 @@ export function setChordSymbol(score, s, i, text) {
 }
 
 export function setLyric(score, s, i, text, hyphen = false, extend = false) {
+  if (isLower(score, s)) throw new Error("words go with the first voice");
   const ev = noteOf(score, s, i);
   if (ev.rest) throw new Error("a syllable goes under a note");
   ev.lyric = text.trim() ? { text: text.trim(), hyphen, extend } : null;
@@ -543,8 +544,86 @@ export function paste(score, s, t, clip) {
 
 // ---- The score's settings --------------------------------------------------------------
 
+/** The score's key; a staff written in a key of its own (a horn in E♭) moves with it. */
 export function setKey(score, fifths) {
-  score.key = Math.max(-7, Math.min(7, fifths));
+  const clamp = (k) => Math.max(-7, Math.min(7, k));
+  const to = clamp(fifths);
+  for (const s of staffLanes(score)) {
+    const staff = score.staves[s];
+    if (staff.key == null) continue;
+    staff.key = clamp(staff.key + to - score.key);
+    if (staff.key === to) delete staff.key;
+  }
+  score.key = to;
+}
+
+/** Staff `s` in a key of its own; the score's key takes it back to the score's. */
+export function setStaffKey(score, s, fifths) {
+  const staff = score.staves[upperOf(score, s)];
+  if (!staff) throw new Error("no such staff");
+  const to = Math.max(-7, Math.min(7, fifths));
+  if (to === score.key) delete staff.key;
+  else staff.key = to;
+}
+
+// ---- Staves, voices, groups -----------------------------------------------------------
+//
+// `score.staves` holds lanes of events. A staff is one lane — its first voice,
+// with the staff's settings — and, when it has a second voice, the lane right
+// after it: { voice: 2, events }. Every edit on events works on a lane; what
+// belongs to the staff (clef, name, key, lyrics) lives on its first lane.
+// `score.group` brackets every staff; `score.groups` are the groups inside
+// it, { kind, first, last } in staves (not lanes), possibly nested.
+
+export function isLower(score, s) {
+  return score.staves[s]?.voice === 2;
+}
+
+/** The staff's first lane, for any of its lanes. */
+export function upperOf(score, s) {
+  return isLower(score, s) ? s - 1 : s;
+}
+
+/** The staff's second voice's lane, or −1. */
+export function lowerOf(score, s) {
+  const u = upperOf(score, s);
+  return isLower(score, u + 1) ? u + 1 : -1;
+}
+
+/** Each staff's first lane, in order. */
+export function staffLanes(score) {
+  return score.staves.map((_, s) => s).filter((s) => !isLower(score, s));
+}
+
+/** Which staff lane `s` is on, counted from 0. */
+export function staffNumber(score, s) {
+  return staffLanes(score).indexOf(upperOf(score, s));
+}
+
+/** The key lane `s` is written in. */
+export function keyOf(score, s) {
+  return score.staves[upperOf(score, s)]?.key ?? score.key;
+}
+
+/** A second voice on the staff of lane `s`, rests to begin with; answers its lane. */
+export function addVoice(score, s) {
+  const u = upperOf(score, s);
+  if (!score.staves[u]) throw new Error("no such staff");
+  if (lowerOf(score, u) >= 0) return u + 1;
+  score.staves.splice(u + 1, 0, { voice: 2, events: rests(score, 0, lengthOf(score.staves[u])) });
+  return u + 1;
+}
+
+/** The staff's second voice taken away, its notes with it. */
+export function removeVoice(score, s) {
+  const lower = lowerOf(score, s);
+  if (lower < 0) throw new Error("this staff has one voice");
+  score.staves.splice(lower, 1);
+}
+
+/** A bar of a second voice is written when something in it is: a note, or a rest with a mark. */
+function sounding(events) {
+  return events.some((ev) => !ev.rest || ev.dynamic || ev.hairpin || ev.hairpinEnd || ev.texts.length || ev.chord || ev.arts.length);
 }
 
 /** A new time signature: every staff laid out again in its bars. */
@@ -565,6 +644,7 @@ export function setTime(score, num, den) {
     return staff.events.map((ev, k) => ({ ev, t: at[k] }));
   });
   score.time = [num, den];
+  for (const s of staffLanes(score)) delete score.staves[s].time;
   const bar = barLength(score);
   for (const [s, staff] of score.staves.entries()) {
     const total = lengthOf(staff);
@@ -585,12 +665,18 @@ export function setTime(score, num, den) {
 
 export function addStaff(score, fields = {}) {
   score.staves.push(emptyStaff(score, fields));
-  if (score.staves.length > 1 && score.group === "none") score.group = "bracket";
+  if (staffLanes(score).length > 1 && score.group === "none" && !(score.groups ?? []).length) score.group = "bracket";
 }
 
+/** The staff of lane `s` taken away, both its voices; the groups around it close up. */
 export function removeStaff(score, s) {
-  if (score.staves.length < 2) throw new Error("a score keeps one staff at least");
-  score.staves.splice(s, 1);
+  if (staffLanes(score).length < 2) throw new Error("a score keeps one staff at least");
+  const u = upperOf(score, s);
+  const n = staffNumber(score, u);
+  score.staves.splice(u, lowerOf(score, u) >= 0 ? 2 : 1);
+  score.groups = (score.groups ?? [])
+    .map((g) => ({ ...g, first: g.first > n ? g.first - 1 : g.first, last: g.last >= n ? g.last - 1 : g.last }))
+    .filter((g) => g.last >= g.first);
 }
 
 /** Bars of rests added at the end of every staff. */
@@ -676,14 +762,25 @@ function lyricText(staff) {
 /**
  * The score as LilyPond, absolute pitches, a bar check at every bar line.
  * `items` maps each note and rest, in the order eui-score numbers them, to
- * its staff and event.
+ * its lane and event. `open` lists bars of second voices to write even when
+ * they hold only rests — where the page is writing in them — as
+ * `[{ staff: lane, bar }]`.
  */
-export function toLilyPond(score) {
+export function toLilyPond(score, { open = [] } = {}) {
   const items = [];
   const header = Object.entries(score.header).filter(([, v]) => v).map(([k, v]) => `${k} = ${quote(v)}`).join(" ");
   const repeats = score.repeats ?? [];
-  const staves = score.staves.map((staff, s) => {
-    const bars = staffBars(score, staff, s, items);
+  const staves = staffLanes(score).map((s) => {
+    const staff = score.staves[s];
+    const upper = staffBars(score, staff, s);
+    const lower = lowerOf(score, s);
+    const second = lower >= 0 ? staffBars(score, score.staves[lower], lower) : [];
+    const bars = upper.map((bar, b) => {
+      const other = second[b];
+      const shown = other && (sounding(other.events) || open.some((o) => o.staff === lower && o.bar === b));
+      items.push(...bar.items, ...(shown ? other.items : []));
+      return shown ? `<< { ${bar.text} } \\\\ { ${other.text} } >>` : bar.text;
+    });
     const music = withRepeats(bars, repeats);
     const lastRepeat = repeats.find((r) => r.endings.length === 0 && r.to === bars.length - 1);
     const name = staff.name ? `instrumentName = ${quote(staff.name)} ` : "";
@@ -693,47 +790,71 @@ export function toLilyPond(score) {
       ? ` \\tempo ${score.tempo.text ? quote(score.tempo.text) + " " : ""}${score.tempo.bpm ? `${score.tempo.base} = ${score.tempo.bpm}` : ""}`.trimEnd()
       : "";
     const clef = CLEFS.includes(staff.clef) ? (staff.clef.includes("_") ? `"${staff.clef}"` : staff.clef) : "treble";
+    const time = staff.time ?? score.time;
     const settings = name + short + midi;
     // A piece that ends on a repeat's end keeps its :|. sign, not a final bar.
     const ending = lastRepeat ? "" : ' \\bar "|."';
-    let out = `  \\new Staff ${settings ? `\\with { ${settings}} ` : ""}{\n    \\clef ${clef} \\key ${KEYS[score.key]} \\major \\time ${score.time[0]}/${score.time[1]}${tempo}\n    ${music}${ending}\n  }`;
+    let out = `\\new Staff ${settings ? `\\with { ${settings}} ` : ""}{\n  \\clef ${clef} \\key ${KEYS[keyOf(score, s)]} \\major \\time ${time[0]}/${time[1]}${tempo}\n  ${music.replace(/\n {4}/g, "\n  ")}${ending}\n}`;
     const lyrics = lyricText(staff);
-    if (lyrics) out += `\n  \\addlyrics { ${lyrics} }`;
+    if (lyrics) out += `\n\\addlyrics { ${lyrics} }`;
     return out;
   });
-  const group = { brace: "\\new PianoStaff", bracket: "\\new StaffGroup", choir: "\\new ChoirStaff" }[score.group] ?? "";
-  const body = staves.length > 1 || group ? `${group ? group + " " : ""}<<\n${staves.join("\n")}\n>>` : staves[0].replace(/^ {2}/gm, "");
+  const kinds = { brace: "\\new PianoStaff", bracket: "\\new StaffGroup", choir: "\\new ChoirStaff" };
+  const indent = (text) => text.replace(/^/gm, "  ");
+  // Staves `from`…`to`, each group among `groups` that starts there around its staves.
+  const nest = (from, to, groups) => {
+    const out = [];
+    let n = from;
+    while (n <= to) {
+      const g = groups.filter((x) => x.first === n && x.last <= to).sort((x, y) => y.last - x.last)[0];
+      if (!g) {
+        out.push(staves[n]);
+        n++;
+        continue;
+      }
+      const names = (g.name ? `instrumentName = ${quote(g.name)} ` : "") + (g.short ? `shortInstrumentName = ${quote(g.short)} ` : "");
+      const inner = nest(g.first, g.last, groups.filter((x) => x !== g));
+      out.push(`${kinds[g.kind]} ${names ? `\\with { ${names}} ` : ""}<<\n${indent(inner)}\n>>`);
+      n = g.last + 1;
+    }
+    return out.join("\n");
+  };
+  const groups = (score.groups ?? []).filter((g) => kinds[g.kind] && g.first <= g.last && g.last < staves.length);
+  const group = kinds[score.group] ?? "";
+  const body = staves.length > 1 || group ? `${group ? group + " " : ""}<<\n${indent(nest(0, staves.length - 1, groups))}\n>>` : staves[0];
   return { source: (header ? `\\header { ${header} }\n` : "") + body + "\n", items };
 }
 
-/** A staff's music, a string per bar; a tuplet never leaves its bar. */
-function staffBars(score, staff, s, items) {
+/** A lane's music, a string per bar, with its events and items; a tuplet never leaves its bar. */
+function staffBars(score, staff, s) {
   const bar = barLength(score);
   const bars = [];
-  let current = [];
+  let current = { parts: [], items: [], events: [] };
   let t = 0;
   let open = null;
+  const close = () => {
+    if (open !== null) current.parts.push("}");
+    open = null;
+    bars.push({ text: current.parts.join(" "), items: current.items, events: current.events });
+    current = { parts: [], items: [], events: [] };
+  };
   staff.events.forEach((ev, i) => {
-    items.push({ staff: s, index: i });
+    current.items.push({ staff: s, index: i });
+    current.events.push(ev);
     const tid = ev.tuplet?.id ?? null;
     if (open !== null && tid !== open) {
-      current.push("}");
+      current.parts.push("}");
       open = null;
     }
     if (tid !== null && open === null) {
-      current.push(`\\tuplet ${ev.tuplet.n}/${ev.tuplet.d} {`);
+      current.parts.push(`\\tuplet ${ev.tuplet.n}/${ev.tuplet.d} {`);
       open = tid;
     }
-    current.push(eventText(ev));
+    current.parts.push(eventText(ev));
     t += ticksOf(ev);
-    if (Math.abs(t / bar - Math.round(t / bar)) < 1e-9) {
-      if (open !== null) current.push("}");
-      open = null;
-      bars.push(current.join(" "));
-      current = [];
-    }
+    if (Math.abs(t / bar - Math.round(t / bar)) < 1e-9) close();
   });
-  if (current.length) bars.push(current.join(" ") + (open !== null ? " }" : ""));
+  if (current.parts.length) close();
   return bars;
 }
 
@@ -943,16 +1064,25 @@ const CLEF_NAMES = { "G,-2,0": "treble", "G,-2,-1": "treble_8", "F,2,0": "bass",
  */
 export function fromParsed(parsed) {
   const unsupported = new Set();
-  const score = { header: { ...parsed.header }, key: 0, time: [4, 4], tempo: null, group: "none", staves: [], repeats: [] };
+  const score = { header: { ...parsed.header }, key: 0, time: [4, 4], tempo: null, group: "none", groups: [], staves: [], repeats: [] };
   // Where the first staff's repeat signs fall, in bars: the score's repeats.
   const signs = [];
   const kinds = { Brace: "brace", Bracket: "bracket", Choir: "choir" };
-  if (parsed.groups.length > 1) unsupported.add("nested staff groups");
-  if (parsed.groups[0]) score.group = kinds[parsed.groups[0].kind] ?? "none";
+  // The group around every staff is the score's; the others are kept as they nest.
+  const outer = parsed.groups.find((g) => g.depth === 0 && g.first === 0 && g.last === parsed.staves.length - 1);
+  if (outer) score.group = kinds[outer.kind] ?? "none";
+  score.groups = parsed.groups
+    .filter((g) => g !== outer && kinds[g.kind])
+    .map((g) => ({ kind: kinds[g.kind], first: g.first, last: g.last, name: g.name ?? "", short: g.short ?? "" }));
   let first = true;
   for (const staff of parsed.staves) {
     if (staff.kind !== "Notes") unsupported.add(staff.kind === "Tab" ? "tablature" : staff.kind === "Drums" ? "drum staves" : "chord-name staves");
     const out = { name: staff.name ?? "", short: staff.short ?? "", instrument: staff.instrument ?? "", clef: "treble", events: [] };
+    // A second voice, `<< { … } \\ { … } >>`: its own lane, rests where it is silent.
+    const lower = { voice: 2, events: [] };
+    let lane = out;
+    let voices = 0;
+    const pad = (target, upto) => target.events.push(...rests(score, lengthOf(target), upto - lengthOf(target)));
     let started = false;
     const tuplets = new Map();
     let key = null;
@@ -974,6 +1104,20 @@ export function fromParsed(parsed) {
       } else if (k === "Tempo") {
         if (started) unsupported.add("a change of tempo");
         else if (first) score.tempo = ev.tempo;
+      } else if (k === "Voices") {
+        if (voices) unsupported.add("voices inside voices");
+        voices = 1;
+        pad(lower, lengthOf(out));
+      } else if (k === "VoiceNext") {
+        if (voices !== 1) unsupported.add("three voices on a staff");
+        voices = 2;
+        lane = lower;
+      } else if (k === "VoicesEnd") {
+        voices = 0;
+        lane = out;
+        const upto = Math.max(lengthOf(out), lengthOf(lower));
+        pad(out, upto);
+        pad(lower, upto);
       } else if (["RepeatStart", "RepeatEnd", "VoltaStart", "VoltaEnd", "Bar"].includes(k)) {
         // Repeat signs, where they fall in bars — the first staff's are the score's.
         if (!first) continue;
@@ -987,12 +1131,19 @@ export function fromParsed(parsed) {
           if (first) {
             score.key = key ?? 0;
             score.time = time ?? [4, 4];
-          } else if ((key ?? 0) !== score.key || (time?.[0] ?? 4) !== score.time[0] || (time?.[1] ?? 4) !== score.time[1]) {
-            unsupported.add("staves in different keys or metres");
+          } else {
+            // A staff in a key of its own (a horn in E♭), or a metre of its own
+            // whose bars last as long as the others' (6/8 beside 3/4).
+            if ((key ?? 0) !== score.key) out.key = key ?? 0;
+            const own = time ?? [4, 4];
+            if (own[0] !== score.time[0] || own[1] !== score.time[1]) {
+              if (own[0] * score.time[1] !== score.time[0] * own[1]) unsupported.add("staves whose bars last differently");
+              else out.time = own;
+            }
           }
         }
         if (k === "Rest" && ev.full) {
-          out.events.push(...rests(score, lengthOf(out), ev.ticks * Math.max(1, ev.count)));
+          lane.events.push(...rests(score, lengthOf(lane), ev.ticks * Math.max(1, ev.count)));
           continue;
         }
         let tuplet = null;
@@ -1007,7 +1158,7 @@ export function fromParsed(parsed) {
         const chord = chordAt >= 0 ? texts.splice(chordAt, 1)[0].text : ev.chord_name || "";
         const arts = ev.scripts.map(([name]) => name).filter((n) => SCRIPTS[n]);
         if (ev.scripts.some(([name]) => !SCRIPTS[name])) unsupported.add("some articulations");
-        out.events.push(makeEvent({
+        lane.events.push(makeEvent({
           rest: k === "Rest", pitches: ev.pitches.map(([d, alter]) => ({ d, alter })), base: ev.base, dots: ev.dots, tuplet,
           tie: ev.tie, slurStart: ev.slur_on, slurEnd: ev.slur_off, dynamic: ev.dynamic ?? null,
           hairpin: ev.hairpin ?? null, hairpinEnd: ev.hairpin_end, arts, chord, texts,
@@ -1025,6 +1176,10 @@ export function fromParsed(parsed) {
       });
     }
     score.staves.push(out);
+    if (lower.events.length && sounding(lower.events)) {
+      pad(lower, lengthOf(out));
+      score.staves.push(lower);
+    }
     first = false;
   }
   if (signs.length) {
