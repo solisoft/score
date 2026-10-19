@@ -383,6 +383,7 @@
   .studio-sheet-refused { background: #fffaf8; }
   .studio-status { min-height: 20px; font-size: 13px; color: var(--muted); }
   .studio-status.studio-error { color: var(--accent-ink); }
+  .studio-show { font: 600 12.5px/1 var(--font-sans); padding: 4px 9px; margin-left: 4px; border-radius: 6px; border: 1px solid currentColor; background: transparent; color: inherit; cursor: pointer; }
   .studio-text-only .studio-toolbox { opacity: .55; }
   .studio-words {
     position: absolute; z-index: 5; width: 120px; font: 15px/1.2 var(--font-serif); padding: 4px 6px; border-radius: 6px;

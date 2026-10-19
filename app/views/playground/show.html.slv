@@ -125,10 +125,13 @@
       <details class="tool-section" data-section="dynamics" open>
         <summary><h3>Dynamics</h3></summary>
         <div class="tool-row tool-dynamics">
-          <% dynamics = {"ppp": "pianississimo", "pp": "pianissimo", "p": "piano", "mp": "mezzo-piano", "mf": "mezzo-forte", "f": "forte"} %>
-          <% dynamics = dynamics.merge({"ff": "fortissimo", "fff": "fortississimo", "sfz": "sforzando", "fp": "forte-piano"}) %>
+          <% dynamics = {"ppp": "pianississimo", "pp": "pianissimo", "p": "piano", "mp": "mezzo-piano"} %>
+          <% dynamics = dynamics.merge({"mf": "mezzo-forte", "f": "forte", "ff": "fortissimo", "fff": "fortississimo"}) %>
+          <% dynamics = dynamics.merge({"sfz": "sforzando", "fp": "forte-piano"}) %>
           <% for dynamic in dynamics.keys %>
-            <button type="button" class="tool tool-dyn" data-act="dynamic" data-name="<%= dynamic %>" title="<%= dynamics[dynamic] %>" aria-label="<%= dynamics[dynamic] %>"><%= dynamic %></button>
+            <% word = dynamics[dynamic] %>
+            <button type="button" class="tool tool-dyn" data-act="dynamic" data-name="<%= dynamic %>"
+              title="<%= word %>" aria-label="<%= word %>"><%= dynamic %></button>
           <% end %>
         </div>
       </details>

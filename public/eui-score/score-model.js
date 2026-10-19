@@ -1298,6 +1298,76 @@ export function insertBars(score, at, count) {
   }
 }
 
+// ---- Refusals ---------------------------------------------------------------------------------
+
+/**
+ * Where an engraver's refusal of `text` points, as a place a person can go
+ * to: `{ at, line, message }` — `at` an index into the JavaScript string,
+ * the message saying "line N" — or null when it names no place.
+ *
+ * The engraver counts characters (Unicode scalar values), and for a block
+ * never closed it names the block it was reading; the one left open is
+ * found here, the innermost — most often the one just typed.
+ */
+export function refusalPlace(message, text) {
+  let at = null;
+  const said = /\(at character (\d+)\)/.exec(message);
+  if (said) at = Array.from(text).slice(0, Number(said[1])).join("").length;
+  const open = /'\{' that is never closed/.test(message) ? ["{", "}"] : /<< that is never closed/.test(message) ? ["<<", ">>"] : null;
+  if (open) at = unclosed(text, open[0], open[1]) ?? at;
+  if (at == null) return null;
+  const line = text.slice(0, at).split("\n").length;
+  const plain = message.replace(/\s*\(at character \d+\)/, "").replace(/^score:\s*/, "").replace(/^./, (c) => c.toUpperCase());
+  return { at, line, message: `${plain}, line ${line}` };
+}
+
+/**
+ * The `open` never closed by `close` in a LilyPond text, past strings and
+ * comments; null when all are closed. A `close` first on its line closes
+ * the `open` of the line indented as much — as the editor writes it, and as
+ * people do — so a block left open inside it is the one named, not the
+ * staff around it. Otherwise the innermost left open.
+ */
+function unclosed(text, open, close) {
+  const stack = [];
+  const skipped = [];
+  const indentAt = (i) => {
+    const start = text.lastIndexOf("\n", i - 1) + 1;
+    return /^[ \t]*/.exec(text.slice(start))[0].length;
+  };
+  const firstOnLine = (i) => /^[ \t]*$/.test(text.slice(text.lastIndexOf("\n", i - 1) + 1, i));
+  let i = 0;
+  while (i < text.length) {
+    const c = text[i];
+    if (c === '"') {
+      i++;
+      while (i < text.length && text[i] !== '"') i += text[i] === "\\" ? 2 : 1;
+      i++;
+    } else if (c === "%" && text[i + 1] === "{") {
+      const end = text.indexOf("%}", i + 2);
+      i = end < 0 ? text.length : end + 2;
+    } else if (c === "%") {
+      const end = text.indexOf("\n", i);
+      i = end < 0 ? text.length : end + 1;
+    } else if (text.startsWith(open, i)) {
+      stack.push({ at: i, indent: indentAt(i) });
+      i += open.length;
+    } else if (text.startsWith(close, i)) {
+      let k = stack.length - 1;
+      if (firstOnLine(i)) {
+        const indent = indentAt(i);
+        while (k >= 0 && stack[k].indent !== indent) k--;
+        if (k < 0) k = stack.length - 1;
+      }
+      skipped.push(...stack.splice(k + 1).map((b) => b.at));
+      stack.pop();
+      i += close.length;
+    } else i++;
+  }
+  if (skipped.length) return skipped[skipped.length - 1];
+  return stack.length ? stack[stack.length - 1].at : null;
+}
+
 // ---- Instruments ------------------------------------------------------------------------------
 //
 // What the editor offers for a staff: its name, its short name, its clef,

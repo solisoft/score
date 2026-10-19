@@ -387,8 +387,8 @@ export function startStudio(root, options = {}) {
       }
       case "zoom-out": st.zoom = Math.max(0.5, Math.round((st.zoom - 0.1) * 10) / 10); return draw();
       case "save-ly": return download(st.text, `${fileName()}.ly`, "text/x-lilypond");
-      case "save-pdf": return toPdf(st.text, title()).then((pdf) => download(pdf, `${fileName()}.pdf`, "application/pdf")).catch((e) => say(e.message ?? String(e), true));
-      case "save-midi": return toMidi(st.text).then((m) => download(m, `${fileName()}.mid`, "audio/midi")).catch((e) => say(e.message ?? String(e), true));
+      case "save-pdf": return toPdf(st.text, title()).then((pdf) => download(pdf, `${fileName()}.pdf`, "application/pdf")).catch((e) => refuse(e));
+      case "save-midi": return toMidi(st.text).then((m) => download(m, `${fileName()}.mid`, "audio/midi")).catch((e) => refuse(e));
       case "mode-select": return setInput(false);
       case "mode-input": return setInput(true);
       case "duration": return duration(Number(data.base), st.input.on ? st.input.dots : 0);
@@ -771,7 +771,7 @@ export function startStudio(root, options = {}) {
       st.view = null;
       svgHost.innerHTML = "";
       sheet.classList.add("studio-sheet-refused");
-      say(error.message ?? String(error), true);
+      refuse(error, shown);
     }
     if (wordsBox) placeWords();
     placeOverlay();
@@ -965,6 +965,25 @@ export function startStudio(root, options = {}) {
         case "staff-instrument": if (value !== "other") M.setInstrument(score, staffOf(), Number(value)); break;
       }
     });
+  }
+
+  /** A refusal of the text: its line, and a button that selects that place in the source. */
+  function refuse(error, text = st.text) {
+    const message = error.message ?? String(error);
+    const place = M.refusalPlace(message, text);
+    say(place ? place.message : message, true);
+    if (!place || text !== sourceBox.value) return false;
+    const show = Object.assign(document.createElement("button"), { type: "button", className: "studio-show", textContent: "Show" });
+    show.addEventListener("click", () => {
+      sourceBox.focus();
+      sourceBox.setSelectionRange(place.at, place.at + 1);
+      // The selected line, with two above it, at the top of the box.
+      const lineHeight = parseFloat(getComputedStyle(sourceBox).lineHeight) || 18;
+      sourceBox.scrollTop = Math.max(0, (place.line - 3) * lineHeight);
+      sourceBox.scrollIntoView({ block: "nearest" });
+    });
+    status.append(" ", show);
+    return false;
   }
 
   function say(message, error = false) {

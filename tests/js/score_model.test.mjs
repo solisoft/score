@@ -247,6 +247,42 @@ test("repeats: written around their bars, with their endings, and read back", ()
   engrave(s);
 });
 
+test("a refusal points at its line: the brace left open, or the engraver's own place", () => {
+  const refusal = (text) => {
+    try {
+      editor_view(text, 900, 7, -1, -1);
+    } catch (e) {
+      return e.message ?? String(e);
+    }
+    return null;
+  };
+  // A brace opened on line 3 and never closed: the engraver says "character 0"; it is line 3.
+  const text = '\\header { title = "Été { }" }\n\\new Staff {\n  c\'4 d\'4 { e\'4 f\'4\n';
+  const said = refusal(text);
+  assert.match(said, /never closed \(at character 0\)/);
+  const place = M.refusalPlace(said, text);
+  assert.equal(place.line, 3);
+  assert.equal(text.slice(place.at, place.at + 1), "{");
+  assert.match(place.message, /, line 3$/);
+  assert.doesNotMatch(place.message, /at character|^score:/);
+  assert.match(place.message, /^A '\{' that is never closed/);
+  // A brace left open inside the staff, closed at the end at the staff's indentation: that brace, line 4.
+  const inside = '\\header { title = "x" }\n\\new Staff {\n  \\clef treble\n  c\'4 d\'4 { e\'4 |\n  f\'1\n}\n';
+  assert.equal(M.refusalPlace("score: a '{' that is never closed (at character 0)", inside).line, 4);
+  // A brace inside a string or a comment is not one.
+  assert.equal(M.refusalPlace("score: a '{' that is never closed (at character 0)", '% {\n"{" { c4').line, 2);
+  // The engraver's own place, counted in characters past accented letters.
+  const typo = '\\header { title = "Éé" }\n\\new Staff {\n  c\'4 d\'4\n} { e\'4 f\'4\n';
+  const bad = refusal(typo);
+  assert.ok(bad, "refused");
+  assert.match(bad, /after the end of the music/);
+  const where = M.refusalPlace(bad, typo);
+  assert.equal(where.line, 4);
+  assert.equal(typo.slice(where.at, where.at + 1), "{");
+  // No place named: nothing to point at.
+  assert.equal(M.refusalPlace("score: something went wrong", "c4"), null);
+});
+
 test("instruments: every one engraves, and plays its own sound", () => {
   const names = new Set();
   M.INSTRUMENTS.forEach((it, k) => {
