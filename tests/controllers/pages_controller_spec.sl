@@ -38,7 +38,7 @@ describe("PagesController") do
       refusals.each do |refusal|
         assert_not_null(refusal["message"], refusal["what"])
       end
-      assert_contains(res_body(response), "\\partial is not a command this reads")
+      assert_contains(res_body(response), "\\shiver is not a command this reads")
     end
   end
 

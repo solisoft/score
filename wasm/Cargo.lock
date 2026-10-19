@@ -16,7 +16,8 @@ checksum = "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600"
 
 [[package]]
 name = "eui-score"
-version = "0.8.0"
+version = "0.11.0"
+source = "git+https://github.com/solisoft/eui?rev=f137388#f137388ed066fc9f11cc0fcd8131b63d5ef8320c"
 dependencies = [
  "serde_json",
 ]

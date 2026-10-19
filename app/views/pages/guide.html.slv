@@ -224,23 +224,26 @@ let pdf: String = eui_score::pdf(src, "Title")?;</code></pre>
       <section class="doc-section" id="speed">
         <h2>Speed<a class="anchor" href="#speed">#</a></h2>
         <p>
-          Measured on the exposition of Beethoven's Fifth (12 systems, 10,518 paths at 900 px), against the
-          original Soli engraver:
+          Against LilyPond itself, on the same files and the same machine: LilyPond 2.24.4 timed as the whole
+          process (best of three), eui-score at the revision Soli 2.28.2 ships, in process (best of twenty).
+          Measured 2026-10-19.
         </p>
         <div class="table-scroll">
           <table class="ref-table">
-            <thead><tr><th>Step</th><th>eui-score</th><th>Soli engraver</th></tr></thead>
+            <thead><tr><th>Piece</th><th>eui-score, A4 PDF</th><th>LilyPond, PDF</th><th>eui-score, screen</th><th>LilyPond, SVG</th></tr></thead>
             <tbody>
-              <tr><td>Engraving</td><td><strong>1.9 ms</strong></td><td>338 ms</td></tr>
-              <tr><td>Drawing the paths</td><td><strong>2.4 ms</strong></td><td>639 ms</td></tr>
-              <tr><td>MIDI file</td><td><strong>1.4 ms</strong></td><td>182 ms</td></tr>
-              <tr><td>PDF of the A4 pages</td><td><strong>47 ms</strong></td><td>—</td></tr>
+              <tr><td><a href="<%= example_path("ensembles", "symphony-5") %>">Symphony No. 5</a> (full score)</td><td><strong>9.7 ms</strong></td><td>567 ms</td><td><strong>1.0 ms</strong></td><td>5,403 ms</td></tr>
+              <tr><td><a href="<%= example_path("piano", "minuet-in-g") %>">Minuet in G</a></td><td><strong>2.1 ms</strong></td><td>321 ms</td><td><strong>0.25 ms</strong></td><td>1,218 ms</td></tr>
+              <tr><td><a href="<%= example_path("ensembles", "string-quartet") %>">Canon in D</a> (quartet)</td><td><strong>2.6 ms</strong></td><td>297 ms</td><td><strong>0.24 ms</strong></td><td>1,001 ms</td></tr>
+              <tr><td><a href="<%= example_path("solos", "ode-to-joy") %>">Ode to Joy</a></td><td><strong>1.4 ms</strong></td><td>295 ms</td><td><strong>0.14 ms</strong></td><td>844 ms</td></tr>
             </tbody>
           </table>
         </div>
         <p>
-          That is the difference between an edit that redraws a symphony in the next frame and one that takes a
-          fifth of a second. <a href="<%= example_path("ensembles", "symphony-5") %>">See it engraved →</a>
+          LilyPond spends about 250 ms starting up — a one-note file takes 253 ms — so even with that set aside,
+          eui-score prints the symphony some thirty times faster. The point is not the benchmark: it is that an
+          edit redraws a full score within the next frame, in a browser or on a server answering a request.
+          LilyPond still engraves far more than this subset; see the <a href="<%= limits_path() %>">limits</a>.
         </p>
       </section>
 

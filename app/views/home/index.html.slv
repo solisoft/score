@@ -19,7 +19,7 @@
     </section>
 
     <div class="facts">
-        <div class="fact"><strong>1.9 ms</strong><span>to engrave the exposition of Beethoven's Fifth, against 338 ms for the original Soli engraver</span></div>
+        <div class="fact"><strong>10 ms</strong><span>to print Beethoven's Fifth as a PDF — LilyPond 2.24 takes 567 ms on the same file</span></div>
         <div class="fact"><strong>3 outputs</strong><span>the screen, a MIDI file and an A4 PDF, from a single source</span></div>
         <div class="fact"><strong>0 fonts</strong><span>every glyph and every letter is an outline, placed where the engraving wants it</span></div>
         <div class="fact"><strong>2 %</strong><span>width difference with LilyPond 2.24, at the same staff size</span></div>

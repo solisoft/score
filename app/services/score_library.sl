@@ -364,20 +364,13 @@ class ScoreLibrary
   # page engraves them live, so the messages it prints are the engraver's own.
   static def refusals
     [
-      {"what": "Tablature", "src": "\\new TabStaff { e4 a d' g' }"},
-      {"what": "Drum staff", "src": "\\new DrumStaff { bd4 sn bd sn }"},
-      {"what": "Percussion clef", "src": "{ \\clef percussion c'4 }"},
-      {"what": "Tenor clef, or an octave treble clef", "src": "{ \\clef tenor c'4 }"},
-      {"what": "Pickup bar", "src": "{ \\partial 4 g'4 | c''1 }"},
-      {"what": "Grace notes", "src": "{ \\grace d''8 c''4 }"},
-      {"what": "Arpeggio sign", "src": "{ <c' e' g'>4\\arpeggio }"},
       {"what": "64th notes", "src": "{ c''64 }"},
       {"what": "A tuplet inside a tuplet", "src": "{ \\tuplet 3/2 { \\tuplet 3/2 { c'8 d' e' } } }"},
       {"what": "Three voices on one staff", "src": "{ << { c''4 } \\\\ { a'4 } \\\\ { f'4 } >> }"},
       {"what": "A note across the bar line", "src": "{ \\time 3/4 c''2 d''2 }"},
       {"what": "Two verses of lyrics", "src": "{ c''4 d'' } \\addlyrics { la la } \\addlyrics { lo lo }"},
       {"what": "An unusual metre", "src": "{ \\time 3/5 c''4 }"},
-      {"what": "An unknown command", "src": "{ c''4 \\glissando d''4 }"}
+      {"what": "An unknown command", "src": "{ c''4 \\shiver d''4 }"}
     ]
   end
 end

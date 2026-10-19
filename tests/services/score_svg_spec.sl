@@ -73,7 +73,7 @@ describe("ScoreSvg") do
 
   describe("midi_url") do
     test("is nil for a source the engraver refuses") do
-      assert_null(ScoreSvg.midi_url("{ c'4 \\glissando d'4 }"))
+      assert_null(ScoreSvg.midi_url("{ c'4 \\shiver d'4 }"))
     end
   end
 

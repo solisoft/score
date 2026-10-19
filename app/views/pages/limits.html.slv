@@ -22,32 +22,20 @@
       </div>
     <% end %>
 
-    <h2>What is written another way</h2>
+    <h2>No longer limits</h2>
+    <p>
+      Since EUI 0.11 (Soli 2.28.2), the engraver reads LilyPond as people write it: variables and
+      <code>\global</code>, <code>\new Voice</code> with <code>\voiceOne</code>/<code>\voiceTwo</code>,
+      <code>\new Lyrics \lyricsto</code>, <code>\language</code>, <code>\fixed</code>, <code>\transpose</code>,
+      <code>q</code>, <code>\partial</code>, <code>\cadenzaOn</code>, spacers, <code>\repeat unfold</code> and
+      <code>percent</code>, grace notes, the tenor, soprano, baritone and <code>treble_8</code> clefs, fingerings,
+      <code>\markup</code>, <code>\mark</code>, <code>\ottava</code>, phrasing slurs, <code>\trill</code> and other
+      ornaments, <code>\arpeggio</code>, <code>\glissando</code>, tremolos, and <code>\new ChordNames</code>,
+      <code>\new DrumStaff</code> and <code>\new TabStaff</code> — each drawn as LilyPond 2.25 draws it.
+    </p>
     <ul>
-      <li>
-        <strong>Guitar</strong>: no tablature and no octave treble clef. Guitar is written in the treble clef, an
-        octave above how it sounds, as in most printed music; chord names go in as text, <code>^"Am"</code>.
-        See <a href="<%= example_category_path("guitar") %>">the examples</a>.
-      </li>
-      <li>
-        <strong>Drums</strong>: no percussion staff and no cross noteheads. A groove is written in position
-        notation on a two-voice staff — hands on top, feet below — and timpani, which are tuned, in the bass
-        clef. See <a href="<%= example_category_path("drums") %>">the examples</a>.
-      </li>
-      <li>
-        <strong>Pickup bars</strong>: without <code>\partial</code>, the upbeat goes in a first bar filled out
-        with rests.
-      </li>
-      <li>
-        <strong>Transposing instruments</strong>: write them at concert pitch (there is no <code>\transpose</code>).
-      </li>
-      <li>
-        <strong>Lyrics</strong>: one verse per staff; for a second verse, a second staff.
-      </li>
-      <li>
-        <strong>Layout</strong>: no grace notes and no cross-staff notation, and a greedy page breaker, simpler
-        than LilyPond's.
-      </li>
+      <li><strong>Lyrics</strong>: one <code>\addlyrics</code> verse per staff.</li>
+      <li><strong>Layout</strong>: no cross-staff notation, and a greedy page breaker, simpler than LilyPond's.</li>
     </ul>
     <div class="callout">
       Not sure? Paste your source into the <a href="<%= playground_path() %>">playground</a>: the engraver's

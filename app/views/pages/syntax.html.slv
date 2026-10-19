@@ -7,6 +7,11 @@
       eui-score reads a subset of the LilyPond language: the part you write every day. Each example below is
       engraved live by the engraver from the source shown under it; open it in the playground to change it.
     </p>
+    <p class="muted" style="margin-top: 10px">
+      EUI 0.11 reads more than this page shows — variables, <code>\new Voice</code>, <code>\lyricsto</code>,
+      <code>\transpose</code>, <code>\partial</code>, grace notes, <code>\markup</code>, chord names, drum staves,
+      tablature… See <a href="<%= limits_path() %>">Limits</a> for the full list.
+    </p>
   </header>
 
   <div class="doc-layout">
@@ -124,7 +129,8 @@
         <h2>Clefs<a class="anchor" href="#clefs">#</a></h2>
         <p>
           <code>\clef treble</code> (or <code>violin</code>, <code>G</code>), <code>\clef bass</code>
-          (<code>F</code>) and <code>\clef alto</code> (<code>C</code>). Other clefs are refused.
+          (<code>F</code>) and <code>\clef alto</code> (<code>C</code>), and since EUI 0.11 the tenor, soprano,
+          baritone, <code>treble_8</code> and percussion clefs too.
         </p>
         <%- score_snippet(figures, "clefs", sandbox) %>
       </section>
