@@ -383,6 +383,7 @@
   .studio-sheet-refused { background: #fffaf8; }
   .studio-status { min-height: 20px; font-size: 13px; color: var(--muted); }
   .studio-status.studio-error { color: var(--accent-ink); }
+  .tool-drums .tool { font-size: 12.5px; padding: 7px 8px; }
   .tool-staves { display: grid; gap: 4px; margin-top: 6px; }
   .tool-staff { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 4px; font-size: 13px; color: var(--ink-soft); }
   .tool-staff span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

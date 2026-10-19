@@ -239,17 +239,19 @@ const PREVIEW = 15;
  * the note just written or selected. Before the sounds have loaded, it
  * starts loading them and stays silent: the next note is heard.
  */
-export function preview(keys, program = 0) {
+export function preview(keys, program = 0, { drums = false } = {}) {
   if (!engine?.done) {
     prepare().catch(() => {});
     return false;
   }
   engine.promise.then(({ ctx, synth }) => {
     ctx.resume().catch(() => {});
-    synth.programChange(PREVIEW, program);
-    for (const key of keys) synth.noteOn(PREVIEW, key, 90);
+    // Drums on the kit's channel, the tenth; the rest on the preview's own.
+    const channel = drums ? 9 : PREVIEW;
+    if (!drums) synth.programChange(channel, program);
+    for (const key of keys) synth.noteOn(channel, key, 90);
     setTimeout(() => {
-      for (const key of keys) synth.noteOff(PREVIEW, key);
+      for (const key of keys) synth.noteOff(channel, key);
     }, 450);
   });
   return true;

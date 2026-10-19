@@ -306,7 +306,8 @@ export function transpose(score, { steps, semitones, s = null, a = 0, b = Infini
     for (const staff of score.staves) if (staff.key != null) staff.key = clamp(staff.key + f);
     for (const c of score.changes ?? []) if (c.key != null) c.key = clamp(c.key + f);
   }
-  const lanes = s == null ? score.staves.map((_, k) => k) : [s];
+  if (s != null) refuseDrums(score, s);
+  const lanes = (s == null ? score.staves.map((_, k) => k) : [s]).filter((lane) => !isDrums(score, lane));
   for (const lane of lanes) {
     const events = score.staves[lane].events;
     events.forEach((ev, i) => {
@@ -547,6 +548,7 @@ export function previousPitch(score, s, i) {
 
 /** Event `i` moved by step, semitone or octave — one head `head` of a chord, or all. */
 export function move(score, s, i, how, by, head = -1) {
+  refuseDrums(score, s);
   const ev = noteOf(score, s, i);
   if (ev.rest) throw new Error("select a note");
   const moved = ev.pitches.map((p, k) => (head < 0 || k === head ? movePitch(p, how, by, keyOf(score, s, starts(score.staves[s])[i])) : p));
@@ -556,6 +558,7 @@ export function move(score, s, i, how, by, head = -1) {
 
 /** Event `i` given step `step` (C = 0 … B = 6) near where it was; a rest becomes that note. `add` adds it above a chord. */
 export function letter(score, s, i, step, add = false, head = -1) {
+  refuseDrums(score, s);
   const ev = noteOf(score, s, i);
   if (ev.rest) {
     const p = nearestPitch(step, previousPitch(score, s, i), keyOf(score, s, starts(score.staves[s])[i]));
@@ -577,6 +580,7 @@ export function letter(score, s, i, step, add = false, head = -1) {
 }
 
 export function setAlter(score, s, i, alter, head = -1) {
+  refuseDrums(score, s);
   const ev = noteOf(score, s, i);
   if (ev.rest) throw new Error("select a note");
   ev.pitches = ev.pitches.map((p, k) => (head < 0 || k === head ? { d: p.d, alter: Math.max(-2, Math.min(2, alter)) } : p));
@@ -1017,7 +1021,8 @@ export function removeLastBar(score) {
 const quote = (text) => `"${String(text).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 
 function eventText(ev) {
-  let out = ev.rest ? "r" : ev.pitches.length === 1 ? spellPitch(ev.pitches[0].d, ev.pitches[0].alter) : `<${ev.pitches.map((p) => spellPitch(p.d, p.alter)).join(" ")}>`;
+  const head = (p) => p.drum ?? spellPitch(p.d, p.alter);
+  let out = ev.rest ? "r" : ev.pitches.length === 1 ? head(ev.pitches[0]) : `<${ev.pitches.map(head).join(" ")}>`;
   out += ev.base + ".".repeat(ev.dots);
   if (ev.tie && !ev.rest) out += "~";
   if (ev.slurStart) out += "(";
@@ -1097,14 +1102,18 @@ export function toLilyPond(score, { open = [], unfold = false } = {}) {
     const lastRepeat = !unfold && repeats.find((r) => r.endings.length === 0 && r.to === bars.length - 1);
     const name = staff.name ? `instrumentName = ${quote(staff.name)} ` : "";
     const short = staff.short ? `shortInstrumentName = ${quote(staff.short)} ` : "";
-    const midi = staff.instrument ? `midiInstrument = ${quote(staff.instrument)} ` : "";
+    const midi = staff.instrument && !staff.drums ? `midiInstrument = ${quote(staff.instrument)} ` : "";
     const tempo = s === 0 && score.tempo && (score.tempo.text || score.tempo.bpm) ? ` ${tempoText(score.tempo)}` : "";
     const clef = clefText(staff.clef);
     const time = staff.time ?? score.time;
     const settings = name + short + midi;
     // A piece that ends on a repeat's end keeps its :|. sign, not a final bar.
     const ending = lastRepeat ? "" : ' \\bar "|."';
-    let out = `\\new Staff ${settings ? `\\with { ${settings}} ` : ""}{\n  \\clef ${clef} \\key ${KEYS[keyOf(score, s)]} \\major \\time ${time[0]}/${time[1]}${tempo}\n  ${music.replace(/\n {4}/g, "\n  ")}${ending}\n}`;
+    // A drum staff: its strokes in \\drummode, with no clef and no key.
+    const opening = staff.drums
+      ? `\\new DrumStaff ${settings ? `\\with { ${settings}} ` : ""}\\drummode {\n  \\time ${time[0]}/${time[1]}${tempo}`
+      : `\\new Staff ${settings ? `\\with { ${settings}} ` : ""}{\n  \\clef ${clef} \\key ${KEYS[keyOf(score, s)]} \\major \\time ${time[0]}/${time[1]}${tempo}`;
+    let out = `${opening}\n  ${music.replace(/\n {4}/g, "\n  ")}${ending}\n}`;
     const lyrics = lyricText(staff);
     if (lyrics) out += `\n\\addlyrics { ${lyrics} }`;
     return out;
@@ -1142,10 +1151,11 @@ const tempoText = (tempo) => `\\tempo ${tempo.text ? quote(tempo.text) + " " : "
 function changesText(score, s, b) {
   if (b === 0) return "";
   const parts = [];
+  const drums = isDrums(score, s);
   const clef = (score.staves[s].clefs ?? []).find((c) => c.bar === b);
-  if (clef) parts.push(`\\clef ${clefText(clef.clef)}`);
+  if (clef && !drums) parts.push(`\\clef ${clefText(clef.clef)}`);
   const c = changeAt(score, b);
-  if (c?.key != null) parts.push(`\\key ${KEYS[keyOf(score, s, barStart(score, b))]} \\major`);
+  if (c?.key != null && !drums) parts.push(`\\key ${KEYS[keyOf(score, s, barStart(score, b))]} \\major`);
   if (c?.time) parts.push(`\\time ${c.time[0]}/${c.time[1]}`);
   if (c?.tempo && staffNumber(score, s) === 0) parts.push(tempoText(c.tempo));
   if (c?.line) parts.unshift(`\\bar "${c.line}"`);
@@ -1515,6 +1525,7 @@ export const INSTRUMENTS = [
   preset("Voices", "Alto", "A.", "choir aahs", "treble"),
   preset("Voices", "Tenor", "T.", "choir aahs", "treble_8"),
   preset("Voices", "Bass", "B.", "choir aahs", "bass"),
+  { family: "Percussion", name: "Drum kit", short: "Dr.", sound: "", clef: "percussion", drums: true },
   preset("Percussion", "Timpani", "Timp.", "timpani", "bass"),
   preset("Percussion", "Glockenspiel", "Glk.", "glockenspiel", "treble"),
   preset("Percussion", "Xylophone", "Xyl.", "xylophone", "treble"),
@@ -1522,6 +1533,74 @@ export const INSTRUMENTS = [
   preset("Percussion", "Vibraphone", "Vib.", "vibraphone", "treble"),
   preset("Percussion", "Tubular bells", "T.B.", "tubular bells", "treble"),
 ];
+
+// ---- Drums ------------------------------------------------------------------------------------
+//
+// A drum staff (`\new DrumStaff \drummode`) holds strokes, not pitches: each
+// head is a drum, drawn where eui-score draws it (`d`, as a pitch would be on
+// a percussion staff) and played on General MIDI's drum channel (`key`).
+
+/** The drums the palette offers, by \drummode's names. */
+export const DRUMS = [
+  { name: "bd", label: "Kick", d: 4, key: 36 },
+  { name: "sn", label: "Snare", d: 8, key: 38 },
+  { name: "ss", label: "Side stick", d: 8, key: 37 },
+  { name: "hh", label: "Hi-hat", d: 10, key: 42 },
+  { name: "hho", label: "Open hi-hat", d: 10, key: 46 },
+  { name: "hhp", label: "Pedal hi-hat", d: 2, key: 44 },
+  { name: "cymc", label: "Crash", d: 12, key: 49 },
+  { name: "cymr", label: "Ride", d: 12, key: 51 },
+  { name: "rb", label: "Ride bell", d: 12, key: 53 },
+  { name: "tomh", label: "High tom", d: 11, key: 50 },
+  { name: "tommh", label: "Mid tom", d: 9, key: 48 },
+  { name: "tomml", label: "Low-mid tom", d: 7, key: 47 },
+  { name: "toml", label: "Low tom", d: 6, key: 45 },
+  { name: "tomfh", label: "Floor tom", d: 5, key: 43 },
+  { name: "tomfl", label: "Low floor tom", d: 3, key: 41 },
+  { name: "hc", label: "Hand clap", d: 8, key: 39 },
+  { name: "cb", label: "Cowbell", d: 12, key: 56 },
+  { name: "tamb", label: "Tambourine", d: 12, key: 54 },
+];
+
+// The other drums \drummode names, read and written back but not offered.
+const MORE_DRUMS = [
+  { name: "bda", d: 4, key: 35 }, { name: "sne", d: 8, key: 40 }, { name: "cymcb", d: 12, key: 57 },
+  { name: "cymrb", d: 12, key: 59 }, { name: "cymch", d: 12, key: 52 }, { name: "cyms", d: 12, key: 55 },
+  { name: "vibs", d: 11, key: 58 },
+];
+
+/** Drum `name` as a head: where it is drawn, and its name. */
+export function drumPitch(name) {
+  const drum = DRUMS.find((x) => x.name === name) ?? MORE_DRUMS.find((x) => x.name === name);
+  if (!drum) throw new Error(`no drum called ${name}`);
+  return { d: drum.d, alter: 0, drum: drum.name };
+}
+
+/** A drum's General MIDI key. */
+export function drumKey(name) {
+  return (DRUMS.find((x) => x.name === name) ?? MORE_DRUMS.find((x) => x.name === name))?.key ?? 38;
+}
+
+/** Whether lane `s` is a drum staff's. */
+export function isDrums(score, s) {
+  return Boolean(score.staves[upperOf(score, s)]?.drums);
+}
+
+function refuseDrums(score, s) {
+  if (isDrums(score, s)) throw new Error("A drum staff has drums, not pitches: the drum buttons write and change them");
+}
+
+/** Lane `s`'s event `i` struck on drum `name` — instead of what it was, or `add`ed to it. */
+export function drumHit(score, s, i, name, add = false) {
+  if (!isDrums(score, s)) throw new Error("Drums go on a drum staff: add one with + Staff, Drum kit");
+  const ev = noteOf(score, s, i);
+  const p = drumPitch(name);
+  if (ev.rest || !add) {
+    Object.assign(ev, { rest: false, pitches: [p] });
+    return;
+  }
+  if (!ev.pitches.some((q) => q.drum === name)) ev.pitches = sortPitches([...ev.pitches, p]);
+}
 
 /** The General MIDI programs by LilyPond's names, in program order: what midiInstrument may say. */
 export const PROGRAMS = [
@@ -1557,6 +1636,7 @@ export function programOf(sound) {
 /** Which of INSTRUMENTS lane `s` is — its sound and, among those sharing it, its name — or -1. */
 export function instrumentOf(score, s) {
   const staff = score.staves[upperOf(score, s)];
+  if (staff.drums) return INSTRUMENTS.findIndex((it) => it.drums);
   const sound = staff.instrument || "acoustic grand";
   const same = INSTRUMENTS.map((it, k) => (it.sound === sound ? k : -1)).filter((k) => k >= 0);
   return same.find((k) => INSTRUMENTS[k].name === staff.name) ?? same[0] ?? -1;
@@ -1571,6 +1651,9 @@ export function setInstrument(score, s, k) {
   const it = INSTRUMENTS[k];
   if (!it) throw new Error("no such instrument");
   const staff = score.staves[upperOf(score, s)];
+  if (Boolean(it.drums) !== Boolean(staff.drums)) {
+    throw new Error(it.drums ? "A staff of notes does not become a drum kit: add a drum staff with + Staff" : "A drum staff stays a drum staff: add a staff for this instrument with + Staff");
+  }
   if (!staff.name || INSTRUMENTS.some((x) => x.name === staff.name)) {
     staff.name = it.name;
     staff.short = it.short;
@@ -1667,7 +1750,11 @@ export function beats(score, passes) {
 
 /** Each staff and the MIDI channel eui-score gives it: [{ lane, name, channel }], as it numbers them. */
 export function channels(score) {
-  return staffLanes(score).map((lane, k) => ({ lane, name: score.staves[lane].name || `Staff ${k + 1}`, channel: k < 9 ? k : Math.min(15, k + 1) }));
+  return staffLanes(score).map((lane, k) => ({
+    lane,
+    name: score.staves[lane].name || `Staff ${k + 1}`,
+    channel: score.staves[lane].drums ? 9 : k < 9 ? k : Math.min(15, k + 1),
+  }));
 }
 
 /** A lane's bars in the order they sound; a jump back says again the metre and the speed it returns to. */
@@ -1712,8 +1799,10 @@ export function fromParsed(parsed) {
     .map((g) => ({ kind: kinds[g.kind], first: g.first, last: g.last, name: g.name ?? "", short: g.short ?? "" }));
   let first = true;
   for (const staff of parsed.staves) {
-    if (staff.kind !== "Notes") unsupported.add(staff.kind === "Tab" ? "tablature" : staff.kind === "Drums" ? "drum staves" : "chord-name staves");
-    const out = { name: staff.name ?? "", short: staff.short ?? "", instrument: staff.instrument ?? "", clef: "treble", events: [] };
+    const drums = staff.kind === "Drums";
+    if (staff.kind !== "Notes" && !drums) unsupported.add(staff.kind === "Tab" ? "tablature" : "chord-name staves");
+    const out = { name: staff.name ?? "", short: staff.short ?? "", instrument: drums ? "" : staff.instrument ?? "", clef: drums ? "percussion" : "treble", events: [] };
+    if (drums) out.drums = true;
     // A second voice, `<< { … } \\ { … } >>`: its own lane, rests where it is silent.
     const lower = { voice: 2, events: [] };
     let lane = out;
@@ -1730,6 +1819,7 @@ export function fromParsed(parsed) {
       // writes the score's changes, the others must change with it.
       const here = lengthOf(lane);
       const bar = isBarLine(score, here) ? barAt(score, here) : -1;
+      if (k === "Clef" && drums) continue;
       if (k === "Clef") {
         const name = CLEF_NAMES[ev.clef.join(",")];
         if (!name) unsupported.add("this clef");
@@ -1793,7 +1883,7 @@ export function fromParsed(parsed) {
           } else {
             // A staff in a key of its own (a horn in E♭), or a metre of its own
             // whose bars last as long as the others' (6/8 beside 3/4).
-            if ((key ?? 0) !== score.key) out.key = key ?? 0;
+            if ((key ?? 0) !== score.key && !drums) out.key = key ?? 0;
             const own = time ?? [4, 4];
             if (own[0] !== score.time[0] || own[1] !== score.time[1]) {
               if (own[0] * score.time[1] !== score.time[0] * own[1]) unsupported.add("staves whose bars last differently");
@@ -1815,10 +1905,16 @@ export function fromParsed(parsed) {
         // A short word above a note that reads as a chord is its chord symbol.
         const chordAt = texts.findIndex((w) => w.dir < 0 && /^[A-G][#b♯♭]?(m|maj|min|dim|aug|sus|add|°|ø|\+)?[0-9]*(\/[A-G][#b♯♭]?)?$/.test(w.text));
         const chord = chordAt >= 0 ? texts.splice(chordAt, 1)[0].text : ev.chord_name || "";
-        const arts = ev.scripts.map(([name]) => name).filter((n) => SCRIPTS[n]);
-        if (ev.scripts.some(([name]) => !SCRIPTS[name])) unsupported.add("some articulations");
+        // An open or a stopped hi-hat's sign comes with its drum.
+        const scripts = drums ? ev.scripts.filter(([name]) => !["open", "stopped"].includes(name)) : ev.scripts;
+        const arts = scripts.map(([name]) => name).filter((n) => SCRIPTS[n]);
+        if (scripts.some(([name]) => !SCRIPTS[name])) unsupported.add("some articulations");
+        const byKey = (key) => (DRUMS.find((x) => x.key === key) ?? MORE_DRUMS.find((x) => x.key === key))?.name;
+        if (drums && ev.drums.some(([, key]) => !byKey(key))) unsupported.add("a drum this editor does not name");
         lane.events.push(makeEvent({
-          rest: k === "Rest", pitches: ev.pitches.map(([d, alter]) => ({ d, alter })), base: ev.base, dots: ev.dots, tuplet,
+          rest: k === "Rest",
+          pitches: drums ? ev.drums.map(([, key]) => drumPitch(byKey(key) ?? "sn")) : ev.pitches.map(([d, alter]) => ({ d, alter })),
+          base: ev.base, dots: ev.dots, tuplet,
           tie: ev.tie, slurStart: ev.slur_on, slurEnd: ev.slur_off, dynamic: ev.dynamic ?? null,
           hairpin: ev.hairpin ?? null, hairpinEnd: ev.hairpin_end, arts, chord, texts,
         }));

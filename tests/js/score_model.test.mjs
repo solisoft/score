@@ -336,6 +336,7 @@ test("instruments: every one engraves, and plays its own sound", () => {
   M.INSTRUMENTS.forEach((it, k) => {
     assert.ok(!names.has(it.name), `${it.name} once`);
     names.add(it.name);
+    if (it.drums) return; // a drum staff of its own: see the drums' test
     const s = M.newScore();
     M.write(s, 0, 0, q, C4);
     M.setInstrument(s, 0, k);
@@ -348,6 +349,58 @@ test("instruments: every one engraves, and plays its own sound", () => {
     if (it.sound !== "acoustic grand") assert.notEqual(bytes[at + 1], 0, `${it.name}: "${it.sound}" is a General MIDI sound`);
     assert.equal(M.programOf(it.sound), bytes[at + 1], `${it.name}: the program the engraver writes`);
   });
+});
+
+test("drums: a drum staff read, written back in \\drummode, played on the drums' channel", () => {
+  const src = '\\new DrumStaff \\with { instrumentName = "Drums" } \\drummode { \\time 4/4 \\tempo 4 = 112 << { hh8 hh <hh sn> hh hho hh <hh sn> hh } \\\\ { bd4 r bd8 bd r4 } >> | <cymc bd>4 tomh8 tommh tomml toml tomfh tomfl \\bar "|." }';
+  const read = M.fromParsed(JSON.parse(score_json(src)));
+  assert.ok(read.score, `read: ${read.unsupported}`);
+  const s = read.score;
+  assert.equal(s.staves[0].drums, true);
+  assert.equal(s.staves.length, 2, "the kick in a second voice");
+  const names = (lane) => s.staves[lane].events.filter((e) => !e.rest).map((e) => e.pitches.map((p) => p.drum).join("+"));
+  assert.deepEqual(names(0).slice(0, 5), ["hh", "hh", "hh+sn", "hh", "hho"]);
+  assert.deepEqual(names(1).slice(0, 3), ["bd", "bd", "bd"]);
+  const { source } = engrave(s);
+  assert.match(source, /\\new DrumStaff \\with \{ instrumentName = "Drums" \} \\drummode \{/);
+  assert.match(source, /<hh sn>8/);
+  assert.doesNotMatch(source, /\\clef|\\key|midiInstrument/);
+  assert.deepEqual(shape(reread(s)).length, shape(s).length, "reads back");
+  assert.deepEqual(names(0), M.fromParsed(JSON.parse(score_json(source))).score.staves[0].events.filter((e) => !e.rest).map((e) => e.pitches.map((p) => p.drum).join("+")));
+  // The drums sound on General MIDI's tenth channel: note-ons 0x99, the kick's key 36.
+  const bytes = midi(source, 100, 4, 0);
+  assert.ok(bytes.some((x, i) => x === 0x99 && bytes[i + 1] === 36), "a kick on channel 10");
+  assert.deepEqual(M.channels(s).map((c) => c.channel), [9]);
+  // Strokes are written with the drum buttons; pitches are refused.
+  assert.throws(() => M.letter(s, 0, 0, 2), /drums, not pitches/);
+  assert.throws(() => M.move(s, 0, 0, "step", 1), /drums, not pitches/);
+  assert.throws(() => M.setAlter(s, 0, 0, 1), /drums, not pitches/);
+  M.drumHit(s, 0, 0, "cymc");
+  assert.deepEqual(s.staves[0].events[0].pitches.map((p) => p.drum), ["cymc"]);
+  M.drumHit(s, 0, 0, "bd", true);
+  assert.deepEqual(s.staves[0].events[0].pitches.map((p) => p.drum), ["bd", "cymc"], "added, low to high");
+  assert.throws(() => M.drumHit(s, 0, 0, "kazoo"), /no drum called kazoo/);
+  // A transposed score leaves its drums where they are.
+  const before = JSON.stringify(s.staves[0]);
+  M.transpose(s, { steps: 1, semitones: 2 });
+  assert.equal(JSON.stringify(s.staves[0]), before);
+  assert.throws(() => M.transpose(s, { steps: 1, semitones: 2, s: 0, a: 0, b: 1 }), /drums, not pitches/);
+});
+
+test("drums: a drum kit is a staff of its own, never a staff of notes changed", () => {
+  const kit = M.INSTRUMENTS.findIndex((it) => it.drums);
+  const s = M.newScore();
+  M.write(s, 0, 0, q, C4);
+  assert.throws(() => M.setInstrument(s, 0, kit), /does not become a drum kit/);
+  assert.equal(s.staves[0].drums, undefined, "nothing changed");
+  M.addStaff(s, { drums: true, name: "Drums", short: "Dr.", instrument: "", clef: "percussion" });
+  assert.equal(M.instrumentOf(s, 1), kit);
+  assert.throws(() => M.setInstrument(s, 1, 0), /stays a drum staff/);
+  assert.throws(() => M.drumHit(s, 0, 0, "sn"), /on a drum staff/);
+  M.drumHit(s, 1, 0, "sn");
+  const { source } = engrave(s);
+  assert.match(source, /\\new Staff [\s\S]*\\new DrumStaff/);
+  assert.deepEqual(M.channels(s).map((c) => c.channel), [0, 9]);
 });
 
 test("instruments: a staff takes the sound, the clef and the names — never a name of its own", () => {

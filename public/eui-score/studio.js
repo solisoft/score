@@ -88,6 +88,15 @@ export function startStudio(root, options = {}) {
     });
   }
 
+  // The drum palette, for a drum staff: a button for each drum of the kit.
+  const drumRow = root.querySelector("[data-drums]");
+  for (const drum of M.DRUMS) {
+    const button = Object.assign(document.createElement("button"), { type: "button", className: "tool", textContent: drum.label, title: `${drum.label} (${drum.name})` });
+    button.dataset.act = "drum";
+    button.dataset.name = drum.name;
+    drumRow?.append(button);
+  }
+
   // The intervals to transpose by; a major second by default.
   const intervalMenu = root.querySelector("[data-transpose-interval]");
   if (intervalMenu) {
@@ -284,7 +293,9 @@ export function startStudio(root, options = {}) {
     if (!ev || ev.rest || !ev.pitches.length) return;
     const heads = t.head >= 0 && ev.pitches[t.head] ? [ev.pitches[t.head]] : ev.pitches;
     const sound = st.score.staves[M.upperOf(st.score, t.s)]?.instrument;
-    if (!P.preview(heads.map((p) => M.midiKey(p.d, p.alter)), M.programOf(sound)) && !P.isReady()) {
+    const drums = M.isDrums(st.score, t.s);
+    const keys = heads.map((p) => (drums ? M.drumKey(p.drum) : M.midiKey(p.d, p.alter)));
+    if (!P.preview(keys, M.programOf(sound), { drums }) && !P.isReady()) {
       say("Loading the sounds, to hear the notes… (38 MB, once)");
       P.prepare().then(() => say("The notes sound as you write them; Hear the notes turns it off.")).catch(() => {});
     }
@@ -330,9 +341,15 @@ export function startStudio(root, options = {}) {
   }
 
   /** Writes a note (pitch step) or a rest (null) at the cursor, and moves on. */
+  /** Writes at the cursor: `step` a letter (0–6), a drum's name, or null for a rest. */
   function inputWrite(step, add) {
+    const drum = typeof step === "string";
     edit((score) => {
       const s = st.input.staff;
+      if (step !== null && drum !== M.isDrums(score, s)) {
+        throw new Error(drum ? "Drums go on a drum staff: add one with + Staff, Drum kit" : "A drum staff has drums, not pitches: the drum buttons write them");
+      }
+      const strike = (lane, i, extra) => (drum ? M.drumHit(score, lane, i, step, extra) : M.letter(score, lane, i, step, extra));
       if (add) {
         // The note just written; else the note at the cursor, or the one before it.
         const staff = score.staves[s];
@@ -347,7 +364,7 @@ export function startStudio(root, options = {}) {
           i = staff.events[here] && !staff.events[here].rest && at[here] === st.input.t ? here : before;
         }
         if (i < 0 || score.staves[lane].events[i].rest) throw new Error("Shift+letter adds to a note's chord: write a note, or put the cursor on one");
-        M.letter(score, lane, i, step, true);
+        strike(lane, i, true);
         st.input.last = { staff: lane, t: M.starts(score.staves[lane])[i] };
         return;
       }
@@ -361,14 +378,14 @@ export function startStudio(root, options = {}) {
         else {
           if (!ev.rest) M.remove(score, s, i);
           i = M.eventAt(staff, st.input.t);
-          M.letter(score, s, i, step);
+          strike(s, i, false);
         }
         const len = M.ticksOf(staff.events[M.eventAt(staff, st.input.t)]);
         st.input.last = step === null ? null : { staff: s, t: st.input.t };
         st.input.t += len;
       } else {
         const near = M.previousPitch(score, s, i < 0 ? staff.events.length : i);
-        const content = step === null ? { rest: true } : { rest: false, pitches: [M.nearestPitch(step, near, M.keyOf(score, s))] };
+        const content = step === null ? { rest: true } : { rest: false, pitches: [drum ? M.drumPitch(step) : M.nearestPitch(step, near, M.keyOf(score, s))] };
         M.write(score, s, st.input.t, inputTicks(), content);
         st.input.last = step === null ? null : { staff: s, t: st.input.t };
         st.input.t += inputTicks();
@@ -403,7 +420,7 @@ export function startStudio(root, options = {}) {
   // ---- Actions ------------------------------------------------------------------
 
   // What changes or moves to a note sounds it, as the person works.
-  const SOUNDING = new Set(["letter", "move", "alter", "head-up", "head-down", "next", "previous"]);
+  const SOUNDING = new Set(["letter", "drum", "move", "alter", "head-up", "head-down", "next", "previous"]);
 
   function act(name, data = {}) {
     const done = doAct(name, data);
@@ -467,6 +484,14 @@ export function startStudio(root, options = {}) {
         return edit((score) => {
           const t = need();
           M.letter(score, t.s, t.i, Number(data.step), add, t.head);
+        });
+      }
+      case "drum": {
+        const add = data.add || root.querySelector("[data-chord-mode]")?.checked;
+        if (st.input.on) return inputWrite(data.name, add);
+        return edit((score) => {
+          const t = need();
+          M.drumHit(score, t.s, t.i, data.name, add);
         });
       }
       case "rest":
@@ -560,7 +585,8 @@ export function startStudio(root, options = {}) {
       case "add-staff": return edit((score) => {
         const [k, clef] = root.querySelector('[data-field="new-staff"]').value.split("|");
         const it = M.INSTRUMENTS[Number(k)] ?? M.INSTRUMENTS[0];
-        M.addStaff(score, { instrument: it.sound, name: it.name, short: it.short, clef: clef || it.clef || "treble" });
+        const kit = it.drums ? { drums: true } : {};
+        M.addStaff(score, { instrument: it.sound, name: it.name, short: it.short, clef: clef || it.clef || "treble", ...kit });
         st.sel = { staff: score.staves.length - 1, t0: 0, t1: 0, head: -1 };
       });
       case "voice": return toVoice(Number(data.voice));
@@ -901,6 +927,10 @@ export function startStudio(root, options = {}) {
     const second = st.score ? M.isLower(st.score, staffOf()) : false;
     root.querySelector('[data-act="voice"][data-voice="1"]')?.classList.toggle("on", Boolean(st.score) && !second);
     root.querySelector('[data-act="voice"][data-voice="2"]')?.classList.toggle("on", second);
+    // A drum staff writes with drums, the others with letters.
+    const onDrums = Boolean(st.score) && M.isDrums(st.score, staffOf());
+    if (drumRow) drumRow.hidden = !onDrums;
+    for (const button of root.querySelectorAll('[data-act="letter"]')) button.hidden = onDrums;
     // The toggles say whether they are on.
     for (const button of root.querySelectorAll('[data-act="duration"], [data-act="dot"], [data-act^="mode-"], [data-act="voice"]')) {
       button.setAttribute("aria-pressed", String(button.classList.contains("on")));

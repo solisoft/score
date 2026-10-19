@@ -219,8 +219,8 @@ class ScoreLibrary
         "title": "Rock Groove",
         "composer": "Example",
         "instrument": "Drums",
-        "about": "Hands on top, feet below: two voices on one staff, with a sixteenth-note fill.",
-        "shows": ["<< { … } \\\\ { … } >>", "hi-hat + snare chords"]
+        "about": "A drum kit on its own staff: hands on top, the kick below, a fill around the toms into a crash.",
+        "shows": ["\\new DrumStaff \\drummode", "<< { … } \\\\ { … } >>", "<hh sn> strokes"]
       },
       {
         "category": "drums",
@@ -228,8 +228,8 @@ class ScoreLibrary
         "title": "Funk Groove",
         "composer": "Example",
         "instrument": "Drums",
-        "about": "Sixteenths on the hi-hat, accented snare and ghost notes.",
-        "shows": ["sixteenths", "-> accents", "automatic beams"]
+        "about": "Sixteenths on the hi-hat, accented snare and ghost notes, an open hi-hat to finish.",
+        "shows": ["\\drummode", "-> accents", "hho, the open hi-hat"]
       },
       {
         "category": "drums",

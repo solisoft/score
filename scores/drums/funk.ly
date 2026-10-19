@@ -1,7 +1,7 @@
 \header { title = "Sixteenth-Note Funk Groove" composer = "EUI Score example" }
-\new Staff \with { instrumentName = "Drums" midiInstrument = "synth drum" }
-{
+\new DrumStaff \with { instrumentName = "Drums" }
+\drummode {
   \time 4/4 \tempo "Funk" 4 = 96
-  << { g''16 g'' g'' g'' <c'' g''>16-> g'' g'' c'' g''16 c'' g'' g'' <c'' g''>16-> g'' g'' g'' } \\ { f'8. f'16 r4 r8 f'8 r4 } >> |
-  << { g''16 g'' g'' g'' <c'' g''>16-> g'' g'' c'' g''16 c'' g'' g'' <c'' g''>16-> g'' c'' c'' } \\ { f'8. f'16 r4 r16 f'8 f'16 r4 } >> \bar "|."
+  << { hh16 hh hh hh <hh sn>16-> hh hh sn hh16 sn hh hh <hh sn>16-> hh hh hh } \\ { bd8. bd16 r4 r8 bd8 r4 } >> |
+  << { hh16 hh hh hh <hh sn>16-> hh hh sn hh16 sn hh hh <hh sn>16-> hho sn sn } \\ { bd8. bd16 r4 r16 bd8 bd16 r4 } >> \bar "|."
 }

@@ -2511,6 +2511,10 @@
   .studio-status.studio-error {
     color: var(--accent-ink);
   }
+  .tool-drums .tool {
+    font-size: 12.5px;
+    padding: 7px 8px;
+  }
   .tool-staves {
     display: grid;
     gap: 4px;

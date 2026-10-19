@@ -87,6 +87,7 @@
           <button type="button" class="tool" data-act="letter" data-step="6" title="B">B</button>
           <button type="button" class="tool" data-act="rest" title="Rest (0)">𝄽</button>
         </div>
+        <div class="tool-row tool-drums" data-drums hidden aria-label="Drums"></div>
         <label class="tool-check"><input type="checkbox" data-chord-mode> Add to the chord <span class="muted">(Shift)</span></label>
         <label class="tool-check"><input type="checkbox" data-hear checked> Hear the notes</label>
       </details>

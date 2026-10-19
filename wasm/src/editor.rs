@@ -573,9 +573,6 @@ pub fn score(src: &str) -> Result<Value, String> {
             if !ev.graces.is_empty() || ev.grace.is_some() {
                 unsupported.push("grace notes");
             }
-            if !ev.drums.is_empty() {
-                unsupported.push("drum notes");
-            }
             if ev.percent.is_some() {
                 unsupported.push("percent repeats");
             }
@@ -590,6 +587,8 @@ pub fn score(src: &str) -> Result<Value, String> {
                 "full": ev.full,
                 "count": ev.count,
                 "pitches": ev.pitches.iter().map(|p| [p.d, p.alter]).collect::<Vec<_>>(),
+                // A drum note's strokes, each where it is drawn and the General MIDI key it plays.
+                "drums": ev.drums.iter().map(|d| [d.d, d.key]).collect::<Vec<_>>(),
                 "tie": ev.tie,
                 "slur_on": ev.slur_on,
                 "slur_off": ev.slur_off,
