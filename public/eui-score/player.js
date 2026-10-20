@@ -16,6 +16,7 @@
 //     const playing = await play(midiBytes, { onStop: () => …, onProgress: (f) => … });
 //     playing.time;                              // seconds, as heard
 //     playing.time = 30;                         // seek
+//     playing.heard;                             // seconds, less the output's latency
 //     playing.stop();
 //   };
 
@@ -153,6 +154,15 @@ export async function play(midi, { at = 0, onStop, onProgress } = {}) {
     },
     set time(sec) {
       seq.currentTime = Math.max(0, Math.min(sec, seq.duration));
+    },
+    /**
+     * Where the music is as it reaches the ear: the time above, less what
+     * the audio output takes to play it — a tenth of a second or more on
+     * Bluetooth headphones. For lighting the notes being heard.
+     */
+    get heard() {
+      const latency = (ctx.outputLatency || 0) + (ctx.baseLatency || 0);
+      return Math.max(0, seq.currentHighResolutionTime - latency * seq.playbackRate);
     },
     get duration() {
       return seq.duration;

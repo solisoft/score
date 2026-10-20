@@ -573,6 +573,112 @@ test("playing: the metronome's beats follow the metre, the speed and the repeats
   assert.ok(Math.abs(b[20].sec - 12) < 1e-9);
 });
 
+/** A MIDI file's note-ons, in seconds from its start, through its tempo changes. */
+function onsetSeconds(bytes) {
+  const v = new DataView(bytes.buffer, bytes.byteOffset);
+  const ppq = v.getUint16(12);
+  const ons = [];
+  const tempos = [];
+  for (let i = 14; i < bytes.length; i += 8 + v.getUint32(i + 4)) {
+    let p = i + 8;
+    const end = p + v.getUint32(i + 4);
+    let t = 0;
+    let status = 0;
+    const vlq = () => {
+      let x = 0;
+      for (;;) {
+        const b = bytes[p++];
+        x = (x << 7) | (b & 127);
+        if (!(b & 128)) return x;
+      }
+    };
+    while (p < end) {
+      t += vlq();
+      if (bytes[p] === 0xff) {
+        const type = bytes[p + 1];
+        p += 2;
+        const len = vlq();
+        if (type === 0x51) tempos.push([t, (bytes[p] << 16) | (bytes[p + 1] << 8) | bytes[p + 2]]);
+        p += len;
+        continue;
+      }
+      if (bytes[p] & 128) status = bytes[p++];
+      if ((status & 0xf0) === 0x90 && bytes[p + 1] > 0) ons.push(t);
+      p += (status & 0xf0) === 0xc0 || (status & 0xf0) === 0xd0 ? 1 : 2;
+    }
+  }
+  tempos.sort((a, b) => a[0] - b[0]);
+  const sec = (tick) => {
+    let s = 0;
+    let last = 0;
+    let us = 500000;
+    for (const [at, u] of tempos) {
+      if (at >= tick) break;
+      s += ((at - last) * us) / ppq / 1e6;
+      last = at;
+      us = u;
+    }
+    return s + ((tick - last) * us) / ppq / 1e6;
+  };
+  return [...new Set(ons)].sort((a, b) => a - b).map(sec);
+}
+
+test("playing: a fermata holds the music, and the notes are lit when they sound", () => {
+  const s = M.newScore();
+  // Bar 1: C D E(fermata) F — the fermata on the third beat holds it a beat more.
+  const pitches = [7, 8, 9, 10];
+  pitches.forEach((d, k) => M.write(s, 0, k * q, q, { rest: false, pitches: [{ d, alter: 0 }] }));
+  M.write(s, 0, 4 * q, q, C4);
+  M.toggleArticulation(s, 0, 2, "fermata");
+  M.toggleRepeat(s, 0, 0);
+  const passes = M.playback(s);
+  // 0.6 s a beat; bar 1 lasts five beats, twice.
+  assert.ok(Math.abs(passes[0].end - 3) < 1e-9 && Math.abs(passes[1].end - 6) < 1e-9);
+  const lit = (t) => M.playedAt(s, passes, t).map((x) => +x.toFixed(6));
+  assert.deepEqual(lit(3 * q), [2.4, 5.4]);
+  assert.deepEqual(lit(4 * q), [6]);
+  // The metronome waits too: its fourth beat comes after the hold.
+  assert.equal(+M.beats(s, passes)[3].sec.toFixed(6), 2.4);
+  // Every note the MIDI file plays is lit at the time it sounds.
+  const heard = onsetSeconds(midi(M.toLilyPond(s, { unfold: true }).source, 100, 4, 0));
+  const shown = s.staves[0].events.flatMap((ev, k) => (ev.rest ? [] : M.playedAt(s, passes, M.starts(s.staves[0])[k])));
+  assert.equal(heard.length, shown.length);
+  for (const h of heard) assert.ok(shown.some((x) => Math.abs(x - h) < 1e-3), `a note heard at ${h} s is lit then`);
+});
+
+test("playing: a note after its grace notes is lit when it sounds, not on its beat", () => {
+  const s = M.newScore();
+  M.write(s, 0, 0, q, C4);
+  M.write(s, 0, q, 2 * q, { rest: false, pitches: [{ d: 9, alter: 0 }] });
+  M.setGrace(s, 0, 1, "acciaccatura");
+  M.addGrace(s, 0, 1);
+  const passes = M.playback(s);
+  // Two sixteenths before a half note: they take a quarter's half, 0.3 s.
+  assert.deepEqual(M.heardAt(s, passes, 0, 1).map((x) => +x.toFixed(6)), [0.9]);
+  assert.deepEqual(M.heardAt(s, passes, 0, 0).map((x) => +x.toFixed(6)), [0]);
+  const heard = onsetSeconds(midi(M.toLilyPond(s, { unfold: true }).source, 100, 4, 0));
+  assert.ok(heard.some((h) => Math.abs(h - 0.9) < 1e-3), `the half note sounds at 0.9 s: ${heard}`);
+});
+
+test("playing: every gallery piece is lit as the MIDI file sounds it", () => {
+  const dir = new URL("../../scores/", import.meta.url);
+  for (const group of readdirSync(dir)) {
+    for (const file of readdirSync(new URL(`${group}/`, dir)).filter((f) => f.endsWith(".ly"))) {
+      const read = M.fromParsed(JSON.parse(score_json(readFileSync(new URL(`${group}/${file}`, dir), "utf8"))));
+      if (!read.score) continue;
+      const s = read.score;
+      const passes = M.playback(s);
+      const shown = s.staves.flatMap((staff) => {
+        const at = M.starts(staff);
+        return staff.events.flatMap((ev, k) => (ev.rest ? [] : M.playedAt(s, passes, at[k])));
+      });
+      for (const h of onsetSeconds(midi(M.toLilyPond(s, { unfold: true }).source, 100, 4, 0))) {
+        assert.ok(shown.some((x) => Math.abs(x - h) < 1e-3), `${group}/${file}: a note heard at ${h.toFixed(2)} s is lit then`);
+      }
+    }
+  }
+});
+
 test("playing: each staff's MIDI channel, as eui-score numbers them", () => {
   const s = M.newScore();
   for (let k = 0; k < 10; k++) M.addStaff(s, { name: k === 0 ? "Flute" : "" });

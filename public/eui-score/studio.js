@@ -1576,7 +1576,7 @@ export function startStudio(root, options = {}) {
     state.ticker = setInterval(tick, 25);
     const follow = () => {
       if (st.playing !== state) return;
-      light(state.handle.time);
+      light(state.handle.heard);
       state.frame = requestAnimationFrame(follow);
     };
     follow();
@@ -1849,7 +1849,7 @@ export function startStudio(root, options = {}) {
     const starts = st.score.staves.map((staff) => M.starts(staff));
     st.items.forEach(({ staff, index }, item) => {
       if (st.score.staves[staff].events[index].rest) return;
-      for (const sec of M.playedAt(st.score, passes, starts[staff][index])) {
+      for (const sec of M.heardAt(st.score, passes, staff, index, starts[staff][index])) {
         const key = Math.round(sec * 1000);
         if (!at.has(key)) at.set(key, { sec, items: [] });
         at.get(key).items.push(item);

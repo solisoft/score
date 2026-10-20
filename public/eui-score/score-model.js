@@ -1840,14 +1840,44 @@ function speedAt(score, b) {
   return { bpm, base };
 }
 
-/** Every pass through a bar, in the order they sound: [{ bar, start, end, bpm, base }], in seconds. */
+/**
+ * Where bar `b`'s fermatas hold, as eui-score's MIDI holds them: the music
+ * waits, when a note under a fermata ends, as long again as that note —
+ * the longest, when several end together. [{ at, ticks }]: `at` ticks into
+ * the bar.
+ */
+function holdsIn(score, b) {
+  const from = barStart(score, b);
+  const to = from + barLength(score, b);
+  const byEnd = new Map();
+  for (const staff of score.staves) {
+    const at = starts(staff);
+    staff.events.forEach((ev, k) => {
+      if (ev.rest || !ev.arts.includes("fermata") || at[k] < from || at[k] >= to) return;
+      const ticks = ticksOf(ev);
+      const end = at[k] + ticks - from;
+      byEnd.set(end, Math.max(byEnd.get(end) ?? 0, ticks));
+    });
+  }
+  return [...byEnd].map(([at, ticks]) => ({ at, ticks })).sort((x, y) => x.at - y.at);
+}
+
+/** Seconds from a pass's start to `into` ticks into its bar, the fermatas before it held. */
+function intoPass(p, into) {
+  const held = p.holds.filter((h) => h.at <= into).reduce((sum, h) => sum + h.ticks, 0);
+  return ((into + held) / M_TICKS(p.base)) * (60 / p.bpm);
+}
+
+/** Every pass through a bar, in the order they sound: [{ bar, start, end, bpm, base, holds }], in seconds. */
 export function playback(score) {
   let sec = 0;
   return playOrder(score).map((bar) => {
     const { bpm, base } = speedAt(score, bar);
     const start = sec;
-    sec += (barLength(score, bar) / M_TICKS(base)) * (60 / bpm);
-    return { bar, start, end: sec, bpm, base };
+    const pass = { bar, start, end: 0, bpm, base, holds: holdsIn(score, bar) };
+    sec += intoPass(pass, barLength(score, bar));
+    pass.end = sec;
+    return pass;
   });
 }
 
@@ -1855,7 +1885,22 @@ export function playback(score) {
 export function playedAt(score, passes, t) {
   const bar = barAt(score, t);
   const into = t - barStart(score, bar);
-  return passes.filter((p) => p.bar === bar).map((p) => p.start + (into / M_TICKS(p.base)) * (60 / p.bpm));
+  return passes.filter((p) => p.bar === bar).map((p) => p.start + intoPass(p, into));
+}
+
+/**
+ * When lane `s`'s note `i` (starting at `t`, ticks) is heard, on each pass
+ * through its bar: after its grace notes, which take their time from it —
+ * as long as they are written, half the note at most, as eui-score plays them.
+ */
+export function heardAt(score, passes, s, i, t = starts(score.staves[s])[i]) {
+  const ev = score.staves[s].events[i];
+  const graces = (ev.graces ?? []).reduce((sum, g) => sum + notated(g.base, g.dots), 0);
+  const stolen = graces > 0 ? Math.max(1, Math.min(graces, Math.floor(ticksOf(ev) / 2))) : 0;
+  return playedAt(score, passes, t).map((sec, k) => {
+    const p = passes.filter((x) => x.bar === barAt(score, t))[k];
+    return sec + (stolen / M_TICKS(p.base)) * (60 / p.bpm);
+  });
 }
 
 /** The pass sounding at `sec`, or the last one when the music is over; null for an empty score. */
@@ -1870,8 +1915,7 @@ export function beats(score, passes) {
   const out = [];
   for (const p of passes) {
     const [num, den] = timeAt(score, p.bar);
-    const beat = ((WHOLE / den) / M_TICKS(p.base)) * (60 / p.bpm);
-    for (let k = 0; k < num; k++) out.push({ sec: p.start + k * beat, down: k === 0 });
+    for (let k = 0; k < num; k++) out.push({ sec: p.start + intoPass(p, (k * WHOLE) / den), down: k === 0 });
   }
   return out;
 }
