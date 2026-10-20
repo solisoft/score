@@ -37,6 +37,7 @@ class ScoreSvg
     right = 0
     bottom = 0
     ink = 0
+    high = 0
     bands.each do |band|
       top = band["y"]
       next if max_height > 0 && top > 0 && top >= max_height
@@ -47,6 +48,7 @@ class ScoreSvg
           shapes.push(ScoreSvg.rect(shape, top, nil))
           right = [right, shape[2] + shape[4]].max()
           ink = [ink, top + shape[3] + shape[5]].max()
+          high = [high, top + shape[3]].min()
           next
         end
 
@@ -58,16 +60,19 @@ class ScoreSvg
         shapes.push(ScoreSvg.use(glyph_ids[outline["d"]], outline, top))
         right = [right, outline["right"]].max()
         ink = [ink, top + outline["low"]].max()
+        high = [high, top + outline["high"]].min()
       end
       band["lit"].each do |shape|
         lit.push(ScoreSvg.lit(shape, top))
       end
     end
     # As tall as the ink, not only the systems: a clef reaches below a staff
-    # of rests, and was cut.
-    height = max_height > 0 ? [bottom, total].min() : [total, (ink + 2).ceil()].max()
+    # of rests, and its top above the first staff when nothing stands over
+    # it — the picture starts that much higher.
+    lift = high < 0 ? (1 - high).ceil() : 0
+    height = lift + (max_height > 0 ? [bottom, total].min() : [total, (ink + 2).ceil()].max())
     view_width = (right + 2).ceil()
-    svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 #{view_width} #{height}\" "
+    svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 #{-lift} #{view_width} #{height}\" "
     + "width=\"#{view_width}\" height=\"#{height}\" role=\"img\" aria-label=\"Partition\">"
     + "<defs>#{glyphs.join("")}</defs><g fill=\"currentColor\">#{shapes.join("")}</g>#{lit.join("")}</svg>"
     {"svg": svg, "error": nil}
@@ -132,13 +137,14 @@ class ScoreSvg
   end
 
   # A kind-5 path as SVG's `d`, relative to its first point ("x", "y"), its
-  # rightmost x and its lowest y.
+  # rightmost x, its lowest y and its highest.
   static def outline(shape)
     origin_x = shape[3]
     origin_y = shape[4]
     parts = []
     right = 0
     low = 0
+    high = origin_y
     i = 2
     n = shape.length
     while i < n
@@ -156,6 +162,7 @@ class ScoreSvg
         y = shape[i + 2 + pair * 2]
         right = x if x > right
         low = y if y > low
+        high = y if y < high
         coords.push("#{ScoreSvg.px(x - origin_x)} #{ScoreSvg.px(y - origin_y)}")
       end
       parts.push(["M", "L", "Q", "C"][cmd] + coords.join(" "))
@@ -166,7 +173,8 @@ class ScoreSvg
       "x": origin_x,
       "y": origin_y,
       "right": right,
-      "low": low
+      "low": low,
+      "high": high
     }
   end
 

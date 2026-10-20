@@ -25,6 +25,25 @@ describe("ScoreSvg") do
       assert_gt(height, (laid["height"] * 8).ceil())
     end
 
+    test("starts above its first staff when a clef reaches over it, and only then") do
+      src = "{ \\key g \\major g'1 | \\key f \\major bes'1 }"
+      svg = ScoreSvg.engrave(src, 600, 8, 0, {})["svg"]
+      view = svg.split("viewBox=\"")[1].split("\"")[0].split(" ")
+      # The treble clef reaches some 1.5 spaces over the top line, at y 0 or below.
+      # The rules as wide as a bar or more: the staff lines.
+      lines = svg.split("<rect").filter do |tag|
+        tag.starts_with?(" x=") && tag.split(" width=\"")[1].split("\"")[0].to_f > 100
+      end
+      top_line = lines.map do |tag|
+        tag.split(" y=\"")[1].split("\"")[0].to_f
+      end.min()
+      assert_lt(view[1].to_f, 0)
+      assert(view[1].to_f <= top_line - 8 * 1.5)
+      assert_eq(svg.split(" height=\"")[1].split("\"")[0], view[3])
+      titled = ScoreSvg.engrave("\\header { title = \"Rests\" } { r1 }", 600, 8, 0, {})["svg"]
+      assert_contains(titled, "viewBox=\"0 0 ")
+    end
+
     test("crops the drawing to its ink, not to the width asked for") do
       svg = ScoreSvg.engrave("{ c'4 }", 900, 7, 0, {})["svg"]
       width = svg.split("width=\"")[1].split("\"")[0].to_i
