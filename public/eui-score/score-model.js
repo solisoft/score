@@ -538,6 +538,22 @@ function noteOf(score, s, i) {
   return ev;
 }
 
+/** The notes tied to event `i`, before and after it, with it: first and last index. */
+export function tiedNotes(staff, i) {
+  let a = i;
+  let b = i;
+  while (a > 0 && staff.events[a - 1].tie && !staff.events[a - 1].rest) a--;
+  while (b < staff.events.length - 1 && staff.events[b].tie && !staff.events[b + 1].rest) b++;
+  return [a, b];
+}
+
+/** Event `i` given `pitches`, and every note tied to it with it: a tie joins the same pitches. */
+function setPitches(score, s, i, pitches) {
+  const staff = score.staves[s];
+  const [a, b] = tiedNotes(staff, i);
+  for (let k = a; k <= b; k++) staff.events[k].pitches = pitches.map((p) => ({ ...p }));
+}
+
 /** The pitch of the last note before event `i`, for a letter to land near. */
 export function previousPitch(score, s, i) {
   const events = score.staves[s].events;
@@ -553,7 +569,7 @@ export function move(score, s, i, how, by, head = -1) {
   if (ev.rest) throw new Error("select a note");
   const moved = ev.pitches.map((p, k) => (head < 0 || k === head ? movePitch(p, how, by, keyOf(score, s, starts(score.staves[s])[i])) : p));
   if (!moved.every(reachable)) throw new Error("that is as far as it goes");
-  ev.pitches = sortPitches(moved);
+  setPitches(score, s, i, sortPitches(moved));
 }
 
 /** Event `i` given step `step` (C = 0 … B = 6) near where it was; a rest becomes that note. `add` adds it above a chord. */
@@ -571,19 +587,19 @@ export function letter(score, s, i, step, add = false, head = -1) {
     if (d <= top) d += 7;
     const p = { d, alter: keyAlters(keyOf(score, s, starts(score.staves[s])[i]))[mod7(d)] };
     if (!reachable(p)) throw new Error("that is as far as it goes");
-    if (!ev.pitches.some((q) => q.d === p.d)) ev.pitches = sortPitches([...ev.pitches, p]);
+    if (!ev.pitches.some((q) => q.d === p.d)) setPitches(score, s, i, sortPitches([...ev.pitches, p]));
     return;
   }
   const k = head >= 0 && head < ev.pitches.length ? head : 0;
   const p = nearestPitch(step, ev.pitches[k].d, keyOf(score, s, starts(score.staves[s])[i]));
-  ev.pitches = sortPitches(ev.pitches.map((q, j) => (j === k ? p : q)));
+  setPitches(score, s, i, sortPitches(ev.pitches.map((q, j) => (j === k ? p : q))));
 }
 
 export function setAlter(score, s, i, alter, head = -1) {
   refuseDrums(score, s);
   const ev = noteOf(score, s, i);
   if (ev.rest) throw new Error("select a note");
-  ev.pitches = ev.pitches.map((p, k) => (head < 0 || k === head ? { d: p.d, alter: Math.max(-2, Math.min(2, alter)) } : p));
+  setPitches(score, s, i, ev.pitches.map((p, k) => (head < 0 || k === head ? { d: p.d, alter: Math.max(-2, Math.min(2, alter)) } : p)));
 }
 
 /** A note — or one head of a chord — taken away; a note becomes a rest of its length. */

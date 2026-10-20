@@ -507,7 +507,10 @@ export function startStudio(root, options = {}) {
           M.move(score, t.s, t.i, data.how, Number(data.by), t.head);
           return;
         }
-        for (let i = r.a; i <= r.b; i++) if (!r.staff.events[i].rest) M.move(score, r.s, i, data.how, Number(data.by));
+        // A note tied from one already moved has moved with it.
+        for (let i = r.a; i <= r.b; i++) {
+          if (!r.staff.events[i].rest && !(i > r.a && r.staff.events[i - 1].tie)) M.move(score, r.s, i, data.how, Number(data.by));
+        }
       });
       case "alter": return edit((score) => {
         const t = need();

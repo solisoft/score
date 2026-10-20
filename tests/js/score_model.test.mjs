@@ -160,6 +160,26 @@ test("ties, slurs, dynamics, hairpins, articulations, chord symbols, lyrics — 
   assert.equal(back.header.title, "Test");
 });
 
+test("a pitch changed on a tied note changes every note tied to it: a tie joins one pitch", () => {
+  const s = M.newScore();
+  // G tied over three bars, in D flat major: the flat on G is the key's.
+  s.key = -5;
+  M.write(s, 0, 0, 2 * q, { rest: false, pitches: [{ d: 11, alter: 0 }] });
+  M.write(s, 0, 2 * q, 6 * q, { rest: false, pitches: [{ d: 11, alter: 0 }] });
+  M.toggleTie(s, 0, 0);
+  const tied = s.staves[0].events.filter((e) => !e.rest);
+  assert.ok(tied.length >= 3 && tied.slice(0, -1).every((e) => e.tie));
+  const last = s.staves[0].events.indexOf(tied[tied.length - 1]);
+  M.setAlter(s, 0, last, -1);
+  assert.ok(tied.every((e) => e.pitches[0].alter === -1), "every tied note is G flat");
+  M.move(s, 0, 0, "step", 1);
+  assert.ok(tied.every((e) => e.pitches[0].d === 12), "and moves with the first");
+  M.letter(s, 0, last, 4);
+  assert.ok(tied.every((e) => e.pitches[0].d === tied[0].pitches[0].d && e.tie === tied[0].tie || e === tied[tied.length - 1]));
+  assert.equal(new Set(tied.map((e) => M.spellPitch(e.pitches[0].d, e.pitches[0].alter))).size, 1);
+  engrave(s);
+});
+
 test("a slur makes a melisma: its notes after the first take no syllable", () => {
   const s = M.newScore();
   for (const [k, d] of [7, 9, 11, 12, 14].entries()) M.write(s, 0, k * q, q, { rest: false, pitches: [{ d, alter: 0 }] });
