@@ -180,6 +180,72 @@ test("a pitch changed on a tied note changes every note tied to it: a tie joins 
   engrave(s);
 });
 
+test("grace notes, arpeggios, glissandi, tremolos and ornaments: written, engraved, read back", () => {
+  const s = M.newScore();
+  M.write(s, 0, 0, q, C4);
+  M.write(s, 0, q, q, { rest: false, pitches: [{ d: 7, alter: 0 }, { d: 9, alter: 0 }, { d: 11, alter: 0 }] });
+  M.write(s, 0, 2 * q, q, C4);
+  M.write(s, 0, 3 * q, q, { rest: false, pitches: [{ d: 14, alter: 0 }] });
+  M.setGrace(s, 0, 0, "acciaccatura");
+  assert.deepEqual(s.staves[0].events[0].graces, [{ pitches: [{ d: 8, alter: 0 }], base: 8, dots: 0 }]);
+  M.addGrace(s, 0, 0);
+  M.moveGrace(s, 0, 0, "semitone", 1);
+  assert.deepEqual(s.staves[0].events[0].graces.map((g) => [M.spellPitch(g.pitches[0].d, g.pitches[0].alter), g.base]), [["d'", 16], ["f'", 16]]);
+  M.toggleArpeggio(s, 0, 1);
+  M.toggleGlissando(s, 0, 2);
+  M.setTremolo(s, 0, 3, 16);
+  M.toggleArticulation(s, 0, 3, "trill");
+  M.toggleArticulation(s, 0, 1, "mordent");
+  const { source } = engrave(s);
+  assert.match(source, /\\acciaccatura \{ d'16 f'16 \} c'4/);
+  assert.match(source, /<c' e' g'>4\\mordent\\arpeggio/);
+  assert.match(source, /c'4\\glissando/);
+  assert.match(source, /c''4:16\\trill/);
+  const back = reread(s).staves[0].events;
+  assert.equal(back[0].grace, "acciaccatura");
+  assert.equal(back[0].graces.length, 2);
+  assert.ok(back[1].arpeggio && back[1].arts.includes("mordent"));
+  assert.ok(back[2].gliss);
+  assert.equal(back[3].tremolo, 16);
+  assert.ok(back[3].arts.includes("trill"));
+  // The kind changes; the same kind again takes them away.
+  M.setGrace(s, 0, 0, "appoggiatura");
+  assert.equal(s.staves[0].events[0].grace, "appoggiatura");
+  M.setGrace(s, 0, 0, "appoggiatura");
+  assert.equal(s.staves[0].events[0].graces.length, 0);
+  // Played: the MIDI rolls the chord and slides to the next note.
+  const keys = (bytes) => {
+    const out = [];
+    for (let k = 0; k + 2 < bytes.length; k++) if ((bytes[k] & 0xf0) === 0x90 && bytes[k + 2] > 0 && bytes[k + 1] < 128) out.push(bytes[k + 1]);
+    return out;
+  };
+  const played = keys(midi(M.toLilyPond(s).source, 0, 4, 0));
+  for (const key of [61, 62, 63]) assert.ok(played.includes(key), `the glissando plays ${key}`);
+});
+
+test("grace notes, arpeggios, glissandi and tremolos refuse what they cannot be", () => {
+  const s = M.newScore();
+  M.write(s, 0, 0, q, C4);
+  assert.throws(() => M.setGrace(s, 0, 1, "grace"), /select a note/);
+  assert.throws(() => M.toggleArpeggio(s, 0, 0), /rolls a chord/);
+  assert.throws(() => M.toggleGlissando(s, 0, 0), /next note/);
+  assert.throws(() => M.setTremolo(s, 0, 0, 4), /eighths, sixteenths/);
+  M.setDuration(s, 0, 0, 16, 0);
+  assert.throws(() => M.setTremolo(s, 0, 0, 16), /shorter than the note/);
+  M.setGrace(s, 0, 0, "grace");
+  assert.throws(() => M.makeTuplet(s, 0, 0, 3), /grace notes/);
+  M.removeGraces(s, 0, 0);
+  assert.throws(() => M.removeGraces(s, 0, 0), /no grace note/);
+  // A tremolo a split note cannot keep is dropped, not written wrong.
+  M.write(s, 0, q, q, C4);
+  M.setTremolo(s, 0, M.eventAt(s.staves[0], q), 8);
+  M.setDuration(s, 0, M.eventAt(s.staves[0], q), 8, 0);
+  assert.equal(s.staves[0].events[M.eventAt(s.staves[0], q)].tremolo, 0);
+  // A note becomes a rest with nothing left on it.
+  M.remove(s, 0, M.eventAt(s.staves[0], 0));
+  engrave(s);
+});
+
 test("a slur makes a melisma: its notes after the first take no syllable", () => {
   const s = M.newScore();
   for (const [k, d] of [7, 9, 11, 12, 14].entries()) M.write(s, 0, k * q, q, { rest: false, pitches: [{ d, alter: 0 }] });

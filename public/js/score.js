@@ -41,12 +41,16 @@
       });
     };
     var src = button.getAttribute("data-src");
-    if (!src || !/\\repeat\b/.test(src)) return server();
+    // The server's file plays every repeat once, and leaves out what the
+    // browser's module plays: arpeggios, glissandi, ornaments.
+    var repeats = /\\repeat\b/.test(src || "");
+    if (!src || (!repeats && !/\\(arpeggio|glissando|trill|prall|mordent|turn)\b/.test(src))) return server();
     return Promise.all([import(ENGINE_SRC), import(MODEL_SRC)])
       .then(function (mods) {
         var E = mods[0];
         var M = mods[1];
         return E.loaded().then(function () {
+          if (!repeats) return E.toMidi(src);
           var read = M.fromParsed(JSON.parse(E.engine.score_json(src)));
           if (!read.score) return server();
           return E.toMidi(M.toLilyPond(read.score, { unfold: true }).source);

@@ -557,6 +557,34 @@ export function startStudio(root, options = {}) {
         const r = range() ?? (() => { throw new Error("Select a note first"); })();
         for (let i = r.a; i <= r.b; i++) if (!r.staff.events[i].rest || data.name === "fermata") M.toggleArticulation(score, r.s, i, data.name);
       });
+      case "grace": return edit((score) => {
+        const t = need();
+        M.setGrace(score, t.s, t.i, data.kind);
+      });
+      case "grace-add": return edit((score) => {
+        const t = need();
+        M.addGrace(score, t.s, t.i);
+      });
+      case "grace-move": return edit((score) => {
+        const t = need();
+        M.moveGrace(score, t.s, t.i, "step", Number(data.by));
+      });
+      case "grace-remove": return edit((score) => {
+        const t = need();
+        M.removeGraces(score, t.s, t.i);
+      });
+      case "arpeggio": return edit((score) => {
+        const t = need();
+        M.toggleArpeggio(score, t.s, t.i);
+      });
+      case "gliss": return edit((score) => {
+        const t = need();
+        M.toggleGlissando(score, t.s, t.i);
+      });
+      case "tremolo": return edit((score) => {
+        const t = need();
+        M.setTremolo(score, t.s, t.i, Number(data.value));
+      });
       case "dynamic": return edit((score) => {
         const t = need();
         M.setDynamic(score, t.s, t.i, data.name);

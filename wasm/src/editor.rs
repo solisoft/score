@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write;
 
 use eui_score::edit::{self, Move, NotEditable};
-use eui_score::parse::{self, Clef, Kind, Parsed};
+use eui_score::parse::{self, Clef, GraceKind, Kind, Parsed};
 use eui_score::{Layout, Path};
 use serde_json::{json, Value};
 
@@ -561,16 +561,10 @@ pub fn score(src: &str) -> Result<Value, String> {
             if ev.phrase_on || ev.phrase_off {
                 unsupported.push("phrasing slurs");
             }
-            if ev.arpeggio {
-                unsupported.push("arpeggios");
-            }
-            if ev.gliss {
-                unsupported.push("glissandi");
-            }
-            if ev.tremolo > 0 {
-                unsupported.push("tremolos");
-            }
-            if !ev.graces.is_empty() || ev.grace.is_some() {
+            // Grace notes the editor keeps are plain notes of one kind; a
+            // drum's (a flam) or one carrying anything more is not kept.
+            let grace_kind = ev.graces.first().and_then(|g| g.grace);
+            if ev.graces.iter().any(|g| g.grace != grace_kind || !g.drums.is_empty() || g.tie || !g.scripts.is_empty() || g.tremolo > 0 || g.dots > 2) {
                 unsupported.push("grace notes");
             }
             if ev.percent.is_some() {
@@ -604,6 +598,17 @@ pub fn score(src: &str) -> Result<Value, String> {
                 "time": [ev.time.0, ev.time.1],
                 "tempo": tempo,
                 "bar": ev.v,
+                // Its grace notes, each `[pitches, value, dots]`, and their kind.
+                "graces": ev.graces.iter().map(|g| json!([g.pitches.iter().map(|p| [p.d, p.alter]).collect::<Vec<_>>(), g.base, g.dots])).collect::<Vec<_>>(),
+                "grace": grace_kind.map(|k| match k {
+                    GraceKind::Acciaccatura => "acciaccatura",
+                    GraceKind::Appoggiatura => "appoggiatura",
+                    GraceKind::Slashed => "slashedGrace",
+                    GraceKind::Plain => "grace",
+                }),
+                "arpeggio": ev.arpeggio,
+                "gliss": ev.gliss,
+                "tremolo": ev.tremolo,
                 "unsupported": unsupported,
             }));
         }

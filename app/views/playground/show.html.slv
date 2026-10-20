@@ -156,6 +156,40 @@
         </div>
       </details>
 
+      <details class="tool-section" data-section="ornaments" open>
+        <summary><h3>Ornaments</h3></summary>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="art" data-name="trill" title="Trill: the note and the one above, quickly in turn">tr Trill</button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="prall" title="Short trill: the note, the one above, the note">Short tr.</button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="mordent" title="Mordent: the note, the one below, the note">Mordent</button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="turn" title="Turn: above, the note, below, the note">Turn</button>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="arpeggio" title="Arpeggio: the chord rolled from its lowest note up">Arpeggio</button>
+          <button type="button" class="tool tool-wide" data-act="gliss" title="Glissando: slide from this note to the next">Glissando</button>
+        </div>
+        <div class="tool-row" aria-label="Tremolo">
+          <button type="button" class="tool tool-wide" data-act="tremolo" data-value="8" title="Tremolo: the note repeated in eighths">Trem. 8</button>
+          <button type="button" class="tool tool-wide" data-act="tremolo" data-value="16" title="Tremolo: the note repeated in sixteenths">16</button>
+          <button type="button" class="tool tool-wide" data-act="tremolo" data-value="32" title="Tremolo: the note repeated in thirty-seconds">32</button>
+        </div>
+      </details>
+
+      <details class="tool-section" data-section="grace-notes" open>
+        <summary><h3>Grace notes</h3></summary>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="grace" data-kind="acciaccatura" title="Acciaccatura: a quick slashed note before the selected one">Acciacc.</button>
+          <button type="button" class="tool tool-wide" data-act="grace" data-kind="appoggiatura" title="Appoggiatura: a leaning note that takes time from the selected one">Appogg.</button>
+          <button type="button" class="tool tool-wide" data-act="grace" data-kind="grace" title="Grace note: a small plain note before the selected one">Grace</button>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="grace-add" title="One more grace note, a step above the last">+ Note</button>
+          <button type="button" class="tool" data-act="grace-move" data-by="1" title="Last grace note a step up" aria-label="Last grace note a step up">↑</button>
+          <button type="button" class="tool" data-act="grace-move" data-by="-1" title="Last grace note a step down" aria-label="Last grace note a step down">↓</button>
+          <button type="button" class="tool tool-wide" data-act="grace-remove" title="Take the grace notes away">Remove</button>
+        </div>
+      </details>
+
       <details class="tool-section" data-section="dynamics" open>
         <summary><h3>Dynamics</h3></summary>
         <div class="tool-row tool-dynamics">

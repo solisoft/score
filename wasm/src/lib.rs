@@ -19,6 +19,7 @@ use eui_score::{Layout, MidiOptions, Path};
 use wasm_bindgen::prelude::*;
 
 pub mod editor;
+pub mod perform;
 
 /// Distinguishes the `<defs>` ids of two scores on one page.
 static ENGRAVINGS: AtomicU32 = AtomicU32::new(0);
@@ -176,11 +177,13 @@ pub fn svg(src: &str, width: f64, staff_space: f64, marks: &str) -> Result<Strin
 
 /// The source as a Standard MIDI File. `bpm` and `beat` give a tempo to a
 /// source with none (0 for none), `program` a General MIDI instrument to a
-/// staff that names none.
+/// staff that names none. Arpeggios, glissandi and ornaments are played
+/// out (see `perform`).
 #[wasm_bindgen]
 pub fn midi(src: &str, bpm: f64, beat: i32, program: i32) -> Result<Vec<u8>, JsError> {
     let opts = MidiOptions { bpm, beat: if beat > 0 { beat.into() } else { 4 }, program: program.into() };
-    eui_score::midi(src, &opts).map_err(|e| JsError::new(&e.message))
+    let bytes = eui_score::midi(src, &opts).map_err(|e| JsError::new(&e.message))?;
+    Ok(perform::perform(src, bytes))
 }
 
 /// The source on A4 as a PDF (ASCII), `title` for one its header names none.

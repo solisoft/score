@@ -24,7 +24,14 @@ const NATURAL = [0, 2, 4, 5, 7, 9, 11];
 const SHARPS = [3, 0, 4, 1, 5, 2, 6];
 const KEYS = { "-7": "ces", "-6": "ges", "-5": "des", "-4": "aes", "-3": "ees", "-2": "bes", "-1": "f", 0: "c", 1: "g", 2: "d", 3: "a", 4: "e", 5: "b", 6: "fis", 7: "cis" };
 const CLEFS = ["treble", "bass", "alto", "tenor", "treble_8", "bass_8", "soprano", "percussion"];
-const SCRIPTS = { staccato: "-.", accent: "->", tenuto: "--", marcato: "-^", staccatissimo: "-!", portato: "-_", fermata: "\\fermata" };
+const SCRIPTS = {
+  staccato: "-.", accent: "->", tenuto: "--", marcato: "-^", staccatissimo: "-!", portato: "-_", fermata: "\\fermata",
+  trill: "\\trill", prall: "\\prall", mordent: "\\mordent", turn: "\\turn",
+};
+/** The kinds of grace notes: slashed and slurred, slurred, plain, slashed. */
+export const GRACES = ["acciaccatura", "appoggiatura", "grace", "slashedGrace"];
+/** A tremolo's strokes: the note repeated in eighths, sixteenths or thirty-seconds. */
+export const TREMOLOS = [8, 16, 32];
 export const DYNAMICS = ["ppp", "pp", "p", "mp", "mf", "f", "ff", "fff", "sf", "sfz", "fp", "rfz"];
 export const ARTICULATIONS = Object.keys(SCRIPTS);
 /** Values, longest first, with their dots, a written duration may take. */
@@ -313,6 +320,7 @@ export function transpose(score, { steps, semitones, s = null, a = 0, b = Infini
     events.forEach((ev, i) => {
       if (s != null && (i < a || i > b)) return;
       if (!ev.rest) ev.pitches = ev.pitches.map((p) => transposePitch(p, steps, semitones));
+      for (const g of ev.graces) g.pitches = g.pitches.map((p) => transposePitch(p, steps, semitones));
       if (s == null && ev.chord) ev.chord = transposeChord(ev.chord, steps, semitones);
     });
   }
@@ -348,7 +356,8 @@ function newId() {
 export function makeEvent(fields = {}) {
   return {
     id: newId(), rest: true, pitches: [], base: 4, dots: 0, tuplet: null, tie: false, slurStart: false, slurEnd: false,
-    dynamic: null, hairpin: null, hairpinEnd: false, arts: [], chord: "", texts: [], lyric: null, ...fields,
+    dynamic: null, hairpin: null, hairpinEnd: false, arts: [], chord: "", texts: [], lyric: null,
+    graces: [], grace: null, arpeggio: false, gliss: false, tremolo: 0, ...fields,
   };
 }
 
@@ -453,8 +462,10 @@ function pieces(score, ev, at, ticks, role) {
   out.forEach((p, k) => {
     const last = k === out.length - 1;
     p.tie = !p.rest && (last ? (role === "head" ? true : Boolean(ev.tie)) : true);
-    if (!(k === 0 && keepsStart)) Object.assign(p, { slurStart: false, dynamic: null, hairpin: null, arts: [], chord: "", texts: [], lyric: null });
-    if (!(last && keepsEnd)) Object.assign(p, { slurEnd: false, hairpinEnd: false });
+    if (!(k === 0 && keepsStart)) Object.assign(p, { slurStart: false, dynamic: null, hairpin: null, arts: [], chord: "", texts: [], lyric: null, graces: [], grace: null, arpeggio: false });
+    if (!(last && keepsEnd)) Object.assign(p, { slurEnd: false, hairpinEnd: false, gliss: false });
+    // A tremolo's strokes are shorter than the note they repeat.
+    if (p.tremolo && p.tremolo <= p.base) p.tremolo = 0;
   });
   return out;
 }
@@ -610,7 +621,7 @@ export function remove(score, s, i, head = -1) {
     ev.pitches = ev.pitches.filter((_, k) => k !== head);
     return;
   }
-  Object.assign(ev, { rest: true, pitches: [], tie: false, slurStart: false, slurEnd: false, arts: [], lyric: null });
+  Object.assign(ev, { rest: true, pitches: [], tie: false, slurStart: false, slurEnd: false, arts: [], lyric: null, graces: [], grace: null, arpeggio: false, gliss: false, tremolo: 0 });
   const prev = score.staves[s].events[i - 1];
   if (prev && prev.tie) prev.tie = false;
   tidy(score, score.staves[s]);
@@ -687,6 +698,97 @@ export function toggleArticulation(score, s, i, name) {
   ev.arts = ev.arts.includes(name) ? ev.arts.filter((a) => a !== name) : [...ev.arts, name];
 }
 
+// ---- Grace notes, arpeggios, glissandi, tremolos ---------------------------------
+
+/** The note `i`, refused when it is a rest or on a drum staff. */
+function pitchedNote(score, s, i) {
+  refuseDrums(score, s);
+  const ev = noteOf(score, s, i);
+  if (ev.rest) throw new Error("select a note");
+  return ev;
+}
+
+/** The pitch a step above `p` (`by` steps, down when negative), as the key at event `i` spells it. */
+function stepFrom(score, s, i, p, by) {
+  const q = movePitch(p, "step", by, keyOf(score, s, starts(score.staves[s])[i]));
+  if (!reachable(q)) throw new Error("that is as far as it goes");
+  return q;
+}
+
+/**
+ * Grace notes of `kind` (see GRACES) before note `i`: a note without any
+ * gets one, a step above its top note; a note with grace notes of that kind
+ * loses them; of another kind, they change kind.
+ */
+export function setGrace(score, s, i, kind) {
+  if (!GRACES.includes(kind)) throw new Error("no such grace note");
+  const ev = pitchedNote(score, s, i);
+  if (ev.tuplet) throw new Error("a note in a tuplet takes no grace note");
+  if (ev.graces.length && ev.grace === kind) {
+    Object.assign(ev, { graces: [], grace: null });
+    return;
+  }
+  if (!ev.graces.length) {
+    const top = ev.pitches[ev.pitches.length - 1];
+    ev.graces = [{ pitches: [stepFrom(score, s, i, top, 1)], base: kind === "grace" ? 16 : 8, dots: 0 }];
+  }
+  ev.grace = kind;
+}
+
+/** One more grace note before note `i`, a step above the last one: two or more are sixteenths. */
+export function addGrace(score, s, i) {
+  const ev = pitchedNote(score, s, i);
+  if (!ev.graces.length) return setGrace(score, s, i, "acciaccatura");
+  if (ev.graces.length >= 8) throw new Error("eight grace notes at most");
+  const last = ev.graces[ev.graces.length - 1];
+  const p = stepFrom(score, s, i, last.pitches[last.pitches.length - 1], 1);
+  ev.graces = [...ev.graces, { pitches: [p], base: 16, dots: 0 }].map((g) => ({ ...g, base: Math.max(g.base, 16) }));
+}
+
+/** The last grace note before note `i` moved by `by` steps (or semitones with `how` "semitone"). */
+export function moveGrace(score, s, i, how, by) {
+  const ev = pitchedNote(score, s, i);
+  if (!ev.graces.length) throw new Error("this note has no grace note");
+  const last = ev.graces[ev.graces.length - 1];
+  const moved = last.pitches.map((p) => movePitch(p, how, by, keyOf(score, s, starts(score.staves[s])[i])));
+  if (!moved.every(reachable)) throw new Error("that is as far as it goes");
+  last.pitches = sortPitches(moved);
+}
+
+/** Note `i`'s grace notes taken away. */
+export function removeGraces(score, s, i) {
+  const ev = noteOf(score, s, i);
+  if (!ev.graces.length) throw new Error("this note has no grace note");
+  Object.assign(ev, { graces: [], grace: null });
+}
+
+/** A chord rolled — its notes played from the lowest up, a wavy line before it — or not. */
+export function toggleArpeggio(score, s, i) {
+  const ev = pitchedNote(score, s, i);
+  if (ev.pitches.length < 2 && !ev.arpeggio) throw new Error("an arpeggio rolls a chord: add notes to it first");
+  ev.arpeggio = !ev.arpeggio;
+}
+
+/** A glissando from note `i` to the next note, or none. */
+export function toggleGlissando(score, s, i) {
+  const ev = pitchedNote(score, s, i);
+  const next = score.staves[s].events[i + 1];
+  if (!ev.gliss && (!next || next.rest)) throw new Error("a glissando goes to the next note");
+  ev.gliss = !ev.gliss;
+}
+
+/** Note `i` repeated in strokes of `value` (8, 16, 32) — or not, given its own value again. */
+export function setTremolo(score, s, i, value) {
+  if (!TREMOLOS.includes(value)) throw new Error("a tremolo is in eighths, sixteenths or thirty-seconds");
+  const ev = pitchedNote(score, s, i);
+  if (ev.tremolo === value) {
+    ev.tremolo = 0;
+    return;
+  }
+  if (value <= ev.base) throw new Error(`a tremolo's strokes are shorter than the note: 1/${value} on a 1/${ev.base} is not one`);
+  ev.tremolo = value;
+}
+
 export function setChordSymbol(score, s, i, text) {
   noteOf(score, s, i).chord = text.trim();
 }
@@ -708,12 +810,13 @@ export function makeTuplet(score, s, i, n) {
   const ev = noteOf(score, s, i);
   if (ev.tuplet) throw new Error("already in a tuplet");
   if (ev.dots) throw new Error("a dotted value cannot be split into a tuplet");
+  if (ev.graces.length) throw new Error("a tuplet's notes take no grace notes: take them away first");
   const d = n === 3 ? 2 : 4;
   const base = ev.base * d;
   if (base > 32) throw new Error("too short to split");
   const tuplet = { id: newId(), n, d };
   const group = Array.from({ length: n }, (_, k) =>
-    k === 0 ? cloneEvent(ev, { base, dots: 0, tuplet, tie: false }) : makeEvent({ base, dots: 0, tuplet }),
+    k === 0 ? cloneEvent(ev, { base, dots: 0, tuplet, tie: false, tremolo: ev.tremolo > base ? ev.tremolo : 0 }) : makeEvent({ base, dots: 0, tuplet }),
   );
   staff.events.splice(i, 1, ...group);
 }
@@ -1038,8 +1141,15 @@ const quote = (text) => `"${String(text).replace(/\\/g, "\\\\").replace(/"/g, '\
 
 function eventText(ev) {
   const head = (p) => p.drum ?? spellPitch(p.d, p.alter);
-  let out = ev.rest ? "r" : ev.pitches.length === 1 ? head(ev.pitches[0]) : `<${ev.pitches.map(head).join(" ")}>`;
+  const notes = (pitches) => (pitches.length === 1 ? head(pitches[0]) : `<${pitches.map(head).join(" ")}>`);
+  let out = "";
+  if (ev.graces.length && !ev.rest) {
+    const graces = ev.graces.map((g) => notes(g.pitches) + g.base + ".".repeat(g.dots));
+    out += `\\${ev.grace ?? "grace"} ${graces.length === 1 ? graces[0] : `{ ${graces.join(" ")} }`} `;
+  }
+  out += ev.rest ? "r" : notes(ev.pitches);
   out += ev.base + ".".repeat(ev.dots);
+  if (ev.tremolo && !ev.rest) out += `:${ev.tremolo}`;
   if (ev.tie && !ev.rest) out += "~";
   if (ev.slurStart) out += "(";
   if (ev.slurEnd) out += ")";
@@ -1049,6 +1159,8 @@ function eventText(ev) {
   for (const a of ev.arts) out += SCRIPTS[a] ?? "";
   if (ev.chord) out += `^${quote(ev.chord)}`;
   for (const t of ev.texts) out += `${t.dir > 0 ? "_" : "^"}${quote(t.text)}`;
+  if (ev.arpeggio && !ev.rest) out += "\\arpeggio";
+  if (ev.gliss && !ev.rest) out += "\\glissando";
   return out;
 }
 
@@ -1933,6 +2045,8 @@ export function fromParsed(parsed) {
           base: ev.base, dots: ev.dots, tuplet,
           tie: ev.tie, slurStart: ev.slur_on, slurEnd: ev.slur_off, dynamic: ev.dynamic ?? null,
           hairpin: ev.hairpin ?? null, hairpinEnd: ev.hairpin_end, arts, chord, texts,
+          graces: (ev.graces ?? []).map(([pitches, base, dots]) => ({ pitches: pitches.map(([d, alter]) => ({ d, alter })), base, dots })),
+          grace: ev.grace ?? null, arpeggio: Boolean(ev.arpeggio), gliss: Boolean(ev.gliss), tremolo: ev.tremolo ?? 0,
         }));
       }
     }
