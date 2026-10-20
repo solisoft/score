@@ -15,12 +15,13 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 # The engraver itself, from eui's main: 21ead43 is eui 0.11 (what Soli
 # 2.28.2 pins, f137388) with the ending brackets, neighbouring dynamics and
-# two-voice rests fixed, and (9ebfa60) a tempo mark clearing the grace
-# notes under it. The browser draws those fixes before the server's
-# Soli does; move this and the server's Soli together otherwise. `build.sh`
+# two-voice rests fixed, (9ebfa60) a tempo mark clearing the grace notes
+# under it, and (78287db) a dotted eighth's dot past its flag. The browser
+# draws those fixes before the server's Soli does; move this and the
+# server's Soli together otherwise. `build.sh`
 # writes the module into public/eui-score/, and that output is committed:
 # deploying the site needs no Rust.
-eui-score = { git = "https://github.com/solisoft/eui", rev = "9ebfa60" }
+eui-score = { git = "https://github.com/solisoft/eui", rev = "78287db" }
 wasm-bindgen = "=0.2.126"
 serde_json = "1"
 
