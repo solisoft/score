@@ -246,6 +246,11 @@ function spellKey(fifths, key, way) {
   return { d: 0, alter: 0 };
 }
 
+/** A MIDI key as a pitch: spelled as key `fifths` spells it, else natural, else sharp in a sharp key and flat in a flat one. */
+export function pitchOfKey(key, fifths) {
+  return spellKey(fifths, key, fifths < 0 ? -1 : 1);
+}
+
 /** A pitch moved: `how` is "step" (in the key), "semitone" or "octave". */
 export function movePitch(p, how, by, fifths) {
   if (how === "octave") return { d: p.d + 7 * Math.sign(by), alter: p.alter };
@@ -603,6 +608,23 @@ export function letter(score, s, i, step, add = false, head = -1) {
   }
   const k = head >= 0 && head < ev.pitches.length ? head : 0;
   const p = nearestPitch(step, ev.pitches[k].d, keyOf(score, s, starts(score.staves[s])[i]));
+  setPitches(score, s, i, sortPitches(ev.pitches.map((q, j) => (j === k ? p : q))));
+}
+
+/** Event `i` given pitch `p` (a key played): a rest becomes that note, `add` adds it to the chord, else it replaces head `head` (the lowest). */
+export function setPitch(score, s, i, p, add = false, head = -1) {
+  refuseDrums(score, s);
+  const ev = noteOf(score, s, i);
+  if (!reachable(p)) throw new Error("that is as far as it goes");
+  if (ev.rest) {
+    Object.assign(ev, { rest: false, pitches: [{ ...p }] });
+    return;
+  }
+  if (add) {
+    if (!ev.pitches.some((q) => midiKey(q.d, q.alter) === midiKey(p.d, p.alter))) setPitches(score, s, i, sortPitches([...ev.pitches, p]));
+    return;
+  }
+  const k = head >= 0 && head < ev.pitches.length ? head : 0;
   setPitches(score, s, i, sortPitches(ev.pitches.map((q, j) => (j === k ? p : q))));
 }
 

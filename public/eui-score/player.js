@@ -234,6 +234,37 @@ export async function midiOutputs() {
   return [...access.outputs.values()].map((port) => ({ id: port.id, name: port.name }));
 }
 
+/** The MIDI keyboards the browser may read, asking the person the first time: [{ id, name }]. */
+export async function midiInputs() {
+  if (!navigator.requestMIDIAccess) throw new Error("This browser reads no MIDI keyboard: Chrome, Edge and Firefox do, Safari does not.");
+  access ??= await navigator.requestMIDIAccess();
+  return [...access.inputs.values()].map((port) => ({ id: port.id, name: port.name }));
+}
+
+let input = null;
+
+/**
+ * Listens to MIDI keyboard `id` (null: to none). `onKey(key, held)` is
+ * called on each key pressed, `held` the other keys still down — keys
+ * played together make a chord.
+ */
+export function listen(id, onKey) {
+  if (input) input.onmidimessage = null;
+  input = id && access ? access.inputs.get(id) ?? null : null;
+  if (!input) return null;
+  const down = new Set();
+  input.onmidimessage = ({ data }) => {
+    const [status, key, velocity] = data;
+    const kind = status & 0xf0;
+    if (kind === 0x90 && velocity > 0) {
+      const held = [...down];
+      down.add(key);
+      onKey(key, held);
+    } else if (kind === 0x80 || kind === 0x90) down.delete(key);
+  };
+  return input;
+}
+
 /** Plays to MIDI output `id` from the next Play on, or to this browser with null. */
 export function setOutput(id) {
   output = id && access ? access.outputs.get(id) ?? null : null;

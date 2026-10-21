@@ -40,6 +40,11 @@
           <button type="button" class="tool tool-wide" data-act="mode-select" title="Select and change notes (Esc)">Select</button>
           <button type="button" class="tool tool-wide" data-act="mode-input" title="Write notes at the cursor (N)">✎ Note input</button>
         </div>
+        <label class="tool-field">MIDI keyboard
+          <select data-midi-in title="Play a key to write its note; keys held together make a chord">
+            <option value="">none</option><option value="find">find keyboards…</option>
+          </select>
+        </label>
       </details>
 
       <details class="tool-section" data-section="playback" open>

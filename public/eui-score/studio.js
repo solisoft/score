@@ -340,16 +340,21 @@ export function startStudio(root, options = {}) {
     draw();
   }
 
-  /** Writes a note (pitch step) or a rest (null) at the cursor, and moves on. */
-  /** Writes at the cursor: `step` a letter (0–6), a drum's name, or null for a rest. */
+  /** Writes at the cursor: `step` a letter (0–6), a drum's name, a MIDI key played ({ key }), or null for a rest. */
   function inputWrite(step, add) {
     const drum = typeof step === "string";
-    edit((score) => {
+    const played = step !== null && typeof step === "object";
+    return edit((score) => {
       const s = st.input.staff;
       if (step !== null && drum !== M.isDrums(score, s)) {
         throw new Error(drum ? "Drums go on a drum staff: add one with + Staff, Drum kit" : "A drum staff has drums, not pitches: the drum buttons write them");
       }
-      const strike = (lane, i, extra) => (drum ? M.drumHit(score, lane, i, step, extra) : M.letter(score, lane, i, step, extra));
+      const pitch = () => M.pitchOfKey(step.key, M.keyOf(score, s, st.input.t));
+      const strike = (lane, i, extra) => {
+        if (drum) return M.drumHit(score, lane, i, step, extra);
+        if (played) return M.setPitch(score, lane, i, pitch(), extra);
+        return M.letter(score, lane, i, step, extra);
+      };
       if (add) {
         // The note just written; else the note at the cursor, or the one before it.
         const staff = score.staves[s];
@@ -385,7 +390,7 @@ export function startStudio(root, options = {}) {
         st.input.t += len;
       } else {
         const near = M.previousPitch(score, s, i < 0 ? staff.events.length : i);
-        const content = step === null ? { rest: true } : { rest: false, pitches: [drum ? M.drumPitch(step) : M.nearestPitch(step, near, M.keyOf(score, s))] };
+        const content = step === null ? { rest: true } : { rest: false, pitches: [drum ? M.drumPitch(step) : played ? pitch() : M.nearestPitch(step, near, M.keyOf(score, s))] };
         M.write(score, s, st.input.t, inputTicks(), content);
         st.input.last = step === null ? null : { staff: s, t: st.input.t };
         st.input.t += inputTicks();
@@ -1849,6 +1854,59 @@ export function startStudio(root, options = {}) {
       }
       box.append(row);
     }
+  }
+
+  // ---- A MIDI keyboard ------------------------------------------------------------
+  //
+  // A key played writes its note at the cursor, in the duration chosen —
+  // note input starts if it was off; keys held together make a chord. With
+  // notes selected and note input off, the key gives the selected note its
+  // pitch, as a letter does.
+
+  const midiIn = root.querySelector("[data-midi-in]");
+  midiIn?.addEventListener("change", () => chooseInput(midiIn));
+
+  function playKey(key, held) {
+    if (!st.score) return;
+    if (!st.input.on && !st.sel) setInput(true);
+    // A key pressed while others are down joins their chord.
+    const add = held.length > 0 && st.input.on && st.input.last;
+    if (st.input.on) inputWrite({ key }, add);
+    else edit((score) => {
+      const t = need();
+      M.setPitch(score, t.s, t.i, M.pitchOfKey(key, M.keyOf(score, t.s, M.starts(score.staves[t.s])[t.i])), false, t.head);
+    });
+    hear();
+  }
+
+  /** The "MIDI keyboard" menu: none, or a keyboard, found when asked for. */
+  async function chooseInput(select) {
+    if (select.value === "") {
+      P.listen(null);
+      return say("No MIDI keyboard: the letters write the notes.");
+    }
+    if (select.value !== "find") {
+      P.listen(select.value, playKey);
+      return say(`Play on ${select.selectedOptions[0].textContent}: each key writes its note at the cursor.`);
+    }
+    let ports = [];
+    try {
+      ports = await P.midiInputs();
+    } catch (error) {
+      select.value = "";
+      return say(error.message ?? "The browser gave no access to MIDI keyboards.", true);
+    }
+    select.innerHTML = "";
+    select.append(new Option("none", ""));
+    for (const port of ports) select.append(new Option(port.name, port.id));
+    select.append(new Option("look again…", "find"));
+    if (!ports.length) {
+      select.value = "";
+      return say("No MIDI keyboard found: plug one in (USB or Bluetooth), then look again.", true);
+    }
+    select.value = ports[0].id;
+    P.listen(ports[0].id, playKey);
+    say(`Play on ${ports[0].name}: each key writes its note at the cursor, in the duration chosen; keys held together make a chord.`);
   }
 
   /** The "Sound to" menu: this browser, or a MIDI device, found when asked for. */

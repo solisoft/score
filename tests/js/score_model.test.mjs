@@ -330,6 +330,23 @@ test("the clipboard as LilyPond: written for other programs, and read from them"
   assert.throws(() => M.clipFromText(String.raw`\tuplet 3/2 { c'8 d' e' }`, score_json), /tuplets/);
 });
 
+test("a key played on a MIDI keyboard: spelled as the key spells it, written, added to a chord", () => {
+  assert.deepEqual(M.pitchOfKey(60, 0), { d: 7, alter: 0 }, "middle C");
+  assert.deepEqual(M.pitchOfKey(66, 2), { d: 10, alter: 1 }, "F♯ in D major");
+  assert.deepEqual(M.pitchOfKey(70, -1), { d: 13, alter: -1 }, "B♭ in F major");
+  assert.deepEqual(M.pitchOfKey(61, 0), { d: 7, alter: 1 }, "C♯ in C: a sharp");
+  assert.deepEqual(M.pitchOfKey(61, -3), { d: 8, alter: -1 }, "D♭ in E♭: a flat");
+  const s = M.newScore();
+  M.setPitch(s, 0, 0, M.pitchOfKey(60, 0));
+  M.setPitch(s, 0, 0, M.pitchOfKey(64, 0), true);
+  M.setPitch(s, 0, 0, M.pitchOfKey(64, 0), true);
+  assert.deepEqual(shape(s)[0][0][0], "c'+e'", "a key already in the chord is not added twice");
+  M.setPitch(s, 0, 0, M.pitchOfKey(62, 0));
+  assert.deepEqual(shape(s)[0][0][0], "d'+e'", "without add, the lowest head is replaced");
+  assert.throws(() => M.setPitch(s, 0, 0, M.pitchOfKey(12, 0)), /as far as it goes/);
+  engrave(s);
+});
+
 test("a new metre lays the notes out again", () => {
   const s = M.newScore();
   M.write(s, 0, 0, 4 * q, C4);
