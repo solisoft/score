@@ -281,6 +281,55 @@ test("copy and paste, over a bar line, and no tie left hanging", () => {
   assert.deepEqual(shape(s)[0].slice(0, 6), [["c'", q, false], ["e'", q, false], ["c'", q, false], ["e'", q, true], ["e'", q, false], ["r", 3 * q, false]]);
 });
 
+test("bars taken away from the middle: the notes with them, the bars after unchanged", () => {
+  const s = M.newScore();
+  const E4 = { rest: false, pitches: [{ d: 9, alter: 0 }] };
+  // Bar 1 a slur and a tie into bar 2; bar 3 its own note.
+  M.write(s, 0, M.barStart(s, 1) + 2 * q, q, C4);
+  M.write(s, 0, M.barStart(s, 1) + 3 * q, 2 * q, E4);
+  M.toggleSlur(s, 0, M.eventAt(s.staves[0], M.barStart(s, 1) + 2 * q), M.eventAt(s.staves[0], M.barStart(s, 2)));
+  M.write(s, 0, M.barStart(s, 3), q, C4);
+  M.setKeyAt(s, 2, 2);
+  M.deleteBars(s, 2, 2);
+  assert.equal(M.barsOf(s), 3);
+  const bar1 = shape(s)[0].filter((_, k) => M.starts(s.staves[0])[k] >= M.barStart(s, 1) && M.starts(s.staves[0])[k] < M.barStart(s, 2));
+  assert.deepEqual(bar1.at(-1), ["e'", q, false], "the tie into a bar taken away is undone");
+  assert.ok(!s.staves[0].events.some((ev) => ev.slurStart), "a slur whose end went goes with it");
+  assert.equal(M.changeAt(s, 2).key, 2, "the bars after keep the key they had");
+  assert.equal(s.staves[0].events[M.eventAt(s.staves[0], M.barStart(s, 2))].pitches[0].d, 7, "bar 3 is bar 2 now");
+  engrave(s);
+  reread(s);
+});
+
+test("bars taken away: the first, a change of metre, the repeats after, and what is refused", () => {
+  const s = M.newScore();
+  M.addBars(s, 2);
+  M.setTimeAt(s, 1, 3, 4);
+  M.toggleRepeat(s, 4, 5);
+  M.deleteBars(s, 0, 1);
+  assert.deepEqual(s.time, [3, 4], "the metre of the bars after is the score's now");
+  assert.deepEqual(s.repeats, [{ from: 2, to: 3, endings: [] }], "a repeat after moves back");
+  assert.throws(() => M.deleteBars(s, 2, 2), /in a repeat/);
+  assert.throws(() => M.deleteBars(s, 0, M.barsOf(s) - 1), /one bar at least/);
+  assert.throws(() => M.deleteBars(s, 9, 9), /no such bar/);
+  engrave(s);
+});
+
+test("the clipboard as LilyPond: written for other programs, and read from them", () => {
+  const s = M.newScore();
+  M.write(s, 0, 0, q, C4);
+  M.write(s, 0, q, q, { rest: false, pitches: [{ d: 9, alter: 1 }, { d: 11, alter: 0 }] });
+  M.setDynamic(s, 0, 0, "p");
+  const text = M.clipText(M.copy(s, 0, 0, 1));
+  assert.equal(text, "c'4\\p <eis' g'>4");
+  const clip = M.clipFromText(String.raw`c'4 d'8 e'8( f'2) g'4 \f`, score_json);
+  assert.deepEqual(clip.map((p) => [p.content.rest ? "r" : M.spellPitch(p.content.pitches[0].d, 0), p.ticks]), [["c'", q], ["d'", q / 2], ["e'", q / 2], ["f'", 2 * q], ["g'", q]], "as long as the text, not its last bar's rests");
+  M.paste(s, 0, M.barStart(s, 1), clip);
+  engrave(s);
+  assert.throws(() => M.clipFromText("hello world", score_json), /not a note name/);
+  assert.throws(() => M.clipFromText(String.raw`\tuplet 3/2 { c'8 d' e' }`, score_json), /tuplets/);
+});
+
 test("a new metre lays the notes out again", () => {
   const s = M.newScore();
   M.write(s, 0, 0, 4 * q, C4);

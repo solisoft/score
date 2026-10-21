@@ -856,6 +856,33 @@ export function copy(score, s, a, b) {
   return events.map((ev) => ({ content: { ...structuredClone(ev), id: undefined }, ticks: ticksOf(ev) }));
 }
 
+/** A clipboard as LilyPond, for another program or another page: its notes in absolute pitches. */
+export function clipText(clip) {
+  return clip.map((piece) => eventText(makeEvent(piece.content))).join(" ");
+}
+
+/**
+ * A clipboard from LilyPond text another program copied, read by eui-score's
+ * parser (`parse`, which is `score_json`): the notes of its first staff, as
+ * long as the text says — not the rests that fill its last bar. Throws when
+ * the text is not music.
+ */
+export function clipFromText(text, parse) {
+  const source = text.includes("{") ? text : `{ ${text} }`;
+  const parsed = JSON.parse(parse(source));
+  const lane = parsed.staves[0];
+  if (!lane) throw new Error("the clipboard holds no notes");
+  if (lane.events.some((ev) => ev.tuplet)) throw new Error("tuplets cannot be pasted yet");
+  const length = lane.events.reduce((sum, ev) => sum + (ev.ticks ?? 0), 0);
+  const { score } = fromParsed(parsed);
+  if (!score || !length) throw new Error("the clipboard holds no notes");
+  const staff = score.staves[0];
+  const at = starts(staff);
+  return staff.events
+    .filter((_, k) => at[k] < length)
+    .map((ev) => ({ content: { ...structuredClone(ev), id: undefined }, ticks: ticksOf(ev) }));
+}
+
 /** A clipboard written from `t` (ticks) on: answers the index of the last event written. */
 export function paste(score, s, t, clip) {
   let last = -1;
@@ -1133,6 +1160,88 @@ export function removeLastBar(score) {
     if (staff.clefs) staff.clefs = staff.clefs.filter((c) => c.bar < bars - 1);
   }
   score.changes = (score.changes ?? []).filter((c) => c.bar < bars - 1);
+}
+
+/**
+ * Bars `a`…`b` taken away from every staff, whatever they hold; the bars
+ * after them keep their key, metre, tempo and clef, and the repeats after
+ * them move back. A repeat the bars are part of is the person's to remove
+ * first, as for the last bar.
+ */
+export function deleteBars(score, a, b) {
+  const bars = barsOf(score);
+  [a, b] = [Math.min(a, b), Math.max(a, b)];
+  if (a < 0 || b >= bars) throw new Error("no such bar");
+  const count = b - a + 1;
+  if (count >= bars) throw new Error("a score keeps one bar at least");
+  if ((score.repeats ?? []).some((r) => r.from <= b && repeatEnd(r) >= a)) throw new Error("these bars are in a repeat: remove the repeat first");
+  // What is in force after the bars, before they go.
+  const after = { key: scoreKeyAt(score, b), time: timeAt(score, b), tempo: tempoAt(score, b) };
+  const before = a > 0 ? { key: scoreKeyAt(score, a - 1), time: timeAt(score, a - 1), tempo: tempoAt(score, a - 1) } : { key: score.key, time: score.time, tempo: score.tempo };
+  const own = changeAt(score, b + 1) ?? {};
+  const clefsAfter = score.staves.map((staff, s) => (staff.voice === 2 ? null : clefAt(score, s, b)));
+  const clefsBefore = score.staves.map((staff, s) => (staff.voice === 2 ? null : a > 0 ? clefAt(score, s, a - 1) : staff.clef));
+  const from = barStart(score, a);
+  const to = barStart(score, b + 1);
+  for (const staff of score.staves) {
+    const at = starts(staff);
+    staff.events = staff.events.filter((_, k) => at[k] < from || at[k] >= to);
+    mend(staff);
+  }
+  // The changes and clefs inside the bars go; those after them move back.
+  const shift = (list) => (list ?? []).filter((c) => c.bar < a || c.bar > b).map((c) => (c.bar > b ? { ...c, bar: c.bar - count } : c));
+  score.changes = shift(score.changes);
+  score.staves.forEach((staff, s) => {
+    if (staff.clefs) staff.clefs = shift(staff.clefs);
+    if (staff.voice === 2 || b + 1 >= bars) return;
+    if (a === 0) staff.clef = clefsAfter[s];
+    else if (clefsAfter[s] !== clefsBefore[s] && !(staff.clefs ?? []).some((c) => c.bar === a)) staff.clefs = [...(staff.clefs ?? []), { bar: a, clef: clefsAfter[s] }].sort((x, y) => x.bar - y.bar);
+    if (staff.clefs && !staff.clefs.length) delete staff.clefs;
+  });
+  if (b + 1 < bars) {
+    if (a === 0) {
+      score.key = after.key;
+      score.time = after.time;
+      score.tempo = after.tempo;
+      // Bar 0's own change is the score's setting now.
+      score.changes = score.changes.filter((c) => c.bar !== 0);
+    } else {
+      if (own.key == null && after.key !== before.key) setChange(score, a, "key", after.key);
+      if (!own.time && String(after.time) !== String(before.time)) setChange(score, a, "time", after.time);
+      if (!own.tempo && JSON.stringify(after.tempo) !== JSON.stringify(before.tempo)) setChange(score, a, "tempo", after.tempo);
+    }
+  }
+  for (const r of score.repeats ?? []) {
+    if (r.from > b) {
+      r.from -= count;
+      r.to -= count;
+    }
+  }
+}
+
+/**
+ * A staff whose events were taken away mended: a tie to a note that is not
+ * the same any more undone, a slur's end without its start (or a start
+ * without its end) taken away, and a hairpin's end without its start.
+ */
+function mend(staff) {
+  let slur = -1;
+  let hairpin = false;
+  staff.events.forEach((ev, i) => {
+    if (ev.tie && !sameNote(ev, staff.events[i + 1])) ev.tie = false;
+    if (ev.slurEnd) {
+      if (slur < 0) ev.slurEnd = false;
+      slur = -1;
+    }
+    if (ev.slurStart) {
+      if (slur >= 0) staff.events[slur].slurStart = false;
+      slur = i;
+    }
+    if (ev.hairpinEnd && !hairpin) ev.hairpinEnd = false;
+    if (ev.hairpinEnd) hairpin = false;
+    if (ev.hairpin) hairpin = true;
+  });
+  if (slur >= 0) staff.events[slur].slurStart = false;
 }
 
 // ---- LilyPond ---------------------------------------------------------------------

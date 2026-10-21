@@ -613,6 +613,21 @@ export function startStudio(root, options = {}) {
       case "unrepeat": return edit((score) => M.removeRepeat(score, selectedBars()[0]));
       case "add-bar": return edit((score) => M.addBars(score, 1));
       case "remove-bar": return edit((score) => M.removeLastBar(score));
+      case "insert-bar": return edit((score) => {
+        // Before the selected bars, or the cursor's; at the end with nothing selected.
+        const at = st.sel || st.input.on ? selectedBars()[0] : M.barsOf(score);
+        M.insertBars(score, at, 1);
+        if (st.input.on) st.input.t = M.barStart(score, at);
+        else if (st.sel) st.sel = { staff: st.sel.staff, t0: M.barStart(score, at), t1: M.barStart(score, at), head: -1 };
+        say(`A bar put in as bar ${at + 1}`);
+      });
+      case "delete-bars": return edit((score) => {
+        const [a, b] = selectedBars();
+        M.deleteBars(score, a, b);
+        st.sel = null;
+        if (st.input.on) st.input = { ...st.input, t: Math.min(st.input.t, M.barStart(score, Math.min(a, M.barsOf(score) - 1))), last: null };
+        say(a === b ? `Bar ${a + 1} taken away` : `Bars ${a + 1}–${b + 1} taken away`);
+      });
       case "add-staff": return edit((score) => {
         const [k, clef] = root.querySelector('[data-field="new-staff"]').value.split("|");
         const it = M.INSTRUMENTS[Number(k)] ?? M.INSTRUMENTS[0];
@@ -708,28 +723,50 @@ export function startStudio(root, options = {}) {
     draw();
   }
 
+  // The clipboard is the system's too: what is copied goes there as
+  // LilyPond, for another page or program; what another program copied is
+  // pasted when it reads as music. The same text back is this page's own
+  // clip, which keeps what the text cannot say.
   function copy(cut) {
     const r = range();
     if (!r) return say("Select what to copy", true);
     try {
       st.clip = M.copy(st.score, r.s, r.a, r.b);
+      st.clipText = M.clipText(st.clip);
       say(`${r.b - r.a + 1} copied`);
     } catch (error) {
       return say(error.message, true);
     }
+    navigator.clipboard?.writeText(st.clipText).catch(() => {});
     if (cut) edit((score) => {
       for (let i = r.b; i >= r.a; i--) M.remove(score, r.s, i);
     });
   }
 
-  function paste() {
-    if (!st.clip) return say("Nothing copied yet", true);
+  /** What to paste: the system clipboard's music, else this page's clip; null when there is none. */
+  async function clipboard() {
+    let text = "";
+    try {
+      text = (await navigator.clipboard?.readText())?.trim() ?? "";
+    } catch (error) {}
+    if (!text || text === st.clipText) return st.clip;
+    return M.clipFromText(text, score_json);
+  }
+
+  async function paste() {
     const s = st.input.on ? st.input.staff : st.sel?.staff;
     const t = st.input.on ? st.input.t : st.sel?.t0;
     if (s == null || t == null) return say("Select where to paste", true);
+    let clip;
+    try {
+      clip = await clipboard();
+    } catch (error) {
+      return say(`The clipboard's text is not music this reads: ${error.message ?? error}`, true);
+    }
+    if (!clip) return say("Nothing copied yet", true);
     edit((score) => {
-      M.paste(score, s, t, st.clip);
-      const end = t + st.clip.reduce((sum, p) => sum + p.ticks, 0);
+      M.paste(score, s, t, clip);
+      const end = t + clip.reduce((sum, p) => sum + p.ticks, 0);
       if (st.input.on) st.input.t = end;
     });
   }
@@ -1385,6 +1422,7 @@ export function startStudio(root, options = {}) {
     // Ctrl+Alt+1, 2: the voice, as MuseScore has it; event.code, since Alt changes the key.
     if (mod && event.altKey && ["Digit1", "Digit2", "Numpad1", "Numpad2"].includes(event.code)) return run("voice", { voice: event.code.slice(-1) });
     if (mod && ["3", "5", "6", "7"].includes(key)) return run("tuplet", { n: key });
+    if (mod && (key === "Delete" || key === "Backspace")) return run("delete-bars");
     if (key === " " && !event.target.closest("button, summary")) return run("play");
     if (key === "?") return run("keys");
     if (mod) return;
@@ -1406,6 +1444,7 @@ export function startStudio(root, options = {}) {
     if (letter !== undefined && !event.altKey) return run("letter", { step: letter, add: event.shiftKey });
     if (key === "0") return run("rest");
     if (key === "]") return run("add-bar");
+    if (key === "Insert") return run("insert-bar");
     if (key === "Delete" || (key === "Backspace" && !st.input.on)) return run("rest");
     if (key === "Backspace" && st.input.on) {
       event.preventDefault();

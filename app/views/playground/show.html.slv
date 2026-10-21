@@ -236,6 +236,10 @@
           <button type="button" class="tool tool-wide" data-act="remove-bar" title="Take the last bar away">− Bar</button>
         </div>
         <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="insert-bar" title="A bar before the selected one (Insert)">Insert bar</button>
+          <button type="button" class="tool tool-wide" data-act="delete-bars" title="Take the selected bars away, notes and all (Ctrl+Delete)">Delete bars</button>
+        </div>
+        <div class="tool-row">
           <select class="tool-select" data-field="new-staff" data-instruments="new" aria-label="Instrument of a new staff"></select>
           <button type="button" class="tool tool-wide" data-act="add-staff">+ Staff</button>
         </div>
@@ -368,6 +372,8 @@
             <dt>A–G</dt><dd>write a note (Shift: add to the chord)</dd>
             <dt>0</dt><dd>rest</dd>
             <dt>]</dt><dd>a bar at the end</dd>
+            <dt>Insert</dt><dd>a bar before the selection</dd>
+            <dt>Ctrl+Delete</dt><dd>take the selected bars away</dd>
             <dt>2–7</dt><dd>32nd … whole; <kbd>.</kbd> dot</dd>
             <dt>↑ ↓</dt><dd>step; Shift semitone; Ctrl octave</dd>
             <dt>← →</dt><dd>previous / next; Shift extends</dd>
@@ -377,7 +383,7 @@
             <dt>Ctrl+3, 5, 6, 7</dt><dd>tuplets</dd>
             <dt>Ctrl+L / Ctrl+K</dt><dd>lyrics / chord symbol</dd>
             <dt>Delete</dt><dd>make rests</dd>
-            <dt>Ctrl+C V X</dt><dd>copy, paste, cut</dd>
+            <dt>Ctrl+C V X</dt><dd>copy, paste, cut — as LilyPond, with other programs too</dd>
             <dt>Ctrl+Z / Y</dt><dd>undo / redo</dd>
             <dt>Space</dt><dd>play / pause</dd>
             <dt>?</dt><dd>this sheet</dd>
