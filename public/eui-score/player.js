@@ -194,6 +194,30 @@ export async function play(midi, { at = 0, onStop, onProgress } = {}) {
   };
 }
 
+// ---- To a file -------------------------------------------------------------------------------
+
+/**
+ * `midi` rendered with the same sounds, faster than it plays, as a WAV file
+ * (a Blob): 44.1 kHz, stereo, with two seconds after the last note for the
+ * sound to die away. `muted` lists the MIDI channels to leave out;
+ * `onProgress(fraction)` while the sounds download.
+ */
+export async function renderWav(midi, { muted = [], onProgress } = {}) {
+  const [{ WorkletSynthesizer, BasicMIDI, audioBufferToWav }, bank] = await Promise.all([import(`./vendor/spessasynth.js${V}`), (onProgress && watchers.add(onProgress), sounds())]);
+  if (onProgress) watchers.delete(onProgress);
+  const bytes = midi instanceof ArrayBuffer ? midi : midi.buffer.slice(midi.byteOffset, midi.byteOffset + midi.byteLength);
+  const sequence = BasicMIDI.fromArrayBuffer(bytes);
+  const rate = 44100;
+  const offline = new OfflineAudioContext({ numberOfChannels: 2, sampleRate: rate, length: Math.ceil(rate * (sequence.duration + 2)) });
+  await offline.audioWorklet.addModule(new URL(`vendor/spessasynth_processor.min.js${V}`, import.meta.url));
+  const synth = new WorkletSynthesizer(offline);
+  synth.connect(offline.destination);
+  await synth.startOfflineRender({ midiSequence: sequence, soundBankList: [{ soundBankBuffer: bank, bankOffset: 0 }], loopCount: 0, sequencerOptions: { skipToFirstNoteOn: false } });
+  for (const channel of muted) synth.midiChannels[channel]?.setSystemParameter?.("isMuted", true);
+  const rendered = await offline.startRendering();
+  return audioBufferToWav(rendered);
+}
+
 // ---- Around the piece ---------------------------------------------------------------------
 
 // The metronome's clicks: wood blocks on a drum channel of their own, so

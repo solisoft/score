@@ -479,6 +479,8 @@ export function startStudio(root, options = {}) {
         return;
       }
       case "save-midi": return toMidi(st.text).then((m) => download(m, `${fileName()}.mid`, "audio/midi")).catch((e) => refuse(e));
+      case "save-wav": return saveWav();
+      case "save-svg": case "save-png": return saveImage(name === "save-png");
       case "mode-select": return setInput(false);
       case "mode-input": return setInput(true);
       case "duration": return duration(Number(data.base), st.input.on ? st.input.dots : 0);
@@ -1853,6 +1855,62 @@ export function startStudio(root, options = {}) {
         row.append(button);
       }
       box.append(row);
+    }
+  }
+
+  // ---- Sound and picture, to files ---------------------------------------------------
+
+  /** What is heard on Play — every repeat played out, the muted staves left out — as a WAV file. */
+  async function saveWav() {
+    let bytes;
+    try {
+      bytes = await toMidi(st.score ? M.toLilyPond(st.score, { unfold: true }).source : st.text, { bpm: 100, beat: 4 });
+    } catch (error) {
+      return refuse(error);
+    }
+    const muted = st.score ? M.channels(st.score).filter(({ lane }) => st.mix.mute.has(lane) || (st.mix.solo.size > 0 && !st.mix.solo.has(lane))).map(({ channel }) => channel) : [];
+    say("Making the WAV file…");
+    try {
+      const wav = await P.renderWav(bytes, { muted, onProgress: (f) => say(`Loading the sounds… ${Math.round(100 * f)} % (38 MB, once)`) });
+      download(wav, `${fileName()}.wav`, "audio/wav");
+      say(`${fileName()}.wav saved — ${(wav.size / 1048576).toFixed(1)} MB`);
+    } catch (error) {
+      say(`The WAV file could not be made: ${error.message ?? error}`, true);
+    }
+  }
+
+  /** The score as a picture: SVG as drawn, or PNG at twice its size — on white, in black ink, nothing selected. */
+  async function saveImage(png) {
+    await loaded();
+    const width = Math.max(320, Math.floor(sheet.clientWidth - 2));
+    let svg;
+    try {
+      svg = engine.svg(st.text, width, 8, "{}");
+    } catch (error) {
+      return refuse(error);
+    }
+    // A margin all round, as on paper.
+    const pad = 24;
+    const [, top, inner, innerH] = svg.match(/viewBox="0 (-?\d+) (\d+) (\d+)"/).map(Number);
+    const [w, h] = [inner + 2 * pad, innerH + 2 * pad];
+    svg = svg
+      .replace(/viewBox="[^"]*" width="\d+" height="\d+"/, `viewBox="${-pad} ${top - pad} ${w} ${h}" width="${w}" height="${h}"`)
+      .replace("<svg ", '<svg color="#000" style="background:#fff" ')
+      .replace("<defs>", `<rect x="${-pad}" y="${top - pad}" width="${w}" height="${h}" fill="#fff"/><defs>`);
+    if (!png) return download(svg, `${fileName()}.svg`, "image/svg+xml");
+    const picture = new Image();
+    picture.src = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+    try {
+      await picture.decode();
+      const canvas = Object.assign(document.createElement("canvas"), { width: w * 2, height: h * 2 });
+      const pen = canvas.getContext("2d");
+      pen.fillStyle = "#fff";
+      pen.fillRect(0, 0, canvas.width, canvas.height);
+      pen.drawImage(picture, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+      download(blob, `${fileName()}.png`, "image/png");
+    } finally {
+      URL.revokeObjectURL(picture.src);
     }
   }
 
