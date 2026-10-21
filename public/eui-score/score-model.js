@@ -394,6 +394,54 @@ export function newScore(fields = {}) {
   return score;
 }
 
+// The scores "New" starts from: their staves, by instrument name (a
+// staff's own name when it differs), and how the staves are grouped.
+// A piano is two staves in a brace, the piano's name on the brace;
+// `about` says what the template holds when its staves' names do not.
+const PIANO = [{ instrument: "Piano", clef: "treble", piano: true }, { instrument: "Piano", clef: "bass", piano: true }];
+export const TEMPLATES = [
+  { id: "blank", name: "Blank", about: "One empty staff", staves: [{ instrument: "Piano", clef: "treble", unnamed: true }], group: "none" },
+  { id: "piano", name: "Piano", about: "Two staves in a brace", staves: PIANO, group: "none" },
+  { id: "voice-piano", name: "Voice and piano", staves: [{ instrument: "Voice" }, ...PIANO], group: "none" },
+  { id: "lead-sheet", name: "Lead sheet", about: "A melody, for chord symbols and lyrics", staves: [{ instrument: "Voice", name: "Melody", short: "", unnamed: true }], group: "none" },
+  { id: "satb", name: "Choir (SATB)", staves: [{ instrument: "Soprano" }, { instrument: "Alto" }, { instrument: "Tenor" }, { instrument: "Bass" }], group: "choir" },
+  { id: "satb-piano", name: "Choir and piano", staves: [{ instrument: "Soprano" }, { instrument: "Alto" }, { instrument: "Tenor" }, { instrument: "Bass" }, ...PIANO], group: "none", choir: [0, 3] },
+  { id: "string-quartet", name: "String quartet", staves: [{ instrument: "Violin", name: "Violin I", short: "Vl. I" }, { instrument: "Violin", name: "Violin II", short: "Vl. II" }, { instrument: "Viola" }, { instrument: "Cello" }], group: "bracket" },
+  { id: "wind-quintet", name: "Wind quintet", staves: [{ instrument: "Flute" }, { instrument: "Oboe" }, { instrument: "Clarinet" }, { instrument: "Horn" }, { instrument: "Bassoon" }], group: "bracket" },
+  { id: "guitar", name: "Guitar", about: "Treble clef an octave down", staves: [{ instrument: "Guitar" }], group: "none" },
+  { id: "band", name: "Rock band", staves: [{ instrument: "Voice" }, { instrument: "Electric guitar" }, { instrument: "Bass guitar" }, { instrument: "Drum kit" }], group: "bracket" },
+  { id: "drums", name: "Drum kit", about: "One drum staff, General MIDI kit", staves: [{ instrument: "Drum kit" }], group: "none" },
+];
+
+/**
+ * A new score from template `id`, with its settings: title, composer,
+ * key (fifths), time ([n, d]), bpm (0 for none), bars.
+ */
+export function fromTemplate(id, { title = "Untitled", composer = "", key = 0, time = [4, 4], bpm = 0, bars = 8 } = {}) {
+  const template = TEMPLATES.find((t) => t.id === id);
+  if (!template) throw new Error("no such template");
+  if (!Number.isInteger(bars) || bars < 1 || bars > 500) throw new Error("a score has 1 to 500 bars");
+  if (!Number.isInteger(key) || key < -7 || key > 7) throw new Error("no such key");
+  // A drum kit alone has no key.
+  const drumsOnly = template.staves.every((spec) => spec.instrument === "Drum kit");
+  const score = { header: { title: title || "Untitled", composer }, key: drumsOnly ? 0 : key, time, tempo: bpm > 0 ? { text: "", base: 4, bpm } : null, group: template.group, groups: [], staves: [], repeats: [], changes: [] };
+  const length = barStart(score, bars);
+  template.staves.forEach((spec) => {
+    const it = INSTRUMENTS.find((x) => x.name === spec.instrument);
+    const named = !spec.unnamed && !spec.piano && template.staves.length > 1;
+    const staff = { name: named ? spec.name ?? it.name : "", short: named ? spec.short ?? it.short : "", instrument: it.drums ? "" : it.sound, clef: spec.clef ?? it.clef ?? "treble", events: rests(score, 0, length) };
+    if (it.drums) staff.drums = true;
+    score.staves.push(staff);
+  });
+  const first = template.staves.findIndex((spec) => spec.piano);
+  if (first >= 0) {
+    const name = template.staves.length > 2 ? "Piano" : "";
+    score.groups.push({ kind: "brace", first, last: first + 1, name, short: name ? "Pno." : "" });
+  }
+  if (template.choir) score.groups.push({ kind: "choir", first: template.choir[0], last: template.choir[1], name: "", short: "" });
+  return score;
+}
+
 /** Each event's start in ticks. */
 export function starts(staff) {
   let t = 0;

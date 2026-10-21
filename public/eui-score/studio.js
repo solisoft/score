@@ -119,6 +119,39 @@ export function startStudio(root, options = {}) {
     if (select.dataset.instruments === "new") select.value = String(M.INSTRUMENTS.findIndex((it) => it.name === "Violin"));
   }
 
+  // "New…": a dialog to start from a template, its title, key, metre, tempo and bars set.
+  const newDialog = root.querySelector("[data-new]");
+  const templateBox = newDialog.querySelector("[data-templates]");
+  for (const template of M.TEMPLATES) {
+    const label = Object.assign(document.createElement("label"), { className: "studio-template" });
+    const radio = Object.assign(document.createElement("input"), { type: "radio", name: "template", value: template.id, id: `new-template-${template.id}`, checked: template.id === "piano" });
+    const staves = template.staves.map((spec) => spec.name ?? spec.instrument).filter((name, k, all) => name !== all[k - 1]);
+    label.append(radio, Object.assign(document.createElement("b"), { textContent: template.name }), Object.assign(document.createElement("small"), { textContent: template.about ?? staves.join(", ") }));
+    templateBox.append(label);
+  }
+  for (const close of newDialog.querySelectorAll("[data-new-close]")) close.addEventListener("click", () => newDialog.close());
+  newDialog.addEventListener("click", (event) => {
+    if (event.target === newDialog) newDialog.close();
+  });
+  newDialog.querySelector("[data-new-form]").addEventListener("submit", (event) => {
+    const form = new FormData(event.target);
+    const template = M.TEMPLATES.find((t) => t.id === form.get("template"));
+    try {
+      const score = M.fromTemplate(template.id, {
+        title: form.get("title").trim(),
+        composer: form.get("composer").trim(),
+        key: Number(form.get("key")),
+        time: form.get("time").split("/").map(Number),
+        bpm: Number(form.get("bpm")) || 0,
+        bars: Number(form.get("bars")) || 16,
+      });
+      load(M.toLilyPond(score).source, `A new score: ${template.name.toLowerCase()}. Press N, then the letters, to write notes.`);
+    } catch (error) {
+      event.preventDefault();
+      say(error.message, true);
+    }
+  });
+
   // ---- Model ↔ text ----------------------------------------------------------
 
   function readText(text) {
@@ -435,7 +468,7 @@ export function startStudio(root, options = {}) {
 
   function doAct(name, data = {}) {
     switch (name) {
-      case "new": return load(M.toLilyPond(M.newScore()).source, "A new score.");
+      case "new": return newDialog.showModal();
       case "undo": return undo();
       case "redo": return redo();
       case "play": return togglePlay();

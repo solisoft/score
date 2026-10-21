@@ -3,7 +3,7 @@
     <button type="button" class="studio-menu studio-tools-toggle" data-act="tools" aria-expanded="false" aria-controls="studio-toolbox">Tools</button>
     <div class="studio-menu-scroll">
       <div class="studio-menu-group">
-        <button type="button" class="studio-menu" data-act="new" title="A new, empty score">New</button>
+        <button type="button" class="studio-menu" data-act="new" title="A new score, from a template">New…</button>
         <label class="studio-menu" title="Open a LilyPond file">Open…<input type="file" accept=".ly,.ily,.txt,text/plain" data-act="open" hidden></label>
         <select class="studio-menu" data-act="example" aria-label="Open an example">
           <option value="">Examples…</option>
@@ -396,6 +396,41 @@
             <dt>Space</dt><dd>play / pause</dd>
             <dt>?</dt><dd>this sheet</dd>
           </dl>
+  </dialog>
+
+  <dialog class="studio-keys studio-new" data-new aria-labelledby="studio-new-title">
+    <form method="dialog" data-new-form>
+      <div class="studio-keys-head">
+        <h2 id="studio-new-title">New score</h2>
+        <button type="button" class="studio-menu" data-new-close aria-label="Close">×</button>
+      </div>
+      <fieldset class="studio-templates">
+        <legend>Start from</legend>
+        <div data-templates></div>
+      </fieldset>
+      <label class="tool-field">Title <input type="text" id="new-title" name="title" placeholder="Untitled"></label>
+      <label class="tool-field">Composer <input type="text" id="new-composer" name="composer"></label>
+      <label class="tool-field">Key
+        <select id="new-key" name="key">
+          <% for fifths in range(-7, 8) %>
+            <option value="<%= fifths %>"<%= fifths == 0 ? " selected" : "" %>><%= ["C♭", "G♭", "D♭", "A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯"][fifths + 7] %> major / <%= ["A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯", "G♯", "D♯", "A♯"][fifths + 7] %> minor</option>
+          <% end %>
+        </select>
+      </label>
+      <label class="tool-field">Metre
+        <select id="new-time" name="time">
+          <% for metre in ["2/4", "3/4", "4/4", "5/4", "2/2", "3/8", "6/8", "9/8", "12/8"] %>
+            <option value="<%= metre %>"<%= metre == "4/4" ? " selected" : "" %>><%= metre %></option>
+          <% end %>
+        </select>
+      </label>
+      <label class="tool-field">Tempo <input type="number" id="new-bpm" name="bpm" min="20" max="300" step="1" placeholder="none"></label>
+      <label class="tool-field">Bars <input type="number" id="new-bars" name="bars" min="1" max="500" step="1" value="16"></label>
+      <div class="tool-row studio-new-actions">
+        <button type="button" class="tool tool-wide" data-new-close>Cancel</button>
+        <button type="submit" class="tool tool-wide tool-primary">Create</button>
+      </div>
+    </form>
   </dialog>
 </div>
 

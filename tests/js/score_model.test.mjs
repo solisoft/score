@@ -347,6 +347,30 @@ test("a key played on a MIDI keyboard: spelled as the key spells it, written, ad
   engrave(s);
 });
 
+test("every template makes a score that engraves, plays and reads back", () => {
+  for (const template of M.TEMPLATES) {
+    const s = M.fromTemplate(template.id, { title: "Étude", composer: "A. N. Other", key: -2, time: [3, 4], bpm: 90, bars: 6 });
+    assert.equal(M.barsOf(s), 6, template.id);
+    assert.equal(s.staves.length, template.staves.length, template.id);
+    const { source } = engrave(s);
+    midi(source, 100, 4, 0);
+    const back = reread(s);
+    assert.equal(back.header.title, "Étude");
+    assert.equal(back.key, template.id === "drums" ? 0 : -2, `${template.id}: the key — none for drums alone`);
+    assert.deepEqual(back.time, [3, 4]);
+    assert.equal(back.tempo?.bpm, 90);
+  }
+  const quartet = M.fromTemplate("string-quartet");
+  assert.deepEqual(quartet.staves.map((st) => st.name), ["Violin I", "Violin II", "Viola", "Cello"]);
+  assert.deepEqual(quartet.staves.map((st) => st.clef), ["treble", "treble", "alto", "bass"]);
+  const song = M.fromTemplate("voice-piano");
+  assert.deepEqual(song.groups, [{ kind: "brace", first: 1, last: 2, name: "Piano", short: "Pno." }]);
+  assert.ok(M.fromTemplate("drums").staves[0].drums);
+  assert.throws(() => M.fromTemplate("kazoo-choir"), /no such template/);
+  assert.throws(() => M.fromTemplate("piano", { bars: 0 }), /1 to 500 bars/);
+  assert.throws(() => M.fromTemplate("piano", { key: 9 }), /no such key/);
+});
+
 test("a new metre lays the notes out again", () => {
   const s = M.newScore();
   M.write(s, 0, 0, 4 * q, C4);
