@@ -337,6 +337,23 @@
   .version-sheet { background: var(--sheet); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; overflow-x: auto; color: var(--ink); }
   .version-sheet svg { max-width: 100%; height: auto; }
 
+  /* The app's start screen: a new score, an import, what to bring in, the recent ones. */
+  .app-cta { display: flex; flex-wrap: wrap; gap: 10px; }
+  .start { width: 100%; max-width: 1120px; margin: 0 auto; padding: 32px 20px 64px; display: grid; gap: 24px; }
+  .start h1 { font-size: 34px; }
+  .start h2 { font-size: 21px; }
+  .start-grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; }
+  @media (max-width: 860px) { .start-grid { grid-template-columns: 1fr; } }
+  .start-side { display: grid; gap: 16px; }
+  .start-card { background: var(--sheet); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; display: grid; gap: 12px; min-width: 0; }
+  .start-templates { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .start-templates legend { font-size: 14px; font-weight: 600; color: var(--ink); margin-bottom: 8px; }
+  .start-templates [data-templates] { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+  .start-fields { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  .start-new .btn { justify-self: start; }
+  .start-file { justify-self: start; cursor: pointer; }
+  .start-recent { display: grid; gap: 12px; }
+
   /* Changelog: days down the page, each change tagged with where it lives. */
   .changelog-legend { display: flex; gap: 8px; margin-top: 18px; }
   .changelog-day { margin: 0 0 40px; }

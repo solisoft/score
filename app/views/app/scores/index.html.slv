@@ -1,10 +1,7 @@
 <section class="library">
   <header class="library-head">
     <h1>Your scores</h1>
-    <form action="<%= app_scores_path() %>" method="POST" class="library-new">
-      <%- csrf_field() %>
-      <button type="submit" class="btn btn-primary">New score</button>
-    </form>
+    <a class="btn btn-primary" href="<%= app_home_path() %>">New score</a>
   </header>
 
   <form action="<%= app_scores_path() %>" method="GET" class="library-tools" role="search">

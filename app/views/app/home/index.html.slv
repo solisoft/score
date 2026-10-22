@@ -1,9 +1,173 @@
-<section class="app-panel">
-  <span class="eyebrow">Your scores</span>
-  <h1>Write music, keep it</h1>
-  <p class="lead">
-    Scores engraved as you type, played with real instruments, and saved to your account. Sign-in and your
-    library come next; until then the <a href="<%= playground_path() %>">playground</a> keeps a draft in this
-    browser.
-  </p>
-</section>
+<% if user.nil? %>
+  <section class="app-panel">
+    <span class="eyebrow">EUI Score</span>
+    <h1>Write music, keep it</h1>
+    <p class="lead">
+      Scores engraved as you type, played with real instruments, and saved to your account: a library of your
+      scores, their history, and every device you sign in on.
+    </p>
+    <div class="app-cta">
+      <a class="btn btn-primary" href="<%= signup_path() %>">Create an account</a>
+      <a class="btn btn-ghost" href="<%= login_path() %>">Sign in</a>
+    </div>
+    <p class="muted">Or try it without an account in the <a href="<%= playground_path() %>">playground</a>: your score stays
+      in this browser, and you can bring it to your account later.</p>
+  </section>
+<% else %>
+  <section class="start">
+    <h1>Start</h1>
+
+    <%# Every way in posts the same form: the LilyPond to start from, and a
+        title for a source that has none. %>
+    <form action="<%= app_scores_path() %>" method="POST" id="start-form" hidden>
+      <%- csrf_field() %>
+      <input type="hidden" name="source" id="start-source">
+      <input type="hidden" name="title" id="start-title">
+    </form>
+
+    <div class="start-grid">
+      <form class="start-card start-new" id="new-score">
+        <h2>New score</h2>
+        <fieldset class="start-templates">
+          <legend>Start from</legend>
+          <div data-templates></div>
+        </fieldset>
+        <div class="start-fields">
+          <label class="field">Title <input type="text" id="new-title" name="title" placeholder="Untitled" maxlength="200"></label>
+          <label class="field">Composer <input type="text" id="new-composer" name="composer"></label>
+          <label class="field">Key
+            <select id="new-key" name="key">
+              <% for fifths in range(-7, 8) %>
+                <option value="<%= fifths %>"<%= fifths == 0 ? " selected" : "" %>><%= ["C♭", "G♭", "D♭", "A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯"][fifths + 7] %> major</option>
+              <% end %>
+            </select>
+          </label>
+          <label class="field">Metre
+            <select id="new-time" name="time">
+              <% for metre in ["2/4", "3/4", "4/4", "5/4", "2/2", "3/8", "6/8", "9/8", "12/8"] %>
+                <option value="<%= metre %>"<%= metre == "4/4" ? " selected" : "" %>><%= metre %></option>
+              <% end %>
+            </select>
+          </label>
+          <label class="field">Tempo (♩ =) <input type="number" id="new-bpm" name="bpm" min="20" max="300" placeholder="none"></label>
+          <label class="field">Bars <input type="number" id="new-bars" name="bars" min="1" max="500" value="16"></label>
+        </div>
+        <p class="form-error" data-new-error hidden></p>
+        <button type="submit" class="btn btn-primary">Create the score</button>
+      </form>
+
+      <div class="start-side">
+        <div class="start-card">
+          <h2>Import</h2>
+          <p class="muted">A LilyPond file (.ly) from your computer.</p>
+          <label class="btn btn-ghost start-file">Choose a file…
+            <input type="file" accept=".ly,.ily,.txt,text/plain" data-import hidden>
+          </label>
+        </div>
+
+        <div class="start-card" data-draft hidden>
+          <h2>Your playground score</h2>
+          <p class="muted">The score kept in this browser by the <a href="<%= playground_path() %>">playground</a>:
+            <strong data-draft-title></strong>.</p>
+          <button type="button" class="btn btn-ghost" data-keep-draft>Save it to your account</button>
+        </div>
+
+        <div class="start-card" data-shared hidden>
+          <h2>A shared score</h2>
+          <p class="muted">The link you opened holds <strong data-shared-title></strong>.</p>
+          <button type="button" class="btn btn-ghost" data-keep-shared>Save it to your account</button>
+        </div>
+      </div>
+    </div>
+
+    <section class="start-recent">
+      <div class="library-head">
+        <h2>Recent</h2>
+        <a href="<%= app_scores_path() %>">All your scores</a>
+      </div>
+      <% if recent.length == 0 %>
+        <p class="muted">Your scores will be here.</p>
+      <% else %>
+        <ul class="library-grid">
+          <% for score in recent %>
+            <li class="score-card">
+              <a class="score-card-open" href="<%= app_score_path(score) %>">
+                <img src="<%= app_score_preview_path(score) %>?r=<%= score.revision %>" alt="" loading="lazy" width="280" height="140">
+                <span class="score-card-title"><%= score.title %></span>
+              </a>
+              <span class="score-card-when muted">Changed <%= time_ago(score.updated_at) %></span>
+            </li>
+          <% end %>
+        </ul>
+      <% end %>
+    </section>
+  </section>
+
+  <script type="module">
+    const M = await import("/eui-score/score-model.js?v=<%= eui_version %>");
+    const startForm = document.getElementById("start-form");
+    const begin = (source, title = "") => {
+      document.getElementById("start-source").value = source;
+      document.getElementById("start-title").value = title;
+      startForm.submit();
+    };
+    const titleOf = (source) => /\\header\s*\{[^}]*?title\s*=\s*"([^"]*)"/.exec(source)?.[1] || "Untitled";
+
+    // New: a template, its settings, the model's LilyPond.
+    const box = document.querySelector("[data-templates]");
+    for (const template of M.TEMPLATES) {
+      const label = Object.assign(document.createElement("label"), { className: "studio-template" });
+      const radio = Object.assign(document.createElement("input"), { type: "radio", name: "template", value: template.id, checked: template.id === "piano" });
+      const staves = template.staves.map((spec) => spec.name ?? spec.instrument).filter((name, k, all) => name !== all[k - 1]);
+      label.append(radio, Object.assign(document.createElement("b"), { textContent: template.name }), Object.assign(document.createElement("small"), { textContent: template.about ?? staves.join(", ") }));
+      box.append(label);
+    }
+    document.getElementById("new-score").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const form = new FormData(event.target);
+      const error = document.querySelector("[data-new-error]");
+      try {
+        const score = M.fromTemplate(form.get("template"), {
+          title: form.get("title").trim() || "Untitled",
+          composer: form.get("composer").trim(),
+          key: Number(form.get("key")),
+          time: form.get("time").split("/").map(Number),
+          bpm: Number(form.get("bpm")) || 0,
+          bars: Number(form.get("bars")) || 16,
+        });
+        begin(M.toLilyPond(score).source);
+      } catch (problem) {
+        error.textContent = problem.message;
+        error.hidden = false;
+      }
+    });
+
+    // Import: the file's text, titled after the file when it has no title.
+    document.querySelector("[data-import]").addEventListener("change", async (event) => {
+      const file = event.target.files[0];
+      if (file) begin(await file.text(), file.name.replace(/\.[^.]+$/, ""));
+    });
+
+    // The playground's draft, kept in this browser.
+    let draft = null;
+    try {
+      draft = localStorage.getItem("eui-score-studio-draft");
+    } catch (error) {}
+    if (draft && draft.trim()) {
+      document.querySelector("[data-draft]").hidden = false;
+      document.querySelector("[data-draft-title]").textContent = titleOf(draft);
+      document.querySelector("[data-keep-draft]").addEventListener("click", () => begin(draft));
+    }
+
+    // A shared link (#s=…), opened here.
+    const code = /^#s=([A-Za-z0-9_-]+)$/.exec(location.hash)?.[1];
+    if (code) {
+      const shared = await M.fromShareCode(code).catch(() => null);
+      if (shared && shared.trim()) {
+        document.querySelector("[data-shared]").hidden = false;
+        document.querySelector("[data-shared-title]").textContent = titleOf(shared);
+        document.querySelector("[data-keep-shared]").addEventListener("click", () => begin(shared));
+      }
+    }
+  </script>
+<% end %>

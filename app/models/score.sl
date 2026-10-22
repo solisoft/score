@@ -43,6 +43,12 @@ class Score < Model
     builder.limit(500).all
   end
 
+  # The `count` scores `user` changed last, out of the trash.
+  static def recent(user, count)
+    mine = Score.where("doc.user_id == @user AND doc.trashed_at == null", {"user": user._key})
+    mine.order("updated_at", "desc").limit(count).all
+  end
+
   # The scores `user` moved to the trash, the latest first.
   static def trash_of(user)
     trashed = Score.where("doc.user_id == @user AND doc.trashed_at != null", {"user": user._key})

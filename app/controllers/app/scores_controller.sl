@@ -24,9 +24,15 @@ class AppScoresController < AppBaseController
     @description = "Scores moved to the trash."
   end
 
-  # POST /app/scores — a blank score, opened in the editor
+  # POST /app/scores — a score from `source` (a template, an imported file,
+  # the playground's draft), titled `title` when it has none; blank without
+  # one. Opened in the editor.
   def create
-    score = Score.start(current_user(), Score.blank_source(params["title"].to_s))
+    source = params["source"].to_s
+    title = params["title"].to_s
+    source = Score.blank_source(title) if source.blank?
+    source = Score.with_title(source, title) if Score.title_in(source).nil? && !title.blank?
+    score = Score.start(current_user(), source)
     halt(422, "That score could not be created.") if score._errors
 
     redirect(app_score_path(score))

@@ -11,7 +11,7 @@ describe("AppHomeController") do
       body = res_body(response)
       assert_contains(body, "class=\"app-header\"")
       assert_not(body.contains("class=\"site-footer\""))
-      assert_contains(body, "<meta property=\"og:title\" content=\"Your scores · EUI Score\">")
+      assert_contains(body, "<meta property=\"og:title\" content=\"Write music, keep it · EUI Score\">")
       assert_contains(body, "<link rel=\"canonical\" href=\"")
     end
   end

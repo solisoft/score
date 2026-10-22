@@ -28,9 +28,60 @@ describe("AppScoresController") do
     assert_eq(res_status(post("/app/scores", {})), 302)
   end
 
-  test("the app's first screen is the library, once signed in") do
-    library_sign_in(library_user())
-    assert_eq(res_location(get("/app")), "/app/scores")
+  describe("the start screen") do
+    test("offers a guest the way in") do
+      body = res_body(get("/app"))
+      assert_contains(body, "Create an account")
+      assert_contains(body, "href=\"/playground\"")
+      assert_not(body.contains("id=\"start-form\""))
+    end
+
+    test("offers the signed-in person to start, and their six latest scores") do
+      owner = library_user()
+      (0 .. 8).each do |i|
+        Score.start(owner, Score.blank_source("Piece #{i}"))
+      end
+      Score.start(owner, Score.blank_source("Thrown away")).move_to_trash
+      Score.start(library_user(), Score.blank_source("Someone else's"))
+      library_sign_in(owner)
+      body = res_body(get("/app"))
+      assert_eq(res_status(get("/app")), 200)
+      assert_contains(body, "id=\"start-form\"")
+      assert_contains(body, "Create the score")
+      assert_contains(body, "data-import")
+      recent = assigns()["recent"]
+      assert_eq(recent.length, 6)
+      assert(recent.all?(&{ |score|
+        score.user_id == owner._key && !score.trashed?
+      }))
+    end
+
+    test("starts a score from the LilyPond posted, titled after the file when it has no title") do
+      owner = library_user()
+      library_sign_in(owner)
+      post(
+        "/app/scores",
+        {"source": "\\relative c' { c4 d e f }", "title": "my-tune"}
+      )
+      created = Score.library(owner, "", "updated")[0]
+      assert_eq(created.title, "my-tune")
+      assert_contains(created.source, "c4 d e f")
+      post(
+        "/app/scores",
+        {"source": "\\header { title = \"Its own\" }\n{ c'1 }", "title": "file-name"}
+      )
+      assert_eq(Score.library(owner, "", "title").map(&{ |score|
+        score.title
+      }), ["Its own", "my-tune"])
+    end
+
+    test("refuses a source too long to keep, and keeps nothing") do
+      owner = library_user()
+      library_sign_in(owner)
+      response = post("/app/scores", {"source": "c" * 1000001})
+      assert_eq(res_status(response), 422)
+      assert_eq(Score.library(owner, "", "updated").length, 0)
+    end
   end
 
   test("lists the signed-in person's scores, with a card each, and searches them") do
