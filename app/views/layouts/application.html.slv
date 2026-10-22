@@ -13,6 +13,9 @@
     <% current_path = req ? req["path"] : "/" %>
     <% share_url = absolute_url(current_path) %>
     <meta name="description" content="<%= share_description %>">
+    <% if indexable == false %>
+    <meta name="robots" content="noindex">
+    <% end %>
     <link rel="canonical" href="<%= share_url %>">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="EUI Score">

@@ -1,0 +1,10 @@
+<div class="wrap">
+  <header class="page-head">
+    <span class="eyebrow">A score on EUI Score</span>
+    <h1><%= score.title %></h1>
+    <% if can_edit %>
+      <p><a class="btn btn-ghost" href="<%= app_score_path(score) %>">Open in the editor</a></p>
+    <% end %>
+  </header>
+  <%- score_figure(figure, {"name": "score", "pdf": pdf_url, "source": "closed"}) %>
+</div>

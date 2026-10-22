@@ -1,0 +1,93 @@
+<section class="library share">
+  <header class="library-head">
+    <h1>Share “<%= score.title %>”</h1>
+    <a class="btn btn-ghost" href="<%= app_score_path(score) %>">Back to the score</a>
+  </header>
+  <% if error.present? %>
+    <p class="form-error" role="alert"><%= error %></p>
+  <% end %>
+
+  <div class="start-card">
+    <h2>Who may read it</h2>
+    <form action="<%= app_score_share_path(score) %>" method="POST" class="share-visibility">
+      <%- csrf_field() %>
+      <% for choice in choices %>
+        <label class="share-choice">
+          <input type="radio" name="visibility" value="<%= choice[0] %>"<%- score.visibility == choice[0] ? " checked" : "" %>>
+          <span><b><%= choice[1] %></b><small><%= choice[2] %></small></span>
+        </label>
+      <% end %>
+      <button type="submit" class="btn btn-primary">Save</button>
+    </form>
+  </div>
+
+  <div class="start-card">
+    <h2>Its link</h2>
+    <p class="muted">The read page: the score engraved, Play, PDF, MIDI — no editing.
+      <% if score.visibility == "private" %>While the score is private, only you and the people invited can open it.<% end %></p>
+    <div class="share-copy">
+      <input type="text" id="read-url" value="<%= absolute_url(read_path) %>" readonly aria-label="The score's link">
+      <button type="button" class="btn btn-ghost" data-copy="read-url">Copy</button>
+    </div>
+    <form action="<%= app_score_new_link_path(score) %>" method="POST">
+      <%- csrf_field() %>
+      <button type="submit" class="btn btn-ghost">New link (the old one stops working)</button>
+    </form>
+  </div>
+
+  <% unless score.visibility == "private" %>
+    <div class="start-card">
+      <h2>On another site</h2>
+      <p class="muted">Paste this into any web page: the score is engraved there, and follows your changes.</p>
+      <% script_tag = "<script type=\"module\" src=\"#{absolute_url("/eui-score.js")}\"></script>" %>
+      <% embed = script_tag + "\n<eui-score src=\"#{absolute_url(source_path)}\"></eui-score>" %>
+      <textarea id="embed-code" class="share-embed" readonly rows="3" aria-label="Code to embed the score"><%= embed %></textarea>
+      <button type="button" class="btn btn-ghost" data-copy="embed-code">Copy the code</button>
+    </div>
+  <% end %>
+
+  <div class="start-card">
+    <h2>People</h2>
+    <form action="<%= app_score_invitations_path(score) %>" method="POST" class="share-invite">
+      <%- csrf_field() %>
+      <label class="field">Email <input type="email" id="invite-email" name="email" required placeholder="name@example.com"></label>
+      <label class="field">May
+        <select id="invite-role" name="role">
+          <option value="read">open it</option>
+          <option value="write">open and change it</option>
+        </select>
+      </label>
+      <button type="submit" class="btn btn-primary">Invite</button>
+    </form>
+    <% if shares.length == 0 %>
+      <p class="muted">Nobody yet.</p>
+    <% else %>
+      <ul class="trash-list">
+        <% for share in shares %>
+          <li>
+            <span class="trash-title"><%= share.email %></span>
+            <span class="muted"><%= share.role == "write" ? "may open and change it" : "may open it" %></span>
+            <form action="<%= app_score_invitation_path(score, share) %>" method="POST">
+              <%- csrf_field() %>
+              <input type="hidden" name="_method" value="DELETE">
+              <button type="submit" class="btn btn-danger">Remove</button>
+            </form>
+          </li>
+        <% end %>
+      </ul>
+    <% end %>
+  </div>
+</section>
+<script>
+  for (const button of document.querySelectorAll("[data-copy]")) {
+    button.addEventListener("click", async () => {
+      const box = document.getElementById(button.dataset.copy);
+      try {
+        await navigator.clipboard.writeText(box.value);
+        button.textContent = "Copied";
+      } catch (error) {
+        box.select();
+      }
+    });
+  }
+</script>

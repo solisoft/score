@@ -10,6 +10,7 @@ class AppScoresController < AppBaseController
     @sort = ["title", "created"].includes?(params["sort"].to_s) ? params["sort"].to_s : "updated"
     @scores = Score.library(@user, @query, @sort)
     @trash_count = Score.trash_of(@user).length
+    @shared = ScoreShare.shared_with(@user)
     @title = "Your scores"
     @description = "Your scores, saved to your account."
   end
@@ -42,7 +43,10 @@ class AppScoresController < AppBaseController
   def show
     @score = @_score("show")
     return redirect(app_trash_path()) if @score.trashed?
+    # Shared to read only: the read page, not the editor.
+    return redirect(shared_score_path(@score.share_token)) unless @score.writable_by?(current_user())
 
+    @owner = @score.owned_by?(current_user())
     @source = @score.source
     @figure = ScoreSvg.figure(@source, 1000, 7)
     @examples = ScoreLibrary.examples
@@ -123,8 +127,8 @@ class AppScoresController < AppBaseController
 
   # POST /app/scores/:id/duplicate
   def duplicate
-    score = @_score("update")
-    copy = score.duplicate
+    score = @_score("show")
+    copy = score.duplicate(current_user())
     flash("notice", "“#{copy.title}” is a copy of “#{score.title}”.")
     redirect(app_scores_path())
   end
@@ -151,12 +155,92 @@ class AppScoresController < AppBaseController
     halt(422, "Move the score to the trash first.") unless score.trashed?
 
     ScoreVersion.delete_all_for(score)
+    ScoreShare.delete_all_for(score)
     score.delete
     flash("notice", "“#{score.title}” is deleted.")
     redirect(app_trash_path())
   end
 
+  # GET /app/scores/:id/share — who may read or change the score, its link,
+  # the code to embed it on a site
+  def share
+    @score = @_score("share")
+    @_share_page(@score)
+    @error = ""
+  end
+
+  # POST /app/scores/:id/share — visibility: private, link or public
+  def update_sharing
+    score = @_score("share")
+    halt(422, "Choose private, link or public.") unless score.make_visible(params["visibility"].to_s)
+
+    flash("notice", "“#{score.title}” is now #{this._visibility_words[score.visibility]}.")
+    redirect(app_score_share_path(score))
+  end
+
+  # POST /app/scores/:id/share/link — a new link; the old one stops working
+  def new_link
+    score = @_score("share")
+    score.new_link
+    flash("notice", "A new link: the old one no longer opens the score.")
+    redirect(app_score_share_path(score))
+  end
+
+  # POST /app/scores/:id/invitations — share with an email address, read or write
+  def invite
+    @score = @_score("share")
+    share = ScoreShare.invite(@score, params["email"].to_s, params["role"].to_s)
+    if type(share) == "hash"
+      @_share_page(@score)
+      @error = share["error"]
+      return render("app/scores/share", {}, {"status": 422})
+    end
+
+    ShareMailer.invited(share, @score, current_user().email).deliver_now rescue nil
+    flash(
+      "notice",
+      "#{share.email} may now #{share.role == "write" ? "open and change" : "open"} “#{this.score.title}”."
+    )
+    redirect(app_score_share_path(@score))
+  end
+
+  # DELETE /app/scores/:id/invitations/:share_id — no longer shared with them
+  def uninvite
+    score = @_score("share")
+    share = ScoreShare.find(params["share_id"])
+    halt(404, "Not shared that way") unless share.score_id == score._key
+
+    share.delete
+    flash("notice", "#{share.email} no longer has “#{score.title}”.")
+    redirect(app_score_share_path(score))
+  end
+
   private
+
+  # What the share page shows of `score`.
+  def _share_page(score)
+    # A score saved before links existed gets its own now (Score#stamp).
+    score.save if score.share_token.blank?
+    @shares = ScoreShare.of(score)
+    # Paths: the view makes them absolute (absolute_url is a view helper).
+    @read_path = shared_score_path(score.share_token)
+    @source_path = "#{shared_score_path(score.share_token)}/source.ly"
+    @choices = [
+      ["private", "Private", "You, and the people you invite below."],
+      ["link", "Anyone with the link", "Not listed anywhere: whoever has the link may read it, play it and print it."],
+      ["public", "Public", "Anyone, and search engines may list it."]
+    ]
+    @title = "Share “#{score.title}”"
+    @description = "Who may read or change #{score.title}."
+  end
+
+  def _visibility_words
+    {
+      "private": "private",
+      "link": "open to whoever has its link",
+      "public": "public"
+    }
+  end
 
   # The score of the route, if the signed-in person may `action` it (403
   # otherwise; 404 for no such score).

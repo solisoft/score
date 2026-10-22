@@ -4,6 +4,14 @@
 # SCORE_TRASH_DAYS days.
 const SCORE_TRASH_DAYS = 30
 const SCORE_UNTITLED = "Untitled score"
+# Who may read a score without an invitation: nobody but its owner and the
+# people it is shared with ("private"), whoever has its link ("link"), or
+# anyone, search engines included ("public").
+const SCORE_VISIBILITIES = [
+  "private",
+  "link",
+  "public"
+]
 
 class Score < Model
   validates("user_id", {"presence": true})
@@ -15,6 +23,10 @@ class Score < Model
     "source",
     {"presence": true, "max_length": 1000000}
   )
+  validates(
+    "visibility",
+    {"inclusion": SCORE_VISIBILITIES, "allow_nil": true}
+  )
   before_save("stamp")
 
   # Every save: the title read from the source, the times, the revision a
@@ -25,7 +37,22 @@ class Score < Model
     @created_at ||= now
     @updated_at = now
     @revision = (@revision ?? 0) + 1
+    @visibility ||= "private"
+    @share_token ||= Score.new_token
     true
+  end
+
+  # The address of a score's read page, /s/<token>: random, so a private
+  # score's cannot be guessed, and replaced at will (`new_link`).
+  static def new_token
+    Crypto.random_token(16)
+  end
+
+  # The score whose read page this is, out of the trash, or nil.
+  static def by_token(token)
+    return nil if token.to_s.blank?
+
+    Score.where("doc.share_token == @token AND doc.trashed_at == null", {"token": token.to_s}).first
   end
 
   # The scores `user` has out of the trash, matching `query` (in the title),
@@ -66,6 +93,7 @@ class Score < Model
 
   # Every score of `user`, trash included: their account is going.
   static def delete_all_of(user)
+    ScoreShare.delete_all_of(user)
     ScoreVersion.delete_all_of(user)
     Score.where("doc.user_id == @user", {"user": user._key}).delete_all
   end
@@ -163,6 +191,39 @@ class Score < Model
     !user.nil? && @user_id == user._key
   end
 
+  # "owner", "write", "read" or nil: what `user` may do with this score
+  # through their account. (A link or public score is also readable by
+  # anyone: `readable_by?`.)
+  def access_of(user)
+    return nil if user.nil?
+    return "owner" if this.owned_by?(user)
+
+    ScoreShare.role_for(this, user)
+  end
+
+  def writable_by?(user)
+    ["owner", "write"].includes?(this.access_of(user))
+  end
+
+  def readable_by?(user)
+    return true if ["link", "public"].includes?(@visibility)
+
+    !this.access_of(user).nil?
+  end
+
+  def make_visible(visibility)
+    return false unless SCORE_VISIBILITIES.includes?(visibility)
+
+    @visibility = visibility
+    @save
+  end
+
+  # A new read-page address; the old one stops working.
+  def new_link
+    @share_token = Score.new_token
+    @save
+  end
+
   def trashed?
     !@trashed_at.nil?
   end
@@ -182,10 +243,11 @@ class Score < Model
     @save
   end
 
-  # A copy in the same library, "(copy)" after its title.
-  def duplicate
+  # A copy in `user`'s library (the owner's, by default), "(copy)" after
+  # its title. It is private, with a link of its own.
+  def duplicate(user = nil)
     Score.create({
-      "user_id": @user_id,
+      "user_id": user.nil? ? @user_id : user._key,
       "source": Score.with_title(@source, "#{this.title} (copy)"),
       "title": "#{this.title} (copy)"
     })

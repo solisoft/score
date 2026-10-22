@@ -354,6 +354,20 @@
   .start-file { justify-self: start; cursor: pointer; }
   .start-recent { display: grid; gap: 12px; }
 
+  /* Sharing a score. */
+  .share-visibility { display: grid; gap: 10px; }
+  .share-visibility .btn { justify-self: start; }
+  .share-choice { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+  .share-choice input { margin-top: 4px; }
+  .share-choice span { display: grid; gap: 2px; }
+  .share-choice small { color: var(--muted); font-size: 14px; }
+  .share-copy { display: flex; gap: 8px; flex-wrap: wrap; }
+  .share-copy input { flex: 1 1 260px; min-width: 0; font: 400 14px/1.4 var(--font-mono); padding: 9px 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--paper); color: var(--ink); }
+  .share-embed { width: 100%; font: 400 13px/1.5 var(--font-mono); padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--paper); color: var(--ink); resize: vertical; }
+  .share-invite { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+  .share-invite .field:first-child { flex: 1 1 240px; }
+  .share .start-card .btn { justify-self: start; }
+
   /* Changelog: days down the page, each change tagged with where it lives. */
   .changelog-legend { display: flex; gap: 8px; margin-top: 18px; }
   .changelog-day { margin: 0 0 40px; }

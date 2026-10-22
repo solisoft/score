@@ -25,7 +25,7 @@ class AuthMailer < Mailer
   def account_locked(user, lock_minutes)
     @user = user
     @lock_minutes = lock_minutes
-    @reset_url = auth_base_url() + "/password/new"
+    @reset_url = auth_base_url() + "/password/reset"
     this.mail(to: user.email, subject: "Your account is temporarily locked")
   end
 end

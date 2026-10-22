@@ -60,5 +60,22 @@
     </ul>
   <% end %>
 
+  <% if shared.length > 0 %>
+    <section class="start-recent">
+      <h2>Shared with you</h2>
+      <ul class="library-grid">
+        <% for entry in shared %>
+          <li class="score-card">
+            <a class="score-card-open" href="<%= app_score_path(entry["score"]) %>">
+              <img src="<%= app_score_preview_path(entry["score"]) %>?r=<%= entry["score"].revision %>" alt="" loading="lazy" width="280" height="140">
+              <span class="score-card-title"><%= entry["score"].title %></span>
+            </a>
+            <span class="score-card-when muted"><%= entry["role"] == "write" ? "You may change it" : "You may read it" %></span>
+          </li>
+        <% end %>
+      </ul>
+    </section>
+  <% end %>
+
   <p class="library-trash-link"><a href="<%= app_trash_path() %>">Trash<% if trash_count > 0 %> (<%= trash_count %>)<% end %></a></p>
 </section>
