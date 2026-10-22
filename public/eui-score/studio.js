@@ -107,6 +107,7 @@ export function startStudio(root, options = {}) {
     zoom: 1,
     playing: null,
     drag: null,
+    written: false, // transposing instruments shown as written, for reading only
   };
   // For a console or a test: the studio's state, on its element.
   root.studio = st;
@@ -202,6 +203,37 @@ export function startStudio(root, options = {}) {
     }
   });
 
+  // File ▸ Print a part…: one staff, written as its player reads it.
+  const partsDialog = root.querySelector("[data-parts]");
+  const partsStaff = partsDialog?.querySelector("[data-parts-staff]");
+  const partSource = () => M.toLilyPond(M.partOf(st.score, Number(partsStaff.value)), { written: true }).source;
+  const partName = () => partsStaff.selectedOptions[0]?.textContent ?? "part";
+  async function previewPart() {
+    await loaded();
+    const box = partsDialog.querySelector("[data-parts-preview]");
+    try {
+      box.innerHTML = engine.svg(partSource(), 560, 5.5, "{}");
+    } catch (error) {
+      box.textContent = error.message ?? String(error);
+    }
+  }
+  function openParts() {
+    if (!st.score) return say("A part needs the score tools: this piece is edited in its text.", true);
+    partsStaff.replaceChildren(...M.staffLanes(st.score).map((s, n) => {
+      const staff = st.score.staves[s];
+      const name = staff.name || M.INSTRUMENTS[M.instrumentOf(st.score, s)]?.name || `Staff ${n + 1}`;
+      return new Option(name, String(s));
+    }));
+    partsDialog.showModal();
+    return previewPart();
+  }
+  partsStaff?.addEventListener("change", previewPart);
+  partsDialog?.querySelector("[data-parts-close]").addEventListener("click", () => partsDialog.close());
+  partsDialog?.querySelector("[data-parts-ly]").addEventListener("click", () => download(partSource(), `${fileName()} - ${partName()}.ly`, "text/x-lilypond"));
+  partsDialog?.querySelector("[data-parts-pdf]").addEventListener("click", () => {
+    toPdf(partSource(), `${title()} — ${partName()}`).then((pdf) => download(pdf, `${fileName()} - ${partName()}.pdf`, "application/pdf")).catch((e) => refuse(e));
+  });
+
   // ---- Model ↔ text ----------------------------------------------------------
 
   function readText(text) {
@@ -245,6 +277,7 @@ export function startStudio(root, options = {}) {
   /** Runs `fn` on the model as one undoable edit; a refusal leaves everything as it was. */
   function edit(fn, { keepFuture = false } = {}) {
     if (!st.score) return say("The score tools wait: this piece is edited in its text below.", true);
+    if (st.written) return say("Written pitch is for reading: View ▸ Written pitch again to write, at concert pitch.", true);
     const before = snapshot();
     try {
       fn(st.score);
@@ -525,6 +558,15 @@ export function startStudio(root, options = {}) {
     switch (name) {
       case "new": return newDialog.showModal();
       case "properties": return root.querySelector("[data-properties]").showModal();
+      case "written": {
+        if (!st.score) return say("Written pitch needs the score tools: this piece is edited in its text.", true);
+        st.written = !st.written;
+        root.querySelector("[data-written-label]").firstChild.textContent = st.written ? "Concert pitch " : "Written pitch ";
+        const moved = M.staffLanes(st.score).some((s) => M.transpositionOf(st.score.staves[s]));
+        say(st.written ? (moved ? "Written pitch: transposing instruments as their players read them. For reading only." : "Written pitch: no instrument here is written apart from how it sounds.") : "Concert pitch: as it sounds, and as it is written into.");
+        return draw();
+      }
+      case "parts": return openParts();
       case "undo": return undo();
       case "redo": return redo();
       case "play": return togglePlay();
@@ -1055,7 +1097,7 @@ export function startStudio(root, options = {}) {
     // Drawn: the text, with the second voice's bars opened where the page writes in them.
     let shown = st.text;
     if (st.score) {
-      const { source, items } = M.toLilyPond(st.score, { open: openBars() });
+      const { source, items } = M.toLilyPond(st.score, { open: openBars(), written: st.written });
       st.items = items;
       shown = source;
     }

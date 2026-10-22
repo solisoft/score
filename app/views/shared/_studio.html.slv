@@ -33,6 +33,7 @@
             <button type="button" role="menuitem" data-act="save-wav">Save the sound <kbd>.wav</kbd></button>
             <button type="button" role="menuitem" data-act="save-png">Save a picture <kbd>.png</kbd></button>
             <button type="button" role="menuitem" data-act="save-svg">Save a drawing <kbd>.svg</kbd></button>
+            <button type="button" role="menuitem" data-act="parts">Print a part… <kbd>one instrument</kbd></button>
             <hr>
             <button type="button" role="menuitem" data-act="share">Copy a link to this score</button>
           </div>
@@ -60,6 +61,7 @@
             <button type="button" role="menuitem" data-act="zoom-in">Larger <kbd>+</kbd></button>
             <button type="button" role="menuitem" data-act="zoom-out">Smaller <kbd>−</kbd></button>
             <button type="button" role="menuitem" data-act="tools">Show or hide the tools</button>
+            <button type="button" role="menuitem" data-act="written" data-written-label>Written pitch <kbd>clarinets, horns, saxes</kbd></button>
             <button type="button" role="menuitem" data-act="keys">Keyboard shortcuts <kbd>?</kbd></button>
           </div>
         </details>
@@ -505,6 +507,21 @@
         </label>
     <p class="muted studio-properties-note">Each staff's instrument, clef and name: select a note of it, then the toolbox's
       <strong>This staff</strong>.</p>
+  </dialog>
+
+  <%# File ▸ Print a part…: one instrument of the score, as its player reads it. %>
+  <dialog class="studio-keys studio-parts" data-parts aria-labelledby="studio-parts-title">
+    <div class="studio-keys-head">
+      <h2 id="studio-parts-title">Print a part</h2>
+      <button type="button" class="studio-menu" data-parts-close aria-label="Close">×</button>
+    </div>
+    <label class="tool-field">Instrument <select data-parts-staff></select></label>
+    <p class="muted studio-parts-note">A part is written as its player reads it: a clarinet in B♭ a tone higher, a horn in F a fifth.</p>
+    <div class="studio-parts-preview" data-parts-preview></div>
+    <div class="tool-row studio-new-actions">
+      <button type="button" class="tool tool-wide" data-parts-ly>Save as .ly</button>
+      <button type="button" class="tool tool-wide tool-primary" data-parts-pdf>Print as PDF</button>
+    </div>
   </dialog>
 
   <dialog class="studio-keys studio-new" data-new aria-labelledby="studio-new-title">

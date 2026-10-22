@@ -285,6 +285,49 @@ test("verses stand one under another, each read back on its own notes", () => {
   assert.throws(() => M.setLyric(s, 0, 0, "la", false, false, 0), /a verse is 1 to 6/);
 });
 
+test("transposing instruments are written where they are read, from their instrument and name", () => {
+  const t = (instrument, name = "") => M.transpositionOf({ instrument, name });
+  assert.equal(t("clarinet", "Clarinet in B♭"), "d");
+  assert.equal(t("clarinet", "Clarinet in A"), "ees");
+  assert.equal(t("clarinet", "Clarinet"), "d");
+  assert.equal(t("clarinet", "Clarinet in C"), null);
+  assert.equal(t("french horn", "Horn in F"), "g");
+  assert.equal(t("trumpet", "Trumpet in C"), null);
+  assert.equal(t("alto sax"), "a");
+  assert.equal(t("tenor sax"), "d'");
+  assert.equal(t("baritone sax"), "a'");
+  assert.equal(t("flute", "Flute"), null);
+  assert.equal(M.transpositionOf({ drums: true, instrument: "" }), null);
+});
+
+test("written pitch moves a transposing staff, key and notes, and is engraved", () => {
+  const s = M.fromTemplate("wind-quintet", { title: "Quintet", key: 1 });
+  M.write(s, 2, 0, q, C4);
+  const concert = M.toLilyPond(s).source;
+  const written = M.toLilyPond(s, { written: true });
+  assert.ok(!concert.includes("\\transpose"));
+  assert.equal(written.source.match(/\\transpose c [a-g]/g).length, 2, "the clarinet and the horn");
+  const view = JSON.parse(editor_view(written.source, 900, 7, -1, -1));
+  assert.equal(view.items.length, written.items.length, "the same items, written or sounding");
+  // The clarinet's C sounds where a D is written, in A major's key.
+  const parsed = JSON.parse(score_json(written.source));
+  assert.ok(parsed, "the engraver reads it");
+});
+
+test("a part: one staff, its second voice with it, its name on top, written as read", () => {
+  const s = M.fromTemplate("wind-quintet", { title: "Quintet" });
+  M.write(s, 2, 0, q, C4);
+  const part = M.partOf(s, 2);
+  assert.equal(part.staves.length, 1);
+  assert.equal(part.header.instrument, "Clarinet in B♭");
+  assert.equal(part.header.title, "Quintet");
+  const { source } = M.toLilyPond(part, { written: true });
+  assert.match(source, /instrument = "Clarinet in B♭"/);
+  assert.match(source, /\\transpose c d \{/);
+  JSON.parse(editor_view(source, 900, 7, -1, -1));
+  assert.equal(s.staves.length, 5, "the score itself is left whole");
+});
+
 test("a tie needs a note after it; a slur on one note goes to the next, and comes off whole", () => {
   const s = M.newScore();
   M.write(s, 0, 0, q, C4);

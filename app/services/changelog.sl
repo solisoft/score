@@ -12,6 +12,20 @@ class Changelog
       {"date": "2026-10-22", "entries": [
         {
           "area": "site",
+          "title": "Parts, and transposing instruments as they are read",
+          "text": "File ▸ Print a part: one instrument alone, as a PDF, its name on top. View ▸ Written pitch shows a "
+          + "clarinet in B♭, a horn in F or a saxophone as its player reads it; the score sounds and is written "
+          + "at concert pitch.",
+          "link": "playground"
+        },
+        {
+          "area": "engine",
+          "title": "A flat or a sharp in a staff's name",
+          "text": "\"Clarinet in B♭\" prints its flat: the score's words have ♭, ♯ and ♮, drawn like the "
+          + "accidentals on the staff."
+        },
+        {
+          "area": "site",
           "title": "The app: your scores, kept in your account",
           "text": "Sign up, start a score from a template or a file, and it saves itself as you write: a library "
           + "with previews, search and a trash, the history of every score, and a way back to any version.",

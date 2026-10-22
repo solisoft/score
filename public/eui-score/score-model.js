@@ -407,7 +407,7 @@ export const TEMPLATES = [
   { id: "satb", name: "Choir (SATB)", staves: [{ instrument: "Soprano" }, { instrument: "Alto" }, { instrument: "Tenor" }, { instrument: "Bass" }], group: "choir" },
   { id: "satb-piano", name: "Choir and piano", staves: [{ instrument: "Soprano" }, { instrument: "Alto" }, { instrument: "Tenor" }, { instrument: "Bass" }, ...PIANO], group: "none", choir: [0, 3] },
   { id: "string-quartet", name: "String quartet", staves: [{ instrument: "Violin", name: "Violin I", short: "Vl. I" }, { instrument: "Violin", name: "Violin II", short: "Vl. II" }, { instrument: "Viola" }, { instrument: "Cello" }], group: "bracket" },
-  { id: "wind-quintet", name: "Wind quintet", staves: [{ instrument: "Flute" }, { instrument: "Oboe" }, { instrument: "Clarinet" }, { instrument: "Horn" }, { instrument: "Bassoon" }], group: "bracket" },
+  { id: "wind-quintet", name: "Wind quintet", staves: [{ instrument: "Flute" }, { instrument: "Oboe" }, { instrument: "Clarinet in B♭" }, { instrument: "Horn in F" }, { instrument: "Bassoon" }], group: "bracket" },
   { id: "guitar", name: "Guitar", about: "Treble clef an octave down", staves: [{ instrument: "Guitar" }], group: "none" },
   { id: "band", name: "Rock band", staves: [{ instrument: "Voice" }, { instrument: "Electric guitar" }, { instrument: "Bass guitar" }, { instrument: "Drum kit" }], group: "bracket" },
   { id: "drums", name: "Drum kit", about: "One drum staff, General MIDI kit", staves: [{ instrument: "Drum kit" }], group: "none" },
@@ -1427,7 +1427,7 @@ function lyricText(staff, verse = 1) {
  * `[{ staff: lane, bar }]`. `unfold` plays every repeat out, for the MIDI:
  * no repeat signs, the bars in the order they sound (see `playOrder`).
  */
-export function toLilyPond(score, { open = [], unfold = false } = {}) {
+export function toLilyPond(score, { open = [], unfold = false, written = false } = {}) {
   const items = [];
   const header = Object.entries(score.header).filter(([, v]) => v).map(([k, v]) => `${k} = ${quote(v)}`).join(" ");
   const repeats = score.repeats ?? [];
@@ -1454,10 +1454,13 @@ export function toLilyPond(score, { open = [], unfold = false } = {}) {
     const settings = name + short + midi;
     // A piece that ends on a repeat's end keeps its :|. sign, not a final bar.
     const ending = lastRepeat ? "" : ' \\bar "|."';
+    // Written pitch: a transposing instrument's staff, key and all, where it is read.
+    const moved = written ? transpositionOf(staff) : null;
+    const brace = moved ? `\\transpose c ${moved} {` : "{";
     // A drum staff: its strokes in \\drummode, with no clef and no key.
     const opening = staff.drums
       ? `\\new DrumStaff ${settings ? `\\with { ${settings}} ` : ""}\\drummode {\n  \\time ${time[0]}/${time[1]}${tempo}`
-      : `\\new Staff ${settings ? `\\with { ${settings}} ` : ""}{\n  \\clef ${clef} \\key ${KEYS[keyOf(score, s)]} \\major \\time ${time[0]}/${time[1]}${tempo}`;
+      : `\\new Staff ${settings ? `\\with { ${settings}} ` : ""}${brace}\n  \\clef ${clef} \\key ${KEYS[keyOf(score, s)]} \\major \\time ${time[0]}/${time[1]}${tempo}`;
     let out = `${opening}\n  ${music.replace(/\n {4}/g, "\n  ")}${ending}\n}`;
     // Each verse a line under the one before.
     for (let verse = 1; verse <= versesOf(staff); verse++) out += `\n\\addlyrics { ${lyricText(staff, verse)} }`;
@@ -1911,14 +1914,16 @@ export const INSTRUMENTS = [
   preset("Woodwinds", "Recorder", "Rec.", "recorder", "treble"),
   preset("Woodwinds", "Oboe", "Ob.", "oboe", "treble"),
   preset("Woodwinds", "English horn", "E.H.", "english horn", "treble"),
-  preset("Woodwinds", "Clarinet", "Cl.", "clarinet", "treble"),
+  preset("Woodwinds", "Clarinet in B♭", "Cl.", "clarinet", "treble"),
+  preset("Woodwinds", "Clarinet in A", "Cl. A", "clarinet", "treble"),
   preset("Woodwinds", "Bassoon", "Bsn.", "bassoon", "bass"),
   preset("Woodwinds", "Soprano sax", "S.Sax.", "soprano sax", "treble"),
   preset("Woodwinds", "Alto sax", "A.Sax.", "alto sax", "treble"),
   preset("Woodwinds", "Tenor sax", "T.Sax.", "tenor sax", "treble"),
   preset("Woodwinds", "Baritone sax", "B.Sax.", "baritone sax", "treble"),
-  preset("Brass", "Trumpet", "Tpt.", "trumpet", "treble"),
-  preset("Brass", "Horn", "Hn.", "french horn", "treble"),
+  preset("Brass", "Trumpet in B♭", "Tpt.", "trumpet", "treble"),
+  preset("Brass", "Trumpet in C", "Tpt. C", "trumpet", "treble"),
+  preset("Brass", "Horn in F", "Hn.", "french horn", "treble"),
   preset("Brass", "Trombone", "Tbn.", "trombone", "bass"),
   preset("Brass", "Tuba", "Tba.", "tuba", "bass"),
   preset("Guitars", "Guitar", "Gtr.", "acoustic guitar (nylon)", "treble_8"),
@@ -2066,6 +2071,53 @@ export function setInstrument(score, s, k) {
   }
   staff.instrument = it.sound;
   if (it.clef) staff.clef = it.clef;
+}
+
+// ---- Transposing instruments and parts ------------------------------------------------------
+//
+// A score keeps its notes as they sound (concert pitch): that is what is
+// played, saved and edited. A clarinet in B♭, a horn in F, a saxophone read
+// their parts written higher; the score shows them so on request (written
+// pitch) and always in a part. Which way a staff is written follows from its
+// instrument — its sound, and its name ("Clarinet in A", "Trumpet in C") —
+// so the LilyPond text needs nothing more to say it.
+
+/**
+ * Where middle C of staff `staff`'s concert pitch is written, as LilyPond's
+ * \transpose c <this> says it — "d" a tone higher (B♭), "g" a fifth (F) — or
+ * null for a staff written as it sounds.
+ */
+export function transpositionOf(staff) {
+  if (!staff || staff.drums) return null;
+  const sound = staff.instrument || "";
+  const name = staff.name || "";
+  const key = /\bin\s+([A-G])\s*(♭|b|-flat)?\b/i.exec(name);
+  const named = key ? key[1].toUpperCase() + (key[2] ? "♭" : "") : null;
+  if (named === "C") return null;
+  if (sound === "alto sax") return "a";
+  if (sound === "baritone sax") return "a'";
+  if (sound === "tenor sax") return "d'";
+  if (sound === "soprano sax") return "d";
+  if (sound === "english horn" || sound === "french horn") return named === "E♭" ? "a" : "g";
+  if (sound === "clarinet") return named === "A" ? "ees" : named === "E♭" ? "a," : "d";
+  if (sound === "trumpet") return named === "A" ? "ees" : named === "D" ? "bes," : named === "E♭" ? "a," : "d";
+  return null;
+}
+
+/** The part of the staff on lane `s`: that staff (and its second voice) alone, its name on top. */
+export function partOf(score, s) {
+  const upper = upperOf(score, s);
+  const lower = lowerOf(score, upper);
+  const lanes = lower >= 0 ? [upper, lower] : [upper];
+  const part = JSON.parse(JSON.stringify(score));
+  const staff = part.staves[upper];
+  part.staves = lanes.map((lane) => part.staves[lane]);
+  part.groups = [];
+  part.group = "none";
+  part.header = { ...part.header, instrument: staff.name || INSTRUMENTS[instrumentOf(score, upper)]?.name || "" };
+  // The staff's name is the part's heading: not repeated before each line.
+  part.staves[0] = { ...part.staves[0], name: "", short: "" };
+  return part;
 }
 
 // ---- Playing ----------------------------------------------------------------------------------
