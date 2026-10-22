@@ -13,7 +13,8 @@ class Changelog
         {
           "area": "site",
           "title": "Parts, and transposing instruments as they are read",
-          "text": "File ▸ Print a part: one instrument alone, as a PDF, its name on top. View ▸ Written pitch shows a "
+          "text": "File ▸ Print a part: one instrument alone, as a PDF, its name on top. View ▸ Written pitch "
+          + "shows a "
           + "clarinet in B♭, a horn in F or a saxophone as its player reads it; the score sounds and is written "
           + "at concert pitch.",
           "link": "playground"
