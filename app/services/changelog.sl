@@ -1,0 +1,160 @@
+# What changed, newest first: on the site and in its score editor, and in the
+# engraver (eui-score) that draws every score. One entry is one change a
+# reader can see; `area` is "site" or "engine", `link` the name of a page
+# of the site that shows it (see PagesController#changelog).
+#
+# Add an entry at the top of its day when a change ships; a new day goes
+# first.
+class Changelog
+  static def days
+    [
+      {"date": "2026-10-22", "entries": [
+        {
+          "area": "engine",
+          "title": "A note too long for its bar is cut into tied notes",
+          "text": "A half note written where only a quarter is left is no longer refused: it is cut at the bar "
+          + "line into two tied notes, as LilyPond cuts it. In the browser for now; the server follows."
+        },
+        {
+          "area": "engine",
+          "title": "The sustain pedal, D.S., D.C. and Fine",
+          "text": "Ped. and its release mark are drawn under the staff and held. D.S. al Coda, D.C. al Fine and "
+          + "Fine are written as LilyPond 2.24 writes them and set against their bar line."
+        },
+        {
+          "area": "site",
+          "title": "Rehearsal letters, segno, coda and jumps in the editor",
+          "text": "The toolbox writes rehearsal letters, segno and coda signs, D.S. and D.C. jumps, the pedal, "
+          + "staff text and expression text. Play follows the jumps.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
+          "title": "A duration that overflows the bar is tied over",
+          "text": "Choosing a duration longer than what is left of the bar writes tied notes across it instead "
+          + "of refusing.",
+          "link": "playground"
+        }
+      ]},
+      {"date": "2026-10-21", "entries": [
+        {
+          "area": "site",
+          "title": "New… starts a score from a template",
+          "text": "Piano, voice and piano, choir, string quartet, band, lead sheet or drums, with the title, key, "
+          + "metre and tempo chosen at the start.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
+          "title": "Save as WAV, PNG or SVG",
+          "text": "What Play sounds is saved as an audio file, and the score as a picture to share.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
+          "title": "A MIDI keyboard writes the notes",
+          "text": "Plug in a keyboard: a key played writes its note at the cursor, keys held together a chord.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
+          "title": "Bars inserted or removed anywhere, and a shared clipboard",
+          "text": "Put a bar before the selection or take the selected bars away; copy and paste go through the "
+          + "system clipboard, so music moves between the editor and other programs.",
+          "link": "playground"
+        }
+      ]},
+      {"date": "2026-10-20", "entries": [
+        {
+          "area": "engine",
+          "title": "A treble clef is drawn whole",
+          "text": "On a score with nothing over the first staff, the top of the clef was cut off. The picture "
+          + "now starts as high as its ink."
+        },
+        {
+          "area": "engine",
+          "title": "A dotted eighth's dot can be seen",
+          "text": "The dot stood against the flag and nearly vanished; it now stands past it."
+        },
+        {
+          "area": "engine",
+          "title": "A tempo mark stands clear of grace notes",
+          "text": "A tempo mark, and anything else over the staff, rises over the grace notes under it instead of "
+          + "running through them."
+        },
+        {
+          "area": "site",
+          "title": "Grace notes, arpeggios, glissandi, tremolos and ornaments",
+          "text": "All written from the editor's toolbox, and all heard when the score plays.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
+          "title": "The notes light up as they are heard",
+          "text": "The highlight waits for fermatas and grace notes, and keeps time with the sound."
+        },
+        {
+          "area": "site",
+          "title": "A tied note changes pitch with its tie",
+          "text": "Changing the pitch of a tied note changes every note tied to it, so a tie never joins two "
+          + "different pitches."
+        }
+      ]},
+      {"date": "2026-10-19", "entries": [
+        {
+          "area": "engine",
+          "title": "Endings, rests and dynamics keep their distance",
+          "text": "An ending's number clears the high notes under it, a rest shared by two voices clears the "
+          + "other voice, a volta bracket stands over the lyrics, and neighbouring dynamics stand apart."
+        },
+        {
+          "area": "site",
+          "title": "Play with real instruments",
+          "text": "Scores play with the MuseScore_General sounds, each staff in its instrument, repeats played "
+          + "out — on every page of the site as in the editor. Drum staves play a real drum kit."
+        },
+        {
+          "area": "site",
+          "title": "Playback controls",
+          "text": "Pause, loop the selected bars, speed from 50 to 150 %, metronome and count-in, mute or solo a "
+          + "staff, and send the playback to a MIDI device such as GarageBand.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
+          "title": "Transpose, share by link, hear what you write",
+          "text": "Transpose the selection or the whole score with its keys and chord symbols; Share copies a "
+          + "link that holds the score itself; notes sound as they are written or moved.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
+          "title": "An editor for phones, tablets and screen readers",
+          "text": "On a small screen the score comes first and the tools open in a sheet; toolbox sections fold; "
+          + "? shows the keyboard shortcuts; every sign-only button is read aloud by name.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
+          "title": "The playground becomes a score editor",
+          "text": "A menu bar, a toolbox and the score: repeats and endings by drag and drop, two voices on a "
+          + "staff, key, metre, tempo and clef changes anywhere, an instrument menu for each staff, and a "
+          + "refused source that names its line.",
+          "link": "playground"
+        }
+      ]},
+      {"date": "2026-10-18", "entries": [{
+        "area": "engine",
+        "title": "eui 0.11: LilyPond as people write it",
+        "text": "Variables, voices, lyrics, \\transpose, \\partial, grace notes, more clefs, chord names, drum "
+        + "staves and tablature are read and drawn as LilyPond draws them.",
+        "link": "limits"
+      }]}
+    ]
+  end
+
+  # The label a reader sees for an entry's area.
+  static def area_label(area)
+    area == "engine" ? "Engraver" : "Site & editor"
+  end
+end

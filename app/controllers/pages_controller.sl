@@ -39,4 +39,17 @@ class PagesController < Controller
       refusal.merge({"message": laid["error"]})
     end
   end
+
+  # GET /changelog — what changed lately, on the site and in the engraver
+  def changelog
+    @title = "Changelog"
+    @description = "What is new in eui-score: the site and its score editor, and the engraver that draws every score."
+    pages = {"playground": playground_path(), "limits": limits_path()}
+    @days = Changelog.days.map do |day|
+      entries = day["entries"].map do |entry|
+        entry.merge({"label": Changelog.area_label(entry["area"]), "href": pages[entry["link"].to_s]})
+      end
+      day.merge({"entries": entries, "heading": DateTime.parse(day["date"]).format("%A, %B %-d, %Y")})
+    end
+  end
 end

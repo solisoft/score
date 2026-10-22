@@ -259,6 +259,19 @@
   .callout { border: 1px solid #e9d7b5; background: #fdf7ea; border-radius: 12px; padding: 14px 18px; font-size: 15px; color: #5d4a22; margin: 16px 0 24px; }
   .callout strong { color: #4a3a14; }
 
+  /* Changelog: days down the page, each change tagged with where it lives. */
+  .changelog-legend { display: flex; gap: 8px; margin-top: 18px; }
+  .changelog-day { margin: 0 0 40px; }
+  .changelog-day h2 { font-size: 22px; margin: 0 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--line); color: var(--ink); }
+  .changelog-entries { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+  .changelog-entry { background: var(--sheet); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; }
+  .changelog-entry h3 { font-size: 18px; margin: 8px 0 4px; color: var(--ink); }
+  .changelog-entry p { margin: 0; color: var(--ink-soft); }
+  .changelog-try { display: inline-block; margin-top: 8px; font-size: 14px; font-weight: 600; color: var(--accent); }
+  .change-tag { display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; }
+  .change-tag-site { background: var(--accent-soft); color: var(--accent-ink); }
+  .change-tag-engine { background: #f5edda; color: #6b5420; }
+
   /* ---- Limits ------------------------------------------------------------------ */
   .refusal { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 18px 0; border-top: 1px solid var(--line); }
   .refusal h3 { font-size: 18px; margin: 0; }

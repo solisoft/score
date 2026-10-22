@@ -55,4 +55,46 @@ describe("PagesController") do
       assert_contains(body, "<eui-score-editor id=\"embed-editor\">")
     end
   end
+
+  describe("GET /changelog") do
+    test("lists every day newest first, each change tagged with where it lives") do
+      response = get("/changelog")
+      assert_eq(res_status(response), 200)
+      days = assigns()["days"]
+      assert_eq(days.length, Changelog.days.length)
+      dates = days.map do |day|
+        day["date"]
+      end
+      assert_eq(dates, dates.sort().reverse())
+      body = res_body(response)
+      assert_contains(body, "Monday, October 19, 2026")
+      assert_contains(body, "change-tag-engine\">Engraver")
+      assert_contains(body, "change-tag-site\">Site &amp; editor")
+      assert_contains(body, "A note too long for its bar is cut into tied notes")
+    end
+
+    test("links a change to the page that shows it, and no further") do
+      get("/changelog")
+      entries = assigns()["days"].map do |day|
+        day["entries"]
+      end.flatten
+      linked = entries.filter do |entry|
+        !entry["link"].nil?
+      end
+      assert(linked.length > 0)
+      linked.each do |entry|
+        assert_not_null(entry["href"], entry["title"])
+      end
+      entries.filter do |entry|
+        entry["link"].nil?
+      end.each do |entry|
+        assert_null(entry["href"])
+      end
+      assert_contains(res_body(get("/changelog")), "href=\"/playground\">Try it")
+    end
+
+    test("is in the site's navigation") do
+      assert_contains(res_body(get("/guide")), "href=\"/changelog\"")
+    end
+  end
 end

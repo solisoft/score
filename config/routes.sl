@@ -23,6 +23,7 @@ get("/guide", "pages#guide", name: "guide")
 get("/syntax", "pages#syntax", name: "syntax")
 get("/embed", "pages#embed", name: "embed")
 get("/limits", "pages#limits", name: "limits")
+get("/changelog", "pages#changelog", name: "changelog")
 
 get("/examples", "examples#index", name: "examples")
 get("/examples/:category", "examples#category", name: "example_category")
