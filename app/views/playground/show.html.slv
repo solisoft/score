@@ -216,6 +216,10 @@
         <summary><h3>Words</h3></summary>
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="lyrics" title="Lyrics under the notes (Ctrl+L)">Lyrics</button>
+          <select class="tool-select" data-verse aria-label="Verse the lyrics go in" title="Each verse is a line under the one before">
+            <option value="1">Verse 1</option><option value="2">Verse 2</option><option value="3">Verse 3</option>
+            <option value="4">Verse 4</option><option value="5">Verse 5</option><option value="6">Verse 6</option>
+          </select>
           <button type="button" class="tool tool-wide" data-act="chord" title="A chord symbol above (Ctrl+K)">Chord symbol</button>
         </div>
         <div class="tool-row">

@@ -362,7 +362,7 @@ export function makeEvent(fields = {}) {
   return {
     id: newId(), rest: true, pitches: [], base: 4, dots: 0, tuplet: null, tie: false, slurStart: false, slurEnd: false,
     dynamic: null, hairpin: null, hairpinEnd: false, arts: [], chord: "", texts: [], lyric: null,
-    graces: [], grace: null, arpeggio: false, gliss: false, tremolo: 0, pedalOn: false, pedalOff: false, ...fields,
+    graces: [], grace: null, arpeggio: false, gliss: false, tremolo: 0, pedalOn: false, pedalOff: false, verses: [], ...fields,
   };
 }
 
@@ -515,7 +515,7 @@ function pieces(score, ev, at, ticks, role) {
   out.forEach((p, k) => {
     const last = k === out.length - 1;
     p.tie = !p.rest && (last ? (role === "head" ? true : Boolean(ev.tie)) : true);
-    if (!(k === 0 && keepsStart)) Object.assign(p, { slurStart: false, dynamic: null, hairpin: null, arts: [], chord: "", texts: [], lyric: null, graces: [], grace: null, arpeggio: false, pedalOn: false, pedalOff: false });
+    if (!(k === 0 && keepsStart)) Object.assign(p, { slurStart: false, dynamic: null, hairpin: null, arts: [], chord: "", texts: [], lyric: null, verses: [], graces: [], grace: null, arpeggio: false, pedalOn: false, pedalOff: false });
     if (!(last && keepsEnd)) Object.assign(p, { slurEnd: false, hairpinEnd: false, gliss: false });
     // A tremolo's strokes are shorter than the note they repeat.
     if (p.tremolo && p.tremolo <= p.base) p.tremolo = 0;
@@ -863,11 +863,44 @@ export function setChordSymbol(score, s, i, text) {
   noteOf(score, s, i).chord = text.trim();
 }
 
-export function setLyric(score, s, i, text, hyphen = false, extend = false) {
+/** The most verses a score's lyrics may have: a line under the staff each. */
+export const MAX_VERSES = 6;
+
+/** Event `i`'s syllable of verse `verse` (1 the first); empty text takes it away. */
+export function setLyric(score, s, i, text, hyphen = false, extend = false, verse = 1) {
   if (isLower(score, s)) throw new Error("words go with the first voice");
+  if (!Number.isInteger(verse) || verse < 1 || verse > MAX_VERSES) throw new Error(`a verse is 1 to ${MAX_VERSES}`);
   const ev = noteOf(score, s, i);
   if (ev.rest) throw new Error("a syllable goes under a note");
-  ev.lyric = text.trim() ? { text: text.trim(), hyphen, extend } : null;
+  putSyllable(ev, verse, text.trim() ? { text: text.trim(), hyphen, extend } : null);
+}
+
+function putSyllable(ev, verse, syllable) {
+  if (verse === 1) {
+    ev.lyric = syllable;
+    return;
+  }
+  ev.verses = [...(ev.verses ?? [])];
+  while (ev.verses.length < verse - 1) ev.verses.push(null);
+  ev.verses[verse - 2] = syllable;
+  while (ev.verses.length && !ev.verses[ev.verses.length - 1]) ev.verses.pop();
+}
+
+/** Event `ev`'s syllable of verse `verse` (1 the first), or null. */
+export function syllableOf(ev, verse = 1) {
+  return (verse === 1 ? ev.lyric : ev.verses?.[verse - 2]) ?? null;
+}
+
+/** How many verses staff `staff` sings: its last verse with a syllable in it. */
+export function versesOf(staff) {
+  let n = 0;
+  for (const ev of staff.events) {
+    if (ev.lyric) n = Math.max(n, 1);
+    (ev.verses ?? []).forEach((syl, k) => {
+      if (syl) n = Math.max(n, k + 2);
+    });
+  }
+  return n;
 }
 
 /**
@@ -1367,12 +1400,12 @@ export function melismata(staff) {
   });
 }
 
-function lyricText(staff) {
+function lyricText(staff, verse = 1) {
   const words = [];
   const skip = melismata(staff);
   for (const [i, ev] of staff.events.entries()) {
     if (!skip[i]) {
-      const l = ev.lyric;
+      const l = syllableOf(ev, verse);
       if (l) {
         const text = /^[\p{L}\p{N}'’.,!?;:]+$/u.test(l.text) ? l.text : quote(l.text);
         words.push(text + (l.hyphen ? " --" : "") + (l.extend ? " __" : ""));
@@ -1382,7 +1415,8 @@ function lyricText(staff) {
     }
   }
   while (words.length && words[words.length - 1] === "_") words.pop();
-  return words.length ? words.join(" ") : "";
+  // A verse with no words before one that has some keeps its line.
+  return words.length ? words.join(" ") : "_";
 }
 
 /**
@@ -1425,8 +1459,8 @@ export function toLilyPond(score, { open = [], unfold = false } = {}) {
       ? `\\new DrumStaff ${settings ? `\\with { ${settings}} ` : ""}\\drummode {\n  \\time ${time[0]}/${time[1]}${tempo}`
       : `\\new Staff ${settings ? `\\with { ${settings}} ` : ""}{\n  \\clef ${clef} \\key ${KEYS[keyOf(score, s)]} \\major \\time ${time[0]}/${time[1]}${tempo}`;
     let out = `${opening}\n  ${music.replace(/\n {4}/g, "\n  ")}${ending}\n}`;
-    const lyrics = lyricText(staff);
-    if (lyrics) out += `\n\\addlyrics { ${lyrics} }`;
+    // Each verse a line under the one before.
+    for (let verse = 1; verse <= versesOf(staff); verse++) out += `\n\\addlyrics { ${lyricText(staff, verse)} }`;
     return out;
   });
   const kinds = { brace: "\\new PianoStaff", bracket: "\\new StaffGroup", choir: "\\new ChoirStaff" };
@@ -2392,12 +2426,14 @@ export function fromParsed(parsed) {
     }
     if (staff.lyrics) {
       if (staff.lyrics_voice !== 1) unsupported.add("lyrics to a second voice");
-      let k = 0;
       const skip = melismata(out);
-      out.events.forEach((ev, i) => {
-        if (skip[i]) return;
-        const syl = staff.lyrics[k++];
-        if (syl && syl.text && syl.text !== "_") ev.lyric = { text: syl.text, hyphen: syl.hyphen, extend: syl.extend };
+      [staff.lyrics, ...(staff.verses ?? [])].forEach((words, v) => {
+        let k = 0;
+        out.events.forEach((ev, i) => {
+          if (skip[i]) return;
+          const syl = words[k++];
+          if (syl && syl.text && syl.text !== "_") putSyllable(ev, v + 1, { text: syl.text, hyphen: syl.hyphen, extend: syl.extend });
+        });
       });
     }
     score.staves.push(out);

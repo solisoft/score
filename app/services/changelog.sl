@@ -11,6 +11,18 @@ class Changelog
       {"date": "2026-10-22", "entries": [
         {
           "area": "engine",
+          "title": "Several verses of lyrics on a staff",
+          "text": "A song's second and third verses are each set on the same notes, a line under the one before, "
+          + "as LilyPond sets them."
+        },
+        {
+          "area": "site",
+          "title": "A Verse menu for the lyrics",
+          "text": "Choose verse 1 to 6 next to the Lyrics button, and the words you type go on that line.",
+          "link": "playground"
+        },
+        {
+          "area": "engine",
           "title": "A note too long for its bar is cut into tied notes",
           "text": "A half note written where only a quarter is left is no longer refused: it is cut at the bar "
           + "line into two tied notes, as LilyPond cuts it. In the browser for now; the server follows."

@@ -646,13 +646,17 @@ pub fn score(src: &str) -> Result<Value, String> {
                 "unsupported": unsupported,
             }));
         }
-        let lyrics = staff.lyrics.as_ref().map(|syl| syl.iter().map(|s| json!({ "text": s.text, "hyphen": s.hyphen, "extend": s.extend })).collect::<Vec<_>>());
+        let words = |syl: &[parse::Syllable]| syl.iter().map(|s| json!({ "text": s.text, "hyphen": s.hyphen, "extend": s.extend })).collect::<Vec<_>>();
+        let lyrics = staff.lyrics.as_deref().map(words);
+        // The verses after the first.
+        let verses: Vec<_> = staff.verses.iter().map(|v| words(v)).collect();
         staves.push(json!({
             "kind": format!("{:?}", staff.kind),
             "name": staff.props.instrument_name,
             "short": staff.props.short_instrument_name,
             "instrument": staff.props.midi_instrument,
             "lyrics": lyrics,
+            "verses": verses,
             "lyrics_voice": staff.lyrics_voice,
             "events": events,
         }));

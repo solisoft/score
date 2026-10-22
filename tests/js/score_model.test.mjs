@@ -258,6 +258,33 @@ test("a slur makes a melisma: its notes after the first take no syllable", () =>
   assert.deepEqual(reread(s).staves[0].events.map((e) => e.lyric?.text ?? null).slice(0, 5), ["one", "two", null, null, "three"]);
 });
 
+test("verses stand one under another, each read back on its own notes", () => {
+  const s = M.newScore();
+  for (const [k, d] of [7, 9, 11].entries()) M.write(s, 0, k * q, q, { rest: false, pitches: [{ d, alter: 0 }] });
+  M.setLyric(s, 0, 0, "Ah,");
+  M.setLyric(s, 0, 1, "vous");
+  M.setLyric(s, 0, 0, "Al", true, false, 2);
+  M.setLyric(s, 0, 1, "lons", false, false, 2);
+  M.setLyric(s, 0, 2, "trois", false, false, 3);
+  assert.equal(M.versesOf(s.staves[0]), 3);
+  assert.equal(M.syllableOf(s.staves[0].events[0], 2).text, "Al");
+  assert.equal(M.syllableOf(s.staves[0].events[2], 2), null);
+  const { source } = engrave(s);
+  assert.match(source, /\\addlyrics \{ "?Ah,"? vous \}\n\\addlyrics \{ Al -- lons \}\n\\addlyrics \{ _ _ trois \}/);
+  const back = reread(s).staves[0].events;
+  assert.deepEqual([1, 2, 3].map((v) => back.slice(0, 3).map((e) => M.syllableOf(e, v)?.text ?? null)), [
+    ["Ah,", "vous", null],
+    ["Al", "lons", null],
+    [null, null, "trois"],
+  ]);
+  // A verse emptied away leaves no line behind it.
+  M.setLyric(s, 0, 2, "", false, false, 3);
+  assert.equal(M.versesOf(s.staves[0]), 2);
+  assert.equal(engrave(s).source.match(/\\addlyrics/g).length, 2);
+  assert.throws(() => M.setLyric(s, 0, 0, "la", false, false, M.MAX_VERSES + 1), /a verse is 1 to 6/);
+  assert.throws(() => M.setLyric(s, 0, 0, "la", false, false, 0), /a verse is 1 to 6/);
+});
+
 test("a tie needs a note after it; a slur on one note goes to the next, and comes off whole", () => {
   const s = M.newScore();
   M.write(s, 0, 0, q, C4);

@@ -890,9 +890,14 @@ export function startStudio(root, options = {}) {
     }, 0));
   }
 
+  /** The verse the lyrics box writes: the Verse menu's, 1 the first. */
+  function verse() {
+    return Number(root.querySelector("[data-verse]")?.value) || 1;
+  }
+
   /** What a words box shows for `ev`: its syllable, chord symbol, staff text or expression. */
   function wordsOf(ev, kind) {
-    if (kind === "lyric") return ev.lyric?.text ?? "";
+    if (kind === "lyric") return M.syllableOf(ev, verse())?.text ?? "";
     if (kind === "chord") return ev.chord ?? "";
     return M.textOf(ev, kind === "text" ? "staff" : "expression");
   }
@@ -905,7 +910,7 @@ export function startStudio(root, options = {}) {
       const i = M.eventAt(score.staves[s], t);
       if (kind === "lyric") {
         if (score.staves[s].events[i].rest) return;
-        M.setLyric(score, s, i, value, Boolean(extra.hyphen));
+        M.setLyric(score, s, i, value, Boolean(extra.hyphen), false, verse());
       } else if (kind === "chord") M.setChordSymbol(score, s, i, value);
       else M.setText(score, s, i, kind === "text" ? "staff" : "expression", value);
     });
@@ -963,7 +968,9 @@ export function startStudio(root, options = {}) {
     const below = wordsBox.kind === "lyric" || wordsBox.kind === "expression";
     const corner = g.at(x0, below ? y1 : y0);
     wordsBox.box.style.left = `${corner.x - 6}px`;
-    wordsBox.box.style.top = below ? `${corner.y + 8}px` : `${Math.max(0, corner.y - 36)}px`;
+    // A later verse's box a line lower, as its words stand.
+    const line = wordsBox.kind === "lyric" ? (verse() - 1) * 26 * st.zoom : 0;
+    wordsBox.box.style.top = below ? `${corner.y + 8 + line}px` : `${Math.max(0, corner.y - 36)}px`;
   }
 
   // ---- Drawing ------------------------------------------------------------------
