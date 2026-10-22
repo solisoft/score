@@ -2135,6 +2135,17 @@
     background: var(--paper-deep);
     outline: none;
   }
+  .playground-banner {
+    margin: 0;
+    padding: 9px 20px;
+    font-size: 14px;
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+    border-bottom: 1px solid var(--line);
+  }
+  .playground-banner a {
+    font-weight: 600;
+  }
   .app-body {
     min-height: 100vh;
     display: flex;

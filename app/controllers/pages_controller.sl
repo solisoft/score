@@ -44,8 +44,12 @@ class PagesController < Controller
   def changelog
     @title = "Changelog"
     @description = "What is new in eui-score: the site and its score editor, and the engraver that draws every score."
-    pages = {"playground": playground_path(), "limits": limits_path()}
-    @days = Changelog.days.map do |day|
+    pages = {
+      "playground": playground_path(),
+      "limits": limits_path(),
+      "app": app_home_path()
+    }
+    @days = Changelog.shown(AppSetup.ready?).map do |day|
       entries = day["entries"].map do |entry|
         entry.merge({"label": Changelog.area_label(entry["area"]), "href": pages[entry["link"].to_s]})
       end

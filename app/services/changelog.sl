@@ -1,7 +1,8 @@
 # What changed, newest first: on the site and in its score editor, and in the
 # engraver (eui-score) that draws every score. One entry is one change a
 # reader can see; `area` is "site" or "engine", `link` the name of a page
-# of the site that shows it (see PagesController#changelog).
+# of the site that shows it (see PagesController#changelog); "app": true
+# for what is shown only once the app (/app) is open on the server.
 #
 # Add an entry at the top of its day when a change ships; a new day goes
 # first.
@@ -9,6 +10,37 @@ class Changelog
   static def days
     [
       {"date": "2026-10-22", "entries": [
+        {
+          "area": "site",
+          "title": "The app: your scores, kept in your account",
+          "text": "Sign up, start a score from a template or a file, and it saves itself as you write: a library "
+          + "with previews, search and a trash, the history of every score, and a way back to any version.",
+          "link": "app",
+          "app": true
+        },
+        {
+          "area": "site",
+          "title": "Share a score: by link, in public, or with the people you choose",
+          "text": "A read page to play and print it, a code to show it on any site, and invitations to read it or "
+          + "to change it with you.",
+          "link": "app",
+          "app": true
+        },
+        {
+          "area": "site",
+          "title": "An app to install, that works without a network",
+          "text": "Install it from your browser; the scores you opened open offline, and what you write there is "
+          + "saved once the network is back.",
+          "link": "app",
+          "app": true
+        },
+        {
+          "area": "site",
+          "title": "Menus in the editor, and a palette over the note",
+          "text": "File, Edit, View, Insert and Play, each command with its key; over the selected note, its "
+          + "accidentals, dot, tie and articulations at hand; the score's properties in a dialog of their own.",
+          "link": "playground"
+        },
         {
           "area": "engine",
           "title": "Several verses of lyrics on a staff",
@@ -163,6 +195,19 @@ class Changelog
         "link": "limits"
       }]}
     ]
+  end
+
+  # The days as a reader sees them: the app's entries only where the app is
+  # open, and no day left empty.
+  static def shown(app_open)
+    days = Changelog.days.map do |day|
+      day.merge({"entries": day["entries"].filter(&{ |entry|
+        app_open || entry["app"] != true
+      })})
+    end
+    days.filter do |day|
+      day["entries"].length > 0
+    end
   end
 
   # The label a reader sees for an entry's area.

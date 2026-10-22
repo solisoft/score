@@ -282,6 +282,9 @@
   .studio-palette button { min-width: 30px; height: 30px; font: 600 16px/1 var(--font-sans); color: var(--ink); background: none; border: 0; border-radius: 7px; cursor: pointer; }
   .studio-palette button:hover, .studio-palette button:focus-visible { background: var(--paper-deep); outline: none; }
 
+  .playground-banner { margin: 0; padding: 9px 20px; font-size: 14px; background: var(--accent-soft); color: var(--accent-ink); border-bottom: 1px solid var(--line); }
+  .playground-banner a { font-weight: 600; }
+
   /* The app (/app): a header bar over the whole window, no site footer. */
   .app-body { min-height: 100vh; display: flex; flex-direction: column; }
   .app-header { display: flex; align-items: center; gap: 16px; height: 64px; padding: 0 20px; border-bottom: 1px solid var(--line); background: var(--paper); position: sticky; top: 0; z-index: 20; }

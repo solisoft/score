@@ -1,3 +1,11 @@
+<% if app_open?() %>
+  <%# The playground is the demo: what is written here stays in this browser.
+      The app's start screen offers to save it to an account. %>
+  <p class="playground-banner">
+    The playground keeps your score in this browser only.
+    <a href="<%= app_home_path() %>">Save it in the app</a> to keep it in an account, with its history, on every device.
+  </p>
+<% end %>
 <%- partial("shared/studio", {"examples": examples, "figure": figure, "source": source}) %>
 
 <script type="module">

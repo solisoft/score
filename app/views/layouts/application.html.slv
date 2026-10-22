@@ -50,7 +50,12 @@
                     <% here = current_path == item[1] || current_path.starts_with?(item[1] + "/") %>
                     <a href="<%= item[1] %>"<%- here ? " aria-current=\"page\"" : "" %>><%= item[0] %></a>
                 <% end %>
-                <a class="nav-cta" href="<%= playground_path() %>">Playground</a>
+                <% if app_open?() %>
+                    <a href="<%= playground_path() %>"<%- current_path == playground_path() ? " aria-current=\"page\"" : "" %>>Playground</a>
+                    <a class="nav-cta" href="<%= app_home_path() %>">Open the app</a>
+                <% else %>
+                    <a class="nav-cta" href="<%= playground_path() %>">Playground</a>
+                <% end %>
             </nav>
         </div>
     </header>

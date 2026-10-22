@@ -80,3 +80,10 @@ def absolute_url(path)
   base = base.substring(0, len(base) - 1) if base.ends_with?("/")
   base + path
 end
+
+# Whether the score-writing app (/app) is open here: it needs a database.
+# Views cannot reach AppSetup (app/services is not loaded for templates), so
+# the rule is written twice — keep this one and AppSetup.ready? alike.
+def app_open?
+  !getenv("SOLIDB_HOST").blank?
+end

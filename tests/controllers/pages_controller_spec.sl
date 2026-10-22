@@ -97,4 +97,32 @@ describe("PagesController") do
       assert_contains(res_body(get("/guide")), "href=\"/changelog\"")
     end
   end
+
+  describe("the changelog and the app") do
+    test("shows the app's news only where the app is open") do
+      all_titles = Changelog.shown(true).map do |day|
+        day["entries"]
+      end.flatten.map do |entry|
+        entry["title"]
+      end
+      closed_titles = Changelog.shown(false).map do |day|
+        day["entries"]
+      end.flatten.map do |entry|
+        entry["title"]
+      end
+      assert_contains(all_titles, "The app: your scores, kept in your account")
+      assert_not(closed_titles.includes?("The app: your scores, kept in your account"))
+      assert_contains(closed_titles, "Menus in the editor, and a palette over the note")
+      assert(Changelog.shown(false).all?(&{ |day|
+        day["entries"].length > 0
+      }))
+    end
+
+    test("the site sends to the app, and the playground offers to save there, where it is open") do
+      body = res_body(get("/playground"))
+      assert_contains(body, "<a class=\"nav-cta\" href=\"/app\">Open the app</a>")
+      assert_contains(body, "playground-banner")
+      assert_contains(res_body(get("/changelog")), "href=\"/app\">Try it")
+    end
+  end
 end
