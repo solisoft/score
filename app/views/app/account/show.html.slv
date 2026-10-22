@@ -1,0 +1,41 @@
+<section class="auth auth-wide">
+  <h1>Your account</h1>
+  <% for message in flashes() %>
+    <p class="form-notice" role="status"><%= message["message"] %></p>
+  <% end %>
+  <% if error.present? %>
+    <p class="form-error" role="alert"><%= error %></p>
+  <% end %>
+  <dl class="account-facts">
+    <dt>Email</dt><dd><%= user.email %></dd>
+  </dl>
+
+  <h2>Change your password</h2>
+  <form action="<%= app_account_password_path() %>" method="POST" class="auth-form">
+    <%- csrf_field() %>
+    <label class="field">Current password
+      <input id="current_password" name="current_password" type="password" required autocomplete="current-password">
+    </label>
+    <label class="field"><span>New password <span class="muted">— 12 characters or more</span></span>
+      <input id="new_password" name="password" type="password" required minlength="12" autocomplete="new-password">
+    </label>
+    <label class="field">The same again
+      <input id="password_confirmation" name="password_confirmation" type="password" required minlength="12" autocomplete="new-password">
+    </label>
+    <button type="submit" class="btn btn-primary">Change the password</button>
+  </form>
+
+  <h2>Sign out</h2>
+  <%- button_to("Sign out", logout_path(), {"method": "delete", "class": "btn btn-ghost"}) %>
+
+  <h2>Delete the account</h2>
+  <p class="muted">Your account and every score in it are deleted for good.</p>
+  <form action="<%= app_account_path() %>" method="POST" class="auth-form">
+    <%- csrf_field() %>
+    <input type="hidden" name="_method" value="DELETE">
+    <label class="field">Your password, to confirm
+      <input id="delete_password" name="password" type="password" required autocomplete="current-password">
+    </label>
+    <button type="submit" class="btn btn-danger">Delete my account</button>
+  </form>
+</section>

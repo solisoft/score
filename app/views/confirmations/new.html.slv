@@ -1,0 +1,17 @@
+<section class="auth">
+  <h1><%= title %></h1>
+  <% if notice.present? %>
+    <p class="form-notice" role="status"><%= notice %></p>
+  <% end %>
+  <% if error.present? %>
+    <p class="form-error" role="alert"><%= error %></p>
+  <% end %>
+  <form action="<%= confirmation_resend_path() %>" method="POST" class="auth-form">
+    <%- csrf_field() %>
+    <label class="field">Email
+      <input id="email" name="email" type="email" required autocomplete="email">
+    </label>
+    <button type="submit" class="btn btn-primary">Send a new confirmation link</button>
+  </form>
+  <p class="auth-alt"><a href="<%= login_path() %>">Sign in</a></p>
+</section>

@@ -40,6 +40,12 @@
         </a>
         <nav class="app-nav" aria-label="App">
             <a href="<%= root_path() %>">The site</a>
+            <% if signed_in?() %>
+                <a href="<%= app_account_path() %>"<%- current_path == app_account_path() ? " aria-current=\"page\"" : "" %>>Account</a>
+            <% else %>
+                <a href="<%= login_path() %>"<%- current_path == login_path() ? " aria-current=\"page\"" : "" %>>Sign in</a>
+                <a class="app-nav-cta" href="<%= signup_path() %>">Create account</a>
+            <% end %>
         </nav>
     </header>
 

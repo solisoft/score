@@ -1,40 +1,12 @@
-# ============================================================================
-# Authentication Middleware (Scope-Only)
-# ============================================================================
-#
-# This middleware checks for authentication.
-# It only runs when explicitly scoped to routes.
-#
-# Usage in routes.sl:
-#   middleware("authenticate", -> {
-#       get("/admin", "admin#index")
-#       get("/admin/settings", "admin#settings")
-#   })
-#
-# Configuration:
-# - `# order: N` - Execution order (lower runs first), scoped and global
-#   middleware sorted together
-# - `# scope_only: true` - Only runs when explicitly scoped
-#
-# Return `req` to continue, or a response (`render_json(...)`,
-# `redirect(...)`, `halt(status, message)`) to stop. A `def` whose name starts
-# with `_` is a helper, not a middleware.
-#
-# ============================================================================
+# The app's screens that belong to someone: a guest is sent to sign in, and
+# comes back to where they were going once signed in (`return_to`).
+# `load_current_user` (current_user.sl, order 5) has already read the session.
 
-# order: 20
+# order: 40
 # scope_only: true
 
-def authenticate(req)
-  # TODO: Replace with your authentication logic
-  # For example, verify JWT token, check session, etc.
-  api_key = req["headers"]["x-api-key"]
-  if api_key.blank?
-    return render_json(
-      {"error": "Unauthorized", "message": "Authentication required"},
-      401
-    )
-  end
+def require_login(req)
+  return req unless req["current_user"].nil?
 
-  req
+  redirect("/login?return_to=" + url(req["path"].to_s))
 end

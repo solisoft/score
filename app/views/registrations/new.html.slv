@@ -1,0 +1,18 @@
+<section class="auth">
+  <h1>Create your account</h1>
+  <p class="muted">Your scores, saved and with you on every device.</p>
+  <% if error.present? %>
+    <p class="form-error" role="alert"><%= error %></p>
+  <% end %>
+  <form action="<%= signup_path() %>" method="POST" class="auth-form">
+    <%- csrf_field() %>
+    <label class="field">Email
+      <input id="email" name="email" type="email" required autofocus autocomplete="email" value="<%= user.email.to_s %>">
+    </label>
+    <label class="field"><span>Password <span class="muted">— 12 characters or more</span></span>
+      <input id="password" name="password" type="password" required minlength="12" autocomplete="new-password">
+    </label>
+    <button type="submit" class="btn btn-primary">Create account</button>
+  </form>
+  <p class="auth-alt">Already have one? <a href="<%= login_path() %>">Sign in</a></p>
+</section>

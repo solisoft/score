@@ -2077,6 +2077,119 @@
   .app-panel h1 {
     font-size: clamp(30px, 5vw, 42px);
   }
+  .app-nav .app-nav-cta {
+    background: var(--ink);
+    color: var(--paper);
+  }
+  .app-nav .app-nav-cta:hover {
+    background: var(--accent);
+    color: #fff;
+  }
+  .auth {
+    width: 100%;
+    max-width: 420px;
+    margin: 0 auto;
+    padding: 56px 20px;
+    display: grid;
+    gap: 16px;
+  }
+  .auth.auth-wide {
+    max-width: 560px;
+  }
+  .auth h1 {
+    font-size: 32px;
+  }
+  .auth h2 {
+    font-size: 21px;
+    margin-top: 18px;
+  }
+  .auth-form {
+    display: grid;
+    gap: 14px;
+  }
+  .auth-form .btn {
+    justify-content: center;
+  }
+  .field {
+    display: grid;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .field input, .field select {
+    font: 400 16px/1.4 var(--font-sans);
+    padding: 10px 12px;
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    background: var(--sheet);
+    color: var(--ink);
+  }
+  .field input:focus-visible, .field select:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  .field .muted {
+    font-weight: 400;
+  }
+  .check {
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+    font-size: 14px;
+  }
+  .auth-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+  }
+  .auth-alt {
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .form-error {
+    border: 1px solid #e6b9b4;
+    background: #fbecea;
+    color: var(--accent-ink);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 14px;
+  }
+  .form-notice {
+    border: 1px solid #c9dcc4;
+    background: #eef6ec;
+    color: #2c5427;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 14px;
+  }
+  .btn-danger {
+    background: var(--sheet);
+    color: var(--accent-ink);
+    border-color: #e6b9b4;
+  }
+  .btn-danger:hover {
+    background: #fbecea;
+    color: var(--accent-ink);
+  }
+  .account-facts {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 16px;
+    margin: 0;
+  }
+  .account-facts dt {
+    color: var(--muted);
+  }
+  .account-facts dd {
+    margin: 0;
+    color: var(--ink);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
   .changelog-legend {
     display: flex;
     gap: 8px;

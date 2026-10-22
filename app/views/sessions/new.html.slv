@@ -1,0 +1,22 @@
+<section class="auth">
+  <h1>Sign in</h1>
+  <% if error.present? %>
+    <p class="form-error" role="alert"><%= error %></p>
+  <% end %>
+  <form action="<%= login_path() %>" method="POST" class="auth-form">
+    <%- csrf_field() %>
+    <input type="hidden" name="return_to" value="<%= return_to %>">
+    <label class="field">Email
+      <input id="email" name="email" type="email" required autofocus autocomplete="email" value="<%= email %>">
+    </label>
+    <label class="field">Password
+      <input id="password" name="password" type="password" required autocomplete="current-password">
+    </label>
+    <div class="auth-row">
+      <label class="check"><input type="checkbox" name="remember_me" value="1"> Remember me</label>
+      <a href="<%= password_reset_path() %>">Forgot your password?</a>
+    </div>
+    <button type="submit" class="btn btn-primary">Sign in</button>
+  </form>
+  <p class="auth-alt">No account yet? <a href="<%= signup_path() %>">Create one</a></p>
+</section>
