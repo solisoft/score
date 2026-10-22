@@ -41,6 +41,7 @@
         <nav class="app-nav" aria-label="App">
             <a href="<%= root_path() %>">The site</a>
             <% if signed_in?() %>
+                <a href="<%= app_scores_path() %>"<%- current_path.starts_with?("/app/scores") || current_path == app_trash_path() ? " aria-current=\"page\"" : "" %>>Your scores</a>
                 <a href="<%= app_account_path() %>"<%- current_path == app_account_path() ? " aria-current=\"page\"" : "" %>>Account</a>
             <% else %>
                 <a href="<%= login_path() %>"<%- current_path == login_path() ? " aria-current=\"page\"" : "" %>>Sign in</a>
@@ -50,6 +51,9 @@
     </header>
 
     <main class="app-main">
+        <% for message in flashes() %>
+            <p class="app-flash" role="status"><%= message["message"] %></p>
+        <% end %>
         <%= yield %>
     </main>
 </body>

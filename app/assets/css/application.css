@@ -261,7 +261,7 @@
 
   /* The app (/app): a header bar over the whole window, no site footer. */
   .app-body { min-height: 100vh; display: flex; flex-direction: column; }
-  .app-header { display: flex; align-items: center; gap: 16px; height: 56px; padding: 0 20px; border-bottom: 1px solid var(--line); background: var(--paper); position: sticky; top: 0; z-index: 20; }
+  .app-header { display: flex; align-items: center; gap: 16px; height: 64px; padding: 0 20px; border-bottom: 1px solid var(--line); background: var(--paper); position: sticky; top: 0; z-index: 20; }
   .app-nav { display: flex; align-items: center; gap: 4px; margin-left: auto; }
   .app-nav a, .app-nav button { color: var(--ink-soft); font: 500 14px/1 var(--font-sans); padding: 8px 12px; border-radius: 999px; background: none; border: 0; cursor: pointer; white-space: nowrap; }
   .app-nav a:hover, .app-nav button:hover { background: var(--paper-deep); color: var(--ink); text-decoration: none; }
@@ -294,6 +294,34 @@
   .account-facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; }
   .account-facts dt { color: var(--muted); }
   .account-facts dd { margin: 0; color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
+
+  .app-flash { margin: 16px auto 0; max-width: 1120px; width: calc(100% - 40px); border: 1px solid #c9dcc4; background: #eef6ec; color: #2c5427; border-radius: 10px; padding: 10px 14px; font-size: 14px; }
+
+  /* The library: a grid of score cards, each with its first systems. */
+  .library { width: 100%; max-width: 1120px; margin: 0 auto; padding: 32px 20px 64px; display: grid; gap: 20px; }
+  .library-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+  .library-head h1 { font-size: 34px; }
+  .library-tools { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+  .library-search { flex: 1 1 240px; }
+  .library-empty { border: 1px dashed var(--line-strong); border-radius: var(--radius); padding: 40px 24px; text-align: center; display: grid; gap: 8px; }
+  .library-empty h2 { font-size: 22px; }
+  .library-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+  .score-card { background: var(--sheet); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; display: grid; gap: 6px; min-width: 0; }
+  .score-card-open { display: grid; gap: 8px; color: var(--ink); }
+  .score-card-open:hover { text-decoration: none; color: var(--accent); }
+  .score-card-open img { width: 100%; height: 140px; object-fit: contain; object-position: center; border-radius: 8px; background: #fff; border: 1px solid var(--line); }
+  .score-card-title { font-family: var(--font-serif); font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
+  .score-card-when { font-size: 13px; }
+  .score-card-more summary { cursor: pointer; font-size: 13px; color: var(--muted); list-style: none; }
+  .score-card-more summary::-webkit-details-marker { display: none; }
+  .score-card-more[open] { display: grid; gap: 8px; }
+  .score-card-more form { display: grid; gap: 6px; }
+  .score-card-more .btn { justify-content: center; font-size: 14px; padding: 8px 14px; }
+  .library-trash-link { font-size: 14px; }
+  .trash-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .trash-list li { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; background: var(--sheet); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
+  .trash-title { font-weight: 600; color: var(--ink); flex: 1 1 200px; overflow-wrap: anywhere; }
+  .trash-list .btn { font-size: 14px; padding: 7px 14px; }
 
   /* Changelog: days down the page, each change tagged with where it lives. */
   .changelog-legend { display: flex; gap: 8px; margin-top: 18px; }

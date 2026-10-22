@@ -1,8 +1,5 @@
 <section class="auth auth-wide">
   <h1>Your account</h1>
-  <% for message in flashes() %>
-    <p class="form-notice" role="status"><%= message["message"] %></p>
-  <% end %>
   <% if error.present? %>
     <p class="form-error" role="alert"><%= error %></p>
   <% end %>

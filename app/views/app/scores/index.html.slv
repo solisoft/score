@@ -1,0 +1,67 @@
+<section class="library">
+  <header class="library-head">
+    <h1>Your scores</h1>
+    <form action="<%= app_scores_path() %>" method="POST" class="library-new">
+      <%- csrf_field() %>
+      <button type="submit" class="btn btn-primary">New score</button>
+    </form>
+  </header>
+
+  <form action="<%= app_scores_path() %>" method="GET" class="library-tools" role="search">
+    <label class="field library-search">Search the titles
+      <input type="search" id="library-q" name="q" value="<%= query %>" placeholder="Title">
+    </label>
+    <label class="field">Order
+      <select id="library-sort" name="sort">
+        <% for option in [["updated", "Last changed"], ["title", "Title"], ["created", "Newest"]] %>
+          <option value="<%= option[0] %>"<%- option[0] == sort ? " selected" : "" %>><%= option[1] %></option>
+        <% end %>
+      </select>
+    </label>
+    <button type="submit" class="btn btn-ghost">Search</button>
+  </form>
+
+  <% if scores.length == 0 %>
+    <div class="library-empty">
+      <% if query.blank? %>
+        <h2>No score yet</h2>
+        <p>Start one with <strong>New score</strong>: it is saved here as you write.</p>
+      <% else %>
+        <h2>No title has “<%= query %>” in it</h2>
+        <p><a href="<%= app_scores_path() %>">All your scores</a></p>
+      <% end %>
+    </div>
+  <% else %>
+    <ul class="library-grid">
+      <% for score in scores %>
+        <li class="score-card">
+          <a class="score-card-open" href="<%= app_score_path(score) %>">
+            <img src="<%= app_score_preview_path(score) %>?r=<%= score.revision %>" alt="" loading="lazy" width="280" height="140">
+            <span class="score-card-title"><%= score.title %></span>
+          </a>
+          <span class="score-card-when muted">Changed <%= time_ago(score.updated_at) %></span>
+          <details class="score-card-more">
+            <summary aria-label="More for <%= score.title %>">More</summary>
+            <form action="<%= app_score_rename_path(score) %>" method="POST" class="score-card-rename">
+              <%- csrf_field() %>
+              <label class="field">New title
+                <input type="text" name="title" value="<%= score.title %>" required maxlength="200">
+              </label>
+              <button type="submit" class="btn btn-ghost">Rename</button>
+            </form>
+            <form action="<%= app_score_duplicate_path(score) %>" method="POST">
+              <%- csrf_field() %>
+              <button type="submit" class="btn btn-ghost">Make a copy</button>
+            </form>
+            <form action="<%= app_score_trash_path(score) %>" method="POST">
+              <%- csrf_field() %>
+              <button type="submit" class="btn btn-danger">Move to the trash</button>
+            </form>
+          </details>
+        </li>
+      <% end %>
+    </ul>
+  <% end %>
+
+  <p class="library-trash-link"><a href="<%= app_trash_path() %>">Trash<% if trash_count > 0 %> (<%= trash_count %>)<% end %></a></p>
+</section>

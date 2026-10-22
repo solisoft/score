@@ -40,6 +40,7 @@ class AppAccountController < AppBaseController
       return render("app/account/show", {}, {"status": 422})
     end
 
+    Score.delete_all_of(@user)
     @user.delete
     session_destroy()
     flash("notice", "Your account is deleted.")

@@ -1,0 +1,11 @@
+<%- partial("shared/studio", {"examples": examples, "figure": figure, "source": source}) %>
+
+<script type="module">
+  const { startStudio } = await import("/eui-score/studio.js?v=<%= eui_version %>");
+  const root = document.getElementById("studio");
+  startStudio(root, {
+    examples: "<%= examples_path() %>",
+    source: root.querySelector("[data-source]").value,
+    greeting: "Click a note to select it, or press N and type A–G to write.",
+  });
+</script>

@@ -268,7 +268,7 @@ describe("Accounts") do
       email = fresh_email()
       make_user(email)
       sign_in_as(email)
-      member_page = res_body(get("/app"))
+      member_page = res_body(get("/app/account"))
       assert_contains(member_page, "href=\"/app/account\"")
       assert_not(member_page.contains("Create account"))
     end

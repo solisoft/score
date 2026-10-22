@@ -2027,7 +2027,7 @@
     display: flex;
     align-items: center;
     gap: 16px;
-    height: 56px;
+    height: 64px;
     padding: 0 20px;
     border-bottom: 1px solid var(--line);
     background: var(--paper);
@@ -2189,6 +2189,151 @@
     color: var(--ink);
     font-weight: 600;
     overflow-wrap: anywhere;
+  }
+  .app-flash {
+    margin: 16px auto 0;
+    max-width: 1120px;
+    width: calc(100% - 40px);
+    border: 1px solid #c9dcc4;
+    background: #eef6ec;
+    color: #2c5427;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 14px;
+  }
+  .library {
+    width: 100%;
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 32px 20px 64px;
+    display: grid;
+    gap: 20px;
+  }
+  .library-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .library-head h1 {
+    font-size: 34px;
+  }
+  .library-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: end;
+  }
+  .library-search {
+    flex: 1 1 240px;
+  }
+  .library-empty {
+    border: 1px dashed var(--line-strong);
+    border-radius: var(--radius);
+    padding: 40px 24px;
+    text-align: center;
+    display: grid;
+    gap: 8px;
+  }
+  .library-empty h2 {
+    font-size: 22px;
+  }
+  .library-grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+  .score-card {
+    background: var(--sheet);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 12px;
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+  }
+  .score-card-open {
+    display: grid;
+    gap: 8px;
+    color: var(--ink);
+  }
+  .score-card-open:hover {
+    text-decoration: none;
+    color: var(--accent);
+  }
+  .score-card-open img {
+    width: 100%;
+    height: 140px;
+    object-fit: cover;
+    object-position: top left;
+    border-radius: 8px;
+    background: #fff;
+    border: 1px solid var(--line);
+  }
+  .score-card-title {
+    font-family: var(--font-serif);
+    font-size: 18px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .score-card-when {
+    font-size: 13px;
+  }
+  .score-card-more summary {
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--muted);
+    list-style: none;
+  }
+  .score-card-more summary::-webkit-details-marker {
+    display: none;
+  }
+  .score-card-more[open] {
+    display: grid;
+    gap: 8px;
+  }
+  .score-card-more form {
+    display: grid;
+    gap: 6px;
+  }
+  .score-card-more .btn {
+    justify-content: center;
+    font-size: 14px;
+    padding: 8px 14px;
+  }
+  .library-trash-link {
+    font-size: 14px;
+  }
+  .trash-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+  }
+  .trash-list li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    align-items: center;
+    background: var(--sheet);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px 14px;
+  }
+  .trash-title {
+    font-weight: 600;
+    color: var(--ink);
+    flex: 1 1 200px;
+    overflow-wrap: anywhere;
+  }
+  .trash-list .btn {
+    font-size: 14px;
+    padding: 7px 14px;
   }
   .changelog-legend {
     display: flex;

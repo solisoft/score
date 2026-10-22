@@ -1,0 +1,29 @@
+<section class="library">
+  <header class="library-head">
+    <h1>Trash</h1>
+    <a class="btn btn-ghost" href="<%= app_scores_path() %>">Back to your scores</a>
+  </header>
+  <p class="muted">A score stays here <%= trash_days %> days, then it is deleted for good.</p>
+
+  <% if scores.length == 0 %>
+    <div class="library-empty"><h2>The trash is empty</h2></div>
+  <% else %>
+    <ul class="trash-list">
+      <% for score in scores %>
+        <li>
+          <span class="trash-title"><%= score.title %></span>
+          <span class="muted">moved <%= time_ago(score.trashed_at) %></span>
+          <form action="<%= app_score_restore_path(score) %>" method="POST">
+            <%- csrf_field() %>
+            <button type="submit" class="btn btn-ghost">Restore</button>
+          </form>
+          <form action="<%= app_score_path(score) %>" method="POST">
+            <%- csrf_field() %>
+            <input type="hidden" name="_method" value="DELETE">
+            <button type="submit" class="btn btn-danger">Delete for good</button>
+          </form>
+        </li>
+      <% end %>
+    </ul>
+  <% end %>
+</section>

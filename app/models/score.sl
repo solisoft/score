@@ -1,0 +1,140 @@
+# A score in someone's library: its LilyPond source — which holds its title
+# too, in \header, so the library and the engraving never disagree — and,
+# once moved to the trash, when (trashed_at). The trash keeps a score
+# SCORE_TRASH_DAYS days.
+const SCORE_TRASH_DAYS = 30
+const SCORE_UNTITLED = "Untitled score"
+
+class Score < Model
+  validates("user_id", {"presence": true})
+  validates(
+    "title",
+    {"presence": true, "max_length": 200}
+  )
+  validates(
+    "source",
+    {"presence": true, "max_length": 1000000}
+  )
+  before_save("stamp")
+
+  # Every save: the title read from the source, the times, the revision a
+  # later save must start from (see #320's conflict check).
+  def stamp
+    @title = Score.title_in(@source) ?? @title ?? SCORE_UNTITLED
+    now = DateTime.utc.to_unix
+    @created_at ||= now
+    @updated_at = now
+    @revision = (@revision ?? 0) + 1
+    true
+  end
+
+  # The scores `user` has out of the trash, matching `query` (in the title),
+  # in `sort` order: "updated" (the default), "title" or "created".
+  static def library(user, query, sort)
+    needle = query.to_s.trim.downcase
+    condition = "doc.user_id == @user AND doc.trashed_at == null"
+    condition = condition + " AND CONTAINS(LOWER(doc.title), @needle)" unless needle.blank?
+    binds = {"user": user._key}
+    binds["needle"] = needle unless needle.blank?
+    builder = Score.where(condition, binds)
+    builder = builder.order("title", "asc") if sort == "title"
+    builder = builder.order("created_at", "desc") if sort == "created"
+    builder = builder.order("updated_at", "desc") unless ["title", "created"].includes?(sort)
+    builder.limit(500).all
+  end
+
+  # The scores `user` moved to the trash, the latest first.
+  static def trash_of(user)
+    trashed = Score.where("doc.user_id == @user AND doc.trashed_at != null", {"user": user._key})
+    trashed.order("trashed_at", "desc").limit(500).all
+  end
+
+  # What has been in `user`'s trash longer than SCORE_TRASH_DAYS goes.
+  static def purge_trash(user)
+    before = DateTime.utc.to_unix - SCORE_TRASH_DAYS * 86400
+    Score.where(
+      "doc.user_id == @user AND doc.trashed_at != null AND doc.trashed_at < @before",
+      {"user": user._key, "before": before}
+    ).delete_all
+  end
+
+  # Every score of `user`, trash included: their account is going.
+  static def delete_all_of(user)
+    Score.where("doc.user_id == @user", {"user": user._key}).delete_all
+  end
+
+  # A new score in `user`'s library.
+  static def start(user, source)
+    Score.create({
+      "user_id": user._key,
+      "source": source,
+      "title": Score.title_in(source) ?? SCORE_UNTITLED
+    })
+  end
+
+  # The title a source's \header gives, or nil.
+  static def title_in(source)
+    found = Regex.capture("\\\\header\\s*\\{[^}]*?title\\s*=\\s*\"(?P<title>[^\"]*)\"", source.to_s)
+    return nil if found.nil?
+
+    title = found["title"].trim
+    title.blank? ? nil : title
+  end
+
+  # `source` with `title` as its title: in its \header, or a header of its
+  # own on top. Quotes and backslashes, which would end the LilyPond string,
+  # are left out.
+  static def with_title(source, title)
+    clean = title.to_s.replace("\"", "").replace("\\", "").trim
+    clean = SCORE_UNTITLED if clean.blank?
+    if Score.title_in(source).nil? && !Regex.matches("\\\\header\\s*\\{", source.to_s)
+      return "\\header { title = \"#{clean}\" }\n" + source.to_s
+    end
+
+    if Regex.matches("\\\\header\\s*\\{[^}]*?title\\s*=", source.to_s)
+      return Regex.replace("(\\\\header\\s*\\{[^}]*?title\\s*=\\s*)\"[^\"]*\"", source.to_s, "${1}\"#{clean}\"")
+    end
+
+    Regex.replace("\\\\header\\s*\\{", source.to_s, "\\header { title = \"#{clean}\"")
+  end
+
+  # The score `user` starts from a blank page.
+  static def blank_source(title)
+    Score.with_title(
+      "\\relative c' {\n  \\clef treble \\key c \\major \\time 4/4\n  r1 | r1 | r1 | r1 \\bar \"|.\"\n}\n",
+      title
+    )
+  end
+
+  def owned_by?(user)
+    !user.nil? && @user_id == user._key
+  end
+
+  def trashed?
+    !@trashed_at.nil?
+  end
+
+  def rename(title)
+    @source = Score.with_title(@source, title)
+    @save
+  end
+
+  def move_to_trash
+    @trashed_at = DateTime.utc.to_unix
+    @save
+  end
+
+  def restore_from_trash
+    @trashed_at = nil
+    @save
+  end
+
+  # A copy in the same library, "(copy)" after its title.
+  def duplicate
+    Score.create({
+      "user_id": @user_id,
+      "source": Score.with_title(@source, "#{this.title} (copy)"),
+      "title": "#{this.title} (copy)"
+    })
+  end
+end
