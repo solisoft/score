@@ -2268,8 +2268,8 @@
   .score-card-open img {
     width: 100%;
     height: 140px;
-    object-fit: cover;
-    object-position: top left;
+    object-fit: contain;
+    object-position: center;
     border-radius: 8px;
     background: #fff;
     border: 1px solid var(--line);
@@ -2334,6 +2334,82 @@
   .trash-list .btn {
     font-size: 14px;
     padding: 7px 14px;
+  }
+  .app-doc {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex: 1 1 auto;
+    margin-left: 8px;
+  }
+  .app-doc-title {
+    font-family: var(--font-serif);
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .app-save {
+    font-size: 13px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    white-space: nowrap;
+    background: var(--paper-deep);
+    color: var(--muted);
+  }
+  .app-save[data-kind="ok"] {
+    background: #eef6ec;
+    color: #2c5427;
+  }
+  .app-save[data-kind="dirty"], .app-save[data-kind="busy"] {
+    background: #fdf7ea;
+    color: #5d4a22;
+  }
+  .app-save[data-kind="offline"], .app-save[data-kind="conflict"] {
+    background: #fbecea;
+    color: var(--accent-ink);
+  }
+  .app-doc-action {
+    font: 500 13px/1 var(--font-sans);
+    color: var(--ink-soft);
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 6px 10px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .app-doc-action:hover {
+    border-color: var(--ink);
+    color: var(--ink);
+    text-decoration: none;
+  }
+  @media (max-width: 760px) {
+    .app-doc-action, .app-nav a:first-child {
+      display: none;
+    }
+  }
+  .version-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+  .version-sheet {
+    background: var(--sheet);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 20px;
+    overflow-x: auto;
+    color: var(--ink);
+  }
+  .version-sheet svg {
+    max-width: 100%;
+    height: auto;
   }
   .changelog-legend {
     display: flex;

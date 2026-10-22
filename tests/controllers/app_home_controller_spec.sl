@@ -1,4 +1,9 @@
 describe("AppHomeController") do
+  before_each() do
+    as_guest()
+    clear_cookies()
+  end
+
   describe("GET /app") do
     test("opens the app in its own layout, with its share tags") do
       response = get("/app")

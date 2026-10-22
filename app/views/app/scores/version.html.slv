@@ -1,0 +1,19 @@
+<section class="library">
+  <header class="library-head">
+    <h1><%= version.title %> <span class="muted">— <%= time_ago(version.created_at) %></span></h1>
+    <div class="version-actions">
+      <a class="btn btn-ghost" href="<%= app_score_versions_path(score) %>">All versions</a>
+      <form action="<%= app_score_restore_version_path(score, version) %>" method="POST">
+        <%- csrf_field() %>
+        <button type="submit" class="btn btn-primary">Restore this version</button>
+      </form>
+    </div>
+  </header>
+  <div class="version-sheet">
+    <% if figure["svg"].nil? %>
+      <p class="form-error"><%= figure["error"] %></p>
+    <% else %>
+      <%- figure["svg"] %>
+    <% end %>
+  </div>
+</section>

@@ -134,4 +134,99 @@ describe("AppScoresController") do
     request("DELETE", "/app/account", {"password": LIBRARY_PASSWORD}, {})
     assert_eq(Score.where("doc.user_id == @user", {"user": owner._key}).all.length, 0)
   end
+
+  describe("saving and the history") do
+    test("the editor's save writes the source, and a stale one is answered 409 with the score as it stands") do
+      owner = library_user()
+      score = Score.start(owner, Score.blank_source("Bolero"))
+      library_sign_in(owner)
+      saved = put(
+        "/app/scores/#{score._key}",
+        {"source": "\\header { title = \"Bolero\" }\n{ c'1 }", "revision": score.revision}
+      )
+      assert_eq(res_status(saved), 200)
+      assert_eq(res_json(saved)["revision"], Score.find(score._key).revision)
+      stale = put(
+        "/app/scores/#{score._key}",
+        {"source": "{ d'1 }", "revision": score.revision}
+      )
+      assert_eq(res_status(stale), 409)
+      assert_contains(res_json(stale)["source"], "c'1")
+      assert_contains(Score.find(score._key).source, "c'1")
+    end
+
+    test("the editor page opens with what the save needs") do
+      owner = library_user()
+      score = Score.start(owner, Score.blank_source("Habanera"))
+      library_sign_in(owner)
+      page = res_body(get("/app/scores/#{score._key}"))
+      assert_contains(page, "data-save-state")
+      assert_contains(page, "let revision = #{score.revision};")
+      assert_contains(page, "href=\"/app/scores/#{score._key}/versions\"")
+    end
+
+    test("keeps a version on request, lists it, shows it, and restores it") do
+      owner = library_user()
+      score = Score.start(owner, Score.blank_source("Gymnopedie"))
+      library_sign_in(owner)
+      kept = post("/app/scores/#{score._key}/versions", {})
+      assert_eq(res_status(kept), 201)
+      version_key = res_json(kept)["version"]
+      put(
+        "/app/scores/#{score._key}",
+        {"source": "\\header { title = \"Gymnopedie\" }\n{ b'1 }", "revision": score.revision}
+      )
+      listing = res_body(get("/app/scores/#{score._key}/versions"))
+      assert_contains(listing, "kept on request")
+      shown = get("/app/scores/#{score._key}/versions/#{version_key}")
+      assert_eq(res_status(shown), 200)
+      assert_contains(res_body(shown), "Restore this version")
+      restored = post("/app/scores/#{score._key}/versions/#{version_key}/restore", {})
+      assert_eq(res_location(restored), "/app/scores/#{score._key}")
+      assert_contains(Score.find(score._key).source, "r1")
+    end
+
+    test("an empty history says so") do
+      owner = library_user()
+      score = Score.start(owner, Score.blank_source("Pavane"))
+      library_sign_in(owner)
+      assert_contains(res_body(get("/app/scores/#{score._key}/versions")), "No version kept yet")
+    end
+
+    test("refuses to save, keep, list or restore someone else's score") do
+      owner = library_user()
+      score = Score.start(owner, Score.blank_source("Mine"))
+      version = ScoreVersion.keep(score, score.source, "manual")
+      library_sign_in(library_user())
+      assert_eq(res_status(put(
+        "/app/scores/#{score._key}",
+        {"source": "{ c'1 }", "revision": score.revision}
+      )), 403)
+      assert_eq(res_status(post("/app/scores/#{score._key}/versions", {})), 403)
+      assert_eq(res_status(get("/app/scores/#{score._key}/versions")), 403)
+      assert_eq(res_status(post("/app/scores/#{score._key}/versions/#{version._key}/restore", {})), 403)
+      assert_contains(Score.find(score._key).source, "r1")
+      assert_eq(ScoreVersion.history(score).length, 1)
+    end
+
+    test("a version of another score is not found through this one") do
+      owner = library_user()
+      score = Score.start(owner, Score.blank_source("One"))
+      other = Score.start(owner, Score.blank_source("Two"))
+      version = ScoreVersion.keep(other, other.source, "manual")
+      library_sign_in(owner)
+      assert_eq(res_status(get("/app/scores/#{score._key}/versions/#{version._key}")), 404)
+      assert_eq(res_status(post("/app/scores/#{score._key}/versions/#{version._key}/restore", {})), 404)
+    end
+
+    test("deleting a score for good takes its history with it") do
+      owner = library_user()
+      score = Score.start(owner, Score.blank_source("Ephemeral"))
+      ScoreVersion.keep(score, score.source, "manual")
+      library_sign_in(owner)
+      post("/app/scores/#{score._key}/trash", {})
+      request("DELETE", "/app/scores/#{score._key}", {}, {})
+      assert_eq(ScoreVersion.history(score).length, 0)
+    end
+  end
 end

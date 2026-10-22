@@ -60,6 +60,7 @@ class Score < Model
 
   # Every score of `user`, trash included: their account is going.
   static def delete_all_of(user)
+    ScoreVersion.delete_all_of(user)
     Score.where("doc.user_id == @user", {"user": user._key}).delete_all
   end
 
@@ -104,6 +105,52 @@ class Score < Model
       "\\relative c' {\n  \\clef treble \\key c \\major \\time 4/4\n  r1 | r1 | r1 | r1 \\bar \"|.\"\n}\n",
       title
     )
+  end
+
+  # The editor's save: `source`, typed over `base_revision`. Refused (409)
+  # when the score has moved on since — saved from another window — with
+  # the refused text kept as a "conflict" version and the score as it now
+  # stands in the answer, so the editor can show it and nothing is lost.
+  # Answers {"status", "body"}.
+  def save_from_editor(source, base_revision)
+    if base_revision != @revision
+      ScoreVersion.keep(this, source, "conflict") unless source.blank?
+      return {"status": 409, "body": {
+        "error": "changed elsewhere",
+        "revision": @revision,
+        "source": @source,
+        "title": @title
+      }}
+    end
+
+    if source.blank?
+      return {"status": 422, "body": {
+        "error": "an empty score is not saved",
+        "revision": @revision
+      }}
+    end
+
+    ScoreVersion.keep_if_due(this)
+    @source = source
+    unless @save
+      return {"status": 422, "body": {
+        "error": @_errors[0]["message"],
+        "revision": base_revision
+      }}
+    end
+
+    {"status": 200, "body": {
+      "revision": @revision,
+      "title": @title,
+      "updated_at": @updated_at
+    }}
+  end
+
+  # Back to `version`: the score as it stands is kept first.
+  def restore_version(version)
+    ScoreVersion.keep(this, @source, "restore")
+    @source = version.source
+    @save
   end
 
   def owned_by?(user)

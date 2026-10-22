@@ -68,5 +68,14 @@ middleware("require_app_database", fn() {
     post("/app/scores/:id/trash", "app/scores#move_to_trash", name: "app_score_trash")
     post("/app/scores/:id/restore", "app/scores#restore", name: "app_score_restore")
     delete("/app/scores/:id", "app/scores#destroy")
+    put("/app/scores/:id", "app/scores#update")
+    post("/app/scores/:id/versions", "app/scores#keep_version", name: "app_score_keep_version")
+    get("/app/scores/:id/versions", "app/scores#versions", name: "app_score_versions")
+    get("/app/scores/:id/versions/:version_id", "app/scores#version", name: "app_score_version")
+    post(
+      "/app/scores/:id/versions/:version_id/restore",
+      "app/scores#restore_version",
+      name: "app_score_restore_version"
+    )
   })
 })

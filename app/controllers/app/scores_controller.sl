@@ -41,8 +41,60 @@ class AppScoresController < AppBaseController
     @figure = ScoreSvg.figure(@source, 1000, 7)
     @examples = ScoreLibrary.examples
     @eui_version = ScoreAssets.version
+    @editing_score = @score
     @title = @score.title
     @description = "#{this.score.title}, in the EUI Score editor."
+  end
+
+  # PUT /app/scores/:id — the editor's autosave, JSON {source, revision}:
+  # 200 {revision, title}, or 409 with the score as it now stands when it
+  # was changed elsewhere since `revision` (see Score#save_from_editor)
+  def update
+    score = @_score("update")
+    body = req["json"] ?? params
+    saved = score.save_from_editor(body["source"].to_s, body["revision"].to_s.to_i)
+    render_json(saved["body"], saved["status"])
+  end
+
+  # POST /app/scores/:id/versions — keep the score as it stands, from the editor
+  def keep_version
+    score = @_score("update")
+    version = ScoreVersion.keep(score, score.source, "manual")
+    render_json(
+      {"version": version._key, "created_at": version.created_at},
+      201
+    )
+  end
+
+  # GET /app/scores/:id/versions — the score's history
+  def versions
+    @score = @_score("show")
+    @versions = ScoreVersion.history(@score)
+    @reasons = {
+      "auto": "kept on the way",
+      "manual": "kept on request",
+      "restore": "before a restore",
+      "conflict": "not saved: changed elsewhere"
+    }
+    @title = "History of #{this.score.title}"
+    @description = "The versions kept of #{this.score.title}."
+  end
+
+  # GET /app/scores/:id/versions/:version_id — one version, engraved
+  def version
+    @score = @_score("show")
+    @version = @_version_of(@score)
+    @figure = ScoreSvg.figure(@version.source, 1000, 7)
+    @title = "#{this.version.title} — a version"
+    @description = "A version of #{this.score.title}."
+  end
+
+  # POST /app/scores/:id/versions/:version_id/restore — the score as it was
+  def restore_version
+    score = @_score("update")
+    score.restore_version(@_version_of(score))
+    flash("notice", "The score is back as it was. What it was just before is kept in its history.")
+    redirect(app_score_path(score))
   end
 
   # GET /app/scores/:id/preview.svg — the first systems, for the library's card
@@ -92,6 +144,7 @@ class AppScoresController < AppBaseController
     score = @_score("destroy")
     halt(422, "Move the score to the trash first.") unless score.trashed?
 
+    ScoreVersion.delete_all_for(score)
     score.delete
     flash("notice", "“#{score.title}” is deleted.")
     redirect(app_trash_path())
@@ -103,5 +156,13 @@ class AppScoresController < AppBaseController
   # otherwise; 404 for no such score).
   def _score(action)
     authorize(Score.find(params["id"]), action)
+  end
+
+  # The version of the route, if it is one of `score`'s (404 otherwise).
+  def _version_of(score)
+    version = ScoreVersion.find(params["version_id"])
+    halt(404, "No such version of this score") unless version.score_id == score._key
+
+    version
   end
 end
