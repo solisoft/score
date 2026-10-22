@@ -110,3 +110,22 @@
 #
 # `enable_security_headers` / `disable_security_headers` toggle the
 # whole bundle.
+
+# ---------------------------------------------------------------------
+# Sessions live in SoliDB, next to the app's accounts and scores: they
+# survive restarts and deploys, and both workers and both blue-green slots
+# share them. Credentials fall back to SOLIDB_USERNAME / SOLIDB_PASSWORD.
+#
+# Only where a database is configured (see AppSetup): a store that cannot
+# be reached would keep /up at 503, and soli-proxy would never switch a
+# deploy over. Without one, the default in-memory store serves the site,
+# whose pages keep nothing in a session.
+# ---------------------------------------------------------------------
+unless getenv("SOLIDB_HOST").blank?
+  session_configure({
+    "driver": "solidb",
+    "solidb_host": getenv("SOLIDB_HOST"),
+    "solidb_database": getenv("SOLIDB_DATABASE") ?? "score",
+    "solidb_collection": "sessions"
+  })
+end

@@ -42,8 +42,8 @@ ENV
   SOLIDB_DATABASE=score
   SOLIDB_USERNAME=score
   SOLIDB_PASSWORD=<its password>
-  # Sessions in an encrypted cookie: shared by both workers and both slots.
-  SOLI_SESSION_DRIVER=cookie
+  # Sessions go to the same SoliDB (config/application.sl), shared by both
+  # workers and both slots. The secret still signs the app's cookies.
   SOLI_SESSION_SECRET=<openssl rand -hex 32>
   # Password reset and email confirmation mails.
   SOLI_MAIL_DELIVERY_METHOD=smtp
