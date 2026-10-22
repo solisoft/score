@@ -5,7 +5,10 @@ def up(db)
   db.create_collection("score_shares")
   db.create_index("score_shares", "idx_score_shares_score", ["score_id"], {})
   db.create_index("score_shares", "idx_score_shares_email", ["email"], {})
-  db.create_index("scores", "idx_scores_share_token", ["share_token"], {"unique": true, "sparse": true})
+  db.create_index("scores", "idx_scores_share_token", ["share_token"], {
+    "unique": true,
+    "sparse": true
+  })
 end
 
 def down(db)

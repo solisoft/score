@@ -219,6 +219,7 @@ class AppScoresController < AppBaseController
 
   # What the share page shows of `score`.
   def _share_page(score)
+
     # A score saved before links existed gets its own now (Score#stamp).
     score.save if score.share_token.blank?
     @shares = ScoreShare.of(score)
