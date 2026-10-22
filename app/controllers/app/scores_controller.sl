@@ -52,6 +52,7 @@ class AppScoresController < AppBaseController
     @examples = ScoreLibrary.examples
     @eui_version = ScoreAssets.version
     @editing_score = @score
+    @room_ticket = ScoreRoom.ticket(@score, current_user(), DateTime.utc.to_unix)
     @title = @score.title
     @description = "#{this.score.title}, in the EUI Score editor."
   end
@@ -63,6 +64,7 @@ class AppScoresController < AppBaseController
     score = @_score("update")
     body = req["json"] ?? params
     saved = score.save_from_editor(body["source"].to_s, body["revision"].to_s.to_i)
+    ScoreRoom.tell_saved(score, body["origin"]) if saved["status"] == 200
     render_json(saved["body"], saved["status"])
   end
 

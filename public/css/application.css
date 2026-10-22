@@ -2501,6 +2501,17 @@
     background: #fbecea;
     color: var(--accent-ink);
   }
+  .app-room {
+    font-size: 13px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: #eaf0fb;
+    color: #23468a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 260px;
+  }
   .app-doc-action {
     font: 500 13px/1 var(--font-sans);
     color: var(--ink-soft);

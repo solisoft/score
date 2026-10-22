@@ -44,6 +44,7 @@
             <div class="app-doc">
                 <span class="app-doc-title" data-doc-title><%= editing_score.title %></span>
                 <span class="app-save" data-save-state data-kind="ok" role="status" aria-live="polite">Saved</span>
+                <span class="app-room" data-room hidden aria-live="polite"></span>
                 <button type="button" class="app-doc-action" data-keep-version>Keep a version</button>
                 <a class="app-doc-action" href="<%= app_score_versions_path(editing_score) %>">History</a>
                 <% if owner %>

@@ -39,6 +39,10 @@ get("/examples/:category/:slug/source.ly", "examples#source", name: "example_sou
 get("/playground", "playground#show", name: "playground")
 
 # The score-writing app: accounts and saved scores, in SoliDB.
+# The room of a score open in the editor: who is there, and saves live.
+# One fixed path: the ticket names the score (a dynamic segment in a
+# websocket route is not matched by Soli 2.28).
+router_websocket("/ws/scores", "score_room#handle")
 get("/app/setup", "app_setup#show", name: "app_setup")
 middleware("require_app_database", fn() {
   get("/app", "app/home#index", name: "app_home")

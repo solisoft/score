@@ -19,6 +19,9 @@
   let saving = false;
   let conflict = false;
   let timer = 0;
+  // This editor, for the room: its own saves come back to it, and are skipped.
+  const origin = crypto.randomUUID?.() ?? String(Math.random()).slice(2);
+  let applyingRemote = false;
   const keepKey = "eui-score-pending:<%= score._key %>";
 
   const keepLocally = (text) => {
@@ -47,7 +50,7 @@
       const response = await fetch(url, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ source: text, revision }),
+        body: JSON.stringify({ source: text, revision, origin }),
       });
       const answer = await response.json();
       if (response.status === 409) {
@@ -92,7 +95,7 @@
     source: root.querySelector("[data-source]").value,
     greeting: "Click a note to select it, or press N and type A–G to write. Your changes save themselves.",
     onChange(text) {
-      if (conflict) return;
+      if (conflict || applyingRemote) return;
       pending = text;
       keepLocally(text);
       show("Unsaved changes", "dirty");
@@ -101,6 +104,57 @@
   });
 
   window.addEventListener("online", save);
+
+  // The score's room: who else has it open, and their saves as they happen.
+  // A save from elsewhere is applied here only while this editor has no
+  // change of its own on the way; otherwise this editor's next save meets
+  // the conflict rule above, and nothing is lost either way.
+  const roomBox = document.querySelector("[data-room]");
+  const me = "<%= current_user()._key %>";
+  let people = {};
+  const showPeople = () => {
+    const others = Object.entries(people).filter(([id]) => id !== me).map(([, p]) => p.metas[0].name);
+    roomBox.hidden = others.length === 0;
+    roomBox.textContent = others.length ? `With ${others.join(", ")}` : "";
+    roomBox.title = others.length ? `Also editing: ${others.join(", ")}` : "";
+  };
+  function joinRoom() {
+    const scheme = location.protocol === "https:" ? "wss:" : "ws:";
+    const socket = new WebSocket(`${scheme}//${location.host}/ws/scores?ticket=<%= room_ticket %>`);
+    socket.onmessage = (message) => {
+      let data;
+      try {
+        data = JSON.parse(message.data);
+      } catch (error) {
+        return;
+      }
+      if (data.event === "presence_state") {
+        people = data.payload;
+        showPeople();
+      } else if (data.event === "presence_diff") {
+        Object.entries(data.payload.joins ?? {}).forEach(([id, p]) => (people[id] = p));
+        Object.keys(data.payload.leaves ?? {}).forEach((id) => delete people[id]);
+        showPeople();
+      } else if (data.event === "saved" && data.origin !== origin && data.revision > revision) {
+        if (pending != null || saving || conflict) {
+          show("Changed in another window", "conflict");
+          return;
+        }
+        revision = data.revision;
+        applyingRemote = true;
+        try {
+          studio.load(data.source, "Updated: someone else saved this score.");
+        } finally {
+          applyingRemote = false;
+        }
+        forgetLocally();
+        titleBox.textContent = data.title;
+        show("Saved", "ok");
+      }
+    };
+    socket.onclose = () => setTimeout(joinRoom, 3000);
+  }
+  joinRoom();
 
   // Changes kept in this browser by a visit that could not save them.
   let kept = null;
