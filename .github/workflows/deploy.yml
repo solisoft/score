@@ -5,7 +5,10 @@
 #   2. `soli-proxy deploy`: the proxy starts the idle slot, waits for its
 #      health check, moves the traffic across, then stops the old slot.
 #
-# No database step: the site has no models. The browser engraver
+# The app (/app) keeps accounts and scores in SoliDB: once the server's .env
+# names a database (SOLIDB_HOST), each deploy runs its migrations before the
+# switch. Without one the site deploys alone and /app says it is being set
+# up. The browser engraver
 # (public/eui-score/) is committed, built by wasm/build.sh, so a deploy needs
 # no Rust to deploy; the `engraver` job only tests it. See deploy/README.md
 # for the one-time server setup.
@@ -210,6 +213,16 @@ jobs:
           echo "server: $installed — pinned: $SOLI_VERSION"
           if [ "$installed" != "$SOLI_VERSION" ]; then
             echo "::warning::the server runs Soli $installed; this run tested $SOLI_VERSION"
+          fi
+
+      # Only where the server has a database: see deploy/README.md.
+      - name: Migrations
+        run: |
+          set -euo pipefail
+          if ssh "$USER@$HOST" "grep -qE '^SOLIDB_HOST=.+' '$SITES_DIR/$DOMAIN/.env'"; then
+            ssh "$USER@$HOST" "set -e; cd '$SITES_DIR/$DOMAIN' && soli db:migrate up"
+          else
+            echo "::notice::no SOLIDB_HOST in the server's .env: migrations skipped, /app shows its set-up page"
           fi
 
       # `soli-proxy deploy` rather than touching restart.txt: it waits for

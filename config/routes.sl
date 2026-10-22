@@ -33,3 +33,7 @@ get("/examples/:category/:slug/preview.svg", "examples#preview", name: "example_
 get("/examples/:category/:slug/source.ly", "examples#source", name: "example_source")
 
 get("/playground", "playground#show", name: "playground")
+
+# The score-writing app: accounts and saved scores, in SoliDB.
+get("/app/setup", "app_setup#show", name: "app_setup")
+middleware("require_app_database", fn() { get("/app", "app/home#index", name: "app_home") })

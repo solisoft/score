@@ -32,7 +32,31 @@ ENV
 - DNS: `score.solisoft.net` → the server (soli-proxy gets the certificate).
 - Soli on the server must be ≥ 2.26.0 (the `eui_score_*` builtins); the
   workflow pins and tests 2.28.2 and warns when the server differs.
-- No database: the site has no models.
+- The app (`/app`: accounts, saved scores) needs SoliDB. Until the `.env`
+  below names one, the site works and `/app` answers with its set-up page.
+  To open it, create a database and a user on the server's SoliDB, then add:
+
+  ```bash
+  cat >> .env <<'ENV'
+  SOLIDB_HOST=http://127.0.0.1:6745
+  SOLIDB_DATABASE=score
+  SOLIDB_USERNAME=score
+  SOLIDB_PASSWORD=<its password>
+  # Sessions in an encrypted cookie: shared by both workers and both slots.
+  SOLI_SESSION_DRIVER=cookie
+  SOLI_SESSION_SECRET=<openssl rand -hex 32>
+  # Password reset and email confirmation mails.
+  SOLI_MAIL_DELIVERY_METHOD=smtp
+  SOLI_SMTP_HOST=…
+  SOLI_SMTP_PORT=587
+  SOLI_SMTP_USER=…
+  SOLI_SMTP_PASS=…
+  SOLI_SMTP_FROM=EUI Score <no-reply@solisoft.net>
+  ENV
+  ```
+
+  The next deploy runs the migrations (`soli db:migrate up`) before it
+  switches slots.
 - The players' sounds, `public/soundfonts/MuseScore_General.sf3` (38 MB),
   are not in git: the workflow fetches them with `deploy/soundfont.sh`
   before its rsync. A local checkout runs that script once.

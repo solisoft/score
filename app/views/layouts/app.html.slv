@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#fbf9f4">
+    <title><%= title %> · EUI Score</title>
+
+    <%# Share tags (Open Graph, Twitter card, canonical), as on the site's
+        layout. Actions set @title and @description. %>
+    <% share_description = description ?? "Write music in your browser: engraved as you type, played, saved." %>
+    <% current_path = req ? req["path"] : "/app" %>
+    <% share_url = absolute_url(current_path) %>
+    <meta name="description" content="<%= share_description %>">
+    <link rel="canonical" href="<%= share_url %>">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="EUI Score">
+    <meta property="og:title" content="<%= title %> · EUI Score">
+    <meta property="og:description" content="<%= share_description %>">
+    <meta property="og:url" content="<%= share_url %>">
+    <meta property="og:image" content="<%= absolute_url(og_image ?? "/images/og.png") %>">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="icon" href="<%= public_path("images/favicon.svg") %>" type="image/svg+xml">
+
+    <link rel="stylesheet" href="<%= public_path("css/application.css") %>">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Music&display=swap" rel="stylesheet">
+</head>
+<body class="app-body">
+    <header class="app-header">
+        <a class="brand" href="<%= app_home_path() %>" aria-label="EUI Score app, home">
+            <span class="brand-mark" aria-hidden="true">
+                <svg width="16" height="18" viewBox="0 0 16 18" fill="currentColor"><path d="M6 1.5 15 0v12.2a2.8 2.3 0 1 1-1.6-2.1V3.4L7.6 4.3v9.9A2.8 2.3 0 1 1 6 12.1Z"/></svg>
+            </span>
+            <span>EUI <em>Score</em></span>
+        </a>
+        <nav class="app-nav" aria-label="App">
+            <a href="<%= root_path() %>">The site</a>
+        </nav>
+    </header>
+
+    <main class="app-main">
+        <%= yield %>
+    </main>
+</body>
+</html>

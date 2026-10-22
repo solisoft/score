@@ -259,6 +259,17 @@
   .callout { border: 1px solid #e9d7b5; background: #fdf7ea; border-radius: 12px; padding: 14px 18px; font-size: 15px; color: #5d4a22; margin: 16px 0 24px; }
   .callout strong { color: #4a3a14; }
 
+  /* The app (/app): a header bar over the whole window, no site footer. */
+  .app-body { min-height: 100vh; display: flex; flex-direction: column; }
+  .app-header { display: flex; align-items: center; gap: 16px; height: 56px; padding: 0 20px; border-bottom: 1px solid var(--line); background: var(--paper); position: sticky; top: 0; z-index: 20; }
+  .app-nav { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+  .app-nav a, .app-nav button { color: var(--ink-soft); font: 500 14px/1 var(--font-sans); padding: 8px 12px; border-radius: 999px; background: none; border: 0; cursor: pointer; white-space: nowrap; }
+  .app-nav a:hover, .app-nav button:hover { background: var(--paper-deep); color: var(--ink); text-decoration: none; }
+  .app-nav a[aria-current="page"] { color: var(--accent); background: var(--accent-soft); }
+  .app-main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .app-panel { width: 100%; max-width: 760px; margin: 0 auto; padding: 56px 20px; display: grid; gap: 14px; }
+  .app-panel h1 { font-size: clamp(30px, 5vw, 42px); }
+
   /* Changelog: days down the page, each change tagged with where it lives. */
   .changelog-legend { display: flex; gap: 8px; margin-top: 18px; }
   .changelog-day { margin: 0 0 40px; }

@@ -1,0 +1,8 @@
+<section class="app-panel">
+  <span class="eyebrow">Being set up</span>
+  <h1>The app is not open on this server yet</h1>
+  <p class="lead">
+    Accounts and saved scores need a database, and this server has none yet. The rest of the site works:
+    the <a href="<%= playground_path() %>">playground</a> writes, plays and exports scores, kept in your browser.
+  </p>
+</section>

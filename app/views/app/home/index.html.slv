@@ -1,0 +1,9 @@
+<section class="app-panel">
+  <span class="eyebrow">Your scores</span>
+  <h1>Write music, keep it</h1>
+  <p class="lead">
+    Scores engraved as you type, played with real instruments, and saved to your account. Sign-in and your
+    library come next; until then the <a href="<%= playground_path() %>">playground</a> keeps a draft in this
+    browser.
+  </p>
+</section>
