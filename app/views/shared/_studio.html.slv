@@ -4,29 +4,95 @@
     first picture, engraved on the server so the page shows a score before
     the module loads), `source` (the LilyPond it opens with). %>
 <div class="studio" id="studio" data-no-nav>
-  <div class="studio-menubar" role="menubar" aria-label="Score">
+  <%# The menu bar: menus as an application has them (File, Edit, View,
+      Insert, Play — each item its shortcut), and the few commands used all
+      the time beside them. Items are the toolbox's own buttons, data-act,
+      so studio.js handles them alike. %>
+  <div class="studio-menubar" aria-label="Score">
     <button type="button" class="studio-menu studio-tools-toggle" data-act="tools" aria-expanded="false" aria-controls="studio-toolbox">Tools</button>
     <div class="studio-menu-scroll">
+      <nav class="studio-menus" aria-label="Menus" data-menus>
+        <details class="studio-dropdown">
+          <summary class="studio-menu">File</summary>
+          <div class="studio-dropdown-items" role="menu">
+            <button type="button" role="menuitem" data-act="new">New… <kbd>from a template</kbd></button>
+            <label role="menuitem" class="studio-dropdown-file">Open a .ly file…<input type="file" accept=".ly,.ily,.txt,text/plain" data-act="open" hidden></label>
+            <label class="studio-dropdown-select">Open an example
+              <select data-act="example" aria-label="Open an example">
+                <option value="">Examples…</option>
+                <% for example in examples %>
+                  <option value="<%= example["category"] %>/<%= example["slug"] %>"><%= example["title"] %> — <%= example["instrument"] %></option>
+                <% end %>
+              </select>
+            </label>
+            <button type="button" role="menuitem" data-act="properties">Score properties… <kbd>title, tempo, staves</kbd></button>
+            <hr>
+            <button type="button" role="menuitem" data-act="save-ly">Save the LilyPond source <kbd>.ly</kbd></button>
+            <button type="button" role="menuitem" data-act="save-pdf">Print as PDF <kbd>A4</kbd></button>
+            <button type="button" role="menuitem" data-act="save-midi">Save as MIDI <kbd>.mid</kbd></button>
+            <button type="button" role="menuitem" data-act="save-wav">Save the sound <kbd>.wav</kbd></button>
+            <button type="button" role="menuitem" data-act="save-png">Save a picture <kbd>.png</kbd></button>
+            <button type="button" role="menuitem" data-act="save-svg">Save a drawing <kbd>.svg</kbd></button>
+            <hr>
+            <button type="button" role="menuitem" data-act="share">Copy a link to this score</button>
+          </div>
+        </details>
+        <details class="studio-dropdown">
+          <summary class="studio-menu">Edit</summary>
+          <div class="studio-dropdown-items" role="menu">
+            <button type="button" role="menuitem" data-act="undo">Undo <kbd>Ctrl+Z</kbd></button>
+            <button type="button" role="menuitem" data-act="redo">Redo <kbd>Ctrl+Y</kbd></button>
+            <hr>
+            <button type="button" role="menuitem" data-act="mode-select">Select notes <kbd>Esc</kbd></button>
+            <button type="button" role="menuitem" data-act="mode-input">Write notes <kbd>N</kbd></button>
+            <hr>
+            <button type="button" role="menuitem" data-act="insert-bar">Insert a bar before the selection <kbd>Insert</kbd></button>
+            <button type="button" role="menuitem" data-act="add-bar">Add a bar at the end <kbd>]</kbd></button>
+            <button type="button" role="menuitem" data-act="delete-bars">Delete the selected bars <kbd>Ctrl+Del</kbd></button>
+            <hr>
+            <button type="button" role="menuitem" data-act="transpose" data-scope="selection">Transpose the selection</button>
+            <button type="button" role="menuitem" data-act="transpose" data-scope="score">Transpose the score</button>
+          </div>
+        </details>
+        <details class="studio-dropdown">
+          <summary class="studio-menu">View</summary>
+          <div class="studio-dropdown-items" role="menu">
+            <button type="button" role="menuitem" data-act="zoom-in">Larger <kbd>+</kbd></button>
+            <button type="button" role="menuitem" data-act="zoom-out">Smaller <kbd>−</kbd></button>
+            <button type="button" role="menuitem" data-act="tools">Show or hide the tools</button>
+            <button type="button" role="menuitem" data-act="keys">Keyboard shortcuts <kbd>?</kbd></button>
+          </div>
+        </details>
+        <details class="studio-dropdown">
+          <summary class="studio-menu">Insert</summary>
+          <div class="studio-dropdown-items" role="menu">
+            <button type="button" role="menuitem" data-act="tie">Tie <kbd>T</kbd></button>
+            <button type="button" role="menuitem" data-act="slur">Slur <kbd>S</kbd></button>
+            <button type="button" role="menuitem" data-act="lyrics">Lyrics <kbd>Ctrl+L</kbd></button>
+            <button type="button" role="menuitem" data-act="chord">Chord symbol <kbd>Ctrl+K</kbd></button>
+            <button type="button" role="menuitem" data-act="text">Staff text</button>
+            <button type="button" role="menuitem" data-act="expression">Expression</button>
+            <hr>
+            <button type="button" role="menuitem" data-act="mark" data-mark="letter">Rehearsal letter</button>
+            <button type="button" role="menuitem" data-act="repeat">Repeat the selected bars</button>
+            <button type="button" role="menuitem" data-act="ending">Ending 1. 2.</button>
+            <button type="button" role="menuitem" data-act="pedal" data-how="on">Sustain pedal</button>
+            <hr>
+            <button type="button" role="menuitem" data-act="add-staff">A staff</button>
+            <button type="button" role="menuitem" data-act="voice" data-voice="2">A second voice <kbd>Ctrl+Alt+2</kbd></button>
+          </div>
+        </details>
+        <details class="studio-dropdown">
+          <summary class="studio-menu">Play</summary>
+          <div class="studio-dropdown-items" role="menu">
+            <button type="button" role="menuitem" data-act="play">Play or pause <kbd>Space</kbd></button>
+            <button type="button" role="menuitem" data-act="stop">Stop, back to the start</button>
+          </div>
+        </details>
+      </nav>
       <div class="studio-menu-group">
-        <button type="button" class="studio-menu" data-act="new" title="A new score, from a template">New…</button>
-        <label class="studio-menu" title="Open a LilyPond file">Open…<input type="file" accept=".ly,.ily,.txt,text/plain" data-act="open" hidden></label>
-        <select class="studio-menu" data-act="example" aria-label="Open an example">
-          <option value="">Examples…</option>
-          <% for example in examples %>
-            <option value="<%= example["category"] %>/<%= example["slug"] %>"><%= example["title"] %> — <%= example["instrument"] %></option>
-          <% end %>
-        </select>
-        <button type="button" class="studio-menu" data-act="save-ly" title="Save the LilyPond source">Save .ly</button>
-        <button type="button" class="studio-menu" data-act="save-pdf" title="Print the A4 pages as a PDF">PDF</button>
-        <button type="button" class="studio-menu" data-act="save-midi" title="Save the MIDI file">MIDI</button>
-        <button type="button" class="studio-menu" data-act="save-wav" title="Save what Play sounds as a WAV file">WAV</button>
-        <button type="button" class="studio-menu" data-act="save-png" title="Save the score as a PNG picture">PNG</button>
-        <button type="button" class="studio-menu" data-act="save-svg" title="Save the score as an SVG picture">SVG</button>
-        <button type="button" class="studio-menu" data-act="share" title="Copy a link that opens this score">Share</button>
-      </div>
-      <div class="studio-menu-group">
-        <button type="button" class="studio-menu" data-act="undo" title="Undo (Ctrl+Z)">↶ Undo</button>
-        <button type="button" class="studio-menu" data-act="redo" title="Redo (Ctrl+Y)">↷ Redo</button>
+        <button type="button" class="studio-menu" data-act="undo" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
+        <button type="button" class="studio-menu" data-act="redo" title="Redo (Ctrl+Y)" aria-label="Redo">↷</button>
         <button type="button" class="studio-menu studio-play" data-act="play" title="Play from the selection, or from the start; pause (Space)">▶ Play</button>
         <button type="button" class="studio-menu" data-act="stop" title="Stop, back to the start" hidden>■ Stop</button>
         <span class="studio-zoom">
@@ -34,7 +100,6 @@
           <span data-zoom-label>100 %</span>
           <button type="button" class="studio-menu" data-act="zoom-in" title="Larger" aria-label="Zoom in">+</button>
         </span>
-        <button type="button" class="studio-menu" data-act="keys" title="Keyboard shortcuts (?)">Keys</button>
       </div>
     </div>
     <div class="studio-state" aria-live="polite" data-state></div>
@@ -358,34 +423,6 @@
         <label class="tool-check"><input type="checkbox" data-field="change-double"> Double bar line before it</label>
       </details>
 
-      <details class="tool-section" data-section="score" open>
-        <summary><h3>Score</h3></summary>
-        <label class="tool-field">Title <input type="text" data-field="title"></label>
-        <label class="tool-field">Subtitle <input type="text" data-field="subtitle"></label>
-        <label class="tool-field">Composer <input type="text" data-field="composer"></label>
-        <label class="tool-field">Key
-          <select data-field="key">
-            <% for fifths in range(-7, 8) %>
-              <option value="<%= fifths %>"><%= ["C♭", "G♭", "D♭", "A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯"][fifths + 7] %> major / <%= ["A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯", "G♯", "D♯", "A♯"][fifths + 7] %> minor</option>
-            <% end %>
-          </select>
-        </label>
-        <label class="tool-field">Metre
-          <select data-field="time">
-            <% for metre in ["2/4", "3/4", "4/4", "5/4", "2/2", "3/8", "6/8", "9/8", "12/8"] %>
-              <option value="<%= metre %>"><%= metre %></option>
-            <% end %>
-          </select>
-        </label>
-        <label class="tool-field">Tempo <input type="number" min="20" max="300" step="1" data-field="bpm"></label>
-        <label class="tool-field">Tempo text <input type="text" data-field="tempo-text" placeholder="Allegro"></label>
-        <label class="tool-field">Staves
-          <select data-field="group">
-            <option value="none">Joined by a line</option><option value="bracket">Bracket</option>
-            <option value="brace">Brace (piano)</option><option value="choir">Choir</option>
-          </select>
-        </label>
-      </details>
 
     </aside>
 
@@ -432,6 +469,42 @@
             <dt>Space</dt><dd>play / pause</dd>
             <dt>?</dt><dd>this sheet</dd>
           </dl>
+  </dialog>
+
+  <%# Score properties (File ▸ Score properties…): the fields studio.js fills
+      and reads by their data-field, wherever they are. %>
+  <dialog class="studio-keys studio-properties" data-properties aria-labelledby="studio-properties-title">
+    <div class="studio-keys-head">
+      <h2 id="studio-properties-title">Score properties</h2>
+      <button type="button" class="studio-menu" data-properties-close aria-label="Close">×</button>
+    </div>
+        <label class="tool-field">Title <input type="text" data-field="title"></label>
+        <label class="tool-field">Subtitle <input type="text" data-field="subtitle"></label>
+        <label class="tool-field">Composer <input type="text" data-field="composer"></label>
+        <label class="tool-field">Key
+          <select data-field="key">
+            <% for fifths in range(-7, 8) %>
+              <option value="<%= fifths %>"><%= ["C♭", "G♭", "D♭", "A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯"][fifths + 7] %> major / <%= ["A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯", "G♯", "D♯", "A♯"][fifths + 7] %> minor</option>
+            <% end %>
+          </select>
+        </label>
+        <label class="tool-field">Metre
+          <select data-field="time">
+            <% for metre in ["2/4", "3/4", "4/4", "5/4", "2/2", "3/8", "6/8", "9/8", "12/8"] %>
+              <option value="<%= metre %>"><%= metre %></option>
+            <% end %>
+          </select>
+        </label>
+        <label class="tool-field">Tempo <input type="number" min="20" max="300" step="1" data-field="bpm"></label>
+        <label class="tool-field">Tempo text <input type="text" data-field="tempo-text" placeholder="Allegro"></label>
+        <label class="tool-field">Staves
+          <select data-field="group">
+            <option value="none">Joined by a line</option><option value="bracket">Bracket</option>
+            <option value="brace">Brace (piano)</option><option value="choir">Choir</option>
+          </select>
+        </label>
+    <p class="muted studio-properties-note">Each staff's instrument, clef and name: select a note of it, then the toolbox's
+      <strong>This staff</strong>.</p>
   </dialog>
 
   <dialog class="studio-keys studio-new" data-new aria-labelledby="studio-new-title">

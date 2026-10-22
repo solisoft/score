@@ -23,6 +23,19 @@ const COLOURS = { selection: "#b4373a", head: "#e0662a", cursor: "#2563c9", play
 const DRAFT = "eui-score-studio-draft";
 const KEY_DURATIONS = { 2: 32, 3: 16, 4: 8, 5: 4, 6: 2, 7: 1 };
 const LETTERS = { c: 0, d: 1, e: 2, f: 3, g: 4, a: 5, b: 6 };
+// The palette over the selected note: the changes made to a note most.
+const PALETTE = [
+  ["move", { how: "step", by: "1" }, "↑", "A step up (↑)"],
+  ["move", { how: "step", by: "-1" }, "↓", "A step down (↓)"],
+  ["alter", { alter: "-1" }, "♭", "Flat (−)"],
+  ["alter", { alter: "0" }, "♮", "Natural (=)"],
+  ["alter", { alter: "1" }, "♯", "Sharp (+)"],
+  ["dot", {}, "•", "Dotted (.)"],
+  ["tie", {}, "⁀", "Tie to the next note (T)"],
+  ["art", { name: "staccato" }, "·", "Staccato"],
+  ["art", { name: "accent" }, ">", "Accent"],
+  ["rest", {}, "𝄽", "A rest instead (0)"],
+];
 
 /**
  * Starts the score editor in `root` (the markup of app/views/shared/_studio).
@@ -34,6 +47,8 @@ const LETTERS = { c: 0, d: 1, e: 2, f: 3, g: 4, a: 5, b: 6 };
  * - `onChange(text)`: called with the source after every change.
  * - `greeting`: the first status line.
  * - `examples`: where the gallery's sources are served.
+ * - `shareUrl`: where Share goes (the app's sharing page) instead of
+ *   copying a link that holds the score.
  *
  * Answers `{ state, ready, source(), load(text, message) }`: `ready` settles
  * once the first score is drawn.
@@ -57,6 +72,20 @@ export function startStudio(root, options = {}) {
   const overlay = document.createElement("div");
   overlay.className = "studio-overlay";
   sheet.appendChild(overlay);
+
+  // Over the selected note, a palette of what is done to a note most.
+  const palette = Object.assign(document.createElement("div"), { className: "studio-palette", hidden: true });
+  palette.setAttribute("role", "toolbar");
+  palette.setAttribute("aria-label", "The selected note");
+  for (const [act, data, sign, title] of PALETTE) {
+    const button = Object.assign(document.createElement("button"), { type: "button", textContent: sign, title });
+    button.setAttribute("aria-label", title.replace(/\s*\(.*\)\s*$/, ""));
+    Object.assign(button.dataset, { act, ...data });
+    palette.appendChild(button);
+  }
+  // A press on it is not a press on the score under it.
+  palette.addEventListener("pointerdown", (event) => event.stopPropagation());
+  sheet.appendChild(palette);
 
   // The playhead: a band over the column being played, every staff of it.
   const playhead = document.createElement("div");
@@ -146,6 +175,11 @@ export function startStudio(root, options = {}) {
     templateBox.append(label);
   }
   for (const close of newDialog.querySelectorAll("[data-new-close]")) close.addEventListener("click", () => newDialog.close());
+  const propertiesDialog = root.querySelector("[data-properties]");
+  propertiesDialog?.querySelector("[data-properties-close]").addEventListener("click", () => propertiesDialog.close());
+  propertiesDialog?.addEventListener("click", (event) => {
+    if (event.target === propertiesDialog) propertiesDialog.close();
+  });
   newDialog.addEventListener("click", (event) => {
     if (event.target === newDialog) newDialog.close();
   });
@@ -490,6 +524,7 @@ export function startStudio(root, options = {}) {
   function doAct(name, data = {}) {
     switch (name) {
       case "new": return newDialog.showModal();
+      case "properties": return root.querySelector("[data-properties]").showModal();
       case "undo": return undo();
       case "redo": return redo();
       case "play": return togglePlay();
@@ -517,7 +552,8 @@ export function startStudio(root, options = {}) {
       case "zoom-out": st.zoom = Math.max(0.5, Math.round((st.zoom - 0.1) * 10) / 10); return draw();
       case "save-ly": return download(st.text, `${fileName()}.ly`, "text/x-lilypond");
       case "save-pdf": return toPdf(st.text, title()).then((pdf) => download(pdf, `${fileName()}.pdf`, "application/pdf")).catch((e) => refuse(e));
-      case "share": return share();
+      // In the app, a saved score's own sharing page; elsewhere a link that holds the score.
+      case "share": return options.shareUrl ? location.assign(options.shareUrl) : share();
       case "transpose": {
         const it = M.INTERVALS[Number(root.querySelector("[data-transpose-interval]").value)];
         const way = Number(root.querySelector("[data-transpose-way]").value);
@@ -1089,25 +1125,26 @@ export function startStudio(root, options = {}) {
       notice.textContent = `This piece uses ${st.unsupported.join(", ")}: the score editor does not edit those yet. It is engraved, and its text below can be edited.`;
     }
     for (const button of root.querySelectorAll('[data-act="duration"]')) button.classList.toggle("on", Number(button.dataset.base) === st.input.base);
-    root.querySelector('[data-act="dot"]')?.classList.toggle("on", st.input.dots > 0);
-    root.querySelector('[data-act="mode-input"]')?.classList.toggle("on", st.input.on);
-    root.querySelector('[data-act="mode-select"]')?.classList.toggle("on", !st.input.on);
+    root.querySelector('.studio-toolbox [data-act="dot"]')?.classList.toggle("on", st.input.dots > 0);
+    // The toolbox's toggles show their state; the menus' items of the same name do not.
+    root.querySelector('.studio-toolbox [data-act="mode-input"]')?.classList.toggle("on", st.input.on);
+    root.querySelector('.studio-toolbox [data-act="mode-select"]')?.classList.toggle("on", !st.input.on);
     const second = st.score ? M.isLower(st.score, staffOf()) : false;
-    root.querySelector('[data-act="voice"][data-voice="1"]')?.classList.toggle("on", Boolean(st.score) && !second);
-    root.querySelector('[data-act="voice"][data-voice="2"]')?.classList.toggle("on", second);
+    root.querySelector('.studio-toolbox [data-act="voice"][data-voice="1"]')?.classList.toggle("on", Boolean(st.score) && !second);
+    root.querySelector('.studio-toolbox [data-act="voice"][data-voice="2"]')?.classList.toggle("on", second);
     // A drum staff writes with drums, the others with letters.
     const onDrums = Boolean(st.score) && M.isDrums(st.score, staffOf());
     if (drumRow) drumRow.hidden = !onDrums;
     for (const button of root.querySelectorAll('[data-act="letter"]')) button.hidden = onDrums;
     // The toggles say whether they are on.
-    for (const button of root.querySelectorAll('[data-act="duration"], [data-act="dot"], [data-act^="mode-"], [data-act="voice"]')) {
+    for (const button of root.querySelectorAll('.studio-toolbox :is([data-act="duration"], [data-act="dot"], [data-act^="mode-"], [data-act="voice"])')) {
       button.setAttribute("aria-pressed", String(button.classList.contains("on")));
     }
-    root.querySelector('[data-act="undo"]').disabled = !st.past.length;
-    root.querySelector('[data-act="redo"]').disabled = !st.future.length;
+    for (const button of root.querySelectorAll('[data-act="undo"]')) button.disabled = !st.past.length;
+    for (const button of root.querySelectorAll('[data-act="redo"]')) button.disabled = !st.future.length;
     const handle = st.playing?.handle;
-    root.querySelector('[data-act="play"]').textContent = !st.playing ? "▶ Play" : !handle ? "■ Stop" : handle.paused ? "▶ Play" : "❚❚ Pause";
-    root.querySelector('[data-act="stop"]').hidden = !handle;
+    root.querySelector(".studio-play").textContent = !st.playing ? "▶ Play" : !handle ? "■ Stop" : handle.paused ? "▶ Play" : "❚❚ Pause";
+    root.querySelector('.studio-menu[data-act="stop"]').hidden = !handle;
     renderMix();
     root.querySelector("[data-zoom-label]").textContent = `${Math.round(st.zoom * 100)} %`;
     for (const tool of root.querySelectorAll(".studio-toolbox .tool, .studio-toolbox input, .studio-toolbox select")) tool.disabled = !st.score;
@@ -1176,7 +1213,7 @@ export function startStudio(root, options = {}) {
     section.querySelector("[data-change-bar]").textContent = b == null ? "—" : String(b + 1);
     section.querySelector("[data-change-hint]").textContent = b == null
       ? "Select a bar, or put the cursor in it: what changes here goes on to the next change."
-      : b === 0 ? "Bar 1 is the piece's start: its key, metre and tempo are under Score, its clef under This staff." : "What changes here goes on to the next change.";
+      : b === 0 ? "Bar 1 is the piece's start: its key, metre and tempo are in File ▸ Score properties, its clef under This staff." : "What changes here goes on to the next change.";
     for (const el of section.querySelectorAll("[data-field]")) el.disabled = !on;
     if (!on) return;
     const s = staffOf();
@@ -1585,12 +1622,34 @@ export function startStudio(root, options = {}) {
     const button = event.target.closest("button[data-act]");
     if (!button || button.disabled) return;
     const typing = ["lyrics", "chord", "text", "expression"].includes(button.dataset.act);
-    if (!button.closest(".studio-menubar") && !typing) sheet.focus({ preventScroll: true });
+    const menu = button.closest(".studio-dropdown");
+    if (menu) menu.open = false;
+    if ((!button.closest(".studio-menubar") || menu) && !typing) sheet.focus({ preventScroll: true });
     act(button.dataset.act, { ...button.dataset, add: event.shiftKey });
   });
 
+  // The menus: one open at a time, closed by Escape or a click elsewhere.
+  const menus = [...root.querySelectorAll(".studio-dropdown")];
+  for (const menu of menus) {
+    menu.addEventListener("toggle", () => {
+      if (menu.open) for (const other of menus) if (other !== menu) other.open = false;
+    });
+  }
+  document.addEventListener("click", (event) => {
+    for (const menu of menus) if (menu.open && !menu.contains(event.target)) menu.open = false;
+  });
+  root.addEventListener("keydown", (event) => {
+    const open = menus.find((menu) => menu.open);
+    if (event.key !== "Escape" || !open) return;
+    open.open = false;
+    open.querySelector("summary").focus();
+    event.stopPropagation();
+  }, true);
+
   root.addEventListener("change", (event) => {
     const el = event.target;
+    const menu = el.closest(".studio-dropdown");
+    if (menu) menu.open = false;
     if (el.matches('[data-act="example"]') && el.value) {
       const path = `${options.examples ?? "/examples"}/${el.value}/source.ly`;
       el.value = "";
@@ -1829,7 +1888,25 @@ export function startStudio(root, options = {}) {
   }
 
   /** The selected bars' boxes, and a handle on every edge of every repeat. */
+  function placePalette() {
+    const g = geometry();
+    const sel = st.sel;
+    const hide = () => {
+      palette.hidden = true;
+    };
+    if (!g || !st.score || st.input.on || st.playing || !sel || sel.bars || sel.t0 !== sel.t1) return hide();
+    const starts = M.starts(st.score.staves[sel.staff]);
+    const k = st.items.findIndex((it) => it.staff === sel.staff && starts[it.index] === sel.t0);
+    const item = st.view?.items.find((it) => it.item === k);
+    if (!item) return hide();
+    const corner = g.at(item.box[0], item.box[1]);
+    palette.hidden = false;
+    palette.style.left = `${Math.max(4, corner.x - 10)}px`;
+    palette.style.top = `${Math.max(4, corner.y - 48)}px`;
+  }
+
   function placeOverlay() {
+    placePalette();
     overlay.innerHTML = "";
     const g = geometry();
     if (!g || !st.score || st.input.on) return;

@@ -70,6 +70,7 @@
 
   const studio = startStudio(root, {
     examples: "<%= examples_path() %>",
+    shareUrl: <%- owner ? "\"" + app_score_share_path(score) + "\"" : "null" %>,
     source: root.querySelector("[data-source]").value,
     greeting: "Click a note to select it, or press N and type A–G to write. Your changes save themselves.",
     onChange(text) {

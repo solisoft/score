@@ -134,6 +134,7 @@ describe("Sharing") do
       editor = get("/app/scores/#{score._key}")
       assert_eq(res_status(editor), 200)
       assert_not(res_body(editor).contains("/share\">Share"))
+      assert_contains(res_body(editor), "shareUrl: null")
       saved = put(
         "/app/scores/#{score._key}",
         {"source": "\\header { title = \"Duet\" }\n{ c'1 }", "revision": score.revision}

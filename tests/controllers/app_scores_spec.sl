@@ -213,6 +213,8 @@ describe("AppScoresController") do
       page = res_body(get("/app/scores/#{score._key}"))
       assert_contains(page, "data-save-state")
       assert_contains(page, "let revision = #{score.revision};")
+      assert_contains(page, "shareUrl: \"/app/scores/#{score._key}/share\"")
+      assert_contains(page, "data-act=\"properties\"")
       assert_contains(page, "href=\"/app/scores/#{score._key}/versions\"")
     end
 
