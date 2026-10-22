@@ -33,6 +33,13 @@
       ornaments, <code>\arpeggio</code>, <code>\glissando</code>, tremolos, and <code>\new ChordNames</code>,
       <code>\new DrumStaff</code> and <code>\new TabStaff</code> — each drawn as LilyPond 2.25 draws it.
     </p>
+    <p>
+      In the browser — the <a href="<%= playground_path() %>">playground</a> and <code>&lt;eui-score&gt;</code> —
+      the engraver is a step ahead of the server's: a note longer than what is left of its bar is cut at the
+      bar line into tied notes, as LilyPond's <code>Completion_heads_engraver</code> cuts it; the sustain pedal
+      (<code>\sustainOn</code>, <code>\sustainOff</code>) is drawn and held; and LilyPond 2.24's jumps,
+      <code>\jump "D.S. al Coda"</code> and <code>\fine</code>, are set against their bar line.
+    </p>
     <ul>
       <li><strong>Lyrics</strong>: one <code>\addlyrics</code> verse per staff.</li>
       <li><strong>Layout</strong>: no cross-staff notation, and a greedy page breaker, simpler than LilyPond's.</li>

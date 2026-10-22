@@ -423,6 +423,20 @@ test("D.C. al Fine plays from the start to the Fine; a D.S. skips the repeats th
   engrave(r);
 });
 
+test("a note written past its bar line reads as tied notes, a rest as rests", () => {
+  const back = M.fromParsed(JSON.parse(score_json(String.raw`{ \time 3/4 c'2 d'2\p( e'4) | r2 r2 r2 | g'1 a'2. }`)));
+  assert.ok(back.score, back.unsupported?.join());
+  const s = back.score;
+  assert.deepEqual(shape(s)[0].slice(0, 4), [["c'", 2 * q, false], ["d'", q, true], ["d'", q, false], ["e'", q, false]]);
+  const d = s.staves[0].events[1];
+  assert.equal(d.dynamic, "p", "the first piece keeps the dynamic");
+  assert.ok(d.slurStart && !s.staves[0].events[2].slurStart, "and the slur's start");
+  assert.ok(s.staves[0].events.every((ev, k) => !ev.rest || !ev.tie), "rests are never tied");
+  assert.equal(M.barsOf(s), 6);
+  engrave(s);
+  assert.deepEqual(shape(reread(s)), shape(s), "and read back the same");
+});
+
 test("a new metre lays the notes out again", () => {
   const s = M.newScore();
   M.write(s, 0, 0, 4 * q, C4);

@@ -367,7 +367,6 @@ class ScoreLibrary
       {"what": "64th notes", "src": "{ c''64 }"},
       {"what": "A tuplet inside a tuplet", "src": "{ \\tuplet 3/2 { \\tuplet 3/2 { c'8 d' e' } } }"},
       {"what": "Three voices on one staff", "src": "{ << { c''4 } \\\\ { a'4 } \\\\ { f'4 } >> }"},
-      {"what": "A note across the bar line", "src": "{ \\time 3/4 c''2 d''2 }"},
       {"what": "Two verses of lyrics", "src": "{ c''4 d'' } \\addlyrics { la la } \\addlyrics { lo lo }"},
       {"what": "An unusual metre", "src": "{ \\time 3/5 c''4 }"},
       {"what": "An unknown command", "src": "{ c''4 \\shiver d''4 }"}

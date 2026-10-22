@@ -2374,7 +2374,7 @@ export function fromParsed(parsed) {
         if (scripts.some(([name]) => !SCRIPTS[name])) unsupported.add("some articulations");
         const byKey = (key) => (DRUMS.find((x) => x.key === key) ?? MORE_DRUMS.find((x) => x.key === key))?.name;
         if (drums && ev.drums.some(([, key]) => !byKey(key))) unsupported.add("a drum this editor does not name");
-        lane.events.push(makeEvent({
+        const read = makeEvent({
           rest: k === "Rest",
           pitches: drums ? ev.drums.map(([, key]) => drumPitch(byKey(key) ?? "sn")) : ev.pitches.map(([d, alter]) => ({ d, alter })),
           base: ev.base, dots: ev.dots, tuplet,
@@ -2383,7 +2383,11 @@ export function fromParsed(parsed) {
           graces: (ev.graces ?? []).map(([pitches, base, dots]) => ({ pitches: pitches.map(([d, alter]) => ({ d, alter })), base, dots })),
           grace: ev.grace ?? null, arpeggio: Boolean(ev.arpeggio), gliss: Boolean(ev.gliss), tremolo: ev.tremolo ?? 0,
           pedalOn: Boolean(ev.pedal_on), pedalOff: Boolean(ev.pedal_off),
-        }));
+        });
+        // A note past its bar line, as the engraver cuts it: tied pieces.
+        const at = lengthOf(lane);
+        if (!tuplet && at + ev.ticks > nextBarLine(score, at) + 1e-6) lane.events.push(...pieces(score, read, at, ev.ticks, "whole"));
+        else lane.events.push(read);
       }
     }
     if (staff.lyrics) {
