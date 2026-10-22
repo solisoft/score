@@ -178,6 +178,10 @@ describe("Sharing") do
       shares = ScoreShare.of(score)
       assert_eq(shares.length, 1)
       assert_eq(shares[0].role, "write")
+      assert_contains(
+        res_body(get("/app/scores/#{score._key}/share")),
+        "action=\"/app/scores/#{score._key}/invitations/#{shares[0]._key}\""
+      )
       request("DELETE", "/app/scores/#{score._key}/invitations/#{shares[0]._key}", {}, {})
       assert_eq(ScoreShare.of(score).length, 0)
       share_sign_in(guest)

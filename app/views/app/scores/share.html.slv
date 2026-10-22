@@ -67,7 +67,7 @@
           <li>
             <span class="trash-title"><%= share.email %></span>
             <span class="muted"><%= share.role == "write" ? "may open and change it" : "may open it" %></span>
-            <form action="<%= app_score_invitation_path(score, share) %>" method="POST">
+            <form action="<%= app_score_invitation_path(score._key, share._key) %>" method="POST">
               <%- csrf_field() %>
               <input type="hidden" name="_method" value="DELETE">
               <button type="submit" class="btn btn-danger">Remove</button>

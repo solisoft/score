@@ -3,7 +3,7 @@
     <h1><%= version.title %> <span class="muted">— <%= time_ago(version.created_at) %></span></h1>
     <div class="version-actions">
       <a class="btn btn-ghost" href="<%= app_score_versions_path(score) %>">All versions</a>
-      <form action="<%= app_score_restore_version_path(score, version) %>" method="POST">
+      <form action="<%= app_score_restore_version_path(score._key, version._key) %>" method="POST">
         <%- csrf_field() %>
         <button type="submit" class="btn btn-primary">Restore this version</button>
       </form>

@@ -112,6 +112,11 @@ jobs:
       - name: Suite, coverage at least 90 %
         run: soli test --coverage --coverage-min 90.0
 
+      # The app as someone uses it, in a real headless Chrome (installed on
+      # GitHub's Ubuntu runners): sign up, write, reload, versions, sharing.
+      - name: The app in a browser
+        run: soli test tests/browser --browser --no-coverage
+
   # The browser engraver's editing half (wasm/src/editor.rs), tested natively
   # against every gallery piece: the edits the playground makes.
   engraver:
