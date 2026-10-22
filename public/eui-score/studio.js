@@ -24,8 +24,24 @@ const DRAFT = "eui-score-studio-draft";
 const KEY_DURATIONS = { 2: 32, 3: 16, 4: 8, 5: 4, 6: 2, 7: 1 };
 const LETTERS = { c: 0, d: 1, e: 2, f: 3, g: 4, a: 5, b: 6 };
 
+/**
+ * Starts the score editor in `root` (the markup of app/views/shared/_studio).
+ *
+ * options:
+ * - `source`: the LilyPond to open. Given, it is what opens — no draft, no
+ *   shared link (#s=) is read: the app opens the score it was asked for.
+ * - `draft`: the localStorage key the draft is kept under, or false for none.
+ * - `onChange(text)`: called with the source after every change.
+ * - `greeting`: the first status line.
+ * - `examples`: where the gallery's sources are served.
+ *
+ * Answers `{ state, ready, source(), load(text, message) }`: `ready` settles
+ * once the first score is drawn.
+ */
 export function startStudio(root, options = {}) {
   const $ = (selector) => root.querySelector(selector);
+  const fixed = typeof options.source === "string";
+  const draftKey = options.draft === false || (fixed && options.draft == null) ? null : (options.draft ?? DRAFT);
   const sheet = $("[data-sheet]");
   const sourceBox = $("[data-source]");
   const status = $("[data-status]");
@@ -240,10 +256,15 @@ export function startStudio(root, options = {}) {
     draw();
   }
 
+  // Every change ends here: the browser's draft (the playground's), and
+  // whoever embeds the editor (the app, which saves to the account).
   function saveDraft() {
-    try {
-      localStorage.setItem(DRAFT, st.text);
-    } catch (error) {}
+    if (draftKey) {
+      try {
+        localStorage.setItem(draftKey, st.text);
+      } catch (error) {}
+    }
+    options.onChange?.(st.text);
   }
 
   function load(text, message) {
@@ -2087,22 +2108,22 @@ export function startStudio(root, options = {}) {
 
   // ---- Start ---------------------------------------------------------------------
 
-  let start = sourceBox.value;
-  const fromExample = new URLSearchParams(location.search).has("source");
+  let start = fixed ? options.source : sourceBox.value;
+  const fromExample = fixed || new URLSearchParams(location.search).has("source");
   // A shared link: its score, which then becomes this browser's draft; the
   // link itself leaves the address bar, so a reload keeps the edits.
-  const shared = /^#s=([A-Za-z0-9_-]+)$/.exec(location.hash)?.[1];
+  const shared = fixed ? null : /^#s=([A-Za-z0-9_-]+)$/.exec(location.hash)?.[1];
   let opening = Promise.resolve(null);
   let draft = null;
   try {
-    draft = localStorage.getItem(DRAFT);
+    if (draftKey) draft = localStorage.getItem(draftKey);
   } catch (error) {}
   if (shared) {
     opening = M.fromShareCode(shared).then((text) => (text.trim() ? text : null)).catch(() => null);
     history.replaceState(null, "", location.pathname + location.search);
   } else if (!fromExample && draft) start = draft;
   // The engraver reads the source: nothing is read before it has loaded.
-  Promise.all([loaded(), opening]).then(([, sharedText]) => {
+  const ready = Promise.all([loaded(), opening]).then(([, sharedText]) => {
     if (sharedText != null) start = sharedText;
     // A link that holds no score opens what would have opened without it.
     else if (shared && draft) start = draft;
@@ -2112,10 +2133,11 @@ export function startStudio(root, options = {}) {
     if (sharedText != null) saveDraft();
     return draw().then(() => sharedText);
   }).then((sharedText) => {
-    if (shared && sharedText == null) say(`That link holds no score: here is ${draft ? "your last one" : "the starting one"}.`, true);
+    if (options.greeting) say(options.greeting);
+    else if (shared && sharedText == null) say(`That link holds no score: here is ${draft ? "your last one" : "the starting one"}.`, true);
     else if (sharedText != null) say("A shared score. Your changes stay in this browser; Share makes a new link.");
     else if (!fromExample && start !== sourceBox.defaultValue) say("Your last score, kept in this browser. New starts afresh.");
     else say("Click a note to select it, or press N and type A–G to write.");
   });
-  return st;
+  return { state: st, ready, source: () => st.text, load };
 }
