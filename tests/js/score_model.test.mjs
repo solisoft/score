@@ -371,6 +371,58 @@ test("every template makes a score that engraves, plays and reads back", () => {
   assert.throws(() => M.fromTemplate("piano", { key: 9 }), /no such key/);
 });
 
+test("marks, jumps, the pedal and words: written, engraved, read back", () => {
+  const s = M.fromTemplate("piano", { bars: 8 });
+  for (let b = 0; b < 8; b++) M.write(s, 0, M.barStart(s, b), M.notated(1), C4);
+  M.setMark(s, 0, "letter");
+  M.setMark(s, 2, "segno");
+  M.setMark(s, 4, "letter");
+  M.setMark(s, 6, "coda");
+  M.setJump(s, 3, "to-coda");
+  M.setJump(s, 5, "ds-coda");
+  M.setPedal(s, 1, 0, "on");
+  M.setPedal(s, 1, 1, "change");
+  M.setPedal(s, 1, 2, "off");
+  M.setText(s, 0, 0, "staff", "solo");
+  M.setText(s, 0, 1, "expression", "dolce");
+  const { source } = engrave(s);
+  assert.match(source, /\\mark \\default/);
+  assert.match(source, /\\segnoMark/);
+  assert.match(source, /\\jump "D\.S\. al Coda"/);
+  assert.match(source, /\\sustainOff\\sustainOn/);
+  assert.match(source, /_\\markup \\italic "dolce"/);
+  const back = reread(s);
+  assert.deepEqual(back.changes.map((c) => [c.bar, c.mark ?? c.jump]), [[0, "letter"], [2, "segno"], [3, "to-coda"], [4, "letter"], [5, "ds-coda"], [6, "coda"]]);
+  assert.deepEqual(back.staves[1].events.slice(0, 3).map((e) => [e.pedalOn, e.pedalOff]), [[true, false], [true, true], [false, true]]);
+  assert.deepEqual(back.staves[0].events[1].texts, [{ text: "dolce", dir: 1, italic: true }]);
+  assert.equal(M.textOf(back.staves[0].events[0], "staff"), "solo");
+  // D.S. al Coda: to bar 6, back to the segno (bar 3), to To Coda (bar 4), then the coda (bars 7–8).
+  assert.deepEqual(M.playOrder(s).map((b) => b + 1), [1, 2, 3, 4, 5, 6, 3, 4, 7, 8]);
+  // The pedal is heard: controller 64 in the MIDI.
+  const bytes = midi(M.toLilyPond(s, { unfold: true }).source, 100, 4, 0);
+  assert.ok(bytes.some((x, k) => (x & 0xf0) === 0xb0 && bytes[k + 1] === 64 && bytes[k + 2] === 127), "the pedal pressed");
+  M.setMark(s, 2, "segno");
+  assert.throws(() => M.setJump(s, 5, "ds"), /segno/);
+  assert.throws(() => M.setMark(s, 99, "coda"), /no such bar/);
+  M.setText(s, 0, 1, "expression", "");
+  assert.deepEqual(s.staves[0].events[1].texts, []);
+});
+
+test("D.C. al Fine plays from the start to the Fine; a D.S. skips the repeats the second time", () => {
+  const s = M.newScore();
+  M.addBars(s, 2);
+  M.setJump(s, 1, "fine");
+  M.setJump(s, 3, "dc-fine");
+  assert.deepEqual(M.playOrder(s), [0, 1, 2, 3, 0, 1]);
+  const r = M.newScore();
+  M.addBars(r, 2);
+  M.toggleRepeat(r, 1, 2);
+  M.setMark(r, 1, "segno");
+  M.setJump(r, 5, "ds");
+  assert.deepEqual(M.playOrder(r), [0, 1, 2, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5]);
+  engrave(r);
+});
+
 test("a new metre lays the notes out again", () => {
   const s = M.newScore();
   M.write(s, 0, 0, 4 * q, C4);

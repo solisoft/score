@@ -218,6 +218,33 @@
           <button type="button" class="tool tool-wide" data-act="lyrics" title="Lyrics under the notes (Ctrl+L)">Lyrics</button>
           <button type="button" class="tool tool-wide" data-act="chord" title="A chord symbol above (Ctrl+K)">Chord symbol</button>
         </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="text" title="Words above the staff: solo, pizz.…">Staff text</button>
+          <button type="button" class="tool tool-wide" data-act="expression" title="Words in italics under the staff: dolce, espressivo…">Expression</button>
+        </div>
+      </details>
+
+      <details class="tool-section" data-section="marks" open>
+        <summary><h3>Marks &amp; jumps</h3></summary>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="mark" data-mark="letter" title="A rehearsal letter over the selected bar: A, B, C…">Rehearsal A</button>
+          <button type="button" class="tool tool-glyph" data-act="mark" data-mark="segno" title="Segno over the selected bar" aria-label="Segno">𝄋</button>
+          <button type="button" class="tool tool-glyph" data-act="mark" data-mark="coda" title="Coda over the selected bar" aria-label="Coda">𝄌</button>
+        </div>
+        <div class="tool-row tool-transpose">
+          <select class="tool-select" data-jump aria-label="Jump at the end of the selected bar">
+            <option value="ds-coda">D.S. al Coda</option><option value="ds-fine">D.S. al Fine</option><option value="ds">D.S.</option>
+            <option value="dc-coda">D.C. al Coda</option><option value="dc-fine">D.C. al Fine</option><option value="dc">D.C.</option>
+            <option value="to-coda">To Coda</option><option value="fine">Fine</option>
+          </select>
+          <button type="button" class="tool" data-act="jump" title="Put it at the end of the selected bar; again takes it away">At bar end</button>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="pedal" data-how="on" title="Press the sustain pedal on this note">Ped.</button>
+          <button type="button" class="tool" data-act="pedal" data-how="off" title="Let the pedal go on this note">*</button>
+          <button type="button" class="tool tool-wide" data-act="pedal" data-how="change" title="Let go and press again on this note">* Ped.</button>
+        </div>
+        <p class="tool-hint">The jumps are played: D.S. and D.C. go back to the segno or the start, on to the Fine, or from To Coda to the coda.</p>
       </details>
 
       <details class="tool-section" data-section="repeats" open>

@@ -362,7 +362,7 @@ export function makeEvent(fields = {}) {
   return {
     id: newId(), rest: true, pitches: [], base: 4, dots: 0, tuplet: null, tie: false, slurStart: false, slurEnd: false,
     dynamic: null, hairpin: null, hairpinEnd: false, arts: [], chord: "", texts: [], lyric: null,
-    graces: [], grace: null, arpeggio: false, gliss: false, tremolo: 0, ...fields,
+    graces: [], grace: null, arpeggio: false, gliss: false, tremolo: 0, pedalOn: false, pedalOff: false, ...fields,
   };
 }
 
@@ -515,7 +515,7 @@ function pieces(score, ev, at, ticks, role) {
   out.forEach((p, k) => {
     const last = k === out.length - 1;
     p.tie = !p.rest && (last ? (role === "head" ? true : Boolean(ev.tie)) : true);
-    if (!(k === 0 && keepsStart)) Object.assign(p, { slurStart: false, dynamic: null, hairpin: null, arts: [], chord: "", texts: [], lyric: null, graces: [], grace: null, arpeggio: false });
+    if (!(k === 0 && keepsStart)) Object.assign(p, { slurStart: false, dynamic: null, hairpin: null, arts: [], chord: "", texts: [], lyric: null, graces: [], grace: null, arpeggio: false, pedalOn: false, pedalOff: false });
     if (!(last && keepsEnd)) Object.assign(p, { slurEnd: false, hairpinEnd: false, gliss: false });
     // A tremolo's strokes are shorter than the note they repeat.
     if (p.tremolo && p.tremolo <= p.base) p.tremolo = 0;
@@ -579,7 +579,7 @@ export function tidy(score, staff) {
     run = null;
   };
   staff.events.forEach((ev, i) => {
-    const plain = ev.rest && !ev.tuplet && !ev.dynamic && !ev.hairpin && !ev.hairpinEnd && !ev.texts.length && !ev.chord && !ev.arts.length;
+    const plain = ev.rest && !ev.tuplet && !ev.dynamic && !ev.hairpin && !ev.hairpinEnd && !ev.texts.length && !ev.chord && !ev.arts.length && !ev.pedalOn && !ev.pedalOff;
     const sameBar = run && barAt(score, at[i]) === barAt(score, run.start);
     if (plain && sameBar) {
       run.ticks += ticksOf(ev);
@@ -1047,7 +1047,7 @@ export function removeVoice(score, s) {
 
 /** A bar of a second voice is written when something in it is: a note, or a rest with a mark. */
 function sounding(events) {
-  return events.some((ev) => !ev.rest || ev.dynamic || ev.hairpin || ev.hairpinEnd || ev.texts.length || ev.chord || ev.arts.length);
+  return events.some((ev) => !ev.rest || ev.dynamic || ev.hairpin || ev.hairpinEnd || ev.texts.length || ev.chord || ev.arts.length || ev.pedalOn || ev.pedalOff);
 }
 
 /** A new time signature for the whole piece's first metre. */
@@ -1149,7 +1149,7 @@ function retime(score, b, num, den) {
     const after = staff.events.filter((_, i) => at[i] >= to);
     staff.events = [...before, ...rests(score, from, to - from + grown), ...after];
     for (const { ev, t } of inside) {
-      if (ev.rest && !ev.dynamic && !ev.texts.length && !ev.chord && !ev.hairpin && !ev.hairpinEnd) continue;
+      if (ev.rest && !ev.dynamic && !ev.texts.length && !ev.chord && !ev.hairpin && !ev.hairpinEnd && !ev.pedalOn && !ev.pedalOff) continue;
       const { id, base, dots, ...content } = ev;
       write(score, k, t, ticksOf(ev), content);
     }
@@ -1337,9 +1337,12 @@ function eventText(ev) {
   if (ev.hairpin) out += ev.hairpin === "<" ? "\\<" : "\\>";
   for (const a of ev.arts) out += SCRIPTS[a] ?? "";
   if (ev.chord) out += `^${quote(ev.chord)}`;
-  for (const t of ev.texts) out += `${t.dir > 0 ? "_" : "^"}${quote(t.text)}`;
+  for (const t of ev.texts) out += `${t.dir > 0 ? "_" : "^"}${t.italic ? `\\markup \\italic ${quote(t.text)}` : quote(t.text)}`;
   if (ev.arpeggio && !ev.rest) out += "\\arpeggio";
   if (ev.gliss && !ev.rest) out += "\\glissando";
+  // Let go before pressed again, when a note has both.
+  if (ev.pedalOff) out += "\\sustainOff";
+  if (ev.pedalOn) out += "\\sustainOn";
   return out;
 }
 
@@ -1403,7 +1406,8 @@ export function toLilyPond(score, { open = [], unfold = false } = {}) {
       const other = second[b];
       const shown = other && (sounding(other.events) || open.some((o) => o.staff === lower && o.bar === b));
       items.push(...bar.items, ...(shown ? other.items : []));
-      return changesText(score, s, b) + (shown ? `<< { ${bar.text} } \\\\ { ${other.text} } >>` : bar.text);
+      const top = staffNumber(score, s) === 0;
+      return changesText(score, s, b) + (top ? markText(score, b) : "") + (shown ? `<< { ${bar.text} } \\\\ { ${other.text} } >>` : bar.text) + (top ? jumpText(score, b) : "");
     });
     const music = unfold ? playedOut(score, s, bars) : withRepeats(bars, repeats);
     const lastRepeat = !unfold && repeats.find((r) => r.endings.length === 0 && r.to === bars.length - 1);
@@ -1455,6 +1459,67 @@ const clefText = (clef) => (CLEFS.includes(clef) ? (clef.includes("_") ? `"${cle
 const tempoText = (tempo) => `\\tempo ${tempo.text ? quote(tempo.text) + " " : ""}${tempo.bpm ? `${tempo.base} = ${tempo.bpm}` : ""}`.trimEnd();
 
 /** What staff `s` writes at the start of bar `b` for what changes there. */
+// ---- Marks, and the jumps they make -------------------------------------------------
+//
+// A bar's `mark` stands over its first bar line: a rehearsal letter
+// (`\mark \default`, lettered A, B… as the marks come), a segno or a coda.
+// Its `jump` is written at its end (`\\jump`, `\\fine`), in italics, against
+// its last bar line: D.S. and D.C.
+// send the music back, Fine ends it there the second time, To Coda jumps
+// to the coda the second time. Both are the first staff's to write.
+
+export const MARKS = ["letter", "segno", "coda"];
+export const JUMPS = { ds: "D.S.", "ds-fine": "D.S. al Fine", "ds-coda": "D.S. al Coda", dc: "D.C.", "dc-fine": "D.C. al Fine", "dc-coda": "D.C. al Coda", fine: "Fine", "to-coda": "To Coda" };
+
+function markText(score, b) {
+  const mark = changeAt(score, b)?.mark;
+  if (!mark) return "";
+  return { letter: "\\mark \\default ", segno: "\\segnoMark ", coda: "\\codaMark " }[mark] ?? "";
+}
+
+function jumpText(score, b) {
+  const jump = changeAt(score, b)?.jump;
+  if (jump === "fine") return " \\fine";
+  return JUMPS[jump] ? ` \\jump ${quote(JUMPS[jump])}` : "";
+}
+
+/** Bar `b`'s mark: "letter", "segno", "coda", or null to take it away. */
+export function setMark(score, b, mark) {
+  if (b < 0 || b >= barsOf(score)) throw new Error("no such bar");
+  if (mark != null && !MARKS.includes(mark)) throw new Error("no such mark");
+  setChange(score, b, "mark", changeAt(score, b)?.mark === mark ? null : mark);
+}
+
+/** The jump at the end of bar `b` (a key of JUMPS), or null to take it away. */
+export function setJump(score, b, jump) {
+  if (b < 0 || b >= barsOf(score)) throw new Error("no such bar");
+  if (jump != null && !JUMPS[jump]) throw new Error("no such jump");
+  if (jump?.startsWith("ds") && !(score.changes ?? []).some((c) => c.mark === "segno" && c.bar <= b)) throw new Error("a D.S. goes back to a segno: put one on an earlier bar first");
+  setChange(score, b, "jump", changeAt(score, b)?.jump === jump ? null : jump);
+}
+
+/** The sustain pedal at event `i`: "on" pressed, "off" let go, "change" both, toggled; null takes it away. */
+export function setPedal(score, s, i, how) {
+  const ev = noteOf(score, s, i);
+  const want = { on: [true, false], off: [false, true], change: [true, true] }[how] ?? [false, false];
+  const same = ev.pedalOn === want[0] && ev.pedalOff === want[1];
+  [ev.pedalOn, ev.pedalOff] = same ? [false, false] : want;
+}
+
+/** Event `i`'s words of `style`: "staff" text above it, upright, or "expression" below, in italics; empty takes them away. */
+export function setText(score, s, i, style, text) {
+  const ev = noteOf(score, s, i);
+  const italic = style === "expression";
+  const kept = ev.texts.filter((t) => Boolean(t.italic) !== italic);
+  const words = String(text ?? "").trim();
+  ev.texts = words ? [...kept, { text: words, dir: italic ? 1 : -1, italic }] : kept;
+}
+
+/** Event `i`'s words of `style`, as setText writes them; "" when it has none. */
+export function textOf(ev, style) {
+  return ev.texts.find((t) => Boolean(t.italic) === (style === "expression"))?.text ?? "";
+}
+
 function changesText(score, s, b) {
   if (b === 0) return "";
   const parts = [];
@@ -1977,8 +2042,42 @@ export function setInstrument(score, s, k) {
 // written from the score played out (`toLilyPond(score, { unfold: true })`),
 // and `playback` says when each bar sounds on each pass.
 
-/** The bars in the order they sound, every repeat played out. */
+/**
+ * The bars in the order they sound, every repeat played out, and the jumps
+ * taken: at a D.S. or a D.C. (once) the music goes back to the segno or the
+ * start and plays on without its repeats, to the Fine, or from To Coda to
+ * the coda.
+ */
 export function playOrder(score) {
+  const order = repeatOrder(score);
+  const jumps = (score.changes ?? []).filter((c) => JUMPS[c.jump]);
+  const back = jumps.find((c) => /^(ds|dc)/.test(c.jump));
+  if (!back) return order;
+  const at = order.lastIndexOf(back.bar);
+  const segno = (score.changes ?? []).find((c) => c.mark === "segno" && c.bar <= back.bar);
+  const from = back.jump.startsWith("ds") ? segno?.bar ?? 0 : 0;
+  const fine = jumps.find((c) => c.jump === "fine" && c.bar >= from)?.bar;
+  const toCoda = jumps.find((c) => c.jump === "to-coda" && c.bar >= from)?.bar;
+  const coda = (score.changes ?? []).find((c) => c.mark === "coda" && c.bar > back.bar)?.bar;
+  const again = [];
+  for (let b = from; b < barsOf(score); b++) {
+    // The second time through, the repeats are not taken; an ending's
+    // bars after the first are skipped with them.
+    if ((score.repeats ?? []).some((r) => r.endings.length > 1 && b > r.to + r.endings[0] && b <= repeatEnd(r))) continue;
+    again.push(b);
+    if (back.jump.endsWith("fine") && b === fine) break;
+    if (back.jump.endsWith("coda") && b === toCoda && coda != null) {
+      for (let c = coda; c < barsOf(score); c++) again.push(c);
+      break;
+    }
+  }
+  // Before the D.S., a coda is not played: the music jumps over it.
+  const first = order.slice(0, at + 1).filter((b) => coda == null || b < coda || !back.jump.endsWith("coda"));
+  return [...first, ...again];
+}
+
+/** The bars in the order they sound, every repeat played out. */
+function repeatOrder(score) {
   const total = barsOf(score);
   const order = [];
   const span = (from, n) => Array.from({ length: n }, (_, k) => from + k);
@@ -2202,6 +2301,19 @@ export function fromParsed(parsed) {
           if (bar === 0) score.tempo = ev.tempo;
           else setChange(score, bar, "tempo", { text: ev.tempo.text ?? "", base: ev.tempo.base || 4, bpm: ev.tempo.bpm || 0 });
         }
+      } else if (k === "Mark") {
+        // A mark over a bar line: a jump over the end of the bar before it
+        // (or of the last bar), else the bar's own mark.
+        if (!first) continue;
+        if (bar < 0) {
+          unsupported.add("a mark inside a bar");
+          continue;
+        }
+        const jump = Object.keys(JUMPS).find((id) => JUMPS[id] === ev.mark?.text);
+        const own = ev.mark?.glyph === "segno" ? "segno" : ev.mark?.glyph === "coda" ? "coda" : /^[A-Z]{1,2}$/.test(ev.mark?.text ?? "") ? "letter" : null;
+        if (jump && bar > 0) setChange(score, bar - 1, "jump", jump);
+        else if (own) setChange(score, bar, "mark", own);
+        else unsupported.add("a mark this editor does not name");
       } else if (k === "Voices") {
         if (voices) unsupported.add("voices inside voices");
         voices = 1;
@@ -2252,7 +2364,7 @@ export function fromParsed(parsed) {
           if (!tuplets.has(tid)) tuplets.set(tid, newId());
           tuplet = { id: tuplets.get(tid), n, d };
         }
-        const texts = ev.texts.map(([text, dir]) => ({ text, dir }));
+        const texts = ev.texts.map(([text, dir, italic]) => (italic ? { text, dir, italic: true } : { text, dir }));
         // A short word above a note that reads as a chord is its chord symbol.
         const chordAt = texts.findIndex((w) => w.dir < 0 && /^[A-G][#b♯♭]?(m|maj|min|dim|aug|sus|add|°|ø|\+)?[0-9]*(\/[A-G][#b♯♭]?)?$/.test(w.text));
         const chord = chordAt >= 0 ? texts.splice(chordAt, 1)[0].text : ev.chord_name || "";
@@ -2270,6 +2382,7 @@ export function fromParsed(parsed) {
           hairpin: ev.hairpin ?? null, hairpinEnd: ev.hairpin_end, arts, chord, texts,
           graces: (ev.graces ?? []).map(([pitches, base, dots]) => ({ pitches: pitches.map(([d, alter]) => ({ d, alter })), base, dots })),
           grace: ev.grace ?? null, arpeggio: Boolean(ev.arpeggio), gliss: Boolean(ev.gliss), tremolo: ev.tremolo ?? 0,
+          pedalOn: Boolean(ev.pedal_on), pedalOff: Boolean(ev.pedal_off),
         }));
       }
     }

@@ -531,6 +531,25 @@ fn absolute(src: &str) -> Result<String, String> {
     checked(out)
 }
 
+/// Words as the editor keeps them: `text` (a `\\markup`'s words joined),
+/// `italic` when every word is, and `glyph`, the sign it is when it is one.
+fn words_json(w: &parse::Words) -> Value {
+    if w.runs.is_empty() {
+        return json!({ "text": w.text, "italic": false, "glyph": Value::Null });
+    }
+    let mut text = String::new();
+    for r in w.runs.iter().filter(|r| !r.glyph) {
+        if r.gap && !text.is_empty() {
+            text.push(' ');
+        }
+        text.push_str(&r.text);
+    }
+    let words: Vec<_> = w.runs.iter().filter(|r| !r.glyph).collect();
+    let italic = !words.is_empty() && words.iter().all(|r| r.weight == eui_score::glyphs::Weight::Italic);
+    let glyph = w.runs.iter().find(|r| r.glyph).map(|r| r.text.clone());
+    json!({ "text": text, "italic": italic, "glyph": glyph })
+}
+
 /// The piece as the editor's model reads it: the header, the staff groups,
 /// and every staff's events with what the editor keeps of each — and, per
 /// event, what it uses that the model does not keep (`unsupported`), so the
@@ -552,7 +571,6 @@ pub fn score(src: &str) -> Result<Value, String> {
                 Kind::Partial => unsupported.push("a pickup bar"),
                 Kind::CadenzaOn | Kind::CadenzaOff => unsupported.push("a cadenza"),
                 Kind::Ottava => unsupported.push("\\ottava"),
-                Kind::Mark => unsupported.push("rehearsal marks"),
                 _ => {}
             }
             if !ev.fingers.is_empty() {
@@ -571,6 +589,19 @@ pub fn score(src: &str) -> Result<Value, String> {
                 unsupported.push("percent repeats");
             }
             let tempo = ev.tempo.as_ref().map(|t| json!({ "text": t.text, "base": t.base, "bpm": t.bpm }));
+            // A mark over the bar line: its words or its sign (segno, coda),
+            // and whether its words are italic — a D.S. or a Fine is.
+            let mark = (ev.k == Kind::Mark).then(|| ev.texts.first().map(words_json)).flatten();
+            // The pedal's own signs are the pedal, not words.
+            let texts: Vec<Value> = ev
+                .texts
+                .iter()
+                .filter(|w| !w.runs.iter().any(|r| r.glyph && r.text.starts_with("keyboardPedal")))
+                .map(|w| {
+                    let shown = words_json(w);
+                    json!([shown["text"], w.dir, shown["italic"]])
+                })
+                .collect();
             let chord_name: String = ev.chord_name.iter().map(|r| r.text.as_str()).collect();
             events.push(json!({
                 "k": format!("{:?}", ev.k),
@@ -587,7 +618,10 @@ pub fn score(src: &str) -> Result<Value, String> {
                 "slur_on": ev.slur_on,
                 "slur_off": ev.slur_off,
                 "scripts": ev.scripts.iter().map(|s| json!([s.name, s.dir])).collect::<Vec<_>>(),
-                "texts": ev.texts.iter().map(|w| json!([w.text, w.dir])).collect::<Vec<_>>(),
+                "texts": texts,
+                "mark": mark,
+                "pedal_on": ev.pedal_on,
+                "pedal_off": ev.pedal_off,
                 "dynamic": ev.dynamic,
                 "hairpin": ev.hairpin.map(|c| c.to_string()),
                 "hairpin_end": ev.hairpin_end,

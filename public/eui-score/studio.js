@@ -631,6 +631,24 @@ export function startStudio(root, options = {}) {
       });
       case "lyrics": return openWords("lyric");
       case "chord": return openWords("chord");
+      case "text": return openWords("text");
+      case "expression": return openWords("expression");
+      case "mark": return edit((score) => {
+        const [b] = selectedBars();
+        M.setMark(score, b, data.mark);
+        const on = M.changeAt(score, b)?.mark === data.mark;
+        say(`Bar ${b + 1}: ${on ? { letter: "a rehearsal letter", segno: "a segno", coda: "a coda" }[data.mark] : "mark taken away"}`);
+      });
+      case "jump": return edit((score) => {
+        const [, b] = selectedBars();
+        const jump = root.querySelector("[data-jump]").value;
+        M.setJump(score, b, jump);
+        say(M.changeAt(score, b)?.jump === jump ? `${M.JUMPS[jump]} at the end of bar ${b + 1} — Play takes it` : `Bar ${b + 1}: ${M.JUMPS[jump]} taken away`);
+      });
+      case "pedal": return edit((score) => {
+        const t = need();
+        M.setPedal(score, t.s, t.i, data.how);
+      });
       case "repeat": return edit((score) => {
         const [a, b] = selectedBars();
         M.toggleRepeat(score, a, b);
@@ -835,9 +853,14 @@ export function startStudio(root, options = {}) {
     }
     const ev = st.score.staves[t.s].events[t.i];
     const box = Object.assign(document.createElement("input"), { type: "text", className: `studio-words studio-words-${kind}` });
-    box.value = kind === "lyric" ? ev.lyric?.text ?? "" : ev.chord ?? "";
-    box.placeholder = kind === "lyric" ? "syllable" : "Am7";
-    box.setAttribute("aria-label", kind === "lyric" ? "Syllable — Space next note, - hyphen, Enter done" : "Chord symbol — Space next note, Enter done");
+    box.value = wordsOf(ev, kind);
+    box.placeholder = { lyric: "syllable", chord: "Am7", text: "solo", expression: "dolce" }[kind];
+    box.setAttribute("aria-label", {
+      lyric: "Syllable — Space next note, - hyphen, Enter done",
+      chord: "Chord symbol — Space next note, Enter done",
+      text: "Staff text — Enter done",
+      expression: "Expression, in italics — Enter done",
+    }[kind]);
     sheet.appendChild(box);
     wordsBox = { box, kind, s: t.s, t: M.starts(st.score.staves[t.s])[t.i] };
     placeWords();
@@ -853,7 +876,7 @@ export function startStudio(root, options = {}) {
         commitWords();
         closeWords();
         sheet.focus();
-      } else if (event.key === " " || event.key === "Tab" || (event.key === "-" && kind === "lyric")) {
+      } else if ((event.key === " " && (kind === "lyric" || kind === "chord")) || event.key === "Tab" || (event.key === "-" && kind === "lyric")) {
         event.preventDefault();
         commitWords({ hyphen: event.key === "-" });
         nextWords();
@@ -867,6 +890,13 @@ export function startStudio(root, options = {}) {
     }, 0));
   }
 
+  /** What a words box shows for `ev`: its syllable, chord symbol, staff text or expression. */
+  function wordsOf(ev, kind) {
+    if (kind === "lyric") return ev.lyric?.text ?? "";
+    if (kind === "chord") return ev.chord ?? "";
+    return M.textOf(ev, kind === "text" ? "staff" : "expression");
+  }
+
   function commitWords(extra = {}) {
     if (!wordsBox) return;
     const { box, kind, s, t } = wordsBox;
@@ -876,7 +906,8 @@ export function startStudio(root, options = {}) {
       if (kind === "lyric") {
         if (score.staves[s].events[i].rest) return;
         M.setLyric(score, s, i, value, Boolean(extra.hyphen));
-      } else M.setChordSymbol(score, s, i, value);
+      } else if (kind === "chord") M.setChordSymbol(score, s, i, value);
+      else M.setText(score, s, i, kind === "text" ? "staff" : "expression", value);
     });
   }
 
@@ -895,7 +926,7 @@ export function startStudio(root, options = {}) {
     draw();
     const ev = staff.events[i];
     wordsBox.t = at[i];
-    wordsBox.box.value = kind === "lyric" ? ev.lyric?.text ?? "" : ev.chord ?? "";
+    wordsBox.box.value = wordsOf(ev, kind);
     placeWords();
     wordsBox.box.focus();
     wordsBox.box.select();
@@ -929,9 +960,10 @@ export function startStudio(root, options = {}) {
     const g = geometry();
     if (!item || !g) return;
     const [x0, y0, , y1] = item.box;
-    const corner = g.at(x0, wordsBox.kind === "lyric" ? y1 : y0);
+    const below = wordsBox.kind === "lyric" || wordsBox.kind === "expression";
+    const corner = g.at(x0, below ? y1 : y0);
     wordsBox.box.style.left = `${corner.x - 6}px`;
-    wordsBox.box.style.top = wordsBox.kind === "lyric" ? `${corner.y + 8}px` : `${Math.max(0, corner.y - 36)}px`;
+    wordsBox.box.style.top = below ? `${corner.y + 8}px` : `${Math.max(0, corner.y - 36)}px`;
   }
 
   // ---- Drawing ------------------------------------------------------------------
@@ -1524,7 +1556,7 @@ export function startStudio(root, options = {}) {
   root.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-act]");
     if (!button || button.disabled) return;
-    const typing = button.dataset.act === "lyrics" || button.dataset.act === "chord";
+    const typing = ["lyrics", "chord", "text", "expression"].includes(button.dataset.act);
     if (!button.closest(".studio-menubar") && !typing) sheet.focus({ preventScroll: true });
     act(button.dataset.act, { ...button.dataset, add: event.shiftKey });
   });

@@ -2640,6 +2640,9 @@
   .studio-words-chord {
     font-weight: 600;
   }
+  .studio-words-expression {
+    font-style: italic;
+  }
   .studio-source {
     border-top: 1px solid var(--line);
     background: var(--sheet);
