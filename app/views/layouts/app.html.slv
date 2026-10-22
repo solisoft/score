@@ -24,6 +24,8 @@
     <meta name="twitter:card" content="summary_large_image">
     <link rel="icon" href="<%= public_path("images/favicon.svg") %>" type="image/svg+xml">
 
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/images/app/icon-192.png">
     <link rel="stylesheet" href="<%= public_path("css/application.css") %>">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -67,5 +69,9 @@
         <% end %>
         <%= yield %>
     </main>
+    <%# Installable, and open without a network: public/sw.js. %>
+    <script>
+      if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
+    </script>
 </body>
 </html>

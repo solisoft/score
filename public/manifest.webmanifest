@@ -1,0 +1,14 @@
+{
+  "name": "EUI Score",
+  "short_name": "EUI Score",
+  "description": "Write music: scores engraved as you type, played, saved to your account.",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fbf9f4",
+  "theme_color": "#fbf9f4",
+  "icons": [
+    { "src": "/images/app/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/images/app/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

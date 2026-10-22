@@ -4,7 +4,10 @@
     over the revision it was opened at. The header says where it stands.
     A 409 — saved from another window since — is never overwritten: the
     server keeps the text refused here as a version, and this page offers
-    the score as it now stands. %>
+    the score as it now stands.
+    Offline, each change is also kept in this browser (localStorage, with
+    the revision it was typed over) until a save goes through: a page
+    closed before then gives it back the next time it opens, and sends it. %>
 <script type="module">
   const { startStudio } = await import("/eui-score/studio.js?v=<%= eui_version %>");
   const root = document.getElementById("studio");
@@ -16,6 +19,18 @@
   let saving = false;
   let conflict = false;
   let timer = 0;
+  const keepKey = "eui-score-pending:<%= score._key %>";
+
+  const keepLocally = (text) => {
+    try {
+      localStorage.setItem(keepKey, JSON.stringify({ text, revision }));
+    } catch (error) {}
+  };
+  const forgetLocally = () => {
+    try {
+      localStorage.removeItem(keepKey);
+    } catch (error) {}
+  };
 
   const show = (text, kind) => {
     saveState.textContent = text;
@@ -43,12 +58,15 @@
           conflict = false;
           studio.load(answer.source, "The score as it was saved elsewhere.");
           pending = null;
+          forgetLocally();
           show("Saved", "ok");
         }
       } else if (!response.ok) {
         show(answer.error ? `Not saved: ${answer.error}` : "Not saved", "conflict");
       } else {
         revision = answer.revision;
+        if (pending == null) forgetLocally();
+        else keepLocally(pending);
         titleBox.textContent = answer.title;
         document.title = `${answer.title} · EUI Score`;
         show(pending == null ? "Saved" : "Unsaved changes", pending == null ? "ok" : "dirty");
@@ -76,12 +94,26 @@
     onChange(text) {
       if (conflict) return;
       pending = text;
+      keepLocally(text);
       show("Unsaved changes", "dirty");
       schedule();
     },
   });
 
   window.addEventListener("online", save);
+
+  // Changes kept in this browser by a visit that could not save them.
+  let kept = null;
+  try {
+    kept = JSON.parse(localStorage.getItem(keepKey) || "null");
+  } catch (error) {}
+  if (kept?.text) {
+    studio.ready.then(() => {
+      if (kept.text === studio.source()) return forgetLocally();
+      revision = kept.revision;
+      studio.load(kept.text, "Your changes made without a network are back, and being saved.");
+    });
+  }
   window.addEventListener("beforeunload", (event) => {
     if (pending != null || saving) event.preventDefault();
   });
