@@ -84,7 +84,10 @@ describe("The app, in a browser") do
 
     click_link("History")
     assert_text("kept on request")
-    click("a.btn[href*='/versions/']")
+    # The version asked for (an automatic one may share its second).
+    rows = "[...document.querySelectorAll('.trash-list li')]"
+    evaluate(rows + ".find((row) => row.textContent.includes('kept on request')).querySelector('a').click()")
+    wait_for_text("Restore this version")
     click_button("Restore this version")
     assert_page_path(score_path)
     assert_text("The score is back as it was")
