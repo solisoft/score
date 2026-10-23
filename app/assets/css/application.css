@@ -575,9 +575,18 @@
   .studio-source-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-bottom: 8px; }
   .studio-source-head h2 { font: 700 12px/1 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0; }
   .studio-source-head .muted { font-size: 13px; }
+  /* The note selected on the score, marked behind the text: a textarea
+     shows no selection while the score has the focus. */
+  .studio-source-box { position: relative; border-radius: 10px; background: var(--code-bg); }
+  .studio-source-mark {
+    position: absolute; inset: 0; margin: 0; padding: 12px 14px; border: 1px solid transparent; overflow: hidden;
+    white-space: pre; color: transparent; font: 13.5px/1.6 var(--font-mono); tab-size: 2; pointer-events: none;
+  }
+  .studio-source-mark mark { color: transparent; border-radius: 3px; background: color-mix(in srgb, #b4373a 22%, transparent); }
   .studio-source textarea {
+    position: relative; display: block;
     width: 100%; min-height: 220px; resize: vertical; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line-strong);
-    background: var(--code-bg); color: var(--ink); font: 13.5px/1.6 var(--font-mono); tab-size: 2;
+    background: transparent; color: var(--ink); font: 13.5px/1.6 var(--font-mono); tab-size: 2;
   }
   .studio-source textarea:focus { outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent); outline-offset: 1px; }
 

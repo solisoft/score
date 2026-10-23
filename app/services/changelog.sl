@@ -11,6 +11,19 @@ class Changelog
     [
       {"date": "2026-10-23", "entries": [
         {
+          "area": "site",
+          "title": "The score and its text, linked",
+          "text": "A note clicked on the score is marked in the LilyPond, and the caret put on a note in the text "
+          + "selects it on the score.",
+          "link": "playground"
+        },
+        {
+          "area": "engine",
+          "title": "Scores a screen reader can name",
+          "text": "Every drawn score carries its title and a sentence: its composer, staves and bars, each "
+          + "staff's key, metre, notes and rests."
+        },
+        {
           "area": "engine",
           "title": "Four voices on a staff, and notes that cross to the other staff",
           "text": "A chorale on one staff, soprano to bass, each voice with its stems; and a piano's notes sent "

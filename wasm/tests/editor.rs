@@ -1,4 +1,4 @@
-use eui_score_web::editor::{apply, view};
+use eui_score_web::editor::{apply, spans, view};
 use serde_json::json;
 
 const TUNE: &str = "{ \\key g \\major \\time 3/4 g'4 a' b' | d''2 r4 | <g' b'>2. \\bar \"|.\" }";
@@ -125,4 +125,44 @@ fn a_staff_of_rests_keeps_its_clef_whole() {
     let clef_bottom = staff_top + 8.0 * (4.0 + 1.5);
     assert!(vb[1] <= staff_top - 8.0 * 1.5, "the drawing starts at {} — the clef reaches higher", vb[1]);
     assert!(vb[1] + vb[3] >= clef_bottom, "the drawing stops at {} — the clef reaches {clef_bottom}", vb[1] + vb[3]);
+}
+
+#[test]
+fn every_item_names_where_it_is_written() {
+    let v = view(TUNE, 600.0, 8.0, -1, -1).unwrap();
+    for item in v["items"].as_array().unwrap() {
+        let span = item["span"].as_array().unwrap();
+        let (start, end) = (span[0].as_u64().unwrap() as usize, span[1].as_u64().unwrap() as usize);
+        let written: String = TUNE.encode_utf16().skip(start).take(end - start).map(|u| u as u8 as char).collect();
+        let first = written.chars().next().unwrap();
+        match item["kind"].as_str().unwrap() {
+            "rest" | "bar-rest" => assert!(first == 'r' || first == 'R', "{written}"),
+            _ => assert!(first == '<' || ('a'..='g').contains(&first), "{written}"),
+        }
+    }
+    let first = &v["items"][0]["span"];
+    assert_eq!(&TUNE[first[0].as_u64().unwrap() as usize..first[1].as_u64().unwrap() as usize], "g'4");
+    // Counted as a textarea counts: a ♭ in a title before the notes moves them by one.
+    let titled = format!("\\header {{ title = \"B♭ air\" }}\n{TUNE}");
+    let first = |src: &str| view(src, 600.0, 8.0, -1, -1).unwrap()["items"][0]["span"][0].as_u64().unwrap();
+    let shift = "\\header { title = \"B♭ air\" }\n".encode_utf16().count() as u64;
+    assert_eq!(first(&titled), first(TUNE) + shift);
+}
+
+#[test]
+fn the_drawing_has_a_title_and_a_description() {
+    let svg = view(TUNE, 600.0, 8.0, -1, -1).unwrap()["svg"].as_str().unwrap().to_string();
+    assert!(svg.contains("aria-labelledby=\"ed-t ed-d\""));
+    assert!(svg.contains("<title id=\"ed-t\">"));
+    assert!(svg.contains("<desc id=\"ed-d\">1 staff"));
+}
+
+#[test]
+fn spans_list_every_item_as_the_view_does() {
+    let listed = spans(TUNE).unwrap();
+    let v = view(TUNE, 600.0, 8.0, -1, -1).unwrap();
+    for item in v["items"].as_array().unwrap() {
+        assert_eq!(listed[item["item"].as_u64().unwrap() as usize], item["span"]);
+    }
+    assert!(spans("{ c'4 (").is_err());
 }

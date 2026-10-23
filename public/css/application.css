@@ -3431,14 +3431,39 @@
   .studio-source-head .muted {
     font-size: 13px;
   }
+  .studio-source-box {
+    position: relative;
+    border-radius: 10px;
+    background: var(--code-bg);
+  }
+  .studio-source-mark {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    padding: 12px 14px;
+    border: 1px solid transparent;
+    overflow: hidden;
+    white-space: pre;
+    color: transparent;
+    font: 13.5px/1.6 var(--font-mono);
+    tab-size: 2;
+    pointer-events: none;
+  }
+  .studio-source-mark mark {
+    color: transparent;
+    border-radius: 3px;
+    background: color-mix(in srgb, #b4373a 22%, transparent);
+  }
   .studio-source textarea {
+    position: relative;
+    display: block;
     width: 100%;
     min-height: 220px;
     resize: vertical;
     padding: 12px 14px;
     border-radius: 10px;
     border: 1px solid var(--line-strong);
-    background: var(--code-bg);
+    background: transparent;
     color: var(--ink);
     font: 13.5px/1.6 var(--font-mono);
     tab-size: 2;

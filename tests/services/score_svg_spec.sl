@@ -125,4 +125,29 @@ describe("ScoreSvg") do
       assert_eq(ScoreSvg.px(4), "4")
     end
   end
+
+  describe("description") do
+    test("names the score for a screen reader: title, composer, staves, bars, notes and rests") do
+      src = "\\header { title = \"Air & <Song>\" composer = \"Anon\" }\n"
+      + "<< \\new Staff { c'1 | r1 } \\new Staff { c1 | c2 r2 } >>"
+      svg = ScoreSvg.engrave(src, 600, 7, 0, {})["svg"]
+      id = Regex.capture("aria-labelledby=\"(?P<id>g[0-9a-f]+)-t ", svg)["id"]
+      assert_contains(svg, "<title id=\"#{id}-t\">Air &amp; &lt;Song&gt;</title>")
+      expected = "By Anon. 2 staves, 2 bars. Staff 1: 1 note, 1 rest. Staff 2: 2 notes, 1 rest."
+      assert_contains(svg, "<desc id=\"#{id}-d\">#{expected}</desc>")
+    end
+
+    test("calls an untitled score a score, and leaves out a blank composer") do
+      svg = ScoreSvg.engrave("\\header { composer = \" \" }\n{ c'4 d' }", 600, 7, 0, {})["svg"]
+      assert_contains(svg, ">Score</title>")
+      assert_contains(svg, ">1 staff, 1 bar. Staff 1: 2 notes, 0 rests.</desc>")
+    end
+
+    test("gives two drawings of the same score at two widths their own ids") do
+      first = ScoreSvg.engrave("{ c'4 }", 600, 7, 0, {})["svg"]
+      second = ScoreSvg.engrave("{ c'4 }", 400, 7, 0, {})["svg"]
+      first_id = Regex.capture("<title id=\"(?P<id>[^\"]+)\"", first)["id"]
+      assert_not(second.includes?("id=\"#{first_id}\""))
+    end
+  end
 end

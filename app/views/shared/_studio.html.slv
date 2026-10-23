@@ -447,7 +447,10 @@
       <h2>LilyPond source</h2>
       <span class="muted">Edit it here, or on the score: each follows the other.</span>
     </div>
-    <textarea data-source wrap="off" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="LilyPond source"><%= source %></textarea>
+    <div class="studio-source-box">
+      <pre class="studio-source-mark" data-source-mark aria-hidden="true"></pre>
+      <textarea data-source wrap="off" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="LilyPond source"><%= source %></textarea>
+    </div>
   </section>
 
   <dialog class="studio-keys" data-keys aria-labelledby="studio-keys-title">

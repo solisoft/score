@@ -89,6 +89,38 @@ fn token_span(src: &str, at_byte: usize) -> Option<std::ops::Range<usize>> {
     (len > 0).then_some(at_byte..at_byte + len)
 }
 
+/// A note's token with its duration: `d'4.`, `<c' e'>2`, `r8`.
+fn written_span(src: &str, at_byte: usize) -> Option<std::ops::Range<usize>> {
+    let span = token_span(src, at_byte)?;
+    let tail = src[span.end..].bytes().take_while(|b| b.is_ascii_digit() || *b == b'.').count();
+    Some(span.start..span.end + tail)
+}
+
+/// Where each note and rest is written, by item number: `[start, end]` in
+/// UTF-16 units, or null for one with no token of its own.
+pub fn spans(src: &str) -> Result<Value, String> {
+    let parsed = parse::parse(src).map_err(|e| e.message)?;
+    let bytes = byte_offsets(src);
+    let mut out: Vec<(usize, Value)> = Vec::new();
+    for staff in &parsed.staves {
+        for ev in staff.events.iter().filter(|e| matches!(e.k, Kind::Note | Kind::Rest)) {
+            let span = bytes.get(ev.at).and_then(|&at| written_span(src, at)).map(|r| json!([utf16_at(src, r.start), utf16_at(src, r.end)]));
+            out.push((ev.i, span.unwrap_or(Value::Null)));
+        }
+    }
+    out.sort_by_key(|x| x.0);
+    let mut list = vec![Value::Null; out.last().map_or(0, |x| x.0 + 1)];
+    for (i, span) in out {
+        list[i] = span;
+    }
+    Ok(Value::Array(list))
+}
+
+/// A byte offset into `src` as a count of UTF-16 units.
+fn utf16_at(src: &str, byte: usize) -> usize {
+    src.get(..byte).map_or(0, |s| s.encode_utf16().count())
+}
+
 /// Engraves `src` and answers it, or the engraver's reason for refusing it.
 fn checked(src: String) -> Result<String, String> {
     match eui_score::engrave(&src, 120.0, &Layout::default()) {
@@ -198,8 +230,9 @@ pub fn view_lit(src: &str, width: f64, sp: f64, lit: &Value) -> Result<Value, St
     let y0 = ink_top.min(0.0);
     let total = ink_bottom - y0;
     let w = (right + 2.0).ceil();
+    let (head, label) = crate::describe::svg_head(&parsed, eng.staves.first().map_or(0, Vec::len), "ed");
     let svg = format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 {y0} {w} {total}\" width=\"{w}\" height=\"{total}\" role=\"img\" aria-label=\"Score\"><defs>{defs}</defs><g fill=\"currentColor\">{body}</g>{over}</svg>"
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 {y0} {w} {total}\" width=\"{w}\" height=\"{total}\" role=\"img\" {label}>{head}<defs>{defs}</defs><g fill=\"currentColor\">{body}</g>{over}</svg>"
     );
 
     let union = |range: &std::ops::Range<usize>, acc: Option<[f64; 4]>| {
@@ -216,6 +249,7 @@ pub fn view_lit(src: &str, width: f64, sp: f64, lit: &Value) -> Result<Value, St
             item_boxes.insert(*item, b);
         }
     }
+    let bytes = byte_offsets(src);
     let mut items = Vec::new();
     for (item, b) in &item_boxes {
         let Some(found) = find(&parsed, *item) else { continue };
@@ -230,7 +264,9 @@ pub fn view_lit(src: &str, width: f64, sp: f64, lit: &Value) -> Result<Value, St
                 Some(json!({ "index": index, "d": d, "alter": ev.pitches[index].alter, "box": hb }))
             })
             .collect();
-        items.push(json!({ "item": item, "kind": kind, "box": b, "heads": head_list }));
+        // Where it is written, in UTF-16 units as a textarea counts them.
+        let span = bytes.get(ev.at).and_then(|&at| written_span(src, at)).map(|r| [utf16_at(src, r.start), utf16_at(src, r.end)]);
+        items.push(json!({ "item": item, "kind": kind, "box": b, "heads": head_list, "span": span }));
     }
     // Every bar's box, in the SVG's pixels: from its start to its bar line,
     // as tall as its system — what a drag across the score selects, and

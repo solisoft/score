@@ -73,7 +73,9 @@ class ScoreSvg
     height = lift + (max_height > 0 ? [bottom, total].min() : [total, (ink + 2).ceil()].max())
     view_width = (right + 2).ceil()
     svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 #{-lift} #{view_width} #{height}\" "
-    + "width=\"#{view_width}\" height=\"#{height}\" role=\"img\" aria-label=\"Partition\">"
+    + "width=\"#{view_width}\" height=\"#{height}\" role=\"img\" aria-labelledby=\"#{prefix}-t #{prefix}-d\">"
+    + "<title id=\"#{prefix}-t\">#{ScoreSvg.escape(ScoreSvg.title(src))}</title>"
+    + "<desc id=\"#{prefix}-d\">#{ScoreSvg.escape(ScoreSvg.description(src, laid))}</desc>"
     + "<defs>#{glyphs.join("")}</defs><g fill=\"currentColor\">#{shapes.join("")}</g>#{lit.join("")}</svg>"
     {"svg": svg, "error": nil}
   end
@@ -83,6 +85,54 @@ class ScoreSvg
     paint = fill.nil? ? "" : "fill=\"#{fill}\" "
     "<rect #{paint}x=\"#{ScoreSvg.px(shape[2])}\" y=\"#{ScoreSvg.px(shape[3] + top)}\" "
     + "width=\"#{ScoreSvg.px(shape[4])}\" height=\"#{ScoreSvg.px(shape[5])}\"/>"
+  end
+
+  # What a screen reader says of the drawing: the header's title, or "Score".
+  # The editor's engraver (wasm/src/describe.rs) says the same, with each
+  # staff's key and metre, which the layout does not give.
+  static def title(src)
+    Score.title_in(src) ?? "Score"
+  end
+
+  # The composer, then how many staves and bars, and each staff's notes and rests.
+  static def description(src, laid)
+    staves = []
+    bars = 0
+    laid["systems"].each do |system|
+      in_system = system["staves"] ?? [{"bars": system["bars"]}]
+      bars = bars + in_system[0]["bars"].length
+      in_system.each_with_index do |staff, k|
+        if staves.length <= k
+          staves.push({"notes": 0, "rests": 0})
+        end
+        kinds = staff["bars"].map do |bar|
+          bar["items"].map(&:k)
+        end.flatten
+        staves[k]["notes"] = staves[k]["notes"] + kinds.filter do |kind|
+          kind == "note"
+        end.length
+        staves[k]["rests"] = staves[k]["rests"] + kinds.filter do |kind|
+          kind == "rest"
+        end.length
+      end
+    end
+    found = Regex.capture("\\\\header\\s*\\{[^}]*?composer\\s*=\\s*\"(?P<composer>[^\"]*)\"", src.to_s)
+    words = []
+    words.push("By #{found["composer"].trim}.") unless found.nil? || found["composer"].blank?
+    words.push("#{ScoreSvg.count(staves.length, "staff", "staves")}, #{ScoreSvg.count(bars, "bar", "bars")}.")
+    staves.each_with_index do |staff, k|
+      notes = ScoreSvg.count(staff["notes"], "note", "notes")
+      words.push("Staff #{k + 1}: #{notes}, #{ScoreSvg.count(staff["rests"], "rest", "rests")}.")
+    end
+    words.join(" ")
+  end
+
+  static def count(n, one, many)
+    "#{n} #{n == 1 ? one : many}"
+  end
+
+  static def escape(text)
+    text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
   end
 
   # A glyph of `<defs>` placed where `outline` starts.

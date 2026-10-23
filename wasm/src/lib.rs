@@ -18,6 +18,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use eui_score::{Layout, MidiOptions, Path};
 use wasm_bindgen::prelude::*;
 
+pub mod describe;
 pub mod editor;
 pub mod perform;
 
@@ -177,8 +178,11 @@ pub fn svg(src: &str, width: f64, staff_space: f64, marks: &str) -> Result<Strin
     // starts that much higher.
     let lift = if high < 0.0 { (1.0 - high).ceil() as i64 } else { 0 };
     let height = (total as f64).max(bottom.ceil() + 2.0) as i64 + lift;
+    // Its title and a sentence a staff, for a screen reader.
+    let parsed = eui_score::parse::parse(src).map_err(|e| JsError::new(&e.message))?;
+    let (head, label) = describe::svg_head(&parsed, eng.staves.first().map_or(0, Vec::len), &format!("es{id}"));
     Ok(format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 {} {w} {height}\" width=\"{w}\" height=\"{height}\" role=\"img\" aria-label=\"Partition\"><defs>{defs}</defs><g fill=\"currentColor\">{body}</g>{over}</svg>",
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 {} {w} {height}\" width=\"{w}\" height=\"{height}\" role=\"img\" {label}>{head}<defs>{defs}</defs><g fill=\"currentColor\">{body}</g>{over}</svg>",
         -lift
     ))
 }
@@ -236,6 +240,13 @@ pub fn editor_view_lit(src: &str, width: f64, staff_space: f64, lit: &str) -> Re
     let sp = if staff_space > 0.0 { staff_space } else { 7.0 };
     let lit: serde_json::Value = serde_json::from_str(lit).unwrap_or_else(|_| serde_json::json!({}));
     editor::view_lit(src, width, sp, &lit).map(|v| v.to_string()).map_err(|e| JsError::new(&e))
+}
+
+/// Where each note and rest is written in `src`, by item number, as JSON:
+/// `[[start, end], …]` in UTF-16 units, as a textarea counts.
+#[wasm_bindgen]
+pub fn source_spans(src: &str) -> Result<String, JsError> {
+    editor::spans(src).map(|v| v.to_string()).map_err(|e| JsError::new(&e))
 }
 
 /// The piece as JSON for an editor's model: header, groups, and each
