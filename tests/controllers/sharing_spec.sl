@@ -56,6 +56,75 @@ describe("Sharing") do
       assert_eq(res_status(get("/s/#{score.share_token}/score.pdf")), 200)
     end
 
+    test("a guest takes the score away: PDF under its title, MIDI, MusicXML, LilyPond, parts; nothing edits") do
+      owner = share_user()
+      score = Score.start(owner, Score.blank_source("Für Elise / op. 59"))
+      score.make_visible("link")
+      clear_cookies()
+      page = get("/s/#{score.share_token}")
+      assert_eq(res_status(page), 200)
+      body = res_body(page)
+      assert_eq(assigns()["file_name"], "für-elise-op-59")
+      # MIDI as Play plays it, under the title.
+      assert_contains(body, "data-score-midi href=\"data:audio/midi;base64,")
+      assert_contains(body, "download=\"für-elise-op-59.mid\"")
+      # The PDF on its paper, under the title.
+      assert_contains(
+        body,
+        "data-score-pdf href=\"/s/#{score.share_token}/score.pdf\" download=\"für-elise-op-59.pdf\""
+      )
+      assert_contains(body, ">A4 PDF</a>")
+      # The files written in the browser, from the readable source alone.
+      assert_contains(body, "data-read-exports data-source-url=\"/s/#{score.share_token}/source.ly\"")
+      assert_contains(body, "data-read-musicxml>MusicXML</button>")
+      assert_contains(body, "data-read-parts>A part…</button>")
+      assert_contains(body, "data-read-part-pdf>Part as PDF</button>")
+      assert_contains(body, "data-read-part-ly>Part as LilyPond</button>")
+      assert_contains(body, "download=\"für-elise-op-59.ly\"")
+      # Nothing that changes the score: no editor, no save, no form.
+      assert_not(body.contains("Open in the editor"))
+      assert_not(body.contains("/app/scores/#{score._key}"))
+      assert_not(body.contains("<form"))
+      assert_not(body.contains("<textarea"), "no source box to type into")
+
+      pdf = get("/s/#{score.share_token}/score.pdf")
+      assert_eq(res_status(pdf), 200)
+      assert_eq(
+        res_header(pdf, "Content-Disposition"),
+        "inline; filename=\"f-r-elise-op-59.pdf\"; filename*=UTF-8''f%C3%BCr-elise-op-59.pdf"
+      )
+      assert(res_body(pdf).starts_with?("%PDF"))
+    end
+
+    test("the PDF of a Letter score is offered as Letter; a score the engraver refuses offers no files") do
+      owner = share_user()
+      letter = Score.start(
+        owner,
+        "\\header { title = \"Letter\" }\n\\paper { #(set-paper-size \"letter\") }\n{ c'4 d' e' f' }"
+      )
+      letter.make_visible("link")
+      refused = Score.start(owner, "\\header { title = \"Broken\" }\n{ c'4 \\foo }")
+      refused.make_visible("link")
+      clear_cookies()
+      body = res_body(get("/s/#{letter.share_token}"))
+      assert_contains(body, ">Letter PDF</a>")
+      assert_not(body.contains("A4 PDF"))
+      broken = get("/s/#{refused.share_token}")
+      assert_eq(res_status(broken), 200)
+      assert_contains(res_body(broken), "score-sheet-refused")
+      assert_not(res_body(broken).contains("data-read-exports"))
+      assert_not(res_body(broken).contains("data-score-pdf"))
+    end
+
+    test("a private score's files are refused to a guest, the PDF included, and say nothing of its title") do
+      score = Score.start(share_user(), Score.blank_source("Hidden title"))
+      clear_cookies()
+      pdf = get("/s/#{score.share_token}/score.pdf")
+      assert_eq(res_status(pdf), 404)
+      assert_null(res_header(pdf, "Content-Disposition"))
+      assert_not(res_body(pdf).contains("Hidden"))
+    end
+
     test("public: open, and indexable") do
       owner = share_user()
       score = Score.start(owner, Score.blank_source("Anthem"))

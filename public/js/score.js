@@ -15,6 +15,7 @@
   var PLAYER_SRC = (script && script.getAttribute("data-player")) || "/eui-score/player.js";
   var ENGINE_SRC = (script && script.getAttribute("data-engine")) || "/eui-score/eui-score.js";
   var MODEL_SRC = (script && script.getAttribute("data-model")) || "/eui-score/score-model.js";
+  var MUSICXML_SRC = (script && script.getAttribute("data-musicxml")) || "/eui-score/musicxml.js";
   var PLAY_LABEL = '<span aria-hidden="true">▶</span> Play';
   var STOP_LABEL = '<span aria-hidden="true">■</span> Stop';
   var player = null;
@@ -76,6 +77,165 @@
       setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
     });
   }
+
+  /** Bytes or a string saved as a file, through a temporary link. */
+  function save(data, fileName, type) {
+    var url = URL.createObjectURL(new Blob([data], { type: type }));
+    var link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  /** The engraver, loaded. */
+  function engine() {
+    return import(ENGINE_SRC).then(function (E) {
+      return E.loaded().then(function () { return E; });
+    });
+  }
+
+  /**
+   * The PDF link: printed here, on the paper the source's \paper sets (the
+   * server's, which the link fetches when this cannot run, is on A4).
+   */
+  function savePdf(link, event) {
+    var button = link.parentElement.querySelector("[data-score-play]");
+    var src = button && button.getAttribute("data-src");
+    if (!src) return;
+    event.preventDefault();
+    engine()
+      .then(function (E) { return E.toPdf(src, link.getAttribute("data-title") || ""); })
+      .then(function (pdf) { save(pdf, link.getAttribute("download") || "score.pdf", "application/pdf"); })
+      .catch(function () { location.href = link.href; });
+  }
+
+  // ---- The read page's other files: MusicXML and parts, written here ------------------
+
+  /**
+   * The read page's score as the editor's model holds it, with the engraver
+   * and the model: {E, M, score}, `score` null for a source the model cannot
+   * read. Fetched once per section.
+   */
+  function readScore(section) {
+    if (!section.__score) {
+      section.__score = Promise.all([engine(), import(MODEL_SRC), fetch(section.getAttribute("data-source-url"))])
+        .then(function (all) {
+          return all[2].text().then(function (src) {
+            var M = all[1];
+            var read = M.fromParsed(JSON.parse(all[0].engine.score_json(src)));
+            return { E: all[0], M: M, score: read.score || null };
+          });
+        });
+      section.__score.catch(function () { section.__score = null; });
+    }
+    return section.__score;
+  }
+
+  function say(section, text) {
+    var note = section.querySelector("[data-read-note]");
+    if (note) note.textContent = text;
+  }
+
+  var UNREAD = "This piece is written in a way the score editor does not read: its MusicXML and parts are not written from it.";
+
+  function saveMusicXml(section) {
+    readScore(section)
+      .then(function (read) {
+        if (!read.score) return say(section, UNREAD);
+        return import(MUSICXML_SRC).then(function (X) {
+          save(X.toMusicXML(read.score), section.getAttribute("data-file") + ".musicxml", "application/vnd.recordare.musicxml+xml");
+          say(section, "");
+        });
+      })
+      .catch(function (error) { say(section, "The MusicXML could not be written: " + (error.message || error)); });
+  }
+
+  /** "A part…": the staves offered, each as its player reads it. */
+  function openParts(section) {
+    readScore(section)
+      .then(function (read) {
+        if (!read.score) return say(section, UNREAD);
+        var M = read.M;
+        var select = section.querySelector("[data-read-part-staff]");
+        select.innerHTML = "";
+        M.staffLanes(read.score).forEach(function (s, n) {
+          var staff = read.score.staves[s];
+          var known = M.INSTRUMENTS[M.instrumentOf(read.score, s)];
+          select.appendChild(new Option(staff.name || (known && known.name) || "Staff " + (n + 1), String(s)));
+        });
+        section.querySelector("[data-read-part]").hidden = false;
+        section.querySelector("[data-read-parts]").hidden = true;
+        say(section, "");
+      })
+      .catch(function (error) { say(section, "The parts could not be read: " + (error.message || error)); });
+  }
+
+  function savePart(section, asPdf) {
+    readScore(section).then(function (read) {
+      var select = section.querySelector("[data-read-part-staff]");
+      var name = select.selectedOptions[0] ? select.selectedOptions[0].textContent : "part";
+      var src = read.M.toLilyPond(read.M.partOf(read.score, Number(select.value)), { written: true }).source;
+      var file = section.getAttribute("data-file") + " - " + name;
+      if (!asPdf) return save(src, file + ".ly", "text/x-lilypond");
+      return read.E.toPdf(src, section.getAttribute("data-title") + " — " + name).then(function (pdf) {
+        save(pdf, file + ".pdf", "application/pdf");
+      });
+    }).catch(function (error) { say(section, "The part could not be written: " + (error.message || error)); });
+  }
+
+  // ---- Printing (Ctrl/Cmd+P) --------------------------------------------------------
+  //
+  // The page prints its scores alone (application.css, @media print), one
+  // picture per system, so a page turns between two systems, never across
+  // one: the server marks where (data-breaks, ScoreSvg.engrave). The editor
+  // does the same with its own engraving (studio.js, printCopy).
+
+  /**
+   * One SVG per band of `svg`, cut at each y of `cuts`, with ids of its own.
+   * The same as printBands in public/eui-score/score-model.js (a module,
+   * which this script does not load before printing): a change goes to both.
+   */
+  function printBands(svg, cuts) {
+    var head = /^<svg\b[^>]*>/.exec(svg);
+    var box = head && /viewBox="(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+)"/.exec(head[0]);
+    if (!box) return [svg];
+    var x = Number(box[1]), y = Number(box[2]), w = Number(box[3]), h = Number(box[4]);
+    var edges = [y].concat(cuts.filter(function (c) { return c > y && c < y + h; }).sort(function (a, b) { return a - b; }), [y + h]);
+    var named = /<title id="([^"]+)-t"/.exec(svg);
+    var prefix = named && named[1];
+    var ids = prefix ? new RegExp('(["#\\s])' + prefix.replace(/[^\w]/g, "\\$&") + "-", "g") : null;
+    var round = function (n) { return Math.round(n * 10) / 10; };
+    return edges.slice(1).map(function (end, k) {
+      var top = round(edges[k]);
+      var tall = round(end - edges[k]);
+      var own = head[0].replace(/viewBox="[^"]*"/, 'viewBox="' + x + " " + top + " " + w + " " + tall + '"').replace(/\sheight="[^"]*"/, ' height="' + tall + '"');
+      var one = own + svg.slice(head[0].length);
+      return ids ? one.replace(ids, "$1" + prefix + "-p" + k + "-") : one;
+    });
+  }
+
+  function printCopies() {
+    document.querySelectorAll(".score-sheet > svg[data-breaks]").forEach(function (svg) {
+      var sheet = svg.parentElement;
+      if (sheet.nextElementSibling && sheet.nextElementSibling.classList.contains("score-print")) return;
+      var cuts = svg.getAttribute("data-breaks").split(" ").map(Number);
+      var box = document.createElement("div");
+      box.className = "score-print";
+      box.setAttribute("aria-hidden", "true");
+      box.innerHTML = printBands(svg.outerHTML, cuts).join("");
+      sheet.after(box);
+    });
+  }
+
+  function dropPrintCopies() {
+    document.querySelectorAll(".score-print").forEach(function (box) { box.remove(); });
+  }
+
+  window.addEventListener("beforeprint", printCopies);
+  window.addEventListener("afterprint", dropPrintCopies);
 
   function clock(sec) {
     var s = Math.max(0, Math.floor(sec));
@@ -188,6 +348,19 @@
     var midiLink = event.target.closest("[data-score-midi]");
     if (midiLink) {
       saveMidi(midiLink, event);
+      return;
+    }
+    var pdfLink = event.target.closest("[data-score-pdf]");
+    if (pdfLink) {
+      savePdf(pdfLink, event);
+      return;
+    }
+    var section = event.target.closest("[data-read-exports]");
+    if (section) {
+      if (event.target.closest("[data-read-musicxml]")) saveMusicXml(section);
+      else if (event.target.closest("[data-read-parts]")) openParts(section);
+      else if (event.target.closest("[data-read-part-pdf]")) savePart(section, true);
+      else if (event.target.closest("[data-read-part-ly]")) savePart(section, false);
       return;
     }
     var copyButton = event.target.closest("[data-score-copy]");

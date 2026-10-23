@@ -350,6 +350,52 @@ test("the paper, the staff size and the breaks are written, read back, and are t
   assert.ok(!M.toLilyPond(s).source.includes("staff-size"));
 });
 
+test("the PDF's paper, named as File ▸ Print as PDF says it: the one the PDF is printed on", () => {
+  const s = M.fromTemplate("piano", { title: "Page", bars: 2 });
+  assert.equal(M.paperLabel(M.toLilyPond(s).source), "A4", "no \\paper: A4");
+  M.setPaper(s, { size: "letter", staffSize: 20 });
+  const letter = M.toLilyPond(s).source;
+  assert.equal(M.paperLabel(letter), "Letter");
+  assert.match(pdf(letter, "Page"), /\/MediaBox \[0 0 612 792\]/, "and the PDF is on Letter");
+  M.setPaper(s, { size: "a3landscape", staffSize: 20 });
+  assert.equal(M.paperLabel(M.toLilyPond(s).source), "A3 landscape");
+  assert.equal(M.paperLabel(`\\paper { #(set-paper-size "a5" 'landscape) }`), "A5 landscape", "LilyPond's own way of turning it");
+  assert.equal(M.paperLabel(`\\paper { #(set-paper-size "tabloid") }`), "Tabloid");
+  assert.equal(M.paperLabel(""), "A4");
+  assert.equal(M.paperLabel(null), "A4");
+});
+
+test("printing cuts the engraving between its systems, each copy with ids of its own", () => {
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -2 700 300" width="700" height="300" aria-labelledby="ed-t ed-d">'
+    + '<title id="ed-t">T</title><desc id="ed-d">Muted-ed-trumpet</desc><defs><path id="ed-0" d="M0 0"/></defs><use href="#ed-0"/></svg>';
+  const bands = M.printBands(svg, [120, 50, 900, -40]);
+  assert.equal(bands.length, 3, "two cuts inside the drawing, the others left out");
+  assert.match(bands[0], /viewBox="0 -2 700 52" width="700" height="52"/);
+  assert.match(bands[1], /viewBox="0 50 700 70" width="700" height="70"/);
+  assert.match(bands[2], /viewBox="0 120 700 178" width="700" height="178"/);
+  assert.match(bands[1], /aria-labelledby="ed-p1-t ed-p1-d"/);
+  assert.match(bands[1], /<path id="ed-p1-0"/);
+  assert.match(bands[1], /href="#ed-p1-0"/);
+  assert.match(bands[1], /Muted-ed-trumpet/, "the words are left as they are");
+  const whole = M.printBands(svg, []);
+  assert.equal(whole.length, 1, "no cut: the whole drawing");
+  assert.match(whole[0], /viewBox="0 -2 700 300"/);
+  assert.deepEqual(M.printBands("not a drawing", [10]), ["not a drawing"]);
+
+  // An engraving of the editor's: each system in a band of its own.
+  const music = Array.from({ length: 24 }, () => "c'4 d' e' f' |").join(" ");
+  const view = JSON.parse(editor_view(`\\header { title = "Long" } { ${music} }`, 600, 8, -1, -1));
+  const systems = Math.max(...view.bars.map((b) => b.system)) + 1;
+  assert.ok(systems > 2);
+  const cuts = [];
+  for (let k = 1; k < systems; k++) {
+    const above = view.bars.filter((b) => b.system === k - 1).map((b) => b.box[3]);
+    const below = view.bars.filter((b) => b.system === k).map((b) => b.box[1]);
+    cuts.push((Math.max(...above) + Math.min(...below)) / 2);
+  }
+  assert.equal(M.printBands(view.svg, cuts).length, systems);
+});
+
 test("a break stays after its bar when bars come and go, and goes with its bar", () => {
   const s = M.newScore();
   M.addBars(s, 4);

@@ -57,6 +57,34 @@ def _score_span(css_class, chars, start, stop)
   "<span class=\"#{css_class}\">" + html_escape(chars.slice(start, stop).join("")) + "</span>"
 end
 
+# The paper a source's PDF is printed on, as a button names it: "A4" when
+# its \paper sets none, "Letter", "A3 landscape"… The editor names it the
+# same way (paperLabel, public/eui-score/score-model.js): a change here goes
+# there too.
+def paper_label(src)
+  sizes = Regex.find_all("set-paper-size\\s+\"[A-Za-z0-9]+\"(\\s+'landscape)?", src.to_s)
+  return "A4" if sizes.length == 0
+
+  text = sizes[0]["match"]
+  name = text.split("\"")[1].downcase
+  turned = text.ends_with?("'landscape") || name.ends_with?("landscape")
+  name = name.substring(0, name.length - 9) if name.ends_with?("landscape")
+  names = {
+    "a4": "A4",
+    "letter": "Letter",
+    "a3": "A3",
+    "a5": "A5",
+    "a6": "A6",
+    "b4": "B4",
+    "b5": "B5",
+    "legal": "Legal",
+    "tabloid": "Tabloid",
+    "11x17": "11×17"
+  }
+  label = names[name] ?? name
+  turned ? "#{label} landscape" : label
+end
+
 # The score, its buttons and its source. `figure` is `ScoreSvg.figure`'s;
 # `opts`:
 #   "name"     "syntax/notes" or "piano/waltz": the MIDI file's name, and
@@ -64,6 +92,7 @@ end
 #   "sandbox"  the sandbox's path, `playground_path()` — route helpers are
 #              the view's, not visible from a helper's own functions
 #   "pdf"      the PDF's URL, when there is one
+#   "title"    the PDF's footer, for a source whose \header names none
 #   "source"   "open" (default), "closed" or "none"
 #   "caption"  a line under the score
 def score_figure(figure, opts)
@@ -104,7 +133,13 @@ def _score_actions(figure, opts)
     midi_attrs = "data-score-midi href=\"#{midi}\" download=\"#{html_escape(file_name)}.mid\""
     buttons.push("<a class=\"score-btn\" #{midi_attrs}>MIDI</a>")
   end
-  buttons.push("<a class=\"score-btn\" href=\"#{html_escape(opts["pdf"])}\">A4 PDF</a>") unless opts["pdf"].blank?
+  unless opts["pdf"].blank?
+    # Printed in the browser, on the paper the source's \paper sets
+    # (score.js); the server's, which the link fetches without it, is on A4.
+    pdf_attrs = "data-score-pdf href=\"#{html_escape(opts["pdf"])}\" download=\"#{html_escape(file_name)}.pdf\""
+    pdf_attrs += " data-title=\"#{html_escape(opts["title"])}\"" unless opts["title"].blank?
+    buttons.push("<a class=\"score-btn\" #{pdf_attrs}>#{paper_label(figure["src"])} PDF</a>")
+  end
   unless name.blank? || opts["sandbox"].blank?
     href = "#{html_escape(opts["sandbox"])}?source=#{html_escape(name)}"
     buttons.push("<a class=\"score-btn score-btn-ghost\" href=\"#{href}\">Edit in the playground →</a>")

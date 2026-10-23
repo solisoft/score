@@ -86,6 +86,31 @@ describe("score_figure") do
     assert_contains(html, "<figcaption>Essai</figcaption>")
   end
 
+  test("names the PDF's paper, and hands the browser what it prints the PDF with") do
+    letter = ScoreSvg.figure("\\paper { #(set-paper-size \"letter\") }\n{ c'4 d' }", 600, 7)
+    html = score_figure(
+      letter,
+      {
+        "name": "fur-elise",
+        "pdf": "/s/t/score.pdf",
+        "title": "Für <Elise>"
+      }
+    )
+    assert_contains(html, ">Letter PDF</a>")
+    assert_not(html.contains("A4 PDF"), "not the paper it is not printed on")
+    assert_contains(
+      html,
+      "data-score-pdf href=\"/s/t/score.pdf\" download=\"fur-elise.pdf\" data-title=\"Für &lt;Elise&gt;\""
+    )
+    plain = score_figure(ScoreSvg.figure("{ c'4 }", 600, 7), {"pdf": "/x.pdf"})
+    assert_contains(plain, ">A4 PDF</a>")
+    assert_not(plain.contains("data-title"), "no title asked for, none given")
+    assert_not(
+      score_figure(ScoreSvg.figure("{ c'4 }", 600, 7), {}).contains("data-score-pdf"),
+      "no PDF without its address"
+    )
+  end
+
   test("escapes the caption") do
     figure = ScoreSvg.figure("{ c'4 }", 600, 7)
     assert_contains(score_figure(figure, {"caption": "<b>x</b>"}), "&lt;b&gt;x&lt;/b&gt;")
@@ -133,5 +158,21 @@ describe("score_snippet") do
   test("names the snippet after its file under syntax/") do
     figures = {"notes": ScoreSvg.figure("{ c'4 }", 600, 7)}
     assert_contains(score_snippet(figures, "notes", "/playground"), "?source=syntax/notes")
+  end
+end
+
+describe("paper_label") do
+  test("names the paper \\paper sets, A4 when it sets none") do
+    assert_eq(paper_label("{ c'4 }"), "A4")
+    assert_eq(paper_label(nil), "A4")
+    assert_eq(paper_label("\\paper { #(set-paper-size \"letter\") }"), "Letter")
+    assert_eq(paper_label("\\paper { #(set-paper-size \"a3landscape\") }"), "A3 landscape")
+    assert_eq(paper_label("\\paper { #(set-paper-size \"a5\" 'landscape) }"), "A5 landscape")
+    assert_eq(paper_label("\\paper { #(set-paper-size \"tabloid\") }"), "Tabloid")
+    assert_eq(
+      paper_label("\\paper { #(set-paper-size \"quarto\") }"),
+      "quarto",
+      "a size it does not know, as written"
+    )
   end
 end

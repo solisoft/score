@@ -13,6 +13,8 @@ class SharedScoresController < Controller
     @figure = ScoreSvg.figure(@score.source, 1040, 7)
     @pdf_url = "#{shared_score_path(this.score.share_token)}/score.pdf"
     @source_url = "#{shared_score_path(this.score.share_token)}/source.ly"
+    # The downloads' name: the title's (score.pdf, score.mid… say nothing once saved).
+    @file_name = @score.file_name
     @can_edit = @score.writable_by?(current_user())
     @indexable = @score.visibility == "public"
     @title = @score.title
@@ -29,13 +31,13 @@ class SharedScoresController < Controller
     }
   end
 
-  # GET /s/:token/score.pdf
+  # GET /s/:token/score.pdf — on the paper its \paper sets, saved under the score's title
   def pdf
     score = @_readable_score
     document = eui_score_pdf(score.source, score.title)
     {
       "status": 200,
-      "headers": {"Content-Type": "application/pdf", "Content-Disposition": "inline; filename=\"score.pdf\""},
+      "headers": {"Content-Type": "application/pdf", "Content-Disposition": score.content_disposition("inline", "pdf")},
       "body": document
     }
   end

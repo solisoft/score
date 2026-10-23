@@ -287,6 +287,28 @@ class Score < Model
     !@trashed_at.nil?
   end
 
+  # The title as a downloaded file's name, before its extension: its letters
+  # and digits (accents kept), each run of anything else one dash, in lower
+  # case; "score" when nothing is left. Nothing in it can end a header's
+  # quoted string or name a folder. The editor names its files the same way
+  # (fileName, public/eui-score/studio.js).
+  def file_name
+    name = Regex.replace_all("[^\\p{L}\\p{N}]+", @title.to_s, "-")
+    name = Regex.replace_all("^-+|-+$", name, "").downcase
+    name.blank? ? "score" : name
+  end
+
+  # The Content-Disposition of a file of this score, `extension` its own
+  # ("pdf"): `filename` in ASCII for the browsers that read only it, its
+  # letters outside ASCII each a dash, and `filename*` the name as it is,
+  # percent-encoded (RFC 6266).
+  def content_disposition(how, extension)
+    plain = Regex.replace_all("[^A-Za-z0-9]+", @file_name, "-")
+    plain = Regex.replace_all("^-+|-+$", plain, "")
+    plain = "score" if plain.blank?
+    "#{how}; filename=\"#{plain}.#{extension}\"; filename*=UTF-8''#{url_encode(this.file_name)}.#{extension}"
+  end
+
   def rename(title)
     @source = Score.with_title(@source, title)
     @save

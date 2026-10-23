@@ -13,6 +13,30 @@ describe("ScoreSvg") do
       assert_contains(svg, "fill=\"currentColor\"")
     end
 
+    test("says where a printed page may turn: between its systems, and nowhere in a preview") do
+      music = ""
+      for bar in range(0, 30)
+        music += "c'4 d' e' f' | "
+      end
+      src = "\\header { title = \"Long\" } { #{music} }"
+      svg = ScoreSvg.engrave(src, 700, 7, 0, {})["svg"]
+      breaks = svg.split(" data-breaks=\"")[1].split("\"")[0].split(" ").map do |y|
+        y.to_f
+      end
+      laid = eui_score_layout(src, 100, {})
+      bands = eui_score_bands(laid, 7, {
+        "colour": "ink",
+        "marks": {}
+      }, (laid["height"] * 7).ceil())
+      assert_eq(breaks.length, bands.length - 1, "one between each two bands: the title, then each system")
+      assert_gt(breaks.length, 2)
+      assert_eq(breaks[0], bands[1]["y"].to_f)
+      for i in range(1, breaks.length)
+        assert_gt(breaks[i], breaks[i - 1], "in order, down the page")
+      end
+      assert_not(ScoreSvg.engrave(src, 700, 7, 230, {})["svg"].contains("data-breaks"), "a preview is not printed")
+    end
+
     test("defines a glyph drawn four times once") do
       svg = ScoreSvg.engrave("{ c''4 c'' c'' c'' }", 600, 7, 0, {})["svg"]
       assert_gt(svg.split("<use ").length - 1, svg.split("<path id=").length - 1)

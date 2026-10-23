@@ -64,6 +64,17 @@ class Changelog
         },
         {
           "area": "site",
+          "title": "Printing prints the score, and a shared score comes in every file",
+          "text": "Printing the editor or a shared score's page (Ctrl+P or Cmd+P) now prints the music alone: no "
+          + "menus, toolbox, source or buttons, and a page never cuts a line of music in half. File, Print as "
+          + "PDF says the paper the PDF is printed on, Letter or A3 when the score asks for it, not always A4. "
+          + "Someone reading a shared score, even without an account, can now save it as MusicXML, as MIDI "
+          + "with its repeats played, as LilyPond, or as one instrument's part, and every file is named after "
+          + "the score's title instead of \"score\".",
+          "link": "app"
+        },
+        {
+          "area": "site",
           "title": "Your first edit keeps what you wrote",
           "text": "Editing a score in the editor no longer quietly drops what it did not understand. Invisible "
           + "rests stay invisible (no more rests appearing in a piano left hand), beams you drew stay, a "

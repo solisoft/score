@@ -738,4 +738,37 @@
     .example-nav { grid-template-columns: 1fr; }
     .example-nav .next { grid-column: 1; }
   }
+
+  /* ---- The read page's other files ------------------------------------------- */
+  .read-exports { margin: 8px 0 40px; }
+  .read-exports h2 { font: 700 12px/1 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  .read-part { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+  .read-part label { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-soft); }
+  .read-part select { font: 14px var(--font-sans); padding: 5px 8px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--sheet); color: var(--ink); }
+  .read-exports-note { font-size: 13.5px; margin: 10px 0 0; }
+  .read-exports-note:empty { display: none; }
+  .score-print, .studio-print { display: none; }
+
+  /* ---- Printing (Ctrl/Cmd+P): the score alone, on white ----------------------
+     The editor and the read page cut their engraving into one picture per
+     system just before printing (studio.js and score.js, printCopy), so a
+     page turns between two systems; until they have, the whole drawing
+     prints. Everything around the score — menus, toolbox, source, headers,
+     buttons, dialogs — stays on the screen. */
+  @media print {
+    @page { margin: 14mm 12mm; }
+    html, body, .app-body, .studio, .studio-canvas, .studio-sheet, .score-sheet { background: #fff !important; }
+    body { color: #000; }
+    .site-header, .site-footer, .app-header, .app-flash, .playground-banner, .page-head,
+    .studio-menubar, .studio-progress, .studio-toolbox, .studio-source, .studio-notice, .studio-status, .studio-roll,
+    .studio-overlay, .studio-palette, .studio-playhead, .studio-words, dialog,
+    .score-actions, .score-source, .score-figure figcaption, .read-exports { display: none !important; }
+    .wrap, .app-main, .studio, .studio-body, .studio-canvas { display: block; max-width: none; min-height: 0; padding: 0; margin: 0; }
+    .score-figure { margin: 0; }
+    .studio-sheet, .score-sheet { border: 0; border-radius: 0; box-shadow: none; padding: 0; min-height: 0; overflow: visible; }
+    .studio-sheet svg, .score-sheet svg { width: 100%; height: auto; }
+    .studio-canvas:has(.studio-print) .studio-sheet, .score-sheet:has(+ .score-print) { display: none; }
+    .studio-print, .score-print { display: block; color: #000; }
+    .studio-print svg, .score-print svg { display: block; width: 100%; max-width: 100%; height: auto; break-inside: avoid; page-break-inside: avoid; }
+  }
 }

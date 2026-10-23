@@ -31,7 +31,7 @@
             <button type="button" role="menuitem" data-act="properties">Score properties… <kbd>title, tempo, staves</kbd></button>
             <hr>
             <button type="button" role="menuitem" data-act="save-ly">Save the LilyPond source <kbd>.ly</kbd></button>
-            <button type="button" role="menuitem" data-act="save-pdf">Print as PDF <kbd>A4</kbd></button>
+            <button type="button" role="menuitem" data-act="save-pdf">Print as PDF <kbd data-pdf-paper><%= paper_label(source) %></kbd></button>
             <button type="button" role="menuitem" data-act="save-midi">Save as MIDI <kbd>.mid, as played</kbd></button>
             <button type="button" role="menuitem" data-act="save-musicxml">Save as MusicXML <kbd>.musicxml</kbd></button>
             <button type="button" role="menuitem" data-act="save-wav">Save the sound <kbd>.wav</kbd></button>

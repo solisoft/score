@@ -64,6 +64,30 @@ describe("Score") do
       assert_eq(Score.title_in(Score.with_title("{ c'4 }", "   ")), SCORE_UNTITLED)
     end
 
+    test("names its files: letters and digits, accents kept, nothing that ends a header or names a folder") do
+      score = Score.new()
+      score.title = "Für \"Elise\" / op. 59; né\r\nX"
+      assert_eq(score.file_name, "für-elise-op-59-né-x")
+      disposition = score.content_disposition("inline", "pdf")
+      assert_eq(
+        disposition,
+        "inline; filename=\"f-r-elise-op-59-n-x.pdf\"; filename*=UTF-8''f%C3%BCr-elise-op-59-n%C3%A9-x.pdf"
+      )
+      score.title = " /// "
+      assert_eq(score.file_name, "score", "nothing left: score")
+      assert_eq(
+        score.content_disposition("attachment", "mid"),
+        "attachment; filename=\"score.mid\"; filename*=UTF-8''score.mid"
+      )
+      score.title = "Élégie"
+      assert_contains(score.content_disposition("inline", "pdf"), "filename=\"l-gie.pdf\"")
+      score.title = "ü"
+      assert_contains(
+        score.content_disposition("inline", "pdf"),
+        "filename=\"score.pdf\"; filename*=UTF-8''%C3%BC.pdf"
+      )
+    end
+
     test("follows the source on every save") do
       score = Score.start(score_owner(), Score.blank_source("First"))
       assert_eq(score.title, "First")

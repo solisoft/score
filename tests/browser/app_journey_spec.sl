@@ -535,3 +535,113 @@ describe("The app, in a browser") do
     assert_no_page_errors()
   end
 end
+
+# What the page saves, caught as its link is clicked: each file's name and
+# text (a MIDI file's first bytes read as text), in window.reads.
+const READ_SAVES = """
+(() => {
+  window.reads = [];
+  HTMLAnchorElement.prototype.click = function () {
+    const file = { name: this.download, text: null };
+    window.reads.push(file);
+    fetch(this.href).then((r) => r.text()).then((t) => { file.text = t; });
+  };
+})()
+"""
+
+# Waits for the page's `n`th file, and answers it: {"name", "text"}, or nil.
+def read_save(n)
+  for tries in range(0, 50)
+    file = JSON.parse(evaluate("JSON.stringify((window.reads || [])[#{n - 1}] ?? null)"))
+    return file unless file.nil? || file["text"].nil?
+
+    sleep(0.2)
+  end
+  nil
+end
+
+# A score of two staves and a repeat, open to whoever has its link.
+def shared_duet
+  owner = User.new()
+  owner.email = journey_email()
+  owner.set_password(JOURNEY_PASSWORD)
+  owner.confirmed_at = DateTime.utc.to_unix
+  owner.save
+  source = "\\header { title = \"Duo für zwei\" }\n\\score { \\new PianoStaff <<"
+  + " \\new Staff { \\repeat volta 2 { c'4 d' e' f' } g'1 }"
+  + " \\new Staff { \\clef bass c1 | g,1 } >> }"
+  score = Score.start(owner, source)
+  score.make_visible("link")
+  score
+end
+
+describe("The read page, for a guest") do
+  before_each() do
+    # The page a test before left may hold itself (an editor with a change
+    # not saved): it is let go, as a person leaving it would.
+    evaluate("(() => { const hold = Event.prototype.preventDefault;"
+    + " Event.prototype.preventDefault = function () { if (this.type !== 'beforeunload') hold.call(this); }; })()")
+    logout()
+  end
+
+  test("saves the score as MusicXML, as MIDI played out, a part and its PDF, without an account") do
+    score = shared_duet()
+    visit("/s/#{score.share_token}")
+    assert_selector("[data-read-exports]")
+    assert_no_selector("[data-source]")
+    evaluate(READ_SAVES)
+
+    click("[data-read-musicxml]")
+    xml = read_save(1)
+    assert_not_null(xml, "a MusicXML file saved")
+    assert_eq(xml["name"], "duo-für-zwei.musicxml")
+    assert_contains(xml["text"], "<score-partwise")
+    assert_contains(xml["text"], "<work-title>Duo für zwei</work-title>")
+
+    # The MIDI as Play plays it: the repeat taken, in the browser.
+    click("[data-score-midi]")
+    midi = read_save(2)
+    assert_not_null(midi, "a MIDI file saved")
+    assert_eq(midi["name"], "duo-für-zwei.mid")
+    assert(midi["text"].starts_with?("MThd"))
+
+    click("[data-read-parts]")
+    wait_for("[data-read-part]:not([hidden])")
+    assert_eq(evaluate("document.querySelectorAll('[data-read-part-staff] option').length"), 2)
+    select_option("[data-read-part-staff]", "1")
+    click("[data-read-part-ly]")
+    part = read_save(3)
+    assert_not_null(part, "a part saved")
+    assert(part["name"].starts_with?("duo-für-zwei - "))
+    assert(part["name"].ends_with?(".ly"))
+    assert_contains(part["text"], "\\clef bass")
+    assert_not(part["text"].contains("e'4 f'"), "the other staff left out")
+
+    # The PDF, printed here on the score's paper, under its title.
+    click("[data-score-pdf]")
+    pdf = read_save(4)
+    assert_not_null(pdf, "a PDF saved")
+    assert_eq(pdf["name"], "duo-für-zwei.pdf")
+    assert(pdf["text"].starts_with?("%PDF"))
+    assert_no_page_errors()
+  end
+
+  test("prints the score alone, cut between its systems") do
+    score = shared_duet()
+    visit("/s/#{score.share_token}")
+    assert_selector(".score-sheet svg[data-breaks]")
+    breaks = evaluate("document.querySelector('.score-sheet svg').getAttribute('data-breaks').split(' ').length")
+    evaluate("window.dispatchEvent(new Event('beforeprint'))")
+    assert_eq(evaluate("document.querySelectorAll('.score-print svg').length"), breaks + 1)
+    printed = evaluate("(() => { const rules = []; const walk = (list) => { for (const r of list) {"
+    + " if (r instanceof CSSMediaRule && r.media.mediaText === 'print') rules.push(r.cssText);"
+    + " else if (r.cssRules) walk(r.cssRules); } };"
+    + " for (const s of document.styleSheets) { try { walk(s.cssRules); } catch (e) {} } return rules.join(' '); })()")
+    [".site-header", ".score-actions", ".read-exports", ".score-source", ".score-print svg"].each do |part|
+      assert_contains(printed, part)
+    end
+    evaluate("window.dispatchEvent(new Event('afterprint'))")
+    assert_eq(evaluate("document.querySelectorAll('.score-print').length"), 0)
+    assert_no_page_errors()
+  end
+end

@@ -6,5 +6,24 @@
       <p><a class="btn btn-ghost" href="<%= app_score_path(score) %>">Open in the editor</a></p>
     <% end %>
   </header>
-  <%- score_figure(figure, {"name": "score", "pdf": pdf_url, "source": "closed"}) %>
+  <%- score_figure(figure, {"name": file_name, "pdf": pdf_url, "title": score.title, "source": "closed"}) %>
+  <%# The score in other programs' files, written in the browser from its
+      source (public/js/score.js): nothing here can change the score. %>
+  <% if figure["error"].nil? %>
+    <section class="read-exports" data-read-exports data-source-url="<%= source_url %>" data-file="<%= file_name %>"
+             data-title="<%= score.title %>" aria-labelledby="read-exports-title">
+      <h2 id="read-exports-title">In other programs</h2>
+      <div class="score-actions">
+        <button type="button" class="score-btn" data-read-musicxml>MusicXML</button>
+        <a class="score-btn" href="<%= source_url %>" download="<%= file_name %>.ly">LilyPond</a>
+        <button type="button" class="score-btn" data-read-parts>A part…</button>
+      </div>
+      <div class="read-part" data-read-part hidden>
+        <label>Instrument <select data-read-part-staff></select></label>
+        <button type="button" class="score-btn" data-read-part-pdf>Part as PDF</button>
+        <button type="button" class="score-btn score-btn-ghost" data-read-part-ly>Part as LilyPond</button>
+      </div>
+      <p class="read-exports-note muted" data-read-note role="status"></p>
+    </section>
+  <% end %>
 </div>

@@ -1403,6 +1403,52 @@ export function startStudio(root, options = {}) {
     if (!st.playing) showInText(false);
   }
 
+  // ---- Printing (Ctrl/Cmd+P) --------------------------------------------------------
+  //
+  // The page prints the score alone (application.css, @media print): drawn
+  // again without the selection's colours, one picture per system, so a page
+  // ends between two systems, never across one. The read page does the same
+  // with the server's engraving (public/js/score.js, printCopy).
+
+  /** The score as printed: one SVG per system, in a box the print stylesheet shows instead of the sheet. */
+  function printCopy() {
+    if (!root.isConnected) return stopPrinting();
+    root.querySelector(".studio-print")?.remove();
+    const shown = st.score ? M.toLilyPond(st.score, { written: st.written }).source : st.text;
+    let view;
+    try {
+      view = JSON.parse(editor_view_lit(shown, Math.max(320, Math.floor(sheet.clientWidth - 2)), 8, "{}"));
+    } catch {
+      return; // A refused text: the sheet prints as it is.
+    }
+    // Where a page may turn: halfway between one system's bottom and the next one's top.
+    const systems = [];
+    for (const bar of view.bars ?? []) {
+      const [, top, , bottom] = bar.box;
+      const s = (systems[bar.system] ??= { top, bottom });
+      s.top = Math.min(s.top, top);
+      s.bottom = Math.max(s.bottom, bottom);
+    }
+    const cuts = [];
+    for (let k = 1; k < systems.length; k++) if (systems[k] && systems[k - 1]) cuts.push((systems[k - 1].bottom + systems[k].top) / 2);
+    const box = Object.assign(document.createElement("div"), { className: "studio-print" });
+    box.setAttribute("aria-hidden", "true");
+    box.innerHTML = M.printBands(view.svg, cuts).join("");
+    sheet.after(box);
+  }
+
+  function dropPrintCopy() {
+    root.querySelector(".studio-print")?.remove();
+  }
+
+  // The listeners go with the editor: a page swapped out by instant navigation stops printing it.
+  function stopPrinting() {
+    window.removeEventListener("beforeprint", printCopy);
+    window.removeEventListener("afterprint", dropPrintCopy);
+  }
+  window.addEventListener("beforeprint", printCopy);
+  window.addEventListener("afterprint", dropPrintCopy);
+
   // ---- The MIDI view --------------------------------------------------------------
 
   /** The roll, drawn when the MIDI view is on: the notes being played lit, the cursor at the first of them. */
@@ -1659,6 +1705,9 @@ export function startStudio(root, options = {}) {
   function showState() {
     root.classList.toggle("studio-input", st.input.on);
     root.classList.toggle("studio-text-only", !st.score);
+    // File ▸ Print as PDF names the paper the PDF is printed on: the score's \paper.
+    const paper = root.querySelector("[data-pdf-paper]");
+    if (paper) paper.textContent = M.paperLabel(st.text);
     notice.hidden = (Boolean(st.score) || !st.unsupported.length) && !(st.score && st.lostNotice);
     if (!st.score && st.unsupported.length) {
       notice.textContent = `This piece uses ${st.unsupported.join(", ")}: the score editor does not edit those yet. It is engraved, and its text below can be edited.`;

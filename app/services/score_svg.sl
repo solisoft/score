@@ -60,10 +60,14 @@ class ScoreSvg
     bottom = 0
     ink = 0
     high = 0
+    breaks = []
     bands.each do |band|
       top = band["y"]
       next if max_height > 0 && top > 0 && top >= max_height
 
+      # Where a printed page may turn: between two bands (the header, then
+      # each system), never across one (public/js/score.js, printCopy).
+      breaks.push(ScoreSvg.px(top)) if top > 0
       bottom = top + band["h"]
       band["paths"].each do |shape|
         if shape[0] == 1
@@ -94,8 +98,10 @@ class ScoreSvg
     lift = high < 0 ? (1 - high).ceil() : 0
     height = lift + (max_height > 0 ? [bottom, total].min() : [total, (ink + 2).ceil()].max())
     view_width = (right + 2).ceil()
+    breaks_attr = breaks.length > 0 && max_height == 0 ? " data-breaks=\"#{breaks.join(" ")}\"" : ""
     svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 #{-lift} #{view_width} #{height}\" "
-    + "width=\"#{view_width}\" height=\"#{height}\" role=\"img\" aria-labelledby=\"#{prefix}-t #{prefix}-d\">"
+    + "width=\"#{view_width}\" height=\"#{height}\" role=\"img\" aria-labelledby=\"#{prefix}-t #{prefix}-d\""
+    + "#{breaks_attr}>"
     + "<title id=\"#{prefix}-t\">#{ScoreSvg.escape(ScoreSvg.title(src))}</title>"
     + "<desc id=\"#{prefix}-d\">#{ScoreSvg.escape(ScoreSvg.description(src, laid))}</desc>"
     + "<defs>#{glyphs.join("")}</defs><g fill=\"currentColor\">#{shapes.join("")}</g>#{lit.join("")}</svg>"

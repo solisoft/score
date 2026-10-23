@@ -78,7 +78,7 @@ async function playedOut(src) {
   }
 }
 
-/** The source on A4 as a PDF string; `title` for a source whose header names none. */
+/** The source as a PDF string, on the paper its \paper sets (A4 when none); `title` for a source whose header names none. */
 export async function toPdf(src, title = "") {
   await ready;
   return engravePdf(src, title);

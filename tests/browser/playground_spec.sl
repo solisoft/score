@@ -265,3 +265,78 @@ describe("The playground, in a browser") do
     assert_no_page_errors()
   end
 end
+
+# The page as it prints: the print stylesheet's rules applied to the screen
+# (the browser helpers cannot switch the media), after the page has cut its
+# score for printing, as it does on Ctrl/Cmd+P (beforeprint).
+const AS_PRINTED = """
+(() => {
+  window.dispatchEvent(new Event('beforeprint'));
+  const found = [];
+  const walk = (rules) => {
+    for (const rule of rules) {
+      if (rule instanceof CSSMediaRule && rule.media.mediaText === 'print') {
+        found.push(...[...rule.cssRules].filter((r) => r instanceof CSSStyleRule).map((r) => r.cssText));
+      }
+      else if (rule.cssRules) walk(rule.cssRules);
+    }
+  };
+  for (const sheet of document.styleSheets) {
+    try { walk(sheet.cssRules); } catch (error) {}
+  }
+  const style = document.createElement('style');
+  style.textContent = found.join(' ');
+  document.head.appendChild(style);
+  return found.length;
+})()
+"""
+
+def shown?(selector)
+  evaluate("(() => { const el = document.querySelector(#{JSON.stringify(selector)});"
+  + " return !!el && getComputedStyle(el).display !== 'none'; })()")
+end
+
+describe("The playground, printed") do
+  test("prints the score alone, one picture per system, without the selection's colours") do
+    visit("/playground")
+    wait_for("[data-source]")
+    sleep(1)
+    long = "\\header { title = \"Long\" }\n{ " + "c'4 d' e' f' | " * 24 + "}"
+    type_source(long)
+    caret_on("e'")
+    assert(
+      evaluate("document.querySelector('.studio-svg').innerHTML.includes('#b4373a')"),
+      "the selection drawn on the screen"
+    )
+    assert_gt(evaluate(AS_PRINTED), 5)
+    systems = evaluate("document.querySelectorAll('.studio-print svg').length")
+    assert_gt(systems, 2, "a picture per system")
+    # Each its own band of the drawing, one after the other.
+    tops = evaluate("[...document.querySelectorAll('.studio-print svg')]"
+    + ".map((s) => Number(s.getAttribute('viewBox').split(' ')[1])).join(',')")
+    numbers = tops.split(",").map do |t|
+      t.to_f
+    end
+    for i in range(1, numbers.length)
+      assert_gt(numbers[i], numbers[i - 1])
+    end
+    assert_eq(
+      evaluate("document.querySelectorAll('.studio-print [id^=\"ed-p1-\"]').length > 0"),
+      true,
+      "ids of its own"
+    )
+    assert_eq(
+      evaluate("document.querySelector('.studio-print').innerHTML.includes('#b4373a')"),
+      false,
+      "no selection drawn"
+    )
+    assert(shown?(".studio-print"))
+    assert_not(shown?(".studio-sheet"))
+    [".studio-menubar", ".studio-toolbox", ".studio-source", ".site-header", ".site-footer"].each do |part|
+      assert_not(shown?(part), "#{part} is not printed")
+    end
+    evaluate("window.dispatchEvent(new Event('afterprint'))")
+    assert_eq(evaluate("document.querySelectorAll('.studio-print').length"), 0, "gone after printing")
+    assert_no_page_errors()
+  end
+end

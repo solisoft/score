@@ -330,6 +330,20 @@ describe("AppScoresController") do
       assert_eq(ScoreVersion.history(score).length, 0)
     end
 
+    test("File ▸ Print as PDF names the score's own paper, not A4 when it is not") do
+      owner = library_user()
+      letter = Score.start(
+        owner,
+        "\\header { title = \"Wide\" }\n\\paper { #(set-paper-size \"a3landscape\") }\n{ c'1 }"
+      )
+      plain = Score.start(owner, Score.blank_source("Plain"))
+      library_sign_in(owner)
+      wide_page = res_body(get("/app/scores/#{letter._key}"))
+      assert_contains(wide_page, "Print as PDF <kbd data-pdf-paper>A3 landscape</kbd>")
+      assert_not(wide_page.contains("data-pdf-paper>A4<"))
+      assert_contains(res_body(get("/app/scores/#{plain._key}")), "Print as PDF <kbd data-pdf-paper>A4</kbd>")
+    end
+
     test("the editor page opens with what the save needs") do
       owner = library_user()
       score = Score.start(owner, Score.blank_source("Habanera"))

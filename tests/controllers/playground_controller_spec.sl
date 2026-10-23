@@ -31,6 +31,30 @@ describe("PlaygroundController") do
       assert_contains(body, "Allegro assai")
     end
 
+    test("File ▸ Print as PDF names the paper (A4 here), and printing shows the score alone") do
+      body = res_body(get("/playground"))
+      assert_contains(body, "data-act=\"save-pdf\">Print as PDF <kbd data-pdf-paper>A4</kbd>")
+      # The print stylesheet: the menus, the toolbox, the source, the headers and the dialogs stay on the screen.
+      css = File.read("public/css/application.css")
+      print_rules = css.split("@media print {")[1]
+      assert_not_null(print_rules, "a print stylesheet")
+      hidden = print_rules.split("display: none !important;")[0]
+      [
+        ".studio-menubar",
+        ".studio-toolbox",
+        ".studio-source",
+        ".app-header",
+        ".site-header",
+        "dialog",
+        ".score-actions"
+      ].each do |part|
+        assert_contains(hidden, part)
+      end
+      assert_contains(print_rules, "@page {")
+      assert_contains(print_rules, ".studio-print svg, .score-print svg {")
+      assert_contains(print_rules, "break-inside: avoid;")
+    end
+
     test("loads the editor's modules under one version") do
       body = res_body(get("/playground"))
       version = ScoreAssets.version

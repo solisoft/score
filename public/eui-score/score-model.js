@@ -2512,6 +2512,47 @@ export function setPaper(score, { size, staffSize }) {
   score.paper = { ...(score.paper ?? paperFrom(null)), size: name === "a4" ? null : name, staffSize: pt === 20 ? null : pt };
 }
 
+const PAPER_NAMES = { a4: "A4", letter: "Letter", a3: "A3", a5: "A5", a6: "A6", b4: "B4", b5: "B5", legal: "Legal", tabloid: "Tabloid", "11x17": "11×17" };
+
+/**
+ * The paper a source's PDF is printed on, as a menu names it: "A4" when its
+ * \\paper sets none, "Letter", "A3 landscape"… Read from the text, so a
+ * source the model cannot hold is named too. The read page's PDF button says
+ * the same (ScoreSvg.paper_label, app/services/score_svg.sl).
+ */
+export function paperLabel(source) {
+  const m = /set-paper-size\s+"([a-z0-9]+?)(landscape)?"(\s+'landscape)?/i.exec(String(source ?? ""));
+  if (!m) return "A4";
+  const name = PAPER_NAMES[m[1].toLowerCase()] ?? m[1];
+  return m[2] || m[3] ? `${name} landscape` : name;
+}
+
+/**
+ * An engraving cut for printing: one SVG per band of `svg`, cut across at
+ * each y of `cuts` (in the drawing's own units), each a copy of the whole
+ * drawing that shows only its band. Their ids are made their own, so no copy
+ * points into another. The read page cuts the server's engraving the same
+ * way (public/js/score.js, printBands): a change here goes there too.
+ */
+export function printBands(svg, cuts) {
+  const head = /^<svg\b[^>]*>/.exec(svg ?? "");
+  const box = head && /viewBox="(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+)"/.exec(head[0]);
+  if (!box) return [svg ?? ""];
+  const [x, y, w, h] = box.slice(1).map(Number);
+  const inside = (cuts ?? []).filter((c) => c > y && c < y + h).sort((a, b) => a - b);
+  const edges = [y, ...inside, y + h];
+  const prefix = /<title id="([^"]+)-t"/.exec(svg)?.[1];
+  const ids = prefix ? new RegExp(`(["#\\s])${prefix.replace(/[^\w]/g, "\\$&")}-`, "g") : null;
+  const round = (n) => Math.round(n * 10) / 10;
+  return edges.slice(1).map((end, k) => {
+    const top = round(edges[k]);
+    const tall = round(end - edges[k]);
+    const own = head[0].replace(/viewBox="[^"]*"/, `viewBox="${x} ${top} ${w} ${tall}"`).replace(/\sheight="[^"]*"/, ` height="${tall}"`);
+    const one = own + svg.slice(head[0].length);
+    return ids ? one.replace(ids, `$1${prefix}-p${k}-`) : one;
+  });
+}
+
 /** Whether the PDF spreads the lines evenly over its pages (true) or fills each in turn (false, the default). */
 export function setEvenPages(score, even) {
   score.paper = { ...(score.paper ?? paperFrom(null)), evenPages: even ? true : null };
