@@ -407,6 +407,15 @@ test("a tuplet inside a tuplet is engraved, and left to the text", () => {
   assert.ok(read.unsupported.includes("a tuplet inside a tuplet"));
 });
 
+test("four voices on a staff, and notes sent to the other staff, are engraved and left to the text", () => {
+  const voices = "{ << { e''4 f'' g''2 } \\\\ { c''4 d'' e''2 } \\\\ { g'4 a' b'2 } \\\\ { c'4 f' g'2 } >> }";
+  JSON.parse(editor_view(voices, 900, 7, -1, -1));
+  assert.ok(M.fromParsed(JSON.parse(score_json(voices))).unsupported.includes("three voices on a staff"));
+  const crossing = '\\new PianoStaff << \\new Staff = "up" { c\'\'4 \\change Staff = "down" c\'4 e\'4 \\change Staff = "up" c\'\'4 } \\new Staff = "down" { \\clef bass s1 } >>';
+  JSON.parse(editor_view(crossing, 900, 7, -1, -1));
+  assert.ok(M.fromParsed(JSON.parse(score_json(crossing))).unsupported.includes("notes moved to another staff"));
+});
+
 test("a tie needs a note after it; a slur on one note goes to the next, and comes off whole", () => {
   const s = M.newScore();
   M.write(s, 0, 0, q, C4);

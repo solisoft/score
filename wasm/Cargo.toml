@@ -13,19 +13,20 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-# The engraver itself, from eui's main: da86a64 is eui 0.11 (what Soli
+# The engraver itself, from eui's main: 562d504 is eui 0.11 (what Soli
 # 2.28.2 pins, f137388) with the engraving fixes since (ending brackets,
 # neighbouring dynamics, two-voice rests, tempo marks over grace notes, a
 # dotted eighth's dot), the sustain pedal, LilyPond 2.24's \jump and
 # \fine, notes past their bar line cut into tied notes, and several
 # verses of lyrics a staff, ♭ ♯ ♮ in its words, and the paper its
-# \paper asks for, 64ths and 128ths, nested tuplets, added-up metres and
-# modes. The browser draws those before the server's Soli does;
+# \paper asks for, 64ths and 128ths, nested tuplets, added-up metres,
+# modes, four voices a staff and notes across staves. The browser draws
+# those before the server's Soli does;
 # move this
 # and the server's Soli together otherwise. `build.sh` writes the module
 # into public/eui-score/, and that output is committed: deploying the site
 # needs no Rust.
-eui-score = { git = "https://github.com/solisoft/eui", rev = "da86a64" }
+eui-score = { git = "https://github.com/solisoft/eui", rev = "562d504" }
 wasm-bindgen = "=0.2.126"
 serde_json = "1"
 

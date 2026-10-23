@@ -2428,6 +2428,8 @@ export function fromParsed(parsed) {
       ev.unsupported.forEach((u) => unsupported.add(u));
       // A tuplet in a tuplet is engraved and played; the score tools write one level.
       if (ev.tuplet_outer) unsupported.add("a tuplet inside a tuplet");
+      // Engraved and played; the score tools write two voices a staff, each on its own.
+      if (ev.cross) unsupported.add("notes moved to another staff");
       const k = ev.k;
       // A change after the first note is the bar's it starts: the first staff
       // writes the score's changes, the others must change with it.

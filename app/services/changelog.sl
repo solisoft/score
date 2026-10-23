@@ -12,6 +12,12 @@ class Changelog
       {"date": "2026-10-23", "entries": [
         {
           "area": "engine",
+          "title": "Four voices on a staff, and notes that cross to the other staff",
+          "text": "A chorale on one staff, soprano to bass, each voice with its stems; and a piano's notes sent "
+          + "with \\change Staff to the other hand's staff, drawn there and played in their own."
+        },
+        {
+          "area": "engine",
           "title": "64ths, 128ths, a tuplet in a tuplet, metres added up, modes",
           "text": "Notes down to the 128th, a triplet inside a quintuplet with both brackets, \\time 2+3/8 and "
           + "13/8, and \\key d \\dorian with the signature of its notes."

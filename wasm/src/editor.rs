@@ -635,6 +635,8 @@ pub fn score(src: &str) -> Result<Value, String> {
                 "fifths": ev.fifths,
                 "time": [ev.time.0, ev.time.1],
                 "time_parts": ev.time_parts,
+                // The staff a note is drawn on after \\change Staff, by its name.
+                "cross": ev.cross,
                 "tempo": tempo,
                 "bar": ev.v,
                 // Its grace notes, each `[pitches, value, dots]`, and their kind.
