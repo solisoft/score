@@ -19,11 +19,11 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "inspect, setup, or encryption-key"
+        description: "inspect, setup, encryption-key, or jobs"
         required: true
         default: inspect
         type: choice
-        options: [inspect, setup, encryption-key]
+        options: [inspect, setup, encryption-key, jobs]
 
 concurrency:
   group: deploy-refs/heads/main
@@ -128,4 +128,23 @@ jobs:
           printf '\n# Two-step sign-in secrets are encrypted with it: never replace it.\nSOLI_ENCRYPTION_KEY=%s\n' "$(openssl rand -hex 32)" >> .env
           chmod 600 .env
           echo "done: SOLI_ENCRYPTION_KEY added (its value stays on the server)"
+          REMOTE
+
+      # Read only: the job queue and what the site last logged, secrets hidden.
+      - name: Jobs
+        if: inputs.action == 'jobs'
+        run: |
+          ssh "$USER@$HOST" SITES_DIR="$SITES_DIR" DOMAIN="$DOMAIN" bash -s <<'REMOTE'
+          hide() { sed -E 's/((PASS|PASSWORD|SECRET|TOKEN|KEY)[A-Z_]*[=: ]+)[^ ,"]*/\1<hidden>/Ig; s/(sk-|x-api-key)[A-Za-z0-9_-]*/\1<hidden>/g'; }
+          cd "$SITES_DIR/$DOMAIN"
+          echo "== jobs"
+          timeout 30 soli jobs list 2>&1 | hide | tail -30
+          echo "== failed jobs"
+          timeout 30 soli jobs list --state failed 2>&1 | hide | tail -15
+          timeout 30 soli jobs list --state dead 2>&1 | hide | tail -15
+          echo "== log files"
+          ls -la *.log log/ logs/ 2>/dev/null | head -10
+          echo "== the site's journal"
+          journalctl --no-pager -n 60 2>/dev/null | grep -iE 'score|job|error' | hide | tail -40
+          for f in *.log log/*.log logs/*.log; do [ -f "$f" ] && { echo "== $f"; tail -40 "$f" | hide; }; done
           REMOTE
