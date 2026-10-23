@@ -3794,19 +3794,24 @@
     .studio-menus {
       flex: 1 1 0;
       min-width: 0;
-      overflow-x: auto;
-      scrollbar-width: none;
+      flex-wrap: wrap;
     }
     .studio-menu-group {
       flex: 1 0 100%;
       order: 1;
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      scrollbar-width: none;
+      flex-wrap: wrap;
+      row-gap: 4px;
       padding-bottom: 2px;
     }
-    .studio-menus::-webkit-scrollbar, .studio-menu-group::-webkit-scrollbar {
-      display: none;
+    .studio-zoom {
+      order: 1;
+    }
+    .studio-record-group {
+      flex-wrap: nowrap;
+      order: 2;
+      border-left: 0;
+      padding-left: 0;
+      margin-left: 0;
     }
     .studio-state {
       flex-basis: 100%;
