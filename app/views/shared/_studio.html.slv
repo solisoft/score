@@ -94,6 +94,10 @@
           <div class="studio-dropdown-items" role="menu">
             <button type="button" role="menuitem" data-act="tie">Tie <kbd>T</kbd></button>
             <button type="button" role="menuitem" data-act="slur">Slur <kbd>S</kbd></button>
+            <button type="button" role="menuitem" data-act="phrase">Phrasing slur <kbd>Shift+S</kbd></button>
+            <button type="button" role="menuitem" data-act="ottava" data-value="1">8va above the selection</button>
+            <button type="button" role="menuitem" data-act="ottava" data-value="-1">8vb below the selection</button>
+            <button type="button" role="menuitem" data-act="ottava-end">End the ottava line here</button>
             <button type="button" role="menuitem" data-act="lyrics">Lyrics <kbd>Ctrl+L</kbd></button>
             <button type="button" role="menuitem" data-act="chord">Chord symbol <kbd>Ctrl+K</kbd></button>
             <button type="button" role="menuitem" data-act="text">Staff text</button>
@@ -274,6 +278,12 @@
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="tie" title="Tie to the next note (T)">⁀ Tie</button>
           <button type="button" class="tool tool-wide" data-act="slur" title="Slur the selected notes (S)">⌒ Slur</button>
+          <button type="button" class="tool tool-wide" data-act="phrase" title="Phrasing slur over the selected notes (Shift+S)">⌒ Phrase</button>
+        </div>
+        <div class="tool-row" aria-label="Ottava">
+          <button type="button" class="tool tool-wide" data-act="ottava" data-value="1" title="8va: the selected notes drawn an octave lower, under a line; again to take it away">8va</button>
+          <button type="button" class="tool tool-wide" data-act="ottava" data-value="-1" title="8vb: the selected notes drawn an octave higher, over a line; again to take it away">8vb</button>
+          <button type="button" class="tool tool-wide" data-act="ottava-end" title="End the ottava line before the selected note">End 8va</button>
         </div>
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="hairpin" data-kind="&lt;" title="Crescendo over the selection">𝆒 cresc.</button>
@@ -290,6 +300,26 @@
           <button type="button" class="tool" data-act="art" data-name="marcato" title="Marcato">^</button>
           <button type="button" class="tool" data-act="art" data-name="staccatissimo" title="Staccatissimo">▾</button>
           <button type="button" class="tool" data-act="art" data-name="fermata" title="Fermata">𝄐</button>
+        </div>
+      </details>
+
+      <details class="tool-section" data-section="fingering" open>
+        <summary><h3>Fingering</h3></summary>
+        <div class="tool-row" aria-label="Finger">
+          <button type="button" class="tool" data-act="finger" data-n="1" title="Finger 1 on the selected note (Alt+1); again to take it away">1</button>
+          <button type="button" class="tool" data-act="finger" data-n="2" title="Finger 2 (Alt+2)">2</button>
+          <button type="button" class="tool" data-act="finger" data-n="3" title="Finger 3 (Alt+3)">3</button>
+          <button type="button" class="tool" data-act="finger" data-n="4" title="Finger 4 (Alt+4)">4</button>
+          <button type="button" class="tool" data-act="finger" data-n="5" title="Finger 5 (Alt+5)">5</button>
+          <button type="button" class="tool tool-wide" data-act="finger-remove" title="Take the fingerings and string numbers away">Remove</button>
+        </div>
+        <div class="tool-row" aria-label="String">
+          <button type="button" class="tool" data-act="string-number" data-n="1" title="Played on string 1">①</button>
+          <button type="button" class="tool" data-act="string-number" data-n="2" title="Played on string 2">②</button>
+          <button type="button" class="tool" data-act="string-number" data-n="3" title="Played on string 3">③</button>
+          <button type="button" class="tool" data-act="string-number" data-n="4" title="Played on string 4">④</button>
+          <button type="button" class="tool" data-act="string-number" data-n="5" title="Played on string 5">⑤</button>
+          <button type="button" class="tool" data-act="string-number" data-n="6" title="Played on string 6">⑥</button>
         </div>
       </details>
 

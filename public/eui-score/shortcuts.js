@@ -73,9 +73,18 @@ export const SHORTCUTS = [
     },
   },
   {
-    keys: "T / S",
-    does: "tie / slur",
-    match: (k) => (k.mod ? null : { t: ["tie"], s: ["slur"] }[lower(k)] ?? null),
+    keys: "T / S / Shift+S",
+    does: "tie / slur / phrasing slur",
+    match: (k) => {
+      if (k.mod) return null;
+      if (lower(k) === "s" && k.shiftKey) return ["phrase"];
+      return { t: ["tie"], s: ["slur"] }[lower(k)] ?? null;
+    },
+  },
+  {
+    keys: "Alt+1–5",
+    does: "fingering (again to take it away)",
+    match: (k) => (!k.mod && k.altKey && /^(Digit|Numpad)[1-5]$/.test(k.code) ? ["finger", { n: k.code.slice(-1) }] : null),
   },
   {
     keys: "L / K, Ctrl+L / Ctrl+K",

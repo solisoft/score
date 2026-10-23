@@ -84,6 +84,8 @@ test("shortcuts: what each key does, and what it leaves to the browser", () => {
     [press("Backspace"), ["rest", {}]],
     [press("t"), ["tie", {}]],
     [press("S"), ["slur", {}]],
+    [press("S", { shift: true }), ["phrase", {}]],
+    [press("£", { alt: true, code: "Digit3" }), ["finger", { n: "3" }]],
     [press(" "), ["play", {}]],
     [press("?", { shift: true }), ["keys", {}]],
   ];

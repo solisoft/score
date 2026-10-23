@@ -13,6 +13,16 @@ class Changelog
       {"date": "2026-10-23", "entries": [
         {
           "area": "site",
+          "title": "Ottava lines, fingerings and phrasing slurs in the editor",
+          "text": "A score with an 8va line, fingerings, string numbers or phrasing slurs now opens in the editor "
+          + "instead of as text only, and keeps them through every edit. Add them from the tools or the Insert "
+          + "menu: 8va and 8vb over the selected notes, fingers 1 to 5 (Alt+1 to 5), strings 1 to 6, and a "
+          + "phrasing slur (Shift+S). Notes under an 8va still play at the pitch written, and MusicXML carries "
+          + "all of them both ways.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
           "title": "History says who saved each version; the library finds composers and comes in pages",
           "text": "The History page names who saved each version, and when a save meets someone else's, the editor "
           + "says who it was instead of \"another window\". A version can be played and copied into a new score. "

@@ -406,7 +406,11 @@ export function transpose(score, { steps, semitones, s = null, a = 0, b = Infini
     const events = score.staves[lane].events;
     events.forEach((ev, i) => {
       if (s != null && (i < a || i > b)) return;
-      if (!ev.rest) ev.pitches = ev.pitches.map((p) => transposePitch(p, steps, semitones));
+      if (!ev.rest) {
+        const moved = ev.pitches.map((p) => transposePitch(p, steps, semitones));
+        followHeads(ev, ev.pitches, moved);
+        ev.pitches = moved;
+      }
       for (const g of ev.graces) g.pitches = g.pitches.map((p) => transposePitch(p, steps, semitones));
       if (s == null && ev.chord) ev.chord = transposeChord(ev.chord, steps, semitones);
     });
@@ -617,8 +621,17 @@ function pieces(score, ev, at, ticks, role) {
   out.forEach((p, k) => {
     const last = k === out.length - 1;
     p.tie = !p.rest && (last ? (role === "head" ? true : Boolean(ev.tie)) : true);
-    if (!(k === 0 && keepsStart)) delete p.beamStart;
-    if (!(last && keepsEnd)) delete p.beamEnd;
+    if (!(k === 0 && keepsStart)) {
+      delete p.beamStart;
+      // An ottava starts, a fingering stands, a phrase begins on the first piece only.
+      delete p.ottava;
+      delete p.fingers;
+      delete p.phraseStart;
+    }
+    if (!(last && keepsEnd)) {
+      delete p.beamEnd;
+      delete p.phraseEnd;
+    }
     if (!(k === 0 && keepsStart)) Object.assign(p, { slurStart: false, dynamic: null, hairpin: null, arts: [], chord: "", texts: [], lyric: null, verses: [], graces: [], grace: null, arpeggio: false, pedalOn: false, pedalOff: false });
     if (!(last && keepsEnd)) Object.assign(p, { slurEnd: false, hairpinEnd: false, gliss: false });
     // A tremolo's strokes are shorter than the note they repeat.
@@ -661,7 +674,15 @@ export function write(score, s, t, ticks, content, { tidyUp = true } = {}) {
   }
   const note = makeEvent({ ...content, tuplet: null });
   const fill = [...rests(score, from, t - from), ...pieces(score, note, t, ticks, "whole"), ...rests(score, t + ticks, to - (t + ticks))];
+  // The ottava lines over what is written over: as they were before it and after it.
+  const replaced = staff.events.slice(a, b);
+  const ottavaThen = ottavaAt(staff, b - 1);
+  const lastMarker = replaced.findLast((ev) => ev.ottava != null)?.ottava;
   staff.events.splice(a, b - a, ...fill);
+  if (fill[0].ottava == null && lastMarker != null) fill[0].ottava = lastMarker;
+  const next = staff.events[a + fill.length];
+  if (next && next.ottava == null && ottavaAt(staff, a + fill.length - 1) !== ottavaThen) next.ottava = ottavaThen;
+  tidyOttavas(staff);
   // A note cut before `from` was tied to its tail, which is gone now.
   const before = staff.events[a - 1];
   const after = staff.events[a];
@@ -683,7 +704,7 @@ export function tidy(score, staff) {
     run = null;
   };
   staff.events.forEach((ev, i) => {
-    const plain = ev.rest && !ev.tuplet && !ev.dynamic && !ev.hairpin && !ev.hairpinEnd && !ev.texts.length && !ev.chord && !ev.arts.length && !ev.pedalOn && !ev.pedalOff && !ev.beamStart && !ev.beamEnd;
+    const plain = ev.rest && !ev.tuplet && !ev.dynamic && !ev.hairpin && !ev.hairpinEnd && !ev.texts.length && !ev.chord && !ev.arts.length && !ev.pedalOn && !ev.pedalOff && !ev.beamStart && !ev.beamEnd && ev.ottava == null;
     // Spacers run with spacers, drawn rests with drawn rests.
     const sameBar = run && barAt(score, at[i]) === barAt(score, run.start) && run.spacer === Boolean(ev.spacer);
     if (plain && sameBar) {
@@ -738,6 +759,7 @@ export function move(score, s, i, how, by, head = -1) {
   if (ev.rest) throw new Error("select a note");
   const moved = ev.pitches.map((p, k) => (head < 0 || k === head ? movePitch(p, how, by, keyOf(score, s, starts(score.staves[s])[i])) : p));
   if (!moved.every(reachable)) throw new Error("that is as far as it goes");
+  followHeads(ev, ev.pitches, moved);
   setPitches(score, s, i, sortPitches(moved));
 }
 
@@ -761,7 +783,9 @@ export function letter(score, s, i, step, add = false, head = -1) {
   }
   const k = head >= 0 && head < ev.pitches.length ? head : 0;
   const p = nearestPitch(step, ev.pitches[k].d, keyOf(score, s, starts(score.staves[s])[i]));
-  setPitches(score, s, i, sortPitches(ev.pitches.map((q, j) => (j === k ? p : q))));
+  const now = ev.pitches.map((q, j) => (j === k ? p : q));
+  followHeads(ev, ev.pitches, now);
+  setPitches(score, s, i, sortPitches(now));
 }
 
 /** Event `i` given pitch `p` (a key played): a rest becomes that note, `add` adds it to the chord, else it replaces head `head` (the lowest). */
@@ -778,7 +802,9 @@ export function setPitch(score, s, i, p, add = false, head = -1) {
     return;
   }
   const k = head >= 0 && head < ev.pitches.length ? head : 0;
-  setPitches(score, s, i, sortPitches(ev.pitches.map((q, j) => (j === k ? p : q))));
+  const now = ev.pitches.map((q, j) => (j === k ? p : q));
+  followHeads(ev, ev.pitches, now);
+  setPitches(score, s, i, sortPitches(now));
 }
 
 export function setAlter(score, s, i, alter, head = -1) {
@@ -793,10 +819,17 @@ export function remove(score, s, i, head = -1) {
   const ev = noteOf(score, s, i);
   if (ev.rest) return;
   if (head >= 0 && ev.pitches.length > 1) {
+    // Its fingering goes with it.
+    if (ev.fingers) ev.fingers = ev.fingers.filter((f) => f.head !== ev.pitches[head].d);
+    if (ev.fingers?.length === 0) delete ev.fingers;
     ev.pitches = ev.pitches.filter((_, k) => k !== head);
     return;
   }
   Object.assign(ev, { rest: true, pitches: [], tie: false, slurStart: false, slurEnd: false, arts: [], lyric: null, graces: [], grace: null, arpeggio: false, gliss: false, tremolo: 0 });
+  // A rest takes no fingering, and no phrasing slur starts or ends on it.
+  delete ev.fingers;
+  delete ev.phraseStart;
+  delete ev.phraseEnd;
   const prev = score.staves[s].events[i - 1];
   if (prev && prev.tie) prev.tie = false;
   tidy(score, score.staves[s]);
@@ -823,30 +856,141 @@ export function toggleTie(score, s, i) {
   ev.tie = !ev.tie;
 }
 
-/** A slur from event `a` to event `b`; on one note, takes away the slurs it starts or ends. */
-export function toggleSlur(score, s, a, b) {
-  const events = score.staves[s].events;
+/** A line from event `a` to event `b` over the fields `start` and `end` (a slur's, a phrasing slur's); see toggleSlur. */
+function toggleLine(events, a, b, start, end, name) {
   const [from, to] = [Math.min(a, b), Math.max(a, b)];
   if (from === to) {
     const ev = events[from];
-    if (ev.slurStart || ev.slurEnd) {
+    if (ev[start] || ev[end]) {
       // On a note a slur starts or ends at: the slur goes, both its ends.
-      const open = ev.slurStart ? from : events.slice(0, from).findLastIndex((e) => e.slurStart);
-      const close = ev.slurEnd ? from : events.findIndex((e, k) => k > from && e.slurEnd);
-      if (open >= 0) events[open].slurStart = false;
-      if (close >= 0) events[close].slurEnd = false;
+      const open = ev[start] ? from : events.slice(0, from).findLastIndex((e) => e[start]);
+      const close = ev[end] ? from : events.findIndex((e, k) => k > from && e[end]);
+      if (open >= 0) events[open][start] = false;
+      if (close >= 0) events[close][end] = false;
       return;
     }
     // One note: slurred to the next one, as MuseScore does.
     const next = events.findIndex((e, k) => k > from && !e.rest);
-    if (ev.rest || next < 0) throw new Error("a slur goes from a note to a later note");
-    ev.slurStart = true;
-    events[next].slurEnd = true;
+    if (ev.rest || next < 0) throw new Error(`a ${name} goes from a note to a later note`);
+    ev[start] = true;
+    events[next][end] = true;
     return;
   }
-  if (events[from].rest || events[to].rest) throw new Error("a slur goes from a note to a note");
-  events[from].slurStart = !events[from].slurStart;
-  events[to].slurEnd = events[from].slurStart;
+  if (events[from].rest || events[to].rest) throw new Error(`a ${name} goes from a note to a note`);
+  events[from][start] = !events[from][start];
+  events[to][end] = events[from][start];
+}
+
+/** A slur from event `a` to event `b`; on one note, takes away the slurs it starts or ends. */
+export function toggleSlur(score, s, a, b) {
+  toggleLine(score.staves[s].events, a, b, "slurStart", "slurEnd", "slur");
+}
+
+/** A phrasing slur, `\(` … `\)`, from event `a` to event `b`: as toggleSlur, beside the slurs. */
+export function togglePhrase(score, s, a, b) {
+  const events = score.staves[s].events;
+  toggleLine(events, a, b, "phraseStart", "phraseEnd", "phrasing slur");
+  // Kept only where there is one: an event without carries no field.
+  for (const ev of events) {
+    if (!ev.phraseStart) delete ev.phraseStart;
+    if (!ev.phraseEnd) delete ev.phraseEnd;
+  }
+}
+
+// ---- Ottava lines -----------------------------------------------------------------
+//
+// `\ottava #n` stands before the event it starts on, as `ev.ottava` (n: 1
+// 8va, 2 15ma, -1 8vb, -2 15mb, 0 the end of one). The notes keep the pitch
+// they sound: an ottava changes where they are drawn, never what is played —
+// LilyPond's own reading, and eui-score's MIDI.
+
+export const OTTAVAS = [-2, -1, 0, 1, 2];
+
+/** The ottava in force at event `i` of a lane: 0 when none. */
+export function ottavaAt(staff, i) {
+  for (let k = Math.min(i, staff.events.length - 1); k >= 0; k--) if (staff.events[k].ottava != null) return staff.events[k].ottava;
+  return 0;
+}
+
+/** A lane's ottava changes, each kept only where the ottava changes. */
+function tidyOttavas(staff) {
+  let now = 0;
+  for (const ev of staff.events) {
+    if (ev.ottava == null) continue;
+    if (ev.ottava === now) delete ev.ottava;
+    else now = ev.ottava;
+  }
+}
+
+/** Where an ottava may go: on the first voice of a staff of notes. */
+function ottavaLane(score, s) {
+  if (!score.staves[s]) throw new Error("no such staff");
+  refuseDrums(score, s);
+  if (isLower(score, s)) throw new Error("an ottava goes on the staff's first voice");
+  return score.staves[s];
+}
+
+/**
+ * Events `a` to `b` under an ottava of `value` (see OTTAVAS), what follows
+ * them as it was; when they are all under it already, taken out of it.
+ */
+export function setOttava(score, s, a, b, value) {
+  if (!OTTAVAS.includes(value)) throw new Error("an ottava is 8va, 15ma, 8vb or 15mb");
+  const staff = ottavaLane(score, s);
+  const [from, to] = [Math.min(a, b), Math.max(a, b)];
+  if (!staff.events[from] || !staff.events[to]) throw new Error("no such note");
+  const after = ottavaAt(staff, to);
+  const under = staff.events.slice(from, to + 1).every((_, k) => ottavaAt(staff, from + k) === value);
+  for (let k = from; k <= to; k++) delete staff.events[k].ottava;
+  staff.events[from].ottava = under ? 0 : value;
+  const next = staff.events[to + 1];
+  if (next && next.ottava == null) next.ottava = after;
+  tidyOttavas(staff);
+}
+
+/** The ottava in force at event `i` ended there: the notes from it on drawn where they sound. */
+export function endOttava(score, s, i) {
+  const staff = ottavaLane(score, s);
+  if (!staff.events[i]) throw new Error("no such note");
+  if (ottavaAt(staff, i) === 0) throw new Error("no ottava line here to end");
+  staff.events[i].ottava = 0;
+  tidyOttavas(staff);
+}
+
+// ---- Fingerings and string numbers ------------------------------------------------
+//
+// `ev.fingers`: `{ text, dir, head, circled }` each — `dir` -1 above (^), 1
+// below (_), 0 where the engraver puts it (-); `head` the diatonic number of
+// the chord's note it is written on, or null for the whole note; `circled` a
+// string's number (`\3`), drawn in a circle.
+
+/** Finger `text` (1–5) — or, `circled`, string `text` (1–6) — on note `i`, on head `head` of a chord; the same again takes it away. */
+export function setFingering(score, s, i, text, { head = -1, circled = false } = {}) {
+  const ev = pitchedNote(score, s, i);
+  const figure = String(text);
+  if (!(circled ? /^[1-6]$/ : /^[1-5]$/).test(figure)) throw new Error(circled ? "a string is 1 to 6" : "a finger is 1 to 5");
+  const d = head >= 0 && ev.pitches.length > 1 ? ev.pitches[head]?.d ?? null : null;
+  const fingers = ev.fingers ?? [];
+  const same = (f) => Boolean(f.circled) === circled && (f.head ?? null) === d;
+  const had = fingers.filter(same);
+  const kept = fingers.filter((f) => !same(f));
+  if (!(had.length === 1 && had[0].text === figure)) kept.push({ text: figure, dir: had[0]?.dir ?? 0, head: d, circled });
+  if (kept.length) ev.fingers = kept;
+  else delete ev.fingers;
+}
+
+/** Note `i`'s fingerings and string numbers taken away. */
+export function removeFingerings(score, s, i) {
+  delete noteOf(score, s, i).fingers;
+}
+
+/** A chord's fingerings follow its notes, moved from `was` to `now` head by head. */
+function followHeads(ev, was, now) {
+  if (!ev.fingers) return;
+  ev.fingers = ev.fingers.map((f) => {
+    const k = f.head == null ? -1 : was.findIndex((p) => p.d === f.head);
+    return k >= 0 && now[k] ? { ...f, head: now[k].d } : f;
+  });
 }
 
 export function setDynamic(score, s, i, dynamic) {
@@ -1728,22 +1872,33 @@ function wordsText(t) {
 function eventText(ev, beam = "") {
   const head = (p) => p.drum ?? spellPitch(p.d, p.alter);
   const notes = (pitches) => (pitches.length === 1 ? head(pitches[0]) : `<${pitches.map(head).join(" ")}>`);
-  let out = "";
+  // An ottava line starts (or ends) before the note, its grace notes too.
+  let out = ev.ottava != null ? `\\ottava #${ev.ottava} ` : "";
+  // Fingerings and string numbers: a chord's in it, by its note; the others after the value.
+  const fingers = ev.rest || ev.pitches.some((p) => p.drum) ? [] : ev.fingers ?? [];
+  const fingerText = (f) => (f.circled ? `\\${f.text}` : `${f.dir < 0 ? "^" : f.dir > 0 ? "_" : "-"}${f.text}`);
+  const onHead = (p) => (ev.pitches.length > 1 ? fingers.filter((f) => f.head === p.d && ev.pitches.find((q) => q.d === f.head) === p) : []);
+  // Inside a chord, a note's string comes before its finger.
+  const headMarks = (p) => onHead(p).sort((x, y) => Number(y.circled) - Number(x.circled)).map(fingerText).join("");
+  const loose = fingers.filter((f) => !ev.pitches.some((p) => onHead(p).includes(f)));
   if (ev.graces.length && !ev.rest) {
     const graces = ev.graces.map((g) => notes(g.pitches) + g.base + ".".repeat(g.dots));
     out += `\\${ev.grace ?? "grace"} ${graces.length === 1 ? graces[0] : `{ ${graces.join(" ")} }`} `;
   }
-  out += ev.rest ? (ev.spacer ? "s" : "r") : notes(ev.pitches);
+  out += ev.rest ? (ev.spacer ? "s" : "r") : ev.pitches.length > 1 ? `<${ev.pitches.map((p) => head(p) + headMarks(p)).join(" ")}>` : notes(ev.pitches);
   out += ev.base + ".".repeat(ev.dots);
   if (ev.tremolo && !ev.rest) out += `:${ev.tremolo}`;
   out += beam;
   if (ev.tie && !ev.rest) out += "~";
   if (ev.slurStart) out += "(";
   if (ev.slurEnd) out += ")";
+  if (ev.phraseEnd && !ev.rest) out += "\\)";
+  if (ev.phraseStart && !ev.rest) out += "\\(";
   if (ev.dynamic) out += `\\${ev.dynamic}`;
   if (ev.hairpinEnd) out += "\\!";
   if (ev.hairpin) out += ev.hairpin === "<" ? "\\<" : "\\>";
   for (const a of ev.arts) out += SCRIPTS[a] ?? "";
+  out += loose.map(fingerText).join("");
   if (ev.chord) out += `^${quote(ev.chord)}`;
   for (const t of ev.texts) out += `${t.dir > 0 ? "_" : "^"}${wordsText(t)}`;
   if (ev.arpeggio && !ev.rest) out += "\\arpeggio";
@@ -2920,6 +3075,8 @@ export function fromParsed(parsed) {
     let key = null;
     let mode = null;
     let time = null;
+    // An \ottava waiting for its lane's next note or rest.
+    const ottavas = new Map();
     for (const ev of staff.events) {
       ev.unsupported.forEach((u) => unsupported.add(u));
       // A tuplet in a tuplet is engraved and played; the score tools write one level.
@@ -2934,6 +3091,10 @@ export function fromParsed(parsed) {
       // A \\break or \\pageBreak: the first staff's say where lines and pages end.
       if (k === "Break") {
         if (first && bar > 0) score.breaks[bar - 1] = ev.page ? "page" : "line";
+        continue;
+      }
+      if (k === "Ottava") {
+        ottavas.set(lane, ev.ottava);
         continue;
       }
       if (k === "Clef" && drums) continue;
@@ -3044,8 +3205,12 @@ export function fromParsed(parsed) {
             }
           }
         }
+        const ottava = ottavas.get(lane);
+        ottavas.delete(lane);
         if (k === "Rest" && ev.full) {
-          lane.events.push(...rests(score, lengthOf(lane), ev.ticks * Math.max(1, ev.count)));
+          const whole = rests(score, lengthOf(lane), ev.ticks * Math.max(1, ev.count));
+          if (ottava != null && whole.length) whole[0].ottava = ottava;
+          lane.events.push(...whole);
           continue;
         }
         let tuplet = null;
@@ -3077,6 +3242,11 @@ export function fromParsed(parsed) {
           ...(k === "Rest" && ev.spacer ? { spacer: true } : {}),
           ...(ev.beam_on ? { beamStart: true } : {}),
           ...(ev.beam_off ? { beamEnd: true } : {}),
+          ...(ottava != null ? { ottava } : {}),
+          // Fingerings and string numbers (see setFingering); phrasing slurs.
+          ...(!drums && ev.fingers?.length ? { fingers: ev.fingers.map(([text, dir, head, circled]) => ({ text, dir, head: head ?? null, circled })) } : {}),
+          ...(ev.phrase_on ? { phraseStart: true } : {}),
+          ...(ev.phrase_off ? { phraseEnd: true } : {}),
         });
         // A note past its bar line, as the engraver cuts it: tied pieces.
         const at = lengthOf(lane);
@@ -3084,6 +3254,8 @@ export function fromParsed(parsed) {
         else lane.events.push(read);
       }
     }
+    // An \ottava with no note after it draws nothing.
+    if (ottavas.size) lost.add("an \\ottava after the last note");
     if (staff.lyrics) {
       if (staff.lyrics_voice !== 1) unsupported.add("lyrics to a second voice");
       const skip = melismata(out);

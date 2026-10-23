@@ -711,11 +711,7 @@ pub fn score(src: &str) -> Result<Value, String> {
             let mut unsupported: Vec<&str> = Vec::new();
             match ev.k {
                 Kind::CadenzaOn | Kind::CadenzaOff => unsupported.push("a cadenza"),
-                Kind::Ottava => unsupported.push("\\ottava"),
                 _ => {}
-            }
-            if !ev.fingers.is_empty() {
-                unsupported.push("fingerings");
             }
             // Engraved and played as written; the score tools write none of them.
             if ev.cue {
@@ -726,13 +722,10 @@ pub fn score(src: &str) -> Result<Value, String> {
             if ev.texts.iter().any(|w| w.runs.iter().any(|r| r.text.starts_with(eui_score::frets::FRET))) {
                 unsupported.push("a chord diagram");
             }
-            if ev.phrase_on || ev.phrase_off {
-                unsupported.push("phrasing slurs");
-            }
             // Grace notes the editor keeps are plain notes of one kind; a
             // drum's (a flam) or one carrying anything more is not kept.
             let grace_kind = ev.graces.first().and_then(|g| g.grace);
-            if ev.graces.iter().any(|g| g.grace != grace_kind || !g.drums.is_empty() || g.tie || !g.scripts.is_empty() || g.tremolo > 0 || g.dots > 2) {
+            if ev.graces.iter().any(|g| g.grace != grace_kind || !g.drums.is_empty() || g.tie || !g.scripts.is_empty() || !g.fingers.is_empty() || g.phrase_on || g.phrase_off || g.tremolo > 0 || g.dots > 2) {
                 unsupported.push("grace notes");
             }
             if ev.percent.is_some() {
@@ -807,6 +800,17 @@ pub fn score(src: &str) -> Result<Value, String> {
             // A beam written by hand, `c8[ d e f]`.
             event["beam_on"] = json!(ev.beam_on);
             event["beam_off"] = json!(ev.beam_off);
+            // `\\ottava #n`: on its own event, the octaves the notes after it are drawn
+            // away from where they sound (they sound as written in the text).
+            event["ottava"] = json!((ev.k == Kind::Ottava).then_some(ev.ottava));
+            // Fingerings and string numbers, each `[text, dir, head, circled]`: `dir`
+            // -1 above (^), 1 below (_), 0 the engraver's choice (-); `head`, in a
+            // chord, the diatonic number of the note it is written on; `circled`, a
+            // string's number (`\\3`).
+            event["fingers"] = json!(ev.fingers.iter().map(|f| json!([f.text, f.dir, f.head, f.circled])).collect::<Vec<_>>());
+            // `\\(` and `\\)`: a phrasing slur starts, ends.
+            event["phrase_on"] = json!(ev.phrase_on);
+            event["phrase_off"] = json!(ev.phrase_off);
             // What the parse keeps as fifths alone: the key's mode, and a repeat's count.
             event["mode"] = json!((ev.k == Kind::Key).then(|| key_mode(src, &bytes, ev.at)));
             event["times"] = json!((ev.k == Kind::RepeatStart).then(|| repeat_times(src, &bytes, ev.at)).flatten());

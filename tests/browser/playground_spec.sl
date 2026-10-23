@@ -23,6 +23,11 @@ def caret_on(token)
   sleep(0.4)
 end
 
+# The LilyPond the source box holds.
+def playground_text
+  evaluate("document.querySelector('[data-source]').value")
+end
+
 # A MusicXML file, as another program writes it: a flute's two bars.
 const FLUTE_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <score-partwise version="4.0"><work><work-title>Two Bars</work-title></work>
@@ -201,6 +206,31 @@ describe("The playground, in a browser") do
     sleep(0.4)
     assert_eq(evaluate("document.querySelector('#studio').studio.zoom"), 0.9)
     assert_contains(evaluate("document.querySelector('[data-source]').value"), "eis'2")
+    assert_no_page_errors()
+  end
+
+  test("an 8va, fingerings and a phrasing slur are edited on the score, not as text only") do
+    type_source("{ \\ottava #1 c'''4-1\\( d''' e''' f'''\\) | \\ottava #0 c'2 d'2 | e'1 }")
+    assert_not(evaluate("document.querySelector('#studio').classList.contains('studio-text-only')"))
+    caret_on("c'2")
+    evaluate("document.querySelector(\"[data-act='finger'][data-n='3']\").click()")
+    sleep(0.4)
+    assert_contains(playground_text(), "c'2-3")
+    caret_on("d'2")
+    evaluate("document.querySelector(\"[data-act='ottava'][data-value='-1']\").click()")
+    sleep(0.4)
+    assert_contains(playground_text(), "\\ottava #-1 d'2 |")
+    caret_on("e'1")
+    evaluate("document.querySelector(\"[data-act='string-number'][data-n='2']\").click()")
+    sleep(0.4)
+    assert_contains(playground_text(), "\\ottava #0 e'1\\2")
+    # The phrase taken away from its first note, both its ends with it.
+    caret_on("c'''4")
+    evaluate("document.querySelector(\"[data-act='phrase']\").click()")
+    sleep(0.4)
+    assert_not(playground_text().includes?("\\("))
+    assert_not(playground_text().includes?("\\)"))
+    assert_contains(playground_text(), "\\ottava #1 c'''4-1 d'''4")
     assert_no_page_errors()
   end
 

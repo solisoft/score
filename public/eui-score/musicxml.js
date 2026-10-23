@@ -405,6 +405,11 @@ function readPart(part, info, first, warnings) {
               if (type === "start") attach(at(s), "\\sustainOn");
               else if (type === "stop") attach(at(s), "\\sustainOff");
               else if (type === "change") attach(at(s), "\\sustainOff\\sustainOn");
+            } else if (d.name === "octave-shift") {
+              // 8va is a shift "down": the notes drawn lower than they sound.
+              const octaves = Number(d.attrs.size ?? 8) >= 15 ? 2 : 1;
+              const shift = d.attrs.type === "down" ? octaves : d.attrs.type === "up" ? -octaves : 0;
+              put(at(s), 0, cursor, `\\ottava #${shift}`);
             } else if (d.name === "rehearsal" && first) {
               put(at(1), 0, cursor, "\\mark \\default");
             } else if (d.name === "segno" && first) {
@@ -598,6 +603,7 @@ function readPart(part, info, first, warnings) {
         const last = lastNote.get(key);
         if (last && !rest) {
           last.pitches.push(pitch);
+          last.marks.push(fingeringText(kids(note, "notations")));
           last.render();
         }
         return;
@@ -610,12 +616,33 @@ function readPart(part, info, first, warnings) {
       if (kids(note, "tie").some((t) => t.attrs.type === "start") || each("tied").some((t) => t.attrs.type === "start")) suffix += "~";
       // A beam as it was drawn, written once it ends: its first note opens it, its last closes it.
       const beam = isChord ? null : kids(note, "beam").find((b) => (b.attrs.number ?? "1") === "1")?.text.trim();
-      const depth = slurDepth.get(key) ?? 0;
-      const slurStops = each("slur").filter((x) => x.attrs.type === "stop").length;
-      const slurStarts = each("slur").filter((x) => x.attrs.type === "start").length;
-      if (slurStops && depth > 0) suffix += ")";
-      if (slurStarts && depth - Math.min(depth, slurStops) === 0) suffix += "(";
-      slurDepth.set(key, Math.max(0, depth - slurStops) + slurStarts);
+      // Slurs by their number: one is a slur, a second one at the same time a
+      // phrasing slur (\\( \\)); MusicXML has no phrasing slur of its own.
+      const open = slurDepth.get(key) ?? { slur: null, phrase: null };
+      const depth = open.slur != null ? 1 : 0;
+      for (const x of each("slur").filter((y) => y.attrs.type === "stop")) {
+        const n = x.attrs.number ?? "1";
+        if (open.phrase === n) {
+          suffix += "\\)";
+          open.phrase = null;
+        } else if (open.slur != null) {
+          suffix += ")";
+          open.slur = null;
+        }
+      }
+      let slurStarts = 0;
+      for (const x of each("slur").filter((y) => y.attrs.type === "start")) {
+        const n = x.attrs.number ?? "1";
+        if (open.slur == null && (n === "1" || open.phrase != null)) {
+          suffix += "(";
+          open.slur = n;
+          slurStarts++;
+        } else if (open.phrase == null && open.slur !== n) {
+          suffix += "\\(";
+          open.phrase = n;
+        }
+      }
+      slurDepth.set(key, open);
       for (const art of notations.flatMap((n) => kids(n, "articulations")).flatMap((a) => a.children)) {
         if (ARTICULATIONS_IN[art.name]) suffix += ARTICULATIONS_IN[art.name];
         else if (art.name !== "breath-mark") warnings.add("some articulations");
@@ -626,6 +653,7 @@ function readPart(part, info, first, warnings) {
         else if (orn.name !== "accidental-mark") warnings.add("some ornaments");
       }
       if (has("fermata")) suffix += "\\fermata";
+      const marks = rest ? "" : fingeringText(notations);
       if (has("arpeggiate") && !rest) suffix += "\\arpeggio";
       if (each("glissando").some((g) => g.attrs.type === "start") || each("slide").some((g) => g.attrs.type === "start")) suffix += "\\glissando";
       for (const dyn of notations.flatMap((n) => kids(n, "dynamics"))) {
@@ -653,11 +681,13 @@ function readPart(part, info, first, warnings) {
       }
       // The words and marks waiting for this staff's next note go on the first lane's.
       const extra = v === 0 ? staff.pending.splice(0).join("") : "";
-      const entry = { pitches: rest ? [] : [pitch], start, index: lane.length, render: null };
+      const entry = { pitches: rest ? [] : [pitch], marks: [marks], start, index: lane.length, render: null };
       entry.render = () => {
         // A rest not printed (print-object="no") is a spacer.
-        const head = rest ? (note.attrs["print-object"] === "no" ? "s" : kid(note, "rest").attrs.measure === "yes" && values.length === 1 && !ratio ? "R" : "r") : entry.pitches.length > 1 ? `<${entry.pitches.join(" ")}>` : entry.pitches[0];
-        const pieces = values.map((value, k) => head + durationText(value) + (k < values.length - 1 && !rest ? "~" : ""));
+        const chord = entry.pitches.length > 1;
+        const head = rest ? (note.attrs["print-object"] === "no" ? "s" : kid(note, "rest").attrs.measure === "yes" && values.length === 1 && !ratio ? "R" : "r") : chord ? `<${entry.pitches.map((p, k) => p + entry.marks[k]).join(" ")}>` : entry.pitches[0];
+        // A note's fingering on its first piece; a chord's on each of its notes.
+        const pieces = values.map((value, k) => head + durationText(value) + (k === 0 && !chord ? entry.marks[0] : "") + (k < values.length - 1 && !rest ? "~" : ""));
         lane[entry.index] = pieces.join(" ") + suffix + (entry.beam ?? "") + extra;
       };
       lane.push("");
@@ -991,6 +1021,16 @@ function tempoDirection(tempo) {
   return `<direction placement="above">${words}${metronome}${sound}</direction>`;
 }
 
+/** A note's <fingering>s and <string>s as LilyPond: `\\3` then `^1`, `_2`, `-3`. */
+function fingeringText(notations) {
+  const technical = notations.flatMap((n) => kids(n, "technical")).flatMap((t) => t.children);
+  const strings = technical.filter((t) => t.name === "string" && /^[1-6]$/.test(t.text.trim())).map((t) => `\\${t.text.trim()}`);
+  const fingers = technical
+    .filter((t) => t.name === "fingering" && /^[1-5]$/.test(t.text.trim()))
+    .map((t) => `${t.attrs.placement === "above" ? "^" : t.attrs.placement === "below" ? "_" : "-"}${t.text.trim()}`);
+  return strings.join("") + fingers.join("");
+}
+
 /** One event of a lane as <note> elements (a chord's heads one after the other), with its directions before. */
 function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, firstLane, part }) {
   const { ev, i } = item;
@@ -1009,6 +1049,13 @@ function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, 
   for (const t of ev.texts) out.push(direction(`<words${t.italic ? ' font-style="italic"' : ""}${t.bold ? ' font-weight="bold"' : ""}>${xml(t.text)}</words>`, t.dir > 0 ? "below" : "above"));
   if (ev.pedalOff) out.push(direction('<pedal type="stop"/>'));
   if (ev.pedalOn) out.push(direction('<pedal type="start" line="no" sign="yes"/>'));
+  if (ev.ottava != null) {
+    // The line before it ends, and this one starts: 8va is a shift "down".
+    const was = M.ottavaAt({ events: lane.slice(0, i).map((x) => x.ev) }, i - 1);
+    const size = (n) => (Math.abs(n) === 2 ? 15 : 8);
+    if (was) out.push(direction(`<octave-shift type="stop" size="${size(was)}"/>`, was > 0 ? "above" : "below"));
+    if (ev.ottava) out.push(direction(`<octave-shift type="${ev.ottava > 0 ? "down" : "up"}" size="${size(ev.ottava)}"/>`, ev.ottava > 0 ? "above" : "below"));
+  }
 
   const pitchXml = (p) => {
     if (drums) {
@@ -1043,6 +1090,14 @@ function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, 
   const tm = ev.tuplet ? `<time-modification><actual-notes>${ev.tuplet.n}</actual-notes><normal-notes>${ev.tuplet.d}</normal-notes></time-modification>` : "";
   const tiedFrom = before && before.tie && !before.rest && !ev.rest;
   const heads = ev.rest ? [null] : ev.pitches;
+  // Fingerings and strings: a chord's on its note, the others on the first.
+  const fingers = ev.rest || drums ? [] : ev.fingers ?? [];
+  const headOf = (f) => (heads.length > 1 && f.head != null ? Math.max(0, heads.findIndex((p) => p.d === f.head)) : 0);
+  const technical = (k) =>
+    fingers
+      .filter((f) => headOf(f) === k)
+      .map((f) => (f.circled ? `<string>${f.text}</string>` : `<fingering${f.dir < 0 ? ' placement="above"' : f.dir > 0 ? ' placement="below"' : ""}>${f.text}</fingering>`))
+      .join("");
   heads.forEach((p, k) => {
     const n = [];
     if (k) n.push("<chord/>");
@@ -1063,6 +1118,9 @@ function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, 
     if (k === 0) {
       if (ev.slurEnd) notations.push('<slur type="stop" number="1"/>');
       if (ev.slurStart) notations.push('<slur type="start" number="1"/>');
+      // A phrasing slur: a second slur, numbered 2.
+      if (ev.phraseEnd) notations.push('<slur type="stop" number="2"/>');
+      if (ev.phraseStart) notations.push('<slur type="start" number="2"/>');
       if (ev.tuplet && !(before?.tuplet?.id === ev.tuplet.id)) notations.push('<tuplet type="start"/>');
       if (ev.tuplet && !(after?.tuplet?.id === ev.tuplet.id)) notations.push('<tuplet type="stop"/>');
       const arts = ev.arts.filter((a) => ARTICULATIONS_OUT[a]).map((a) => `<${ARTICULATIONS_OUT[a]}/>`);
@@ -1075,6 +1133,7 @@ function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, 
       if (ev.gliss && p) notations.push('<glissando type="start"/>');
     }
     if (ev.arpeggio && p) notations.push("<arpeggiate/>");
+    if (p && technical(k)) notations.push(`<technical>${technical(k)}</technical>`);
     if (notations.length) n.push(`<notations>${notations.join("")}</notations>`);
     if (k === 0 && p && firstLane) n.push(...lyricsXml(lane, i));
     // A spacer takes its time and is not printed.

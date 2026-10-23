@@ -887,6 +887,30 @@ export function startStudio(root, options = {}) {
         const r = range() ?? (() => { throw new Error("Select the notes to slur: click the first, Shift+click the last"); })();
         M.toggleSlur(score, r.s, r.a, r.b);
       });
+      case "phrase": return edit((score) => {
+        const r = range() ?? (() => { throw new Error("Select the notes of the phrase: click the first, Shift+click the last"); })();
+        M.togglePhrase(score, r.s, r.a, r.b);
+      });
+      // An ottava line over the selection (again: taken away), or ended at its first note.
+      case "ottava": return edit((score) => {
+        const r = range() ?? (() => { throw new Error("Select the notes the line goes over"); })();
+        M.setOttava(score, r.s, r.a, r.b, Number(data.value));
+      });
+      case "ottava-end": return edit((score) => {
+        const r = range() ?? (() => { throw new Error("Select the note the line ends before"); })();
+        M.endOttava(score, r.s, r.a);
+      });
+      // A finger (1–5) or a string (1–6) on the selected notes — on the selected note of a chord.
+      case "finger": case "string-number": return edit((score) => {
+        const r = range() ?? (() => { throw new Error("Select a note first"); })();
+        const head = r.a === r.b ? st.sel.head : -1;
+        const circled = name === "string-number";
+        for (let i = r.a; i <= r.b; i++) if (!r.staff.events[i].rest) M.setFingering(score, r.s, i, data.n, { head, circled });
+      });
+      case "finger-remove": return edit((score) => {
+        const r = range() ?? (() => { throw new Error("Select a note first"); })();
+        for (let i = r.a; i <= r.b; i++) M.removeFingerings(score, r.s, i);
+      });
       case "hairpin": return edit((score) => {
         const r = range() ?? (() => { throw new Error("Select the notes the hairpin spans"); })();
         M.setHairpin(score, r.s, r.a, r.b, data.kind);
