@@ -223,6 +223,9 @@ describe("AppScoresController") do
       # File › Open a photo…, read on the account's AI.
       assert_contains(page, "Open a photo… <kbd>read by AI</kbd>")
       assert_contains(page, "data-photo-open")
+      # New, Open and the examples make a new score, never over this one.
+      assert_contains(page, "data-open-form")
+      assert_contains(page, "onOpen: openAsNew")
       # View › MIDI view, and its button.
       assert_contains(page, "data-act=\"midi-view\" data-midi-label")
       assert_contains(page, "data-midi-button")

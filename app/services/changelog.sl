@@ -13,6 +13,14 @@ class Changelog
       {"date": "2026-10-23", "entries": [
         {
           "area": "site",
+          "title": "New and Open make a new score, the open one left as it is",
+          "text": "In the app's editor, File › New, Open a file, Open an example and Open a photo now make a new "
+          + "score in your library and open it, instead of writing over the score you had open.",
+          "link": "app",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "Notes dragged and resized on the MIDI view's keyboard",
           "text": "On the Keyboard layout, drag a note up or down to change its pitch, along to move it, and its "
           + "right edge to make it longer or shorter, on the Quantize grid; the score follows, ties and all, "

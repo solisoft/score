@@ -50,6 +50,9 @@ const PALETTE = [
  *   shared link (#s=) is read: the app opens the score it was asked for.
  * - `draft`: the localStorage key the draft is kept under, or false for none.
  * - `onChange(text)`: called with the source after every change.
+ * - `onOpen(text, message)`: File › New, Open a file and Open an example
+ *   hand it their source instead of loading it over the score: the app
+ *   makes a new score of it, leaving the open one as it is.
  * - `greeting`: the first status line.
  * - `examples`: where the gallery's sources are served.
  * - `shareUrl`: where Share goes (the app's sharing page) instead of
@@ -216,7 +219,7 @@ export function startStudio(root, options = {}) {
         bars: Number(form.get("bars")) || 16,
       });
       score.timeParts = metre.parts;
-      load(M.toLilyPond(score).source, `A new score: ${template.name.toLowerCase()}. Press N, then the letters, to write notes.`);
+      open(M.toLilyPond(score).source, `A new score: ${template.name.toLowerCase()}. Press N, then the letters, to write notes.`);
     } catch (error) {
       event.preventDefault();
       say(error.message, true);
@@ -352,6 +355,13 @@ export function startStudio(root, options = {}) {
       } catch (error) {}
     }
     options.onChange?.(st.text);
+  }
+
+  // New, Open a file, an example: a score of its own where the embedder says
+  // so (the app), else in place of this one (the playground, one draft).
+  function open(text, message) {
+    if (options.onOpen) return options.onOpen(text, message);
+    load(text, message);
   }
 
   function load(text, message) {
@@ -2157,20 +2167,20 @@ export function startStudio(root, options = {}) {
     if (el.matches('[data-act="example"]') && el.value) {
       const path = `${options.examples ?? "/examples"}/${el.value}/source.ly`;
       el.value = "";
-      fetch(path).then((r) => r.text()).then((text) => load(text, "Example opened.")).catch(() => say("Could not open that example", true));
+      fetch(path).then((r) => r.text()).then((text) => open(text, "Example opened.")).catch(() => say("Could not open that example", true));
       return;
     }
     if (el.matches('[data-act="open"]') && el.files?.[0]) {
       const file = el.files[0];
       el.value = "";
       if (!isMusicXmlName(file.name)) {
-        file.text().then((text) => load(text, `${file.name} opened.`));
+        file.text().then((text) => open(text, `${file.name} opened.`));
         return;
       }
       // MusicXML, from MuseScore, Sibelius, Finale or Dorico: read as LilyPond.
       musicXml()
         .then(async (X) => X.fromMusicXML(await X.musicXmlOf(file)))
-        .then(({ source, warnings }) => load(source, `${file.name} opened.${warnings.length ? ` Left out: ${warnings.join("; ")}.` : ""}`))
+        .then(({ source, warnings }) => open(source, `${file.name} opened.${warnings.length ? ` Left out: ${warnings.join("; ")}.` : ""}`))
         .catch((error) => say(error.message ?? String(error), true));
       return;
     }

@@ -164,6 +164,15 @@ const ROLL_PICK = """
 })()
 """
 
+# File › Open an example: the gallery's first.
+const OPEN_FIRST_EXAMPLE = """
+(() => {
+  const select = document.querySelector('[data-act="example"]');
+  select.value = select.options[1].value;
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+})()
+"""
+
 def roll_keys(key, shift)
   evaluate("document.querySelector('.studio-roll').dispatchEvent(new KeyboardEvent('keydown',"
   + " { key: '#{key}', ctrlKey: true, shiftKey: #{shift}, bubbles: true }))")
@@ -259,6 +268,30 @@ describe("The app, in a browser") do
     assert_text("Forbidden")
     visit(read_path)
     assert_text("No such score")
+  end
+
+  test("an example opened from the editor becomes a new score; the one open stays as it was") do
+    sign_up_in_browser(journey_email())
+    choose("input[value='string-quartet']")
+    fill_in("#new-title", "Kept quartet")
+    click_button("Create the score")
+    wait_for("[data-save-state]")
+    first_path = page_path()
+    write_notes([4, 5, 6])
+    wait_saved()
+
+    evaluate(OPEN_FIRST_EXAMPLE)
+    sleep(3)
+    wait_editor()
+    assert_match(page_path(), "^/app/scores/")
+    assert_not(page_path() == first_path)
+    assert_not(Regex.matches("g'*4 a'*4 b'*4", editor_source()))
+
+    visit(first_path)
+    wait_editor()
+    assert_text("Kept quartet")
+    assert_match(editor_source(), "g'*4 a'*4 b'*4")
+    assert_no_page_errors()
   end
 
   test("import a MusicXML file: what it leaves out is named first, then the score is created") do

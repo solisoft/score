@@ -1,5 +1,12 @@
 <%- partial("shared/studio", {"examples": examples, "figure": figure, "source": source, "app": true}) %>
 
+<%# File › New, Open a file, Open an example and Open a photo make a new
+    score in the library and open it: the score open here stays as it is. %>
+<form action="<%= app_scores_path() %>" method="POST" data-open-form hidden>
+  <%- csrf_field() %>
+  <input type="hidden" name="source" data-open-source>
+</form>
+
 <%# The AI assistant (AI menu): what to ask, then the explanation beside the
     proposed score, to apply or discard. %>
 <dialog class="studio-keys studio-parts studio-ai" data-ai aria-labelledby="studio-ai-title">
@@ -126,7 +133,19 @@
       show("Unsaved changes", "dirty");
       schedule();
     },
+    onOpen: openAsNew,
   });
+
+  // What New / Open bring becomes a score of its own, once this one's last
+  // change is saved.
+  async function openAsNew(text) {
+    clearTimeout(timer);
+    await save();
+    const form = document.querySelector("[data-open-form]");
+    form.querySelector("[data-open-source]").value = text;
+    show("Opening as a new score…", "busy");
+    form.submit();
+  }
 
   window.addEventListener("online", save);
 
@@ -204,8 +223,7 @@
   });
 
   // File › Open a photo…: read by the server's or the person's AI; what was
-  // read replaces the score once confirmed, the score as it stood kept as a
-  // version first.
+  // read opens as a new score.
   document.querySelector("[data-photo-open]")?.addEventListener("change", async (event) => {
     const file = event.target.files[0];
     event.target.closest("details")?.removeAttribute("open");
@@ -214,11 +232,7 @@
     show("Reading the photo… a minute or two", "busy");
     try {
       const answer = await readPhoto(file, { readings: "<%= app_readings_path() %>" });
-      show(pending == null ? "Saved" : "Unsaved changes", pending == null ? "ok" : "dirty");
-      if (!confirm(`The music of ${file.name} is read. Put it in place of this score? The score as it stands now is kept in its history.`)) return;
-      await save();
-      await fetch(`${url}/versions`, { method: "POST", headers: { Accept: "application/json" } });
-      studio.load(answer.source, `Read from ${file.name}: check it against the photo.`);
+      await openAsNew(answer.source);
     } catch (problem) {
       show("Photo not read", "conflict");
       alert(problem.message);
