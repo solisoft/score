@@ -1,0 +1,66 @@
+# The production database, run by hand (Actions > production database >
+# Run workflow): the server is reached only with the deploy key.
+#
+#   inspect — what the server has: SoliDB, its port, and how the other sites
+#             on it reach it (hosts, databases, user names; never a password).
+name: production database
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "inspect"
+        required: true
+        default: inspect
+        type: choice
+        options: [inspect]
+
+concurrency:
+  group: deploy-refs/heads/main
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      HOST: ${{ secrets.DEPLOY_HOST }}
+      USER: ${{ vars.DEPLOY_USER || 'rocky' }}
+      SITES_DIR: ${{ vars.DEPLOY_SITES_DIR || '/home/rocky/sites' }}
+      DOMAIN: ${{ vars.DEPLOY_DOMAIN || 'score.solisoft.net' }}
+    steps:
+      - name: Prepare SSH
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_DEPLOY_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Inspect
+        if: inputs.action == 'inspect'
+        run: |
+          ssh "$USER@$HOST" SITES_DIR="$SITES_DIR" DOMAIN="$DOMAIN" bash -s <<'REMOTE'
+          hide() { sed -E 's/((PASS|PASSWORD|SECRET|TOKEN|KEY)[A-Z_]*[= ])[^ ]*/\1<hidden>/Ig'; }
+          echo "== solidb"
+          command -v solidb && solidb --version 2>&1 | head -1
+          echo "== processes"
+          ps -eo user,args | grep -i '[s]olidb' | hide | head -5
+          echo "== services"
+          systemctl list-units --type=service --all 2>/dev/null | grep -i solidb | head -5
+          echo "== listening"
+          (ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null) | grep -E ':6745|:67[0-9][0-9]' | head -5
+          echo "== answers"
+          curl -s -o /dev/null -w '127.0.0.1:6745 -> %{http_code}\n' -m 3 http://127.0.0.1:6745/_api/databases || echo "127.0.0.1:6745 -> nothing"
+          echo "== the sites and their database"
+          for d in "$SITES_DIR"/*/; do
+            f="$d.env"
+            [ -f "$f" ] || continue
+            printf '%s: ' "$(basename "$d")"
+            grep -E '^(SOLIDB_HOST|SOLIDB_DATABASE|SOLIDB_USERNAME|SOLI_MAIL_DELIVERY_METHOD|SOLI_SMTP_HOST|SOLI_SMTP_FROM)=' "$f" | tr '\n' ' '
+            grep -qE '^SOLIDB_PASSWORD=.+' "$f" && printf 'SOLIDB_PASSWORD=<set> '
+            grep -qE '^SOLI_SESSION_SECRET=.+' "$f" && printf 'SOLI_SESSION_SECRET=<set>'
+            echo
+          done
+          REMOTE
