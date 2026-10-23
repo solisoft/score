@@ -142,6 +142,14 @@ jobs:
           echo "== failed jobs"
           timeout 30 soli jobs list --state failed 2>&1 | hide | tail -15
           timeout 30 soli jobs list --state dead 2>&1 | hide | tail -15
+          echo "== why the dead and failed jobs stopped"
+          value() { grep -E "^$1=" .env | head -1 | cut -d= -f2-; }
+          token=$(curl -s -m 5 -X POST http://127.0.0.1:6745/auth/login -H 'content-type: application/json' \
+            -d "{\"username\":\"$(value SOLIDB_USERNAME)\",\"password\":\"$(value SOLIDB_PASSWORD)\"}" | sed -E 's/.*"token":"([^"]*)".*/\1/')
+          curl -s -m 10 -X POST "http://127.0.0.1:6745/_api/database/$(value SOLIDB_DATABASE)/cursor" \
+            -H "Authorization: Bearer $token" -H 'content-type: application/json' \
+            -d '{"query":"FOR j IN _jobs FILTER j.state IN [\"dead\", \"failed\"] SORT j.run_at DESC LIMIT 5 RETURN {handler: j.handler, error: j.last_error}"}' \
+            | hide | head -c 4000; echo
           echo "== log files"
           ls -la *.log log/ logs/ 2>/dev/null | head -10
           echo "== the site's journal"
