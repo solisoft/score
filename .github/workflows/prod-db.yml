@@ -3,17 +3,24 @@
 #
 #   inspect — what the server has: SoliDB, its port, and how the other sites
 #             on it reach it (hosts, databases, user names; never a password).
+#   setup   — gives this site its database as the server's other sites have
+#             theirs: SoliDB on 127.0.0.1:6745 as its admin, a database of its
+#             own (score), the admin password and the mail relay copied on the
+#             server from crm.solisoft.net's .env, a session secret made there.
+#             Nothing secret leaves the server. The .env is kept beside as
+#             .env.before-db, and nothing is done if it names a database already.
+#             The next deploy runs the migrations and opens /app.
 name: production database
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: "inspect"
+        description: "inspect, or setup"
         required: true
         default: inspect
         type: choice
-        options: [inspect]
+        options: [inspect, setup]
 
 concurrency:
   group: deploy-refs/heads/main
@@ -63,4 +70,44 @@ jobs:
             grep -qE '^SOLI_SESSION_SECRET=.+' "$f" && printf 'SOLI_SESSION_SECRET=<set>'
             echo
           done
+          REMOTE
+
+      - name: Set up
+        if: inputs.action == 'setup'
+        run: |
+          ssh "$USER@$HOST" SITES_DIR="$SITES_DIR" DOMAIN="$DOMAIN" bash -s <<'REMOTE'
+          set -euo pipefail
+          site="$SITES_DIR/$DOMAIN"
+          from="$SITES_DIR/crm.solisoft.net/.env"
+          cd "$site"
+          if grep -qE '^SOLIDB_HOST=.+' .env; then
+            echo "this site's .env names a database already: nothing done"; exit 0
+          fi
+          if grep -lE '^SOLIDB_DATABASE=score$' "$SITES_DIR"/*/.env 2>/dev/null | grep -v "^$site/" ; then
+            echo "another site uses a database called score: nothing done" >&2; exit 1
+          fi
+          [ -f "$from" ] || { echo "$from is missing" >&2; exit 1; }
+          value() { grep -E "^$1=" "$from" | head -1 | cut -d= -f2-; }
+          [ -n "$(value SOLIDB_PASSWORD)" ] || { echo "no SOLIDB_PASSWORD in $from" >&2; exit 1; }
+          cp -p .env .env.before-db
+          {
+            echo ""
+            echo "# The app's database (/app): SoliDB on this server, as its other sites have theirs."
+            echo "SOLIDB_HOST=http://127.0.0.1:6745"
+            echo "SOLIDB_DATABASE=score"
+            echo "SOLIDB_USERNAME=admin"
+            echo "SOLIDB_PASSWORD=$(value SOLIDB_PASSWORD)"
+            echo "SOLI_SESSION_SECRET=$(openssl rand -hex 32)"
+            echo "# Mail (password reset, confirmation, shares): the relay crm.solisoft.net uses."
+            echo "SOLI_MAIL_DELIVERY_METHOD=smtp"
+            for k in SOLI_SMTP_HOST SOLI_SMTP_PORT SOLI_SMTP_USER SOLI_SMTP_PASS; do
+              v="$(value $k)"
+              if [ -n "$v" ]; then echo "$k=$v"; fi
+            done
+            echo "SOLI_SMTP_FROM=EUI Score <no-reply@solisoft.net>"
+          } >> .env
+          chmod 600 .env
+          echo "done: the names now set, without their values:"
+          grep -E '^(SOLIDB_|SOLI_SESSION|SOLI_MAIL|SOLI_SMTP)' .env | cut -d= -f1 | tr '\n' ' '; echo
+          curl -s -o /dev/null -w 'SoliDB answers: %{http_code}\n' -m 3 http://127.0.0.1:6745/_api/databases || true
           REMOTE
