@@ -188,14 +188,16 @@ export function startStudio(root, options = {}) {
     const form = new FormData(event.target);
     const template = M.TEMPLATES.find((t) => t.id === form.get("template"));
     try {
+      const metre = M.metreOf(form.get("time"));
       const score = M.fromTemplate(template.id, {
         title: form.get("title").trim(),
         composer: form.get("composer").trim(),
         key: Number(form.get("key")),
-        time: form.get("time").split("/").map(Number),
+        time: metre.time,
         bpm: Number(form.get("bpm")) || 0,
         bars: Number(form.get("bars")) || 16,
       });
+      score.timeParts = metre.parts;
       load(M.toLilyPond(score).source, `A new score: ${template.name.toLowerCase()}. Press N, then the letters, to write notes.`);
     } catch (error) {
       event.preventDefault();
@@ -1231,7 +1233,7 @@ export function startStudio(root, options = {}) {
     set("subtitle", st.score.header.subtitle);
     set("composer", st.score.header.composer);
     set("key", String(st.score.key));
-    set("time", `${st.score.time[0]}/${st.score.time[1]}`);
+    set("time", M.timeText(st.score));
     set("bpm", st.score.tempo?.bpm || "");
     set("tempo-text", st.score.tempo?.text || "");
     set("group", st.score.group);
@@ -1302,7 +1304,7 @@ export function startStudio(root, options = {}) {
       switch (el.dataset.field) {
         case "title": case "subtitle": case "composer": score.header[el.dataset.field] = value; break;
         case "key": M.setKey(score, Number(value)); break;
-        case "time": { const [n, d] = value.split("/").map(Number); M.setTime(score, n, d); break; }
+        case "time": M.setMetre(score, value); break;
         case "bpm": score.tempo = { ...(score.tempo ?? { text: "", base: 4 }), bpm: Number(value) || 0 }; break;
         case "tempo-text": score.tempo = { ...(score.tempo ?? { base: 4, bpm: 0 }), text: value }; break;
         case "group": score.group = value; break;

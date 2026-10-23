@@ -628,10 +628,13 @@ pub fn score(src: &str) -> Result<Value, String> {
                 "hairpin": ev.hairpin.map(|c| c.to_string()),
                 "hairpin_end": ev.hairpin_end,
                 "tuplet": ev.tuplet.as_ref().map(|t| json!([t.id, t.n, t.d])),
+                // The tuplet around that one, when they nest.
+                "tuplet_outer": ev.tuplet_outer.as_ref().map(|t| json!([t.id, t.n, t.d])),
                 "chord_name": chord_name,
                 "clef": [format!("{:?}", ev.clef.sign), ev.clef.line, ev.clef.octave],
                 "fifths": ev.fifths,
                 "time": [ev.time.0, ev.time.1],
+                "time_parts": ev.time_parts,
                 "tempo": tempo,
                 "bar": ev.v,
                 // Its grace notes, each `[pitches, value, dots]`, and their kind.

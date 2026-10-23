@@ -44,7 +44,7 @@
           </label>
           <label class="field">Metre
             <select id="new-time" name="time">
-              <% for metre in ["2/4", "3/4", "4/4", "5/4", "2/2", "3/8", "6/8", "9/8", "12/8"] %>
+              <% for metre in editor_metres() %>
                 <option value="<%= metre %>"<%= metre == "4/4" ? " selected" : "" %>><%= metre %></option>
               <% end %>
             </select>
@@ -127,14 +127,16 @@
       const form = new FormData(event.target);
       const error = document.querySelector("[data-new-error]");
       try {
+        const metre = M.metreOf(form.get("time"));
         const score = M.fromTemplate(form.get("template"), {
           title: form.get("title").trim() || "Untitled",
           composer: form.get("composer").trim(),
           key: Number(form.get("key")),
-          time: form.get("time").split("/").map(Number),
+          time: metre.time,
           bpm: Number(form.get("bpm")) || 0,
           bars: Number(form.get("bars")) || 16,
         });
+        score.timeParts = metre.parts;
         begin(M.toLilyPond(score).source);
       } catch (problem) {
         error.textContent = problem.message;

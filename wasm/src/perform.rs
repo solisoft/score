@@ -36,12 +36,15 @@ pub fn perform(src: &str, bytes: Vec<u8>) -> Vec<u8> {
         return bytes;
     }
     let Some((head, mut tracks)) = read(&bytes) else { return bytes };
+    // The engraver's ticks to the file's: its header says how many a quarter.
+    let division = i64::from(u16::from_be_bytes([head[12], head[13]])).max(1);
+    let per = (WHOLE / 4 / division).max(1);
     // The tempo track, when the file has one, is the first; the engraver
     // writes one track per staff, so the staves are its tracks in order.
     for (k, track) in tracks.iter_mut().enumerate() {
         if let Some(changes) = plays.get(k) {
             for change in changes {
-                apply(track, change);
+                apply(track, &in_file(change, per), per);
             }
         }
     }
@@ -296,11 +299,22 @@ fn note(track: &[Event], t: i64, key: i64) -> Option<(usize, usize)> {
     Some((on, off))
 }
 
-fn apply(track: &mut Vec<Event>, change: &Play) {
+/// A change timed in the engraver's ticks, timed in the file's (`per` of
+/// them each).
+fn in_file(change: &Play, per: i64) -> Play {
+    let at = |t: i64| (t + per / 2) / per;
+    match change {
+        Play::Roll { t, keys, span } => Play::Roll { t: at(*t), keys: keys.clone(), span: at(t + span) - at(*t) },
+        Play::Slide { t, span, from, to } => Play::Slide { t: at(*t), span: at(t + span) - at(*t), from: *from, to: *to },
+        Play::Ornament { t, span, key, upper, lower, name } => Play::Ornament { t: at(*t), span: at(t + span) - at(*t), key: *key, upper: *upper, lower: *lower, name },
+    }
+}
+
+fn apply(track: &mut Vec<Event>, change: &Play, per: i64) {
     let mut added: Vec<Event> = Vec::new();
     match change {
         Play::Roll { t, keys, span } => {
-            let gap = ROLL.min(span / (2 * keys.len() as i64)).max(1);
+            let gap = (ROLL / per).min(span / (2 * keys.len() as i64)).max(1);
             for (k, key) in keys.iter().enumerate() {
                 if let Some((on, _)) = note(track, *t, *key) {
                     track[on].0 = t + gap * k as i64;
@@ -324,7 +338,7 @@ fn apply(track: &mut Vec<Event>, change: &Play) {
         Play::Ornament { t, span, key, upper, lower, name } => {
             let Some((on, off)) = note(track, *t, *key) else { return };
             let (channel, velocity) = (track[on].1[0] & 0x0f, track[on].1[2]);
-            let n = SHAKE.min(span / 4).max(1);
+            let n = (SHAKE / per).min(span / 4).max(1);
             // The notes played before the note goes on as written.
             let figure: Vec<i64> = match *name {
                 "trill" => (0..(span / n - 1).max(1)).map(|k| if k % 2 == 0 { *key } else { *upper }).collect(),
@@ -388,6 +402,11 @@ mod tests {
             .collect()
     }
 
+    /// The file's ticks a whole: a quarter of 6720.
+    const FILE_WHOLE: i64 = 4 * 6720;
+    /// An arpeggio's step, in the file's ticks.
+    const FILE_ROLL: i64 = ROLL * FILE_WHOLE / WHOLE;
+
     fn ons(src: &str) -> Vec<(i64, i64)> {
         notes(src).concat().into_iter().filter(|n| n.2).map(|n| (n.0, n.1)).collect()
     }
@@ -410,7 +429,7 @@ mod tests {
     #[test]
     fn an_arpeggio_rolls_the_chord_from_the_bottom() {
         let on = ons("{ <c' e' g'>2\\arpeggio r2 }");
-        assert_eq!(on, vec![(0, 60), (ROLL, 64), (2 * ROLL, 67)]);
+        assert_eq!(on, vec![(0, 60), (FILE_ROLL, 64), (2 * FILE_ROLL, 67)]);
     }
 
     #[test]
@@ -419,9 +438,9 @@ mod tests {
         let keys: Vec<i64> = on.iter().map(|n| n.1).collect();
         assert_eq!(keys, vec![60, 61, 62, 63, 64, 65]);
         // Held half its length before it slides.
-        assert_eq!(on[1].0, WHOLE / 4);
-        assert!(on[4].0 < WHOLE / 2);
-        assert_eq!(on[5].0, WHOLE / 2);
+        assert_eq!(on[1].0, FILE_WHOLE / 4);
+        assert!(on[4].0 < FILE_WHOLE / 2);
+        assert_eq!(on[5].0, FILE_WHOLE / 2);
     }
 
     #[test]
@@ -430,7 +449,7 @@ mod tests {
         let keys: Vec<i64> = on.iter().map(|n| n.1).collect();
         // E and F sharp, G major's.
         assert_eq!(&keys[..4], &[76, 78, 76, 78]);
-        assert!(on.iter().all(|n| n.0 < WHOLE / 4));
+        assert!(on.iter().all(|n| n.0 < FILE_WHOLE / 4));
     }
 
     #[test]
@@ -446,7 +465,7 @@ mod tests {
         let on = ons("{ \\grace d'8 <c' e'>2\\arpeggio r2 }");
         assert_eq!(on[0].1, 62);
         assert!(on[1].0 > 0 && on[1].1 == 60);
-        assert_eq!(on[2], (on[1].0 + ROLL, 64));
+        assert_eq!(on[2], (on[1].0 + FILE_ROLL, 64));
     }
 
     #[test]

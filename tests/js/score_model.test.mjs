@@ -373,6 +373,40 @@ test("refuses a break after the last bar, a paper or a staff size there is none 
   assert.deepEqual(s.breaks, {});
 });
 
+test("64ths and 128ths are written, engraved and read back", () => {
+  const s = M.newScore();
+  M.write(s, 0, 0, M.notated(64), C4);
+  M.write(s, 0, M.notated(64), M.notated(128), { rest: false, pitches: [{ d: 8, alter: 0 }] });
+  const { source } = engrave(s);
+  assert.match(source, /c'64 d'128/);
+  const back = reread(s).staves[0].events;
+  assert.deepEqual([back[0].base, back[1].base], [64, 128]);
+  assert.equal(M.WHOLE % 128, 0);
+});
+
+test("an added-up metre is kept, engraved and read back; a mode is read as its signature", () => {
+  const s = M.newScore();
+  M.setMetre(s, "2+3/8");
+  assert.deepEqual(s.time, [5, 8]);
+  assert.deepEqual(s.timeParts, [2, 3]);
+  const { source } = engrave(s);
+  assert.match(source, /\\time 2\+3\/8/);
+  assert.deepEqual(reread(s).timeParts, [2, 3]);
+  M.setMetre(s, "7/8");
+  assert.equal(s.timeParts, null);
+  assert.ok(!M.toLilyPond(s).source.includes("+"));
+  assert.throws(() => M.setMetre(s, "seven"), /like 3\/4/);
+  const dorian = M.fromParsed(JSON.parse(score_json("{ \\key a \\dorian a'4 b' c'' d'' }")));
+  assert.equal(dorian.score.key, 1, "A dorian: one sharp");
+});
+
+test("a tuplet inside a tuplet is engraved, and left to the text", () => {
+  const src = "{ \\tuplet 5/4 { c'4 \\tuplet 3/2 { d'8 e' f' } g'4 a' b' } }";
+  JSON.parse(editor_view(src, 900, 7, -1, -1));
+  const read = M.fromParsed(JSON.parse(score_json(src)));
+  assert.ok(read.unsupported.includes("a tuplet inside a tuplet"));
+});
+
 test("a tie needs a note after it; a slur on one note goes to the next, and comes off whole", () => {
   const s = M.newScore();
   M.write(s, 0, 0, q, C4);

@@ -121,3 +121,9 @@ def score_snippet(figures, name, sandbox)
     }
   )
 end
+
+# The metres the editor's menus offer: the usual, the odd, the added up.
+def editor_metres
+  ["2/4", "3/4", "4/4", "5/4", "6/4", "7/4", "2/2", "3/2", "3/8", "5/8", "6/8", "7/8", "9/8", "12/8"]
+  + ["2+3/8", "3+2/8", "2+2+3/8", "3+3+2/8", "13/8", "15/16"]
+end

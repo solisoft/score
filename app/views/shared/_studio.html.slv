@@ -154,6 +154,8 @@
           <button type="button" class="tool tool-glyph" data-act="duration" data-base="8" title="Eighth note (4)">𝅘𝅥𝅮</button>
           <button type="button" class="tool tool-glyph" data-act="duration" data-base="16" title="Sixteenth note (3)">𝅘𝅥𝅯</button>
           <button type="button" class="tool tool-glyph" data-act="duration" data-base="32" title="Thirty-second note (2)">𝅘𝅥𝅰</button>
+          <button type="button" class="tool" data-act="duration" data-base="64" title="Sixty-fourth note">64</button>
+          <button type="button" class="tool" data-act="duration" data-base="128" title="Hundred twenty-eighth note">128</button>
           <button type="button" class="tool" data-act="dot" title="Dotted (.)">•</button>
         </div>
       </details>
@@ -411,7 +413,7 @@
         <label class="tool-field">Metre
           <select data-field="change-time">
             <option value="">As before</option>
-            <% for metre in ["2/4", "3/4", "4/4", "5/4", "2/2", "3/8", "6/8", "9/8", "12/8"] %>
+            <% for metre in editor_metres() %>
               <option value="<%= metre %>"><%= metre %></option>
             <% end %>
           </select>
@@ -495,7 +497,7 @@
         </label>
         <label class="tool-field">Metre
           <select data-field="time">
-            <% for metre in ["2/4", "3/4", "4/4", "5/4", "2/2", "3/8", "6/8", "9/8", "12/8"] %>
+            <% for metre in editor_metres() %>
               <option value="<%= metre %>"><%= metre %></option>
             <% end %>
           </select>
@@ -566,7 +568,7 @@
       </label>
       <label class="tool-field">Metre
         <select id="new-time" name="time">
-          <% for metre in ["2/4", "3/4", "4/4", "5/4", "2/2", "3/8", "6/8", "9/8", "12/8"] %>
+          <% for metre in editor_metres() %>
             <option value="<%= metre %>"<%= metre == "4/4" ? " selected" : "" %>><%= metre %></option>
           <% end %>
         </select>

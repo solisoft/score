@@ -12,6 +12,18 @@ class Changelog
       {"date": "2026-10-23", "entries": [
         {
           "area": "engine",
+          "title": "64ths, 128ths, a tuplet in a tuplet, metres added up, modes",
+          "text": "Notes down to the 128th, a triplet inside a quintuplet with both brackets, \\time 2+3/8 and "
+          + "13/8, and \\key d \\dorian with the signature of its notes."
+        },
+        {
+          "area": "site",
+          "title": "The new values and metres in the editor",
+          "text": "64 and 128 among the durations; 5/8, 7/8, 2+3/8, 13/8 and more among the metres.",
+          "link": "playground"
+        },
+        {
+          "area": "engine",
           "title": "The paper a score asks for",
           "text": "\\paper's size and margins and the staff size are the PDF's: letter, A3, A5, landscape, 16 pt…"
         },

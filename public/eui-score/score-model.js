@@ -16,8 +16,8 @@
 // No DOM here: the page's editor calls these functions, and so do the
 // tests (tests/js/score_model.test.mjs).
 
-/** Ticks in a whole note, as eui-score counts them: a dotted 32nd, and any of them in a triplet, quintuplet, sextuplet or septuplet, is a whole number. */
-export const WHOLE = 26880;
+/** Ticks in a whole note, as eui-score counts them: a dotted 128th, and any of them in a triplet, quintuplet, sextuplet or septuplet — or a triplet in a triplet — is a whole number. */
+export const WHOLE = 80640;
 
 const NAMES = ["c", "d", "e", "f", "g", "a", "b"];
 const NATURAL = [0, 2, 4, 5, 7, 9, 11];
@@ -35,11 +35,11 @@ export const TREMOLOS = [8, 16, 32];
 export const DYNAMICS = ["ppp", "pp", "p", "mp", "mf", "f", "ff", "fff", "sf", "sfz", "fp", "rfz"];
 export const ARTICULATIONS = Object.keys(SCRIPTS);
 /** Values, longest first, with their dots, a written duration may take. */
-const VALUES = [1, 2, 4, 8, 16, 32].flatMap((base) => [2, 1, 0].map((dots) => ({ base, dots, ticks: notated(base, dots) }))).sort((a, b) => b.ticks - a.ticks);
+const VALUES = [1, 2, 4, 8, 16, 32, 64, 128].flatMap((base) => [2, 1, 0].map((dots) => ({ base, dots, ticks: notated(base, dots) }))).sort((a, b) => b.ticks - a.ticks);
 
 // ---- Durations ------------------------------------------------------------
 
-/** The ticks of a written value: `base` 1 (whole) … 32, with `dots`. */
+/** The ticks of a written value: `base` 1 (whole) … 128, with `dots`. */
 export function notated(base, dots = 0) {
   let ticks = WHOLE / base;
   let add = ticks;
@@ -1462,8 +1462,8 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
     const brace = moved ? `\\transpose c ${moved} {` : "{";
     // A drum staff: its strokes in \\drummode, with no clef and no key.
     const opening = staff.drums
-      ? `\\new DrumStaff ${settings ? `\\with { ${settings}} ` : ""}\\drummode {\n  \\time ${time[0]}/${time[1]}${tempo}`
-      : `\\new Staff ${settings ? `\\with { ${settings}} ` : ""}${brace}\n  \\clef ${clef} \\key ${KEYS[keyOf(score, s)]} \\major \\time ${time[0]}/${time[1]}${tempo}`;
+      ? `\\new DrumStaff ${settings ? `\\with { ${settings}} ` : ""}\\drummode {\n  \\time ${timeText(score, time)}${tempo}`
+      : `\\new Staff ${settings ? `\\with { ${settings}} ` : ""}${brace}\n  \\clef ${clef} \\key ${KEYS[keyOf(score, s)]} \\major \\time ${timeText(score, time)}${tempo}`;
     let out = `${opening}\n  ${music.replace(/\n {4}/g, "\n  ")}${ending}\n}`;
     // Each verse a line under the one before.
     for (let verse = 1; verse <= versesOf(staff); verse++) out += `\n\\addlyrics { ${lyricText(staff, verse)} }`;
@@ -2124,6 +2124,29 @@ function pageText(score) {
   return lines.length ? lines.join("\n") + "\n" : "";
 }
 
+/** A metre as \\time writes it: 3/4, or the score's added-up one, 2+3/8. */
+export function timeText(score, time = score.time) {
+  const parts = score.timeParts;
+  const sum = parts?.reduce((a, b) => a + b, 0);
+  if (parts && parts.length > 1 && sum === time[0] && time === score.time) return `${parts.join("+")}/${time[1]}`;
+  return `${time[0]}/${time[1]}`;
+}
+
+/** A metre written "3/4" or "2+3/8": its [num, den], and its parts when added up (else null). */
+export function metreOf(text) {
+  const match = /^(\d+(?:\+\d+)*)\/(\d+)$/.exec(String(text).trim());
+  if (!match) throw new Error("a metre is like 3/4, or 2+3/8");
+  const parts = match[1].split("+").map(Number);
+  return { time: [parts.reduce((a, b) => a + b, 0), Number(match[2])], parts: parts.length > 1 ? parts : null };
+}
+
+/** The score's metre from text: "3/4", or an added-up one, "2+3/8" (its parts kept). */
+export function setMetre(score, text) {
+  const { time, parts } = metreOf(text);
+  setTime(score, time[0], time[1]);
+  score.timeParts = parts;
+}
+
 // ---- Transposing instruments and parts ------------------------------------------------------
 //
 // A score keeps its notes as they sound (concert pitch): that is what is
@@ -2403,6 +2426,8 @@ export function fromParsed(parsed) {
     let time = null;
     for (const ev of staff.events) {
       ev.unsupported.forEach((u) => unsupported.add(u));
+      // A tuplet in a tuplet is engraved and played; the score tools write one level.
+      if (ev.tuplet_outer) unsupported.add("a tuplet inside a tuplet");
       const k = ev.k;
       // A change after the first note is the bar's it starts: the first staff
       // writes the score's changes, the others must change with it.
@@ -2428,7 +2453,12 @@ export function fromParsed(parsed) {
         else if (first) setChange(score, bar, "key", ev.fifths === scoreKeyAt(score, bar - 1) ? null : ev.fifths);
         else if (ev.fifths !== Math.max(-7, Math.min(7, scoreKeyAt(score, bar) + (out.key ?? score.key) - score.key))) unsupported.add("staves changing key apart");
       } else if (k === "Time") {
-        if (!started) time = ev.time;
+        const added = (ev.time_parts ?? []).filter((p) => p > 0);
+        if (!started) {
+          time = ev.time;
+          // An additive metre at the start, 2+3/8: its parts, to be written again.
+          if (first) score.timeParts = added.length > 1 ? added : null;
+        } else if (added.length > 1) unsupported.add("an added-up metre after the start");
         else if (bar < 0) unsupported.add("a change of metre inside a bar");
         else if (first) {
           const was = timeAt(score, bar);
