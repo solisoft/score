@@ -364,11 +364,11 @@ class ScoreLibrary
   # page engraves them live, so the messages it prints are the engraver's own.
   static def refusals
     [
-      {"what": "64th notes", "src": "{ c''64 }"},
-      {"what": "A tuplet inside a tuplet", "src": "{ \\tuplet 3/2 { \\tuplet 3/2 { c'8 d' e' } } }"},
-      {"what": "Three voices on one staff", "src": "{ << { c''4 } \\\\ { a'4 } \\\\ { f'4 } >> }"},
-      {"what": "Two verses of lyrics", "src": "{ c''4 d'' } \\addlyrics { la la } \\addlyrics { lo lo }"},
-      {"what": "An unusual metre", "src": "{ \\time 3/5 c''4 }"},
+      {"what": "256th notes", "src": "{ c''256 }"},
+      {"what": "Tuplets three deep", "src": "{ \\tuplet 3/2 { \\tuplet 3/2 { \\tuplet 3/2 { c'32 d' e' } } } }"},
+      {"what": "Five voices", "src": "{ << { c''4 } \\\\ { a'4 } \\\\ { f'4 } \\\\ { d'4 } \\\\ { b4 } >> }"},
+      {"what": "Layout tweaks", "src": "{ \\stemUp c''4 \\override NoteHead.color = #red d''4 }"},
+      {"what": "A forced accidental", "src": "{ cis''!4 }"},
       {"what": "An unknown command", "src": "{ c''4 \\shiver d''4 }"}
     ]
   end

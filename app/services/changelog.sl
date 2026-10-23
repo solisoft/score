@@ -12,6 +12,14 @@ class Changelog
     [
       {"date": "2026-10-23", "entries": [
         {
+          "area": "engine",
+          "title": "One engraver everywhere: what the editor draws, the library, shared pages and PDFs draw too",
+          "text": "The server now engraves with the browser's engraver (Soli 2.28.4): 64th notes, a tuplet inside "
+          + "a tuplet, up to four voices on a staff and several verses of lyrics show on library cards, shared "
+          + "pages and printed PDFs, not only in the editor. The Limits page lists what is still refused.",
+          "link": "playground"
+        },
+        {
           "area": "site",
           "title": "Jazz chord symbols transpose, and plainer messages",
           "text": "Chord symbols such as C7b9, Cm7b5, C(add9), C7#11, C6/9 or C7(b9,#11)/E are now read as chord "

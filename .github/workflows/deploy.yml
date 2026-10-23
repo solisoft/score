@@ -29,7 +29,7 @@ concurrency:
 env:
   # Pinned, so CI tests what the server runs. The eui_score_* builtins the
   # site engraves with are in every release since 2.26.0.
-  SOLI_VERSION: "2.28.2"
+  SOLI_VERSION: "2.28.4"
   # `soli test` resets its test databases on SoliDB before it starts.
   SOLIDB_VERSION: "2.3.1"
 
@@ -54,6 +54,18 @@ jobs:
           }
           fetch soli   solisoft/soli_lang "$SOLI_VERSION"
           fetch solidb solisoft/solidb    "$SOLIDB_VERSION"
+
+      # The server engraves what the browser's wasm engraves (library cards,
+      # shared pages, PDFs): both must pin the same eui revision, or a score
+      # the editor draws is refused everywhere else.
+      - name: One engraver, in the browser and on the server
+        run: |
+          set -euo pipefail
+          browser="$(grep -oE 'eui-score = \{ git = "[^"]+", rev = "[0-9a-f]+"' wasm/Cargo.toml | grep -oE '[0-9a-f]{7,}"$' | tr -d '"')"
+          server="$(curl -fsSL "https://raw.githubusercontent.com/solisoft/soli_lang/v$SOLI_VERSION/Cargo.toml" \
+            | grep -oE '^eui-score = \{ git = "[^"]+", rev = "[0-9a-f]+"' | grep -oE '[0-9a-f]{7,}"$' | tr -d '"')"
+          echo "browser: $browser — soli $SOLI_VERSION: $server"
+          [ -n "$browser" ] && [ "$browser" = "$server" ] || { echo "eui-score differs: pin wasm/Cargo.toml and soli to the same revision" >&2; exit 1; }
 
       - name: Format
         run: soli fmt --check

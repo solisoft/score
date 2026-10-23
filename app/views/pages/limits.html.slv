@@ -34,15 +34,16 @@
       <code>\new DrumStaff</code> and <code>\new TabStaff</code> — each drawn as LilyPond 2.25 draws it.
     </p>
     <p>
-      In the browser — the <a href="<%= playground_path() %>">playground</a> and <code>&lt;eui-score&gt;</code> —
-      the engraver is a step ahead of the server's: a note longer than what is left of its bar is cut at the
-      bar line into tied notes, as LilyPond's <code>Completion_heads_engraver</code> cuts it; the sustain pedal
-      (<code>\sustainOn</code>, <code>\sustainOff</code>) is drawn and held; and LilyPond 2.24's jumps,
-      <code>\jump "D.S. al Coda"</code> and <code>\fine</code>, are set against their bar line.
+      Since Soli 2.28.4, the server engraves with the same engraver as the browser: 64th and 128th notes, a
+      tuplet inside a tuplet, up to four voices on a staff, several <code>\addlyrics</code> verses, any metre;
+      a note longer than what is left of its bar is cut at the bar line into tied notes, as LilyPond's
+      <code>Completion_heads_engraver</code> cuts it; the sustain pedal (<code>\sustainOn</code>,
+      <code>\sustainOff</code>) is drawn and held; and LilyPond 2.24's jumps, <code>\jump "D.S. al Coda"</code>
+      and <code>\fine</code>, are set against their bar line. The library, the shared pages and the PDFs show
+      what the editor shows.
     </p>
     <ul>
-      <li><strong>Lyrics</strong>: one <code>\addlyrics</code> verse per staff.</li>
-      <li><strong>Layout</strong>: no cross-staff notation, and a greedy page breaker, simpler than LilyPond's.</li>
+      <li><strong>Layout</strong>: no cross-staff notation, and a page breaker simpler than LilyPond's.</li>
     </ul>
     <div class="callout">
       Not sure? Paste your source into the <a href="<%= playground_path() %>">playground</a>: the engraver's

@@ -90,7 +90,7 @@ describe("ScoreSvg") do
     end
 
     test("carries no MIDI when the source is refused") do
-      figure = ScoreSvg.figure("{ c'64 }", 600, 7)
+      figure = ScoreSvg.figure("{ c'256 }", 600, 7)
       assert_not_null(figure["error"])
       assert_null(figure["midi"])
     end
