@@ -1,4 +1,4 @@
-<%- partial("shared/studio", {"examples": examples, "figure": figure, "source": source}) %>
+<%- partial("shared/studio", {"examples": examples, "figure": figure, "source": source, "photos": true}) %>
 
 <%# The score saves itself: 1.5 s after the last change, a PUT of its source
     over the revision it was opened at. The header says where it stands.
@@ -176,5 +176,29 @@
     const response = await fetch(`${url}/versions`, { method: "POST", headers: { Accept: "application/json" } });
     event.target.textContent = response.ok ? "Version kept" : "Not kept";
     setTimeout(() => (event.target.textContent = "Keep a version"), 2500);
+  });
+
+  // File › Open a photo…: read by the server's or the person's AI; what was
+  // read replaces the score once confirmed, the score as it stood kept as a
+  // version first.
+  document.querySelector("[data-photo-open]")?.addEventListener("change", async (event) => {
+    const file = event.target.files[0];
+    event.target.closest("details")?.removeAttribute("open");
+    if (!file) return;
+    const { readPhoto } = await import("/js/score-photo.js?v=<%= eui_version %>");
+    show("Reading the photo… a minute or two", "busy");
+    try {
+      const answer = await readPhoto(file, { readings: "<%= app_readings_path() %>" });
+      show(pending == null ? "Saved" : "Unsaved changes", pending == null ? "ok" : "dirty");
+      if (!confirm(`The music of ${file.name} is read. Put it in place of this score? The score as it stands now is kept in its history.`)) return;
+      await save();
+      await fetch(`${url}/versions`, { method: "POST", headers: { Accept: "application/json" } });
+      studio.load(answer.source, `Read from ${file.name}: check it against the photo.`);
+    } catch (problem) {
+      show("Photo not read", "conflict");
+      alert(problem.message);
+    } finally {
+      event.target.value = "";
+    }
   });
 </script>

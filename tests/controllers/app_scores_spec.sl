@@ -220,6 +220,9 @@ describe("AppScoresController") do
       assert_contains(page, "/ws/scores?ticket=#{score._key}.#{owner._key}.")
       assert_contains(page, "data-room")
       assert_contains(page, "href=\"/app/scores/#{score._key}/versions\"")
+      # File › Open a photo…, read on the account's AI.
+      assert_contains(page, "Open a photo… <kbd>read by AI</kbd>")
+      assert_contains(page, "data-photo-open")
     end
 
     test("keeps a version on request, lists it, shows it, and restores it") do

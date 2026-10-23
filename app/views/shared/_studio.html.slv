@@ -17,6 +17,9 @@
           <div class="studio-dropdown-items" role="menu">
             <button type="button" role="menuitem" data-act="new">New… <kbd>from a template</kbd></button>
             <label role="menuitem" class="studio-dropdown-file">Open a file… <kbd>.ly, MusicXML</kbd><input type="file" accept=".ly,.ily,.txt,.musicxml,.mxl,.xml,text/plain" data-act="open" hidden></label>
+            <% if locals["photos"] %>
+              <label role="menuitem" class="studio-dropdown-file">Open a photo… <kbd>read by AI</kbd><input type="file" accept="image/*" data-photo-open hidden></label>
+            <% end %>
             <label class="studio-dropdown-select">Open an example
               <select data-act="example" aria-label="Open an example">
                 <option value="">Examples…</option>
