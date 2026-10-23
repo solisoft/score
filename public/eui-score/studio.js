@@ -18,6 +18,7 @@ const { loaded, toMidi, toPdf, download, engine } = await import(`./eui-score.js
 const M = await import(`./score-model.js${V}`);
 const P = await import(`./player.js${V}`);
 const R = await import(`./piano-roll.js${V}`);
+const K = await import(`./shortcuts.js${V}`);
 const { editor_view_lit, score_json, source_spans } = engine;
 
 /** The MusicXML reader and writer, loaded the first time a file needs it. */
@@ -29,8 +30,6 @@ const isMidiName = (name) => /\.(mid|midi|smf|kar)$/i.test(name ?? "");
 
 const COLOURS = { selection: "#b4373a", head: "#e0662a", cursor: "#2563c9", playing: "#0f9d47" };
 const DRAFT = "eui-score-studio-draft";
-const KEY_DURATIONS = { 2: 32, 3: 16, 4: 8, 5: 4, 6: 2, 7: 1 };
-const LETTERS = { c: 0, d: 1, e: 2, f: 3, g: 4, a: 5, b: 6 };
 // The palette over the selected note: the changes made to a note most.
 const PALETTE = [
   ["move", { how: "step", by: "1" }, "↑", "A step up (↑)"],
@@ -58,8 +57,10 @@ const PALETTE = [
  *   makes a new score of it, leaving the open one as it is.
  * - `greeting`: the first status line.
  * - `examples`: where the gallery's sources are served.
- * - `shareUrl`: where Share goes (the app's sharing page) instead of
- *   copying a link that holds the score.
+ * - `shareUrl`: where Share goes (the app's sharing page, for the owner)
+ *   instead of copying a link that holds the score.
+ * - `scoreUrl`: without `shareUrl`, the link Share copies (the score's page
+ *   in the app, which opens for those it is shared with).
  *
  * Answers `{ state, ready, source(), load(text, message) }`: `ready` settles
  * once the first score is drawn.
@@ -142,6 +143,13 @@ export function startStudio(root, options = {}) {
   // does: its title, without the key in brackets.
   for (const button of root.querySelectorAll("button[title]")) {
     if (!button.hasAttribute("aria-label") && !/\p{L}{2}/u.test(button.textContent)) button.setAttribute("aria-label", button.title.replace(/\s*\(.*\)\s*$/, ""));
+  }
+
+  // On a Mac, the menus and the tools' tips say ⌘ and ⌥ where they say Ctrl and Alt.
+  const mac = K.isMac();
+  if (mac) {
+    for (const kbd of root.querySelectorAll(".studio-dropdown-items kbd")) kbd.textContent = K.keyLabel(kbd.textContent, true);
+    for (const el of root.querySelectorAll("[title]")) el.title = K.keyLabel(el.title, true);
   }
 
   // The toolbox's sections fold, and stay as the person left them.
@@ -783,7 +791,9 @@ export function startStudio(root, options = {}) {
           .catch((error) => say(error.message ?? String(error), true));
       }
       case "save-pdf": return toPdf(st.text, title()).then((pdf) => download(pdf, `${fileName()}.pdf`, "application/pdf")).catch((e) => refuse(e));
-      // In the app, a saved score's own sharing page; elsewhere a link that holds the score.
+      // In the app, the owner goes to the score's sharing page, and someone it
+      // is shared with copies its address in the app, which opens for those it
+      // is shared with; elsewhere, a link that holds the score.
       case "share": return options.shareUrl ? location.assign(options.shareUrl) : share();
       case "transpose": {
         const it = M.INTERVALS[Number(root.querySelector("[data-transpose-interval]").value)];
@@ -1834,9 +1844,11 @@ export function startStudio(root, options = {}) {
 
   /** Copies a link holding the score; where the clipboard is refused, shows it to copy by hand. */
   async function share() {
-    const link = `${location.origin}${location.pathname}#s=${await M.shareCode(st.text)}`;
+    const inApp = typeof options.scoreUrl === "string";
+    const link = inApp ? new URL(options.scoreUrl, location.origin).href : `${location.origin}${location.pathname}#s=${await M.shareCode(st.text)}`;
     try {
       await navigator.clipboard.writeText(link);
+      if (inApp) return say("Link copied: it opens this score for those it is shared with.");
       return say("Link copied: whoever opens it gets this score. It lives in the link, not on the site.");
     } catch (error) {
       say("Copy this link:");
@@ -2111,72 +2123,33 @@ export function startStudio(root, options = {}) {
     // In a field, or in the shortcuts sheet (whose Esc closes it): not the score's keys.
     const field = event.target.closest("input, textarea, select, dialog");
     if (field) return;
-    const key = event.key;
-    const mod = event.ctrlKey || event.metaKey;
-    const run = (name, data) => {
-      event.preventDefault();
-      act(name, data);
-    };
-    if (mod && key.toLowerCase() === "z") return run(event.shiftKey ? "redo" : "undo");
-    if (mod && key.toLowerCase() === "y") return run("redo");
-    if (mod && key.toLowerCase() === "c") return run("copy");
-    if (mod && key.toLowerCase() === "x") return run("cut");
-    if (mod && event.shiftKey && key.toLowerCase() === "v") return run("insert-copied");
-    if (mod && key.toLowerCase() === "v") return run("paste");
-    if (mod && key.toLowerCase() === "l") return run("lyrics");
-    if (mod && key.toLowerCase() === "k") return run("chord");
-    // Ctrl+Alt+1, 2: the voice, as MuseScore has it; event.code, since Alt changes the key.
-    if (mod && event.altKey && ["Digit1", "Digit2", "Numpad1", "Numpad2"].includes(event.code)) return run("voice", { voice: event.code.slice(-1) });
-    if (mod && ["3", "5", "6", "7"].includes(key)) return run("tuplet", { n: key });
-    if (mod && (key === "Delete" || key === "Backspace")) return run("delete-bars");
-    if (key === " " && !event.target.closest("button, summary")) return run("play");
-    if (key === "?") return run("keys");
-    if (mod) return;
-    if (key === "Escape") {
-      event.preventDefault();
+    // What the key does, from the one table the sheet is written from (shortcuts.js).
+    const found = K.resolveKey(event, { inputOn: st.input.on, alter: currentAlter(), onButton: !!event.target.closest("button, summary") });
+    if (!found) return;
+    // Ctrl/⌘ + and − zoom the score, not the page; Ctrl+↑ is the browser's otherwise.
+    event.preventDefault();
+    const [name, data] = found;
+    if (name === "escape") {
       if (st.input.on) return setInput(false);
       st.sel = null;
       return draw();
     }
-    if (key === "n" || key === "N") return run(st.input.on ? "mode-select" : "mode-input");
-    if (key === "ArrowRight" || key === "ArrowLeft") return run(key === "ArrowRight" ? "next" : "previous", { extend: event.shiftKey });
-    if ((key === "ArrowUp" || key === "ArrowDown") && event.altKey) return run(key === "ArrowUp" ? "head-up" : "head-down");
-    if (key === "ArrowUp" || key === "ArrowDown") {
-      return run("move", { how: event.shiftKey ? "semitone" : "step", by: key === "ArrowUp" ? 1 : -1 });
-    }
-    if (KEY_DURATIONS[key]) return run("duration", { base: KEY_DURATIONS[key] });
-    if (key === ".") return run("dot");
-    const letter = LETTERS[key.toLowerCase()];
-    if (letter !== undefined && !event.altKey) return run("letter", { step: letter, add: event.shiftKey });
-    if (key === "0") return run("rest");
-    if (key === "]") return run("add-bar");
-    if (key === "Insert") return run("insert-bar");
-    if (key === "Delete" || (key === "Backspace" && !st.input.on)) return run("rest");
-    if (key === "Backspace" && st.input.on) {
-      event.preventDefault();
-      return inputBack();
-    }
-    if (key === "+") return run("alter", { alter: Math.min(2, currentAlter() + 1) });
-    if (key === "-") return run("alter", { alter: Math.max(-2, currentAlter() - 1) });
-    if (key === "=") return run("alter", { alter: 0 });
-    if (key === "l" || key === "L") return run("lyrics");
-    if (key === "k" || key === "K") return run("chord");
-    if (key === "t" || key === "T") return run("tie");
-    if (key === "r" || key === "R") return run("record");
-    if (key === "s" || key === "S") return run("slur");
+    if (name === "input-back") return inputBack();
+    act(name, data);
   });
+
+  // The shortcuts sheet, written from the table the keys are found in.
+  const keysList = root.querySelector("[data-keys-list]");
+  if (keysList) {
+    keysList.replaceChildren(...K.SHORTCUTS.flatMap(({ keys, does }) => [
+      Object.assign(document.createElement("dt"), { textContent: K.keyLabel(keys, mac) }),
+      Object.assign(document.createElement("dd"), { textContent: K.keyLabel(does, mac) }),
+    ]));
+  }
 
   // The shortcuts sheet closes on a click outside it, as on Esc.
   root.querySelector("[data-keys]")?.addEventListener("click", (event) => {
     if (event.target === event.currentTarget) event.currentTarget.close();
-  });
-
-  // Ctrl+arrows move by octaves; the browser keeps Ctrl+↑ for itself otherwise.
-  root.addEventListener("keydown", (event) => {
-    if ((event.ctrlKey || event.metaKey) && (event.key === "ArrowUp" || event.key === "ArrowDown") && !event.target.closest("input, textarea, select")) {
-      event.preventDefault();
-      act("move", { how: "octave", by: event.key === "ArrowUp" ? 1 : -1 });
-    }
   });
 
   function currentAlter() {
@@ -2208,12 +2181,60 @@ export function startStudio(root, options = {}) {
   document.addEventListener("click", (event) => {
     for (const menu of menus) if (menu.open && !menu.contains(event.target)) menu.open = false;
   });
+  // They are menus to a screen reader (role="menu"), and to the keyboard as
+  // one: ↓ on a menu's name opens it at its first item, ↑ ↓ Home End move
+  // between its items, ← → to the menu beside it, Escape closes it, back on
+  // its name. The items that are labels (Open a file…) are reached too.
+  const menuItems = (menu) => [...menu.querySelectorAll('[role="menuitem"]')].filter((item) => !item.disabled && item.getClientRects().length > 0);
+  for (const menu of menus) {
+    menu.querySelector("summary").setAttribute("aria-haspopup", "menu");
+    for (const label of menu.querySelectorAll('label[role="menuitem"]')) label.tabIndex = -1;
+  }
+  const openMenu = (menu, at) => {
+    menu.open = true;
+    const items = menuItems(menu);
+    (at === "last" ? items.at(-1) : items[0])?.focus();
+  };
   root.addEventListener("keydown", (event) => {
-    const open = menus.find((menu) => menu.open);
-    if (event.key !== "Escape" || !open) return;
-    open.open = false;
-    open.querySelector("summary").focus();
-    event.stopPropagation();
+    const menu = event.target.closest?.(".studio-dropdown") ?? (event.key === "Escape" ? menus.find((other) => other.open) : null);
+    if (!menu || (event.key !== "Escape" && event.target.closest("select, input"))) return;
+    const onName = event.target.matches("summary");
+    const items = menuItems(menu);
+    const at = items.indexOf(event.target);
+    const handled = () => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    if (event.key === "Escape" && menu.open) {
+      handled();
+      menu.open = false;
+      return menu.querySelector("summary").focus();
+    }
+    if (onName && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+      handled();
+      return openMenu(menu, event.key === "ArrowUp" ? "last" : "first");
+    }
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      handled();
+      const next = menus[(menus.indexOf(menu) + (event.key === "ArrowRight" ? 1 : -1) + menus.length) % menus.length];
+      menu.open = false;
+      if (onName) return next.querySelector("summary").focus();
+      return openMenu(next, "first");
+    }
+    if (at < 0) return;
+    const go = { ArrowDown: (at + 1) % items.length, ArrowUp: (at - 1 + items.length) % items.length, Home: 0, End: items.length - 1 }[event.key];
+    if (go !== undefined) {
+      handled();
+      return items[go].focus();
+    }
+    // A label item (a file to open) is chosen as a button is.
+    if ((event.key === "Enter" || event.key === " ") && event.target.matches("label")) {
+      handled();
+      event.target.click();
+      return;
+    }
+    // Inside a menu, the score's keys wait: Space or ↑ there is not the score's.
+    if (menu.open && event.key !== "Tab") event.stopPropagation();
   }, true);
 
   root.addEventListener("change", (event) => {

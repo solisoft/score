@@ -13,6 +13,17 @@ class Changelog
       {"date": "2026-10-23", "entries": [
         {
           "area": "site",
+          "title": "Zoom with Ctrl + and −, and menus you can move through with the keyboard",
+          "text": "The score now zooms with Ctrl and + or − (⌘ on a Mac) instead of the whole page; + and − "
+          + "alone still sharpen and flatten the selected note. The keyboard shortcuts sheet (?) now lists "
+          + "every key the editor answers to, including R to record, L and K, the voices and Insert the "
+          + "copied bars. On a Mac, menus and tips say ⌘ and ⌥ instead of Ctrl and Alt. The menus open with "
+          + "↓, move with the arrow keys, Home and End, and close with Escape. In File, the owner of a score "
+          + "now sees Share…, and someone it is shared with copies a link that opens it for them.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
           "title": "Sharing says when the invitation email did not leave",
           "text": "When you share a score with someone and the invitation email cannot be sent, the notice now "
           + "says so and asks you to send them the link yourself, instead of saying only that they may now "

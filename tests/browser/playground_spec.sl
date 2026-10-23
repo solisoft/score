@@ -180,4 +180,88 @@ describe("The playground, in a browser") do
     ])
     assert_no_page_errors()
   end
+
+  test("Ctrl + and Ctrl − zoom the score and not the page; + alone sharpens the note") do
+    caret_on("e'2")
+    evaluate("document.querySelector('.studio-sheet').focus()")
+    # What the browser would do with the key: its own zoom, unless the editor took it.
+    evaluate("window.keptKeys = [];"
+    + " window.addEventListener('keydown', (e) => window.keptKeys.push(e.defaultPrevented))")
+    press("Ctrl+=")
+    sleep(0.3)
+    assert_eq(evaluate("document.querySelector('#studio').studio.zoom"), 1.1)
+    assert_eq(evaluate("document.querySelector('[data-zoom-label]').textContent"), "110 %")
+    assert_eq(evaluate("window.keptKeys"), [true])
+    press("Ctrl+-")
+    press("Ctrl+-")
+    sleep(0.3)
+    assert_eq(evaluate("document.querySelector('#studio').studio.zoom"), 0.9)
+    # Without Ctrl, + is a sharp: the zoom stays, the note changes.
+    press("+")
+    sleep(0.4)
+    assert_eq(evaluate("document.querySelector('#studio').studio.zoom"), 0.9)
+    assert_contains(evaluate("document.querySelector('[data-source]').value"), "eis'2")
+    assert_no_page_errors()
+  end
+
+  test("the menus are moved through with the arrows, and the score keeps its keys meanwhile") do
+    caret_on("e'2")
+    source_before = evaluate("document.querySelector('[data-source]').value")
+    active = "(() => { const el = document.activeElement;"
+    + " return el.dataset.act ?? el.textContent.trim().slice(0, 12); })()"
+    evaluate("document.querySelector('.studio-dropdown summary').focus()")
+    press("ArrowDown")
+    assert(evaluate("document.querySelector('.studio-dropdown').open"), "↓ opens File")
+    assert_eq(evaluate(active), "new")
+    press("ArrowDown")
+    assert_eq(evaluate(active), "Open a file…")
+    press("End")
+    assert_eq(evaluate(active), "share")
+    press("Home")
+    assert_eq(evaluate(active), "new")
+    press("ArrowUp")
+    assert_eq(evaluate(active), "share", "↑ on the first item goes round to the last")
+    # → : the next menu, open at its first item, this one closed.
+    press("ArrowRight")
+    assert_not(evaluate("document.querySelectorAll('.studio-dropdown')[0].open"))
+    assert(evaluate("document.querySelectorAll('.studio-dropdown')[1].open"), "→ opens Edit")
+    assert_eq(evaluate(active), "undo")
+    # Nothing to redo: Redo is off, and ↓ passes over it.
+    assert(evaluate("document.querySelector('.studio-dropdown-items [data-act=\"redo\"]').disabled"))
+    press("ArrowDown")
+    assert_eq(evaluate(active), "mode-select")
+    # Escape closes it, back on its name.
+    press("Escape")
+    assert_not(evaluate("document.querySelectorAll('.studio-dropdown')[1].open"))
+    assert_eq(evaluate("document.activeElement.textContent"), "Edit")
+    # None of these arrows moved the selected note.
+    assert_eq(evaluate("document.querySelector('[data-source]').value"), source_before)
+    assert_eq(evaluate("document.querySelector('.studio-dropdown summary').getAttribute('aria-haspopup')"), "menu")
+    assert_no_page_errors()
+  end
+
+  test("the shortcuts sheet lists every key the editor handles, from its table") do
+    evaluate("document.querySelector('.studio-sheet').focus()")
+    press("?")
+    sleep(0.3)
+    assert(evaluate("document.querySelector('[data-keys]').open"), "? opens the sheet")
+    keys = evaluate("[...document.querySelectorAll('[data-keys-list] dt')].map((dt) => dt.textContent)")
+    # Ctrl and Alt are ⌘ and ⌥ on a Mac, the sheet written for the keyboard in front of the person.
+    mac = evaluate("/mac|iphone|ipad/i.test(navigator.userAgentData?.platform || navigator.platform)")
+    expected = ["R", "L / K, Ctrl+L / Ctrl+K", "Ctrl+Alt+1 / 2", "Ctrl+Shift+V", "Ctrl++ / Ctrl+−", "Space", "?"]
+    expected.each do |key|
+      label = mac ? key.replace("Ctrl+Shift+", "⌘⇧").replace("Ctrl+Alt+", "⌘⌥").replace("Ctrl+", "⌘") : key
+      assert_contains(keys, label)
+    end
+    assert_not(keys.join(" ").contains("⌘"), "no ⌘ off a Mac") unless mac
+    if mac
+      assert_not(keys.join(" ").contains("Ctrl"), "no Ctrl on a Mac")
+      assert_eq(
+        evaluate("document.querySelector('.studio-dropdown-items [data-act=\"undo\"] kbd').textContent"),
+        "⌘Z"
+      )
+    end
+    assert_eq(keys.length, evaluate("[...document.querySelectorAll('[data-keys-list] dd')].length"))
+    assert_no_page_errors()
+  end
 end

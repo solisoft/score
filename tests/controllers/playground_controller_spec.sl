@@ -11,6 +11,12 @@ describe("PlaygroundController") do
       assert_not(body.includes?("data-ai-ask"), "no AI assistant without an account")
       assert_not(body.includes?("data-act=\"midi-view\""), "the MIDI view is the app's")
       assert_contains(body, "data-act=\"insert-copied\"")
+      # No account, no sharing page: the link copied holds the score.
+      assert_contains(body, "data-act=\"share\">Copy a link to this score <kbd>the score inside</kbd>")
+      assert_not(body.includes?("data-act=\"share\">Share…"), "no sharing page without an account")
+      # The shortcuts sheet is written by studio.js from its table; zoom is Ctrl + and −.
+      assert_contains(body, "<dl data-keys-list></dl>")
+      assert_contains(body, "data-act=\"zoom-in\">Larger <kbd>Ctrl++</kbd>")
       # Recording from a MIDI keyboard, its grid sixteenths to begin with.
       assert_contains(body, "data-act=\"record\" data-record aria-pressed=\"false\"")
       assert_contains(body, "class=\"studio-record-group\"")

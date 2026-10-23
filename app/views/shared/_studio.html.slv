@@ -39,7 +39,16 @@
             <button type="button" role="menuitem" data-act="save-svg">Save a drawing <kbd>.svg</kbd></button>
             <button type="button" role="menuitem" data-act="parts">Print a part… <kbd>one instrument</kbd></button>
             <hr>
-            <button type="button" role="menuitem" data-act="share">Copy a link to this score</button>
+            <%# The owner shares from the score's sharing page; someone it is
+                shared with copies its address in the app; the playground
+                copies a link that holds the score. %>
+            <% if locals["owner"] %>
+              <button type="button" role="menuitem" data-act="share">Share… <kbd>who may open it</kbd></button>
+            <% elsif locals["app"] %>
+              <button type="button" role="menuitem" data-act="share">Copy a link to this score <kbd>for those it is shared with</kbd></button>
+            <% else %>
+              <button type="button" role="menuitem" data-act="share">Copy a link to this score <kbd>the score inside</kbd></button>
+            <% end %>
           </div>
         </details>
         <details class="studio-dropdown">
@@ -70,8 +79,8 @@
         <details class="studio-dropdown">
           <summary class="studio-menu">View</summary>
           <div class="studio-dropdown-items" role="menu">
-            <button type="button" role="menuitem" data-act="zoom-in">Larger <kbd>+</kbd></button>
-            <button type="button" role="menuitem" data-act="zoom-out">Smaller <kbd>−</kbd></button>
+            <button type="button" role="menuitem" data-act="zoom-in">Larger <kbd>Ctrl++</kbd></button>
+            <button type="button" role="menuitem" data-act="zoom-out">Smaller <kbd>Ctrl+−</kbd></button>
             <button type="button" role="menuitem" data-act="tools">Show or hide the tools</button>
             <% if locals["app"] %>
               <button type="button" role="menuitem" data-act="midi-view" data-midi-label>MIDI view <kbd>tracks, piano roll</kbd></button>
@@ -144,9 +153,9 @@
           <label class="studio-menu-check" title="Write the dynamics of how hard the keys are struck, where they change"><input type="checkbox" data-record-dynamics checked> Dynamics</label>
         </span>
         <span class="studio-zoom">
-          <button type="button" class="studio-menu" data-act="zoom-out" title="Smaller" aria-label="Zoom out">−</button>
+          <button type="button" class="studio-menu" data-act="zoom-out" title="Smaller (Ctrl+−)" aria-label="Zoom out">−</button>
           <span data-zoom-label>100 %</span>
-          <button type="button" class="studio-menu" data-act="zoom-in" title="Larger" aria-label="Zoom in">+</button>
+          <button type="button" class="studio-menu" data-act="zoom-in" title="Larger (Ctrl++)" aria-label="Zoom in">+</button>
         </span>
       </div>
     </div>
@@ -501,27 +510,9 @@
       <h2 id="studio-keys-title">Keyboard</h2>
       <button type="button" class="studio-menu" data-act="keys" aria-label="Close">×</button>
     </div>
-          <dl>
-            <dt>N / Esc</dt><dd>note input / select</dd>
-            <dt>A–G</dt><dd>write a note (Shift: add to the chord)</dd>
-            <dt>0</dt><dd>rest</dd>
-            <dt>]</dt><dd>a bar at the end</dd>
-            <dt>Insert</dt><dd>a bar before the selection</dd>
-            <dt>Ctrl+Delete</dt><dd>take the selected bars away</dd>
-            <dt>2–7</dt><dd>32nd … whole; <kbd>.</kbd> dot</dd>
-            <dt>↑ ↓</dt><dd>step; Shift semitone; Ctrl octave</dd>
-            <dt>← →</dt><dd>previous / next; Shift extends</dd>
-            <dt>Alt+↑ ↓</dt><dd>a note of the chord</dd>
-            <dt>+ − =</dt><dd>sharp, flat, natural</dd>
-            <dt>T / S</dt><dd>tie / slur</dd>
-            <dt>Ctrl+3, 5, 6, 7</dt><dd>tuplets</dd>
-            <dt>Ctrl+L / Ctrl+K</dt><dd>lyrics / chord symbol</dd>
-            <dt>Delete</dt><dd>make rests</dd>
-            <dt>Ctrl+C V X</dt><dd>copy, paste, cut — as LilyPond, with other programs too</dd>
-            <dt>Ctrl+Z / Y</dt><dd>undo / redo</dd>
-            <dt>Space</dt><dd>play / pause</dd>
-            <dt>?</dt><dd>this sheet</dd>
-          </dl>
+    <%# Written by studio.js from the table its keys are found in
+        (public/eui-score/shortcuts.js): a key handled is a key listed. %>
+    <dl data-keys-list></dl>
   </dialog>
 
   <%# Score properties (File ▸ Score properties…): the fields studio.js fills

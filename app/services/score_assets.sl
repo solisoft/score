@@ -20,6 +20,7 @@ class ScoreAssets
       "musicxml.js",
       "midi-import.js",
       "piano-roll.js",
+      "shortcuts.js",
       "player.js",
       "vendor/README.md",
       "eui_score_web.js",

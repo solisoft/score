@@ -305,6 +305,9 @@ describe("AppScoresController") do
       assert_contains(page, "action=\"/app/scores\" method=\"POST\" data-open-form")
       assert_contains(page, "let revision = #{score.revision};")
       assert_contains(page, "shareUrl: \"/app/scores/#{score._key}/share\"")
+      # The owner shares from the sharing page: File says so.
+      assert_contains(page, "data-act=\"share\">Share… <kbd>who may open it</kbd>")
+      assert_not(page.contains("Copy a link to this score"))
       assert_contains(page, "data-act=\"properties\"")
       assert_contains(page, "/ws/scores?ticket=")
       assert_contains(page, "fetch(\"/app/scores/#{score._key}/room_ticket\"")

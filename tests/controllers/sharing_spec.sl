@@ -141,6 +141,10 @@ describe("Sharing") do
       assert_eq(res_status(editor), 200)
       assert_not(res_body(editor).contains("/share\">Share"))
       assert_contains(res_body(editor), "shareUrl: null")
+      # File's link item copies the score's address in the app, which opens for them.
+      assert_contains(res_body(editor), "scoreUrl: \"/app/scores/#{score._key}\"")
+      assert_contains(res_body(editor), "Copy a link to this score <kbd>for those it is shared with</kbd>")
+      assert_not(res_body(editor).contains("data-act=\"share\">Share…"))
       saved = put(
         "/app/scores/#{score._key}",
         {"source": "\\header { title = \"Duet\" }\n{ c'1 }", "revision": score.revision}

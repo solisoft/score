@@ -1,4 +1,4 @@
-<%- partial("shared/studio", {"examples": examples, "figure": figure, "source": source, "app": true}) %>
+<%- partial("shared/studio", {"examples": examples, "figure": figure, "source": source, "app": true, "owner": owner}) %>
 
 <%# File › New, Open a file, Open an example and Open a photo make a new
     score in the library and open it: the score open here stays as it is.
@@ -217,6 +217,7 @@
   const studio = startStudio(root, {
     examples: "<%= examples_path() %>",
     shareUrl: <%- owner ? "\"" + app_score_share_path(score) + "\"" : "null" %>,
+    scoreUrl: "<%= app_score_path(score) %>",
     source: root.querySelector("[data-source]").value,
     greeting: "Click a note to select it, or press N and type A–G to write. Your changes save themselves.",
     onChange(text) {
