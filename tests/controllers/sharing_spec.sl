@@ -349,5 +349,67 @@ describe("Sharing") do
       assert_eq(ScoreShare.where({"owner_id": owner._key}).all.length, 0)
       assert_eq(ScoreShare.where({"email": owner.email}).all.length, 0)
     end
+
+    test("Shared with you says who shared each score, and offers to remove it from the list") do
+      owner = share_user()
+      friend = share_user()
+      score = Score.start(owner, Score.blank_source("Gift"))
+      ScoreShare.invite(score, friend.email, "read")
+      share_sign_in(friend)
+      response = get("/app/scores")
+      assert_no_n_plus_one(response)
+      body = res_body(response)
+      assert_contains(body, "Shared by #{owner.email}")
+      assert_contains(body, "action=\"/app/scores/#{score._key}/leave\"")
+      assert_contains(body, "Remove “Gift” from your list?")
+      assert_eq(assigns()["shared"][0]["owner"], owner.email)
+    end
+
+    test("removing a shared score from one's list leaves the share, and the owner's score untouched") do
+      owner = share_user()
+      friend = share_user()
+      other = share_user()
+      score = Score.start(owner, Score.blank_source("Lent"))
+      ScoreShare.invite(score, friend.email, "write")
+      ScoreShare.invite(score, other.email, "read")
+      before = Score.find(score._key)
+      share_sign_in(friend)
+      response = post("/app/scores/#{score._key}/leave", {})
+      assert_eq(res_location(response), "/app/scores")
+      assert_eq(ScoreShare.where({
+        "score_id": score._key,
+        "email": friend.email
+      }).count, 0)
+      assert_eq(ScoreShare.where({
+        "score_id": score._key,
+        "email": other.email
+      }).count, 1)
+      after = Score.find(score._key)
+      assert_eq(after.source, before.source)
+      assert_eq(after.revision, before.revision)
+      assert_eq(after.user_id, owner._key)
+      assert_not(after.trashed?)
+      assert_eq(ScoreShare.shared_with(friend).length, 0)
+      # Gone from their list, and no longer theirs to open.
+      get("/app/scores")
+      assert_eq(assigns()["shared"].length, 0)
+      assert_eq(res_status(get("/app/scores/#{score._key}")), 403)
+      assert_eq(res_status(post("/app/scores/#{score._key}/leave", {})), 403)
+    end
+
+    test("the owner cannot leave their own score, nor a stranger someone else's; nothing changes") do
+      owner = share_user()
+      friend = share_user()
+      score = Score.start(owner, Score.blank_source("Mine"))
+      ScoreShare.invite(score, friend.email, "read")
+      share_sign_in(owner)
+      refused = post("/app/scores/#{score._key}/leave", {})
+      assert_eq(res_status(refused), 422)
+      share_sign_in(share_user())
+      assert_eq(res_status(post("/app/scores/#{score._key}/leave", {})), 403)
+      assert_eq(ScoreShare.where({"score_id": score._key}).count, 1)
+      assert_not(Score.find(score._key).trashed?)
+      assert_eq(res_status(post("/app/scores/no-such-score/leave", {})), 404)
+    end
   end
 end

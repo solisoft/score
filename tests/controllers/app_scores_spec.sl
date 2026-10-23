@@ -112,7 +112,7 @@ describe("AppScoresController") do
     assert_eq(assigns()["sort"], "title")
     get("/app/scores?sort=nonsense")
     assert_eq(assigns()["sort"], "updated")
-    assert_contains(res_body(get("/app/scores?q=zzz")), "No title has")
+    assert_contains(res_body(get("/app/scores?q=zzz")), "No title or composer has")
   end
 
   test("reads a library of many scores, shares and a trash in a few queries, however many there are") do
@@ -442,6 +442,227 @@ describe("AppScoresController") do
       post("/app/scores/#{score._key}/trash", {})
       request("DELETE", "/app/scores/#{score._key}", {}, {})
       assert_eq(ScoreVersion.history(score).length, 0)
+    end
+
+    test("the history names who saved each version, older ones nobody, in a few queries") do
+      owner = library_user()
+      friend = library_user()
+      score = Score.start(owner, Score.blank_source("Duet"))
+      ScoreShare.invite(score, friend.email, "write")
+      [owner, friend, owner, friend].each do |author|
+        ScoreVersion.keep(score, score.source, "manual", author._key)
+      end
+      ScoreVersion.keep(score, score.source, "auto")
+      library_sign_in(owner)
+      response = get("/app/scores/#{score._key}/versions")
+      assert_eq(res_status(response), 200)
+      assert_no_n_plus_one(response)
+      body = res_body(response)
+      assert_contains(body, "by #{owner.email}")
+      assert_contains(body, "by #{friend.email}")
+      assert_eq(body.split("data-version-author").length - 1, 4)
+      assert_eq(assigns()["authors"][friend._key], friend.email)
+    end
+
+    test("a stranger sees neither the history nor its authors, and cannot copy a version") do
+      owner = library_user()
+      score = Score.start(owner, Score.blank_source("Private"))
+      version = ScoreVersion.keep(score, score.source, "manual", owner._key)
+      stranger = library_user()
+      library_sign_in(stranger)
+      listing = get("/app/scores/#{score._key}/versions")
+      assert_eq(res_status(listing), 403)
+      assert_not(res_body(listing).contains(owner.email))
+      assert_eq(res_status(get("/app/scores/#{score._key}/versions/#{version._key}")), 403)
+      copied = post("/app/scores/#{score._key}/versions/#{version._key}/copy", {})
+      assert_eq(res_status(copied), 403)
+      assert_eq(Score.where("doc.user_id == @user", {"user": stranger._key}).count, 0)
+    end
+
+    test("a version plays and copies: the copy is a new score, opened in the editor, the original untouched") do
+      owner = library_user()
+      score = Score.start(owner, Score.blank_source("Sarabande"))
+      version = ScoreVersion.keep(score, Score.with_title("{ e'1 }", "Sarabande"), "manual", owner._key)
+      library_sign_in(owner)
+      page = res_body(get("/app/scores/#{score._key}/versions/#{version._key}"))
+      assert_contains(page, "data-score-play")
+      assert_contains(page, "/js/score.js")
+      assert_contains(page, "action=\"/app/scores/#{score._key}/versions/#{version._key}/copy\"")
+      assert_contains(page, "Restore this version")
+      copied = post("/app/scores/#{score._key}/versions/#{version._key}/copy", {})
+      assert_eq(res_status(copied), 302)
+      copies = Score.library(owner, "Sarabande (copy)", "title")
+      assert_eq(copies.length, 1)
+      assert_eq(res_location(copied), "/app/scores/#{copies[0]._key}")
+      copy = Score.find(copies[0]._key)
+      assert_contains(copy.source, "e'1")
+      assert_eq(copy.saved_by, owner._key)
+      stored = Score.find(score._key)
+      assert_eq(stored.revision, score.revision)
+      assert_contains(stored.source, "r1")
+      unknown = post("/app/scores/#{score._key}/versions/no-such-version/copy", {})
+      assert_eq(res_status(unknown), 404)
+    end
+
+    test("someone it is shared with to read copies a version into their own library, but cannot restore it") do
+      owner = library_user()
+      reader = library_user()
+      score = Score.start(owner, Score.blank_source("Chaconne"))
+      ScoreShare.invite(score, reader.email, "read")
+      version = ScoreVersion.keep(score, score.source, "manual", owner._key)
+      library_sign_in(reader)
+      page = res_body(get("/app/scores/#{score._key}/versions/#{version._key}"))
+      assert_not(page.contains("Restore this version"))
+      post("/app/scores/#{score._key}/versions/#{version._key}/copy", {})
+      assert_eq(Score.library(reader, "Chaconne", "title").map(&:title), ["Chaconne (copy)"])
+      assert_eq(Score.library(owner, "", "title").map(&:title), ["Chaconne"])
+    end
+
+    test("a save refused because someone else saved names them; the editor shows it") do
+      owner = library_user()
+      friend = library_user()
+      score = Score.start(owner, Score.blank_source("Canon"))
+      ScoreShare.invite(score, friend.email, "write")
+      opened_at = score.revision
+      library_sign_in(friend)
+      friend_save = put(
+        "/app/scores/#{score._key}",
+        {"source": "\\header { title = \"Canon\" }\n{ e'1 }", "revision": opened_at}
+      )
+      assert_eq(res_status(friend_save), 200)
+      assert_eq(Score.find(score._key).saved_by, friend._key)
+      clear_cookies()
+      library_sign_in(owner)
+      stale = put(
+        "/app/scores/#{score._key}",
+        {"source": "\\header { title = \"Canon\" }\n{ f'1 }", "revision": opened_at}
+      )
+      assert_eq(res_status(stale), 409)
+      assert_eq(res_json(stale)["saved_by"], friend.email)
+      # The owner's own window, again over the old revision: nobody named.
+      again = put(
+        "/app/scores/#{score._key}",
+        {"source": "\\header { title = \"Canon\" }\n{ g'1 }", "revision": Score.find(score._key).revision}
+      )
+      assert_eq(res_status(again), 200)
+      mine = put(
+        "/app/scores/#{score._key}",
+        {"source": "\\header { title = \"Canon\" }\n{ a'1 }", "revision": opened_at}
+      )
+      assert_eq(res_status(mine), 409)
+      assert_null(res_json(mine)["saved_by"])
+      page = res_body(get("/app/scores/#{score._key}"))
+      assert_contains(page, "data-conflict-who")
+      assert_contains(page, "theirs?.saved_by")
+    end
+  end
+
+  describe("the trash and copies") do
+    test("Make a copy opens the copy in the editor") do
+      owner = library_user()
+      score = Score.start(owner, Score.blank_source("Aria"))
+      library_sign_in(owner)
+      response = post("/app/scores/#{score._key}/duplicate", {})
+      copies = Score.library(owner, "Aria (copy)", "title")
+      assert_eq(copies.length, 1)
+      assert_eq(res_location(response), "/app/scores/#{copies[0]._key}")
+    end
+
+    test("deleting for good and emptying the trash ask first") do
+      owner = library_user()
+      Score.start(owner, Score.blank_source("Gone")).move_to_trash
+      library_sign_in(owner)
+      page = res_body(get("/app/trash"))
+      assert_contains(page, "Delete “Gone” for good?")
+      assert_contains(page, "Empty the trash")
+      assert_contains(page, "Delete every score in the trash for good?")
+      assert_contains(page, "action=\"/app/trash/empty\"")
+    end
+
+    test("an empty trash offers nothing to empty") do
+      library_sign_in(library_user())
+      page = res_body(get("/app/trash"))
+      assert_contains(page, "The trash is empty")
+      assert_not(page.contains("action=\"/app/trash/empty\""))
+    end
+
+    test("emptying the trash erases this person's trashed scores only") do
+      owner = library_user()
+      other = library_user()
+      kept = Score.start(owner, Score.blank_source("Kept"))
+      thrown = (0 .. 2).map do |i|
+        Score.start(owner, Score.blank_source("Thrown #{i}"))
+      end
+      thrown.each do |score|
+        score.move_to_trash
+      end
+      theirs = Score.start(other, Score.blank_source("Theirs"))
+      theirs.move_to_trash
+      library_sign_in(owner)
+      response = post("/app/trash/empty", {})
+      assert_eq(res_location(response), "/app/trash")
+      thrown.each do |score|
+        assert_null(Score.find_by("_key", score._key))
+      end
+      assert_not_null(Score.find_by("_key", kept._key))
+      assert(Score.find(theirs._key).trashed?)
+      assert_contains(res_body(get("/app/trash")), "The trash is empty")
+    end
+
+    test("a guest cannot empty a trash") do
+      owner = library_user()
+      score = Score.start(owner, Score.blank_source("Safe"))
+      score.move_to_trash
+      set_header("Accept", "application/json")
+      response = post("/app/trash/empty", {})
+      clear_headers()
+      assert_eq(res_status(response), 401)
+      assert(Score.find(score._key).trashed?)
+    end
+  end
+
+  describe("pages of the library") do
+    test("60 a page, a next page for the rest, and a page past the end says so") do
+      owner = library_user()
+      (0 .. SCORE_PAGE_SIZE + 2).each do |i|
+        Score.start(owner, Score.blank_source("Piece #{1000 + i}"))
+      end
+      library_sign_in(owner)
+      first = get("/app/scores?sort=title")
+      assert_no_n_plus_one(first)
+      assert_eq(assigns()["scores"].length, SCORE_PAGE_SIZE)
+      assert(assigns()["more"])
+      assert_contains(res_body(first), "href=\"/app/scores?q=&amp;sort=title&amp;page=2\"")
+      assert_not(res_body(first).contains("rel=\"prev\""))
+      second = get("/app/scores?sort=title&page=2")
+      # 62 scores: (0 .. 62) stops before 62.
+      assert_eq(assigns()["scores"].map(&:title), ["Piece 1060", "Piece 1061"])
+      assert_not(assigns()["more"])
+      assert_contains(res_body(second), "href=\"/app/scores?q=&amp;sort=title&amp;page=1\"")
+      assert_not(res_body(second).contains("rel=\"next\""))
+      past = res_body(get("/app/scores?page=9"))
+      assert_contains(past, "No score on this page")
+      get("/app/scores?page=nonsense")
+      assert_eq(assigns()["page"], 1)
+      assert_eq(assigns()["scores"].length, SCORE_PAGE_SIZE)
+    end
+
+    test("one page shows no page links") do
+      owner = library_user()
+      Score.start(owner, Score.blank_source("Alone"))
+      library_sign_in(owner)
+      assert_not(res_body(get("/app/scores")).contains("data-library-pages"))
+    end
+
+    test("the search finds composers, and its pages keep it") do
+      owner = library_user()
+      Score.start(owner, "\\header { title = \"Ode to Joy\" composer = \"Beethoven\" }\n{ c'1 }")
+      Score.start(owner, Score.blank_source("Minuet"))
+      library_sign_in(owner)
+      body = res_body(get("/app/scores?q=beethoven"))
+      assert_eq(assigns()["scores"].map(&:title), ["Ode to Joy"])
+      assert_contains(body, "Beethoven")
+      assert_eq(assigns()["page_path"], "/app/scores?q=beethoven&sort=updated&page=")
     end
   end
 end

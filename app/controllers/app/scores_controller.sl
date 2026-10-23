@@ -2,15 +2,24 @@
 # renamed, copied, moved to the trash and back. Behind `require_login`;
 # ScorePolicy keeps each score to its owner.
 class AppScoresController < AppBaseController
-  # GET /app/scores — ?q= searches the titles, ?sort= updated|title|created
+  # GET /app/scores — ?q= searches the titles and the composers, ?sort=
+  # updated|title|created, ?page= SCORE_PAGE_SIZE at a time
   def index
     @user = current_user()
     @query = params["q"].to_s
     @sort = ["title", "created"].includes?(params["sort"].to_s) ? params["sort"].to_s : "updated"
+    @page = Score.page_number(params["page"])
+    rows = []
     grouped(fn() {
-      @scores = Score.library(@user, @query, @sort)
+      rows = Score.library_query(@user, @query, @sort, @page).all
       @trash_count = Score.trash_count(@user)
     })
+    listing = Score.paged(rows)
+    @scores = listing["scores"]
+    @more = listing["more"]
+    # Another page's address, but for its number, which the view adds.
+    library_path = app_scores_path()
+    @page_path = library_path + "?q=#{url_encode(this.query)}&sort=#{this.sort}&page="
     @shared = ScoreShare.shared_with(@user)
     @title = "Your scores"
     @description = "Your scores, saved to your account."
@@ -23,6 +32,13 @@ class AppScoresController < AppBaseController
     @trash_days = SCORE_TRASH_DAYS
     @title = "Trash"
     @description = "Scores moved to the trash."
+  end
+
+  # POST /app/trash/empty — every score in the trash deleted for good
+  def empty_trash
+    erased = Score.empty_trash_of(current_user())
+    flash("notice", erased == 1 ? "One score is deleted for good." : "#{erased} scores are deleted for good.")
+    redirect(app_trash_path())
   end
 
   # POST /app/scores — a score from `source` (a template, an imported file,
@@ -75,7 +91,7 @@ class AppScoresController < AppBaseController
     return @_not_writable unless score.writable_by?(current_user())
 
     body = req["json"] ?? params
-    saved = score.save_from_editor(body["source"].to_s, body["revision"].to_s.to_i)
+    saved = score.save_from_editor(body["source"].to_s, body["revision"].to_s.to_i, current_user())
     ScoreRoom.tell_saved(score, body["origin"]) if saved["status"] == 200
     render_json(saved["body"], saved["status"])
   end
@@ -85,17 +101,18 @@ class AppScoresController < AppBaseController
     score = Score.find(params["id"])
     return @_not_writable unless score.writable_by?(current_user())
 
-    version = ScoreVersion.keep(score, score.source, "manual")
+    version = ScoreVersion.keep(score, score.source, "manual", current_user()._key)
     render_json(
       {"version": version._key, "created_at": version.created_at},
       201
     )
   end
 
-  # GET /app/scores/:id/versions — the score's history
+  # GET /app/scores/:id/versions — the score's history, who saved each
   def versions
     @score = @_score("show")
     @versions = ScoreVersion.history(@score)
+    @authors = ScoreVersion.authors_of(@versions)
     @reasons = {
       "auto": "kept on the way",
       "manual": "kept on request",
@@ -106,11 +123,14 @@ class AppScoresController < AppBaseController
     @description = "The versions kept of #{this.score.title}."
   end
 
-  # GET /app/scores/:id/versions/:version_id — one version, engraved
+  # GET /app/scores/:id/versions/:version_id — one version, engraved, to
+  # play, restore or copy
   def version
     @score = @_score("show")
     @version = @_version_of(@score)
     @figure = ScoreSvg.figure(@version.source, 1000, 7)
+    @file_name = @score.file_name
+    @can_restore = @score.writable_by?(current_user())
     @title = "#{this.version.title} — a version"
     @description = "A version of #{this.score.title}."
   end
@@ -118,9 +138,21 @@ class AppScoresController < AppBaseController
   # POST /app/scores/:id/versions/:version_id/restore — the score as it was
   def restore_version
     score = @_score("update")
-    score.restore_version(@_version_of(score))
+    score.restore_version(@_version_of(score), current_user())
     flash("notice", "The score is back as it was. What it was just before is kept in its history.")
     redirect(app_score_path(score))
+  end
+
+  # POST /app/scores/:id/versions/:version_id/copy — a new score from the
+  # version, in the signed-in person's library, opened in the editor
+  def copy_version
+    score = @_score("show")
+    version = @_version_of(score)
+    copy = Score.copy_of(current_user()._key, version.source, version.title ?? score.title)
+    halt(422, "That version could not be copied.") if copy._errors
+
+    flash("notice", "“#{copy.title}” is a copy of a version of “#{score.title}”.")
+    redirect(app_score_path(copy))
   end
 
   # GET /app/scores/:id/preview.svg — the first systems, for the library's card
@@ -141,11 +173,23 @@ class AppScoresController < AppBaseController
     redirect(app_scores_path())
   end
 
-  # POST /app/scores/:id/duplicate
+  # POST /app/scores/:id/duplicate — the copy opened in the editor
   def duplicate
     score = @_score("show")
     copy = score.duplicate(current_user())
+    halt(422, "That score could not be copied.") if copy._errors
+
     flash("notice", "“#{copy.title}” is a copy of “#{score.title}”.")
+    redirect(app_score_path(copy))
+  end
+
+  # POST /app/scores/:id/leave — a score shared with you, off your list: your
+  # share goes, the score stays its owner's, untouched
+  def leave
+    score = @_score("show")
+    halt(422, "This score is not shared with you.") unless ScoreShare.leave(score, current_user())
+
+    flash("notice", "“#{score.title}” is no longer in your list.")
     redirect(app_scores_path())
   end
 

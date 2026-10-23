@@ -4,7 +4,7 @@
     <a class="btn btn-ghost" href="<%= app_score_path(score) %>">Back to the score</a>
   </header>
   <p class="muted">A version is kept every 10 minutes of work, when you ask for one, before a restore, and when a save
-    could not go through because the score had changed in another window.</p>
+    could not go through because the score had changed elsewhere. Each says who saved it.</p>
   <% if versions.length == 0 %>
     <div class="library-empty"><h2>No version kept yet</h2><p>One is kept as soon as you write.</p></div>
   <% else %>
@@ -12,7 +12,7 @@
       <% for version in versions %>
         <li>
           <span class="trash-title"><%= version.title %></span>
-          <span class="muted"><%= time_ago(version.created_at) %> · <%= reasons[version.reason] %></span>
+          <span class="muted"><%= time_ago(version.created_at) %> · <%= reasons[version.reason] %><% unless authors[version.author_id.to_s].nil? %> · <span class="version-author" data-version-author>by <%= authors[version.author_id.to_s] %></span><% end %></span>
           <a class="btn btn-ghost" href="<%= app_score_version_path(score._key, version._key) %>">Show</a>
         </li>
       <% end %>

@@ -12,6 +12,18 @@ class Changelog
     [
       {"date": "2026-10-23", "entries": [
         {
+          "area": "site",
+          "title": "History says who saved each version; the library finds composers and comes in pages",
+          "text": "The History page names who saved each version, and when a save meets someone else's, the editor "
+          + "says who it was instead of \"another window\". A version can be played and copied into a new score. "
+          + "Make a copy opens the copy. Deleting a score for good asks first, and the trash can be emptied in "
+          + "one go. Scores shared with you say who shared them, and you can remove one from your list without "
+          + "touching the owner's score. The search reads composers as well as titles, and the library shows "
+          + "60 scores a page.",
+          "link": "app",
+          "app": true
+        },
+        {
           "area": "engine",
           "title": "One engraver everywhere: what the editor draws, the library, shared pages and PDFs draw too",
           "text": "The server now engraves with the browser's engraver (Soli 2.28.4): 64th notes, a tuplet inside "

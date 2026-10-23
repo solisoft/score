@@ -53,16 +53,24 @@ class ScoreShare < Model
     ScoreShare.where({"score_id": score._key}).order("email", "asc").all
   end
 
-  # The scores shared with `user`, out of the trash, each with the role:
-  # [{"score", "role"}]: the shares, then their scores in one query, as a
-  # list shows them (Score.listed) — two queries however many there are.
+  # The scores shared with `user`, out of the trash, each with the role, the
+  # share (to leave it) and who shared it (their owner's name, or "" when
+  # their account is gone): [{"score", "role", "share", "owner"}]. The
+  # shares, then their scores (as a list shows them, Score.listed) and
+  # their owners together: two round-trips however many there are.
   static def shared_with(user)
     shares = ScoreShare.where({"email": user.email}).limit(500).all
     return [] if shares.length == 0
 
     keys = shares.map(&:score_id)
     live = Score.where("doc._key IN @keys AND doc.trashed_at == null", {"keys": keys})
-    scores = Score.listed(live).limit(500).all
+    scores = []
+    owner_rows = []
+    grouped(fn() {
+      scores = Score.listed(live).limit(500).all
+      owner_rows = User.named(shares.map(&:owner_id)).all
+    })
+    owners = User.names_in(owner_rows)
     by_key = {}
     scores.each do |score|
       by_key[score._key] = score
@@ -70,8 +78,25 @@ class ScoreShare < Model
     shares.filter do |share|
       by_key.has_key(share.score_id)
     end.map do |share|
-      {"score": by_key[share.score_id], "role": share.role}
+      score = by_key[share.score_id]
+      {
+        "score": score,
+        "role": share.role,
+        "share": share._key,
+        "owner": owners[score.user_id].to_s
+      }
     end
+  end
+
+  # `user` no longer has `score` shared with them: their share goes, and
+  # the score is left as it is, its owner's. False when it was not shared
+  # with them (their own score among them).
+  static def leave(score, user)
+    share = ScoreShare.where({"score_id": score._key, "email": user.email}).first
+    return false if share.nil?
+
+    share.delete
+    true
   end
 
   static def delete_all_for(score)

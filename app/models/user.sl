@@ -118,6 +118,42 @@ class User < Model
     this.role == "admin"
   end
 
+  # How the app names someone to others: their name when they have one, else
+  # their email address.
+  def display_name
+    @name.blank? ? @email : @name
+  end
+
+  # The users whose keys are `keys` (blanks and repeats ignored), each key to
+  # its `display_name`: one query however many there are, reading nothing
+  # else of them. A key with no user left is missing from the answer.
+  static def names_of(keys)
+    wanted = keys.filter do |key|
+      !key.blank?
+    end
+    return {} if wanted.length == 0
+
+    User.names_in(User.named(wanted).all)
+  end
+
+  # The query for the users whose keys are `keys`, reading only what names
+  # them: to run alone (`names_of`) or among others in `grouped`.
+  static def named(keys)
+    wanted = keys.filter do |key|
+      !key.blank?
+    end.uniq
+    User.where("doc._key IN @keys", {"keys": wanted}).select("email", "name")
+  end
+
+  # `users` (read by `named`), each key to its `display_name`.
+  static def names_in(users)
+    names = {}
+    users.each do |user|
+      names[user._key] = user.display_name
+    end
+    names
+  end
+
   # --- Password reset ---------------------------------------------------------
 
   # Issue a reset token: returns the plaintext token (goes into the email);

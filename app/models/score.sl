@@ -4,6 +4,8 @@
 # SCORE_TRASH_DAYS days.
 const SCORE_TRASH_DAYS = 30
 const SCORE_UNTITLED = "Untitled score"
+# How many scores a page of the library shows.
+const SCORE_PAGE_SIZE = 60
 # Who may read a score without an invitation: nobody but its owner and the
 # people it is shared with ("private"), whoever has its link ("link"), or
 # anyone, search engines included ("public").
@@ -29,10 +31,13 @@ class Score < Model
   )
   before_save("stamp")
 
-  # Every save: the title read from the source, the times, the revision a
-  # later save must start from (see #320's conflict check).
+  # Every save: the title and the composer read from the source (the
+  # composer "" when it names none, so the library's search reads a string),
+  # the times, the revision a later save must start from (see #320's
+  # conflict check).
   def stamp
     @title = Score.title_in(@source) ?? @title ?? SCORE_UNTITLED
+    @composer = Score.composer_in(@source).to_s
     now = DateTime.utc.to_unix
     @created_at ||= now
     @updated_at = now
@@ -55,27 +60,58 @@ class Score < Model
     Score.where("doc.share_token == @token AND doc.trashed_at == null", {"token": token.to_s}).first
   end
 
-  # The scores `user` has out of the trash, matching `query` (in the title),
-  # in `sort` order: "updated" (the default), "title" or "created". As a
-  # list shows them (`listed`): without their sources.
+  # The first page of `library_page`.
   static def library(user, query, sort)
+    Score.library_page(user, query, sort, 1)["scores"]
+  end
+
+  # Page `page` (from 1) of the scores `user` has out of the trash, matching
+  # `query` (in the title or the composer), in `sort` order: "updated" (the
+  # default), "title" or "created". SCORE_PAGE_SIZE a page, as a list shows
+  # them (`listed`): without their sources. Answers {"scores", "more"}:
+  # "more" when a later page has some, read with one row past the page.
+  static def library_page(user, query, sort, page)
+    Score.paged(Score.library_query(user, query, sort, page).all)
+  end
+
+  # The query `library_page` runs: the page's rows and one past them. To
+  # run alone, or among other reads in `grouped`, then given to `paged`.
+  static def library_query(user, query, sort, page)
     needle = query.to_s.trim.downcase
     condition = "doc.user_id == @user AND doc.trashed_at == null"
-    condition = condition + " AND CONTAINS(LOWER(doc.title), @needle)" unless needle.blank?
+    unless needle.blank?
+      condition = condition + " AND (CONTAINS(LOWER(doc.title), @needle)"
+      condition = condition + " OR (doc.composer != null AND CONTAINS(LOWER(doc.composer), @needle)))"
+    end
     binds = {"user": user._key}
     binds["needle"] = needle unless needle.blank?
     builder = Score.listed(Score.where(condition, binds))
     builder = builder.order("title", "asc") if sort == "title"
     builder = builder.order("created_at", "desc") if sort == "created"
     builder = builder.order("updated_at", "desc") unless ["title", "created"].includes?(sort)
-    builder.limit(500).all
+    first = (Score.page_number(page) - 1) * SCORE_PAGE_SIZE
+    builder.offset(first).limit(SCORE_PAGE_SIZE + 1)
   end
 
-  # What a list of scores shows of each — its title, its owner, its times,
-  # its revision (in its preview's address) — and not its source, which may
-  # run to a megabyte: `query` reading only those. Read, never saved back.
+  # The rows `library_query` read, as a page: {"scores", "more"}.
+  static def paged(rows)
+    more = rows.length > SCORE_PAGE_SIZE
+    {"scores": more ? rows.slice(0, SCORE_PAGE_SIZE) : rows, "more": more}
+  end
+
+  # A page number read from a request: 1 for anything not a whole number
+  # of at least 1.
+  static def page_number(value)
+    number = value.to_s.trim.to_i
+    number < 1 ? 1 : number
+  end
+
+  # What a list of scores shows of each — its title, its composer, its
+  # owner, its times, its revision (in its preview's address) — and not its
+  # source, which may run to a megabyte: `query` reading only those. Read,
+  # never saved back.
   static def listed(query)
-    query.select("title", "user_id", "updated_at", "created_at", "revision", "trashed_at")
+    query.select("title", "composer", "user_id", "updated_at", "created_at", "revision", "trashed_at")
   end
 
   # The `count` scores `user` changed last, out of the trash.
@@ -94,6 +130,13 @@ class Score < Model
   # How many scores `user`'s trash shows, counted by the database.
   static def trash_count(user)
     Score.trashed_by(user).count
+  end
+
+  # "Empty the trash": every score `user` has in the trash erased, with all
+  # that hangs off it (`erase`); nobody else's, and nothing out of the trash.
+  # Answers how many went.
+  static def empty_trash_of(user)
+    Score.erase_each(Score.where("doc.user_id == @user AND doc.trashed_at != null", {"user": user._key}))
   end
 
   static def trashed_by(user)
@@ -135,10 +178,11 @@ class Score < Model
     ScoreVersion.delete_all_of(user)
   end
 
-  # A new score in `user`'s library.
+  # A new score in `user`'s library, saved by them.
   static def start(user, source)
     Score.create({
       "user_id": user._key,
+      "saved_by": user._key,
       "source": source,
       "title": Score.title_in(source) ?? SCORE_UNTITLED
     })
@@ -146,11 +190,43 @@ class Score < Model
 
   # The title a source's \header gives, or nil.
   static def title_in(source)
-    found = Regex.capture("\\\\header\\s*\\{[^}]*?title\\s*=\\s*\"(?P<title>[^\"]*)\"", source.to_s)
+    Score.header_field(source, "title")
+  end
+
+  # The composer a source's \header gives, or nil.
+  static def composer_in(source)
+    Score.header_field(source, "composer")
+  end
+
+  # The \header's `field` (a plain word: "title", "composer"), trimmed, or
+  # nil when it is not there or blank.
+  static def header_field(source, field)
+    found = Regex.capture("\\\\header\\s*\\{[^}]*?#{field}\\s*=\\s*\"(?P<value>[^\"]*)\"", source.to_s)
     return nil if found.nil?
 
-    title = found["title"].trim
-    title.blank? ? nil : title
+    value = found["value"].trim
+    value.blank? ? nil : value
+  end
+
+  # The scores saved before their composer was kept (#370), given it from
+  # their source, `batch` at a time, without touching their times or their
+  # revision: the migration's backfill. Answers how many were given one.
+  static def backfill_composers(batch = 200)
+    done = 0
+    scores = Score.backfill_batch(batch)
+    while scores.length > 0
+      scores.each do |score|
+        composer = Score.composer_in(score.source).to_s
+        Score.where("doc._key == @key", {"key": score._key}).update_all({"composer": composer})
+      end
+      done = done + scores.length
+      scores = Score.backfill_batch(batch)
+    end
+    done
+  end
+
+  static def backfill_batch(batch)
+    Score.where("doc.composer == null", {}).select("source").limit(batch).all
   end
 
   # `source` with `title` as its title: in its \header, or a header of its
@@ -184,10 +260,12 @@ class Score < Model
   # stands in the answer, so the editor can show it and nothing is lost.
   # The write itself matches only while the score is still at
   # `base_revision` (`_write_over`): of two saves over the same revision,
-  # one wins and the other is that 409.
+  # one wins and the other is that 409. `author` is the one saving: the
+  # score's last saver (saved_by) once it goes through, the refused text's
+  # author when it does not; the 409 names who saved last (`saved_by_name`).
   # Answers {"status", "body"}.
-  def save_from_editor(source, base_revision)
-    return @_conflict(source) if base_revision != @revision
+  def save_from_editor(source, base_revision, author = nil)
+    return @_conflict(source, author) if base_revision != @revision
 
     if source.blank?
       return {"status": 422, "body": {
@@ -205,9 +283,9 @@ class Score < Model
     end
 
     ScoreVersion.keep_if_due(this)
-    unless @_write_over(source, base_revision)
+    unless @_write_over(source, base_revision, author&._key)
       @reload
-      return @_conflict(source)
+      return @_conflict(source, author)
     end
 
     {"status": 200, "body": {
@@ -229,11 +307,20 @@ class Score < Model
     nil
   end
 
-  # Back to `version`: the score as it stands is kept first.
-  def restore_version(version)
-    ScoreVersion.keep(this, @source, "restore")
+  # Back to `version`, by `author`: the score as it stands is kept first.
+  def restore_version(version, author = nil)
+    ScoreVersion.keep(this, @source, "restore", @saved_by)
     @source = version.source
+    @saved_by = author&._key
     @save
+  end
+
+  # Who saved the score last, as the app names them to `viewer`: nil when
+  # it was `viewer` themself (from another window), or nobody is known.
+  def saved_by_name(viewer)
+    return nil if @saved_by.blank? || @saved_by == viewer&._key
+
+    User.names_of([@saved_by])[@saved_by]
   end
 
   # The score gone for good, with all that hangs off it: its versions, its
@@ -327,20 +414,29 @@ class Score < Model
   # A copy in `user`'s library (the owner's, by default), "(copy)" after
   # its title. It is private, with a link of its own.
   def duplicate(user = nil)
+    Score.copy_of(user.nil? ? @user_id : user._key, @source, this.title)
+  end
+
+  # A new score in the library of the user whose key is `user_id`, from
+  # `source` titled `title` "(copy)": a score's copy, or a version's.
+  static def copy_of(user_id, source, title)
     Score.create({
-      "user_id": user.nil? ? @user_id : user._key,
-      "source": Score.with_title(@source, "#{this.title} (copy)"),
-      "title": "#{this.title} (copy)"
+      "user_id": user_id,
+      "saved_by": user_id,
+      "source": Score.with_title(source, "#{title} (copy)"),
+      "title": "#{title} (copy)"
     })
   end
 
   private
 
-  # `source` written over `base_revision` in one statement, which matches
-  # only while the score is still at that revision: false when another save
-  # got there first. It sets what `stamp` would, to the same values.
-  def _write_over(source, base_revision)
+  # `source` written over `base_revision` by the user whose key is
+  # `saved_by`, in one statement, which matches only while the score is
+  # still at that revision: false when another save got there first. It
+  # sets what `stamp` would, to the same values.
+  def _write_over(source, base_revision, saved_by)
     title = Score.title_in(source) ?? @title ?? SCORE_UNTITLED
+    composer = Score.composer_in(source).to_s
     now = DateTime.utc.to_unix
     next_revision = base_revision + 1
     visibility = @visibility ?? "private"
@@ -353,6 +449,8 @@ class Score < Model
       UPDATE s WITH {
         source: #{source},
         title: #{title},
+        composer: #{composer},
+        saved_by: #{saved_by},
         updated_at: #{now},
         created_at: #{created_at},
         revision: #{next_revision},
@@ -366,6 +464,8 @@ class Score < Model
 
     @source = source
     @title = title
+    @composer = composer
+    @saved_by = saved_by
     @updated_at = now
     @created_at = created_at
     @revision = next_revision
@@ -374,15 +474,17 @@ class Score < Model
     true
   end
 
-  # The 409: `source` kept as a "conflict" version, and the score as it
-  # stands in the answer.
-  def _conflict(source)
-    ScoreVersion.keep(this, source, "conflict") unless source.blank?
+  # The 409: `source` kept as a "conflict" version by `author`, and the
+  # score as it stands in the answer, with who saved it last ("saved_by":
+  # nil when it was `author`, from another window, or nobody is known).
+  def _conflict(source, author)
+    ScoreVersion.keep(this, source, "conflict", author&._key) unless source.blank?
     {"status": 409, "body": {
       "error": "changed elsewhere",
       "revision": @revision,
       "source": @source,
-      "title": @title
+      "title": @title,
+      "saved_by": this.saved_by_name(author)
     }}
   end
 end

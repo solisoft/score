@@ -126,3 +126,61 @@ describe("Score#save_from_editor") do
     assert_eq(odd._errors[0]["field"], "reason")
   end
 end
+
+describe("ScoreVersion, who saved it") do
+  test("auto, manual, restore and conflict versions each name who saved them") do
+    owner = history_owner()
+    friend = history_owner()
+    score = Score.start(owner, Score.blank_source("Duet"))
+    assert_eq(score.saved_by, owner._key)
+    opened_at = score.revision
+    # The first save keeps the score as it stood: the owner's work.
+    score.save_from_editor(Score.with_title("{ c'1 }", "Duet"), opened_at, friend)
+    current = Score.find(score._key)
+    assert_eq(current.saved_by, friend._key)
+    auto = ScoreVersion.history(current).filter do |version|
+      version.reason == "auto"
+    end
+    assert_eq(auto.map(&:author_id), [owner._key])
+    # A stale save by the owner: refused, the text kept as theirs, the
+    # answer naming who saved last.
+    refused = Score.find(score._key).save_from_editor(Score.with_title("{ g'1 }", "Duet"), opened_at, owner)
+    assert_eq(refused["status"], 409)
+    assert_eq(refused["body"]["saved_by"], friend.email)
+    conflict = ScoreVersion.history(current).filter do |version|
+      version.reason == "conflict"
+    end
+    assert_eq(conflict.map(&:author_id), [owner._key])
+    manual = ScoreVersion.keep(current, current.source, "manual", owner._key)
+    assert_eq(manual.author_id, owner._key)
+    Score.find(score._key).restore_version(manual, owner)
+    restored = Score.find(score._key)
+    assert_eq(restored.saved_by, owner._key)
+    before_restore = ScoreVersion.history(restored).filter do |version|
+      version.reason == "restore"
+    end
+    assert_eq(before_restore.map(&:author_id), [friend._key])
+    names = ScoreVersion.authors_of(ScoreVersion.history(restored))
+    assert_eq(names[owner._key], owner.email)
+    assert_eq(names[friend._key], friend.email)
+  end
+
+  test("a stale save from another window of the same person names nobody") do
+    owner = history_owner()
+    score = Score.start(owner, Score.blank_source("Solo"))
+    opened_at = score.revision
+    score.save_from_editor(Score.with_title("{ c'1 }", "Solo"), opened_at, owner)
+    refused = Score.find(score._key).save_from_editor(Score.with_title("{ d'1 }", "Solo"), opened_at, owner)
+    assert_eq(refused["status"], 409)
+    assert_null(refused["body"]["saved_by"])
+  end
+
+  test("a version kept before authors were recorded names nobody") do
+    score = Score.start(history_owner(), Score.blank_source("Old"))
+    aged_version(score, 10)
+    versions = ScoreVersion.history(score)
+    assert_null(versions[0].author_id)
+    assert_eq(ScoreVersion.authors_of(versions), {})
+    assert_eq(User.names_of(["no-such-user"]), {})
+  end
+end

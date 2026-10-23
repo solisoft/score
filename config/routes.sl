@@ -82,6 +82,7 @@ middleware("require_app_database", fn() {
     get("/app/scores", "app/scores#index", name: "app_scores")
     post("/app/scores", "app/scores#create")
     get("/app/trash", "app/scores#trash", name: "app_trash")
+    post("/app/trash/empty", "app/scores#empty_trash", name: "app_trash_empty")
     post("/app/readings", "app/score_readings#create", name: "app_readings")
     get("/app/readings/:id", "app/score_readings#show", name: "app_reading")
     post("/app/scores/:id/suggestions", "app/score_suggestions#create", name: "app_score_suggestions")
@@ -91,6 +92,7 @@ middleware("require_app_database", fn() {
     get("/app/scores/:id/preview.svg", "app/scores#preview", name: "app_score_preview")
     post("/app/scores/:id/rename", "app/scores#rename", name: "app_score_rename")
     post("/app/scores/:id/duplicate", "app/scores#duplicate", name: "app_score_duplicate")
+    post("/app/scores/:id/leave", "app/scores#leave", name: "app_score_leave")
     post("/app/scores/:id/trash", "app/scores#move_to_trash", name: "app_score_trash")
     post("/app/scores/:id/restore", "app/scores#restore", name: "app_score_restore")
     delete("/app/scores/:id", "app/scores#destroy")
@@ -108,5 +110,6 @@ middleware("require_app_database", fn() {
       "app/scores#restore_version",
       name: "app_score_restore_version"
     )
+    post("/app/scores/:id/versions/:version_id/copy", "app/scores#copy_version", name: "app_score_copy_version")
   })
 })

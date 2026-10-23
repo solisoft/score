@@ -3,17 +3,22 @@
     <h1><%= version.title %> <span class="muted">— <%= time_ago(version.created_at) %></span></h1>
     <div class="version-actions">
       <a class="btn btn-ghost" href="<%= app_score_versions_path(score) %>">All versions</a>
-      <form action="<%= app_score_restore_version_path(score._key, version._key) %>" method="POST">
+      <form action="<%= app_score_copy_version_path(score._key, version._key) %>" method="POST">
         <%- csrf_field() %>
-        <button type="submit" class="btn btn-primary">Restore this version</button>
+        <button type="submit" class="btn btn-ghost">Make a copy</button>
       </form>
+      <% if can_restore %>
+        <form action="<%= app_score_restore_version_path(score._key, version._key) %>" method="POST">
+          <%- csrf_field() %>
+          <button type="submit" class="btn btn-primary">Restore this version</button>
+        </form>
+      <% end %>
     </div>
   </header>
-  <div class="version-sheet">
-    <% if figure["svg"].nil? %>
-      <p class="form-error"><%= figure["error"] %></p>
-    <% else %>
-      <%- figure["svg"] %>
-    <% end %>
-  </div>
+  <%# Engraved, with Play and MIDI: the version's own source through the
+      read page's player (public/js/score.js, loaded once per tab). %>
+  <%- score_figure(figure, {"name": file_name, "source": "closed"}) %>
 </section>
+<script defer src="<%= public_path("js/score.js") %>" data-player="<%= public_path("eui-score/player.js") %>"
+  data-engine="<%= public_path("eui-score/eui-score.js") %>" data-model="<%= public_path("eui-score/score-model.js") %>"
+  data-musicxml="<%= public_path("eui-score/musicxml.js") %>"></script>

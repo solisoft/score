@@ -41,7 +41,9 @@
     <h2 id="studio-conflict-title">Changed elsewhere</h2>
     <button type="button" class="studio-menu" data-conflict-close aria-label="Close">×</button>
   </div>
-  <p class="studio-parts-note">This score was saved from another window, or by someone else, since you opened it. Your changes are not lost: they are kept here and in the score's history.</p>
+  <%# Who saved it: the 409 names them ("saved_by"), or nobody when it was
+      this person, from another window. %>
+  <p class="studio-parts-note"><span data-conflict-who>This score was saved from another window</span> since you opened it. Your changes are not lost: they are kept here and in the score's history.</p>
   <div class="studio-conflict-actions">
     <button type="button" class="tool tool-wide tool-primary" data-conflict-mine>Keep mine <small>replace what was saved elsewhere</small></button>
     <button type="button" class="tool tool-wide" data-conflict-theirs>Load theirs <small>drop my changes here</small></button>
@@ -118,8 +120,11 @@
   // elsewhere since. `theirs` is the score as it now stands.
   const conflictBox = document.querySelector("[data-conflict]");
   let theirs = null;
+  const conflictWho = conflictBox.querySelector("[data-conflict-who]");
   const openConflict = () => {
-    show("Changed elsewhere: choose what to keep", "conflict");
+    const by = theirs?.saved_by;
+    conflictWho.textContent = by ? `${by} saved this score` : "This score was saved from another window";
+    show(by ? `Changed by ${by}: choose what to keep` : "Changed elsewhere: choose what to keep", "conflict");
     if (!conflictBox.open) conflictBox.showModal();
   };
   const resolve = () => {

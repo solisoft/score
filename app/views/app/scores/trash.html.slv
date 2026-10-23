@@ -17,13 +17,20 @@
             <%- csrf_field() %>
             <button type="submit" class="btn btn-ghost">Restore</button>
           </form>
-          <form action="<%= app_score_path(score) %>" method="POST">
-            <%- csrf_field() %>
-            <input type="hidden" name="_method" value="DELETE">
-            <button type="submit" class="btn btn-danger">Delete for good</button>
-          </form>
+          <%- button_to("Delete for good", app_score_path(score), {
+            "method": "delete",
+            "confirm": "Delete “#{score.title}” for good? It cannot be brought back.",
+            "class": "btn btn-danger"
+          }) %>
         </li>
       <% end %>
     </ul>
+    <div class="trash-empty">
+      <%- button_to("Empty the trash", app_trash_empty_path(), {
+        "confirm": "Delete every score in the trash for good? They cannot be brought back.",
+        "class": "btn btn-danger",
+        "data-empty-trash": "true"
+      }) %>
+    </div>
   <% end %>
 </section>

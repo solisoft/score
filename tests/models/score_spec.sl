@@ -312,3 +312,115 @@ describe("Score") do
     assert_eq(Score.where("doc.user_id == @user", {"user": owner._key}).all.length, 0)
   end
 end
+
+describe("Score, its composer and its pages") do
+  test("the composer is read from the header, and kept at every save") do
+    assert_eq(Score.composer_in("\\header { title = \"Ode\" composer = \"Beethoven\" }\n{ c'4 }"), "Beethoven")
+    assert_null(Score.composer_in("\\header { title = \"Ode\" }\n{ c'4 }"))
+    assert_null(Score.composer_in("\\header { composer = \" \" }"))
+    owner = score_owner()
+    score = Score.start(owner, "\\header { title = \"Air\" composer = \"J. S. Bach\" }\n{ c'1 }")
+    assert_eq(Score.find(score._key).composer, "J. S. Bach")
+    saved = score.save_from_editor(
+      "\\header { title = \"Air\" composer = \"Handel\" }\n{ d'1 }",
+      score.revision,
+      owner
+    )
+    assert_eq(saved["status"], 200)
+    assert_eq(Score.find(score._key).composer, "Handel")
+    none = Score.start(owner, Score.blank_source("Nobody's"))
+    assert_eq(Score.find(none._key).composer, "")
+  end
+
+  test("the library finds a score by its composer as well as its title, the owner's only") do
+    owner = score_owner()
+    Score.start(owner, "\\header { title = \"Ode to Joy\" composer = \"Beethoven\" }\n{ c'1 }")
+    Score.start(owner, "\\header { title = \"Minuet\" composer = \"Petzold\" }\n{ c'1 }")
+    Score.start(owner, Score.blank_source("Beethoven's cat"))
+    Score.start(score_owner(), "\\header { title = \"Not mine\" composer = \"Beethoven\" }\n{ c'1 }")
+    found = Score.library(owner, "beeTHOVEN", "title").map(&:title)
+    assert_eq(found, ["Beethoven's cat", "Ode to Joy"])
+    assert_eq(Score.library(owner, "petz", "title").map(&:title), ["Minuet"])
+    assert_eq(Score.library(owner, "Mozart", "title").length, 0)
+  end
+
+  test("a score saved before composers were kept is found once backfilled, its times and revision untouched") do
+    owner = score_owner()
+    score = Score.start(owner, "\\header { title = \"Old\" composer = \"Satie\" }\n{ c'1 }")
+    Score.where("doc._key == @key", {"key": score._key}).update_all({"composer": nil})
+    before = Score.find(score._key)
+    assert_null(before.composer)
+    assert_eq(Score.library(owner, "satie", "title").length, 0)
+    assert(Score.backfill_composers(2) >= 1)
+    after = Score.find(score._key)
+    assert_eq(after.composer, "Satie")
+    assert_eq(after.revision, before.revision)
+    assert_eq(after.updated_at, before.updated_at)
+    assert_eq(Score.library(owner, "satie", "title").map(&:title), ["Old"])
+    assert_eq(Score.backfill_composers(2), 0)
+  end
+
+  test("pages of SCORE_PAGE_SIZE: the last full page says there is more, the next holds the rest") do
+    owner = score_owner()
+    (0 .. SCORE_PAGE_SIZE + 1).each do |i|
+      Score.start(owner, Score.blank_source("Piece #{1000 + i}"))
+    end
+    first = Score.library_page(owner, "", "title", 1)
+    assert_eq(first["scores"].length, SCORE_PAGE_SIZE)
+    assert(first["more"])
+    assert_eq(first["scores"][0].title, "Piece 1000")
+    second = Score.library_page(owner, "", "title", 2)
+    assert_eq(second["scores"].map(&:title), ["Piece #{1000 + SCORE_PAGE_SIZE}"])
+    assert_not(second["more"])
+    third = Score.library_page(owner, "", "title", 3)
+    assert_eq(third["scores"].length, 0)
+    assert_not(third["more"])
+  end
+
+  test("exactly one page: no more") do
+    owner = score_owner()
+    (0 .. SCORE_PAGE_SIZE).each do |i|
+      Score.start(owner, Score.blank_source("Etude #{i}"))
+    end
+    page = Score.library_page(owner, "", "updated", 1)
+    assert_eq(page["scores"].length, SCORE_PAGE_SIZE)
+    assert_not(page["more"])
+  end
+
+  test("a page number that is not one reads as the first") do
+    assert_eq(Score.page_number("3"), 3)
+    assert_eq(Score.page_number("0"), 1)
+    assert_eq(Score.page_number("-2"), 1)
+    assert_eq(Score.page_number("two"), 1)
+    assert_eq(Score.page_number(nil), 1)
+  end
+
+  test("emptying the trash erases the owner's trashed scores and what hangs off them, nothing else") do
+    owner = score_owner()
+    stranger = score_owner()
+    kept = Score.start(owner, Score.blank_source("Kept"))
+    hang_off(kept)
+    thrown = Score.start(owner, Score.blank_source("Thrown"))
+    hang_off(thrown)
+    thrown.move_to_trash
+    old = trashed_long_ago(owner, "Long gone")
+    theirs = Score.start(stranger, Score.blank_source("Theirs"))
+    theirs.move_to_trash
+    assert_eq(Score.empty_trash_of(owner), 2)
+    assert_null(Score.find_by("_key", thrown._key))
+    assert_null(Score.find_by("_key", old._key))
+    assert_eq(remains_of(thrown), [
+      0,
+      0,
+      0
+    ])
+    assert_not_null(Score.find_by("_key", kept._key))
+    assert_eq(remains_of(kept), [
+      1,
+      1,
+      1
+    ])
+    assert(Score.find(theirs._key).trashed?)
+    assert_eq(Score.empty_trash_of(owner), 0)
+  end
+end

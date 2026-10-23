@@ -2514,6 +2514,11 @@
   .score-card-when {
     font-size: 13px;
   }
+  .score-card-by {
+    font-size: 14px;
+    color: var(--ink-soft);
+    overflow-wrap: anywhere;
+  }
   .score-card-more summary {
     cursor: pointer;
     font-size: 13px;
@@ -2538,6 +2543,21 @@
   }
   .library-trash-link {
     font-size: 14px;
+  }
+  .library-pages {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+  }
+  .trash-empty {
+    display: flex;
+    justify-content: flex-end;
+  }
+  .version-author {
+    color: var(--ink-soft);
   }
   .trash-list {
     list-style: none;
@@ -2666,18 +2686,6 @@
     flex-wrap: wrap;
     gap: 10px;
     align-items: center;
-  }
-  .version-sheet {
-    background: var(--sheet);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    padding: 20px;
-    overflow-x: auto;
-    color: var(--ink);
-  }
-  .version-sheet svg {
-    max-width: 100%;
-    height: auto;
   }
   .app-cta {
     display: flex;

@@ -5,8 +5,8 @@
   </header>
 
   <form action="<%= app_scores_path() %>" method="GET" class="library-tools" role="search">
-    <label class="field library-search">Search the titles
-      <input type="search" id="library-q" name="q" value="<%= query %>" placeholder="Title">
+    <label class="field library-search">Search the titles and composers
+      <input type="search" id="library-q" name="q" value="<%= query %>" placeholder="Title or composer">
     </label>
     <label class="field">Order
       <select id="library-sort" name="sort">
@@ -20,11 +20,14 @@
 
   <% if scores.length == 0 %>
     <div class="library-empty">
-      <% if query.blank? %>
+      <% if page > 1 %>
+        <h2>No score on this page</h2>
+        <p><a href="<%= page_path %>1">Back to the first page</a></p>
+      <% elsif query.blank? %>
         <h2>No score yet</h2>
         <p>Start one with <strong>New score</strong>: it is saved here as you write.</p>
       <% else %>
-        <h2>No title has “<%= query %>” in it</h2>
+        <h2>No title or composer has “<%= query %>” in it</h2>
         <p><a href="<%= app_scores_path() %>">All your scores</a></p>
       <% end %>
     </div>
@@ -36,6 +39,9 @@
             <img src="<%= app_score_preview_path(score) %>?r=<%= score.revision %>" alt="" loading="lazy" width="280" height="140">
             <span class="score-card-title"><%= score.title %></span>
           </a>
+          <% unless score.composer.blank? %>
+            <span class="score-card-by"><%= score.composer %></span>
+          <% end %>
           <span class="score-card-when muted">Changed <%= time_ago(score.updated_at) %></span>
           <details class="score-card-more">
             <summary aria-label="More for <%= score.title %>">More</summary>
@@ -60,6 +66,18 @@
     </ul>
   <% end %>
 
+  <% if page > 1 || more %>
+    <nav class="library-pages" aria-label="Pages of your scores" data-library-pages>
+      <% if page > 1 %>
+        <a class="btn btn-ghost" rel="prev" href="<%= page_path %><%= page - 1 %>">← Previous</a>
+      <% end %>
+      <span class="muted">Page <%= page %></span>
+      <% if more %>
+        <a class="btn btn-ghost" rel="next" href="<%= page_path %><%= page + 1 %>">Next →</a>
+      <% end %>
+    </nav>
+  <% end %>
+
   <% if shared.length > 0 %>
     <section class="start-recent">
       <h2>Shared with you</h2>
@@ -70,7 +88,18 @@
               <img src="<%= app_score_preview_path(entry["score"]) %>?r=<%= entry["score"].revision %>" alt="" loading="lazy" width="280" height="140">
               <span class="score-card-title"><%= entry["score"].title %></span>
             </a>
+            <% unless entry["owner"].blank? %>
+              <span class="score-card-by" data-shared-by>Shared by <%= entry["owner"] %></span>
+            <% end %>
             <span class="score-card-when muted"><%= entry["role"] == "write" ? "You may change it" : "You may read it" %></span>
+            <details class="score-card-more">
+              <summary aria-label="More for <%= entry["score"].title %>">More</summary>
+              <%- button_to("Remove from my list", app_score_leave_path(entry["score"]), {
+                "confirm": "Remove “#{entry["score"].title}” from your list? "
+                  + "It stays its owner's: they may share it with you again.",
+                "class": "btn btn-ghost"
+              }) %>
+            </details>
           </li>
         <% end %>
       </ul>
