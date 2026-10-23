@@ -1,5 +1,5 @@
-# The signed-in person's account: who they are, a new password, leaving.
-# Behind `require_login`.
+# The signed-in person's account: who they are, a new password, two-step
+# sign-in, an AI key for reading photos, leaving. Behind `require_login`.
 class AppAccountController < AppBaseController
   # GET /app/account
   def show
@@ -67,6 +67,28 @@ class AppAccountController < AppBaseController
 
     @user.stop_two_step()
     flash("notice", "Two-step sign-in is off.")
+    redirect(app_account_path())
+  end
+
+  # POST /app/account/ai — a provider, a model and an API key of one's own
+  def ai_key
+    @user = current_user()
+    @ai_error = @user.keep_ai_key(params["provider"], params["model"], params["key"]).to_s
+    unless @ai_error.blank?
+      @title = "Account"
+      @description = "Your EUI Score account."
+      @error = ""
+      return render("app/account/show", {}, {"status": 422})
+    end
+
+    flash("notice", "Photos are now read with your #{ScoreReader.provider_name(this.user.ai_provider)} key.")
+    redirect(app_account_path())
+  end
+
+  # POST /app/account/ai/remove — back to the site's own AI, if it has one
+  def forget_ai_key
+    current_user().forget_ai_key()
+    flash("notice", "Your AI key is removed.")
     redirect(app_account_path())
   end
 

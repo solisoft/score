@@ -1,12 +1,14 @@
-# A photo of a score, read into LilyPond by Claude: the Import card sends the
+# A photo of a score, read into LilyPond by an AI model (the server's Claude,
+# or the person's own key, User#ai_settings): the Start page's card sends the
 # picture, then asks after it until the reading is done. Behind sign-in;
 # a reading is only its owner's.
 class AppScoreReadingsController < AppBaseController
   # POST /app/readings — JSON {picture: base64}: 202 {id}, or an {error}
   def create
-    return render_json({"error": "Reading photos is not available here."}, 503) unless ScoreReader.available?()
-
     user = current_user()
+    no_key = "Add an AI key on your account page to read photos."
+    return render_json({"error": no_key}, 503) if user.ai_settings.nil?
+
     data = (req["json"] ?? params)["picture"].to_s
     return render_json({"error": "Choose a photo of the score."}, 422) if data.blank?
     return render_json({"error": "The photo is too large."}, 422) if data.length > SCORE_READER_BYTES
@@ -14,7 +16,7 @@ class AppScoreReadingsController < AppBaseController
     picture = ScoreReader.picture(data)
     return render_json({"error": "That file is not a picture."}, 422) if picture.nil?
 
-    used_up = "You have read #{SCORE_READINGS_PER_DAY} photos today: try again tomorrow."
+    used_up = "You have read all of today's photos: try again tomorrow."
     return render_json({"error": used_up}, 429) if ScoreReading.left_today(user) <= 0
 
     reading = ScoreReading.start(user, picture)

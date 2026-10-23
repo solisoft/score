@@ -134,3 +134,92 @@ describe("AppScoreReadingsController") do
     }).count, 0)
   end
 end
+
+describe("An AI key of one's own, on the account page") do
+  before_each() do
+    as_guest()
+    clear_cookies()
+    clear_headers()
+  end
+
+  test("offers the providers, and keeps a key encrypted, shown by its end") do
+    user = reading_user()
+    page = res_body(get("/app/account"))
+    assert_contains(page, "AI for reading photos")
+    providers = ["Anthropic (Claude)", "OpenAI (GPT)", "Google (Gemini)", "Mistral", "DeepSeek", "Moonshot (Kimi)"]
+    (providers + ["OpenRouter"]).each do |name|
+      assert_contains(page, name)
+    end
+    response = post(
+      "/app/account/ai",
+      {
+        "provider": "openai",
+        "model": "gpt-5",
+        "key": "sk-proj-abcdefgh4321"
+      }
+    )
+    assert_eq(res_location(response), "/app/account")
+    stored = User.find(user._key)
+    assert_eq(stored.ai_provider, "openai")
+    assert_ne(stored.ai_key, "sk-proj-abcdefgh4321")
+    page = res_body(get("/app/account"))
+    assert_contains(page, "<strong>OpenAI (GPT)</strong>")
+    assert_contains(page, "…4321")
+    assert_not(page.includes?("sk-proj-abcdefgh4321"), "the key is never shown again")
+    start = res_body(get("/app"))
+    assert_contains(start, "read by OpenAI (GPT), gpt-5")
+    assert_contains(start, "<span data-photos-left>#{SCORE_READINGS_OWN_PER_DAY}</span> left today")
+  end
+
+  test("refuses an unknown provider or a missing key, and keeps nothing") do
+    user = reading_user()
+    response = post(
+      "/app/account/ai",
+      {
+        "provider": "skynet",
+        "model": "t-800",
+        "key": "sk-123456789"
+      }
+    )
+    assert_eq(res_status(response), 422)
+    assert_contains(res_body(response), "Choose a provider.")
+    response = post(
+      "/app/account/ai",
+      {
+        "provider": "openai",
+        "model": "gpt-5",
+        "key": ""
+      }
+    )
+    assert_eq(res_status(response), 422)
+    assert_contains(res_body(response), "Paste the API key.")
+    assert_not(User.find(user._key).own_ai?)
+  end
+
+  test("removes the key: back to the site's Claude") do
+    user = reading_user()
+    post(
+      "/app/account/ai",
+      {
+        "provider": "mistral",
+        "model": "pixtral-large-latest",
+        "key": "sk-mistral-0000"
+      }
+    )
+    assert(User.find(user._key).own_ai?)
+    assert_eq(res_location(post("/app/account/ai/remove", {})), "/app/account")
+    assert_not(User.find(user._key).own_ai?)
+    assert_contains(res_body(get("/app")), "read by Claude")
+  end
+
+  test("a guest cannot keep one") do
+    assert_eq(res_status(post(
+      "/app/account/ai",
+      {
+        "provider": "openai",
+        "model": "gpt-5",
+        "key": "sk-123456789"
+      }
+    )), 302)
+  end
+end

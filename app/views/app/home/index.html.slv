@@ -69,16 +69,21 @@
           </div>
         </div>
 
-        <% unless photos_left.nil? %>
-          <div class="start-card">
-            <h2>From a photo</h2>
-            <p class="muted">A photo or scan of printed or handwritten music, read by Claude. Check what it read before you
-              keep it. <span data-photos-left><%= photos_left %></span> left today.</p>
+        <div class="start-card">
+          <h2>From a photo</h2>
+          <% if photos["ready"] %>
+            <p class="muted">A photo or scan of printed or handwritten music, read by <%= photos["with"] %>. Check
+              what it read before you keep it. <span data-photos-left><%= photos["left"] %></span> left today.</p>
             <label class="btn btn-ghost start-file">Choose a photo…
-              <input type="file" accept="image/*" data-photo hidden<%= photos_left == 0 ? " disabled" : "" %>>
+              <input type="file" accept="image/*" data-photo hidden<%= photos["left"] == 0 ? " disabled" : "" %>>
             </label>
-          </div>
-        <% end %>
+          <% else %>
+            <p class="muted">A photo or scan of printed or handwritten music, read by an AI model. Add a key from
+              Anthropic (Claude), OpenAI (GPT), Google (Gemini), Mistral, DeepSeek, Moonshot (Kimi) or OpenRouter
+              to read photos with it.</p>
+            <a class="btn btn-ghost start-file" href="<%= app_account_path() %>#ai">Add an AI key</a>
+          <% end %>
+        </div>
 
         <div class="start-card" data-draft hidden>
           <h2>Your playground score</h2>
@@ -249,7 +254,7 @@
           if (answer.state === "reading") continue;
           if (answer.state === "failed") return fail(answer.error);
           score.innerHTML = answer.svg;
-          status.textContent = "What Claude read. You can correct it in the editor.";
+          status.textContent = "What was read. You can correct it in the editor.";
           keep.hidden = false;
           keep.onclick = () => begin(answer.source, name);
           return;

@@ -74,6 +74,8 @@ middleware("require_app_database", fn() {
     post("/app/account/two-step", "app/account#two_step", name: "app_account_two_step")
     post("/app/account/two-step/confirm", "app/account#confirm_two_step", name: "app_account_two_step_confirm")
     post("/app/account/two-step/stop", "app/account#stop_two_step", name: "app_account_two_step_stop")
+    post("/app/account/ai", "app/account#ai_key", name: "app_account_ai")
+    post("/app/account/ai/remove", "app/account#forget_ai_key", name: "app_account_ai_remove")
     delete("/app/account", "app/account#destroy")
 
     get("/app/scores", "app/scores#index", name: "app_scores")

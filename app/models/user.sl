@@ -405,6 +405,69 @@ class User < Model
     this.update()
   end
 
+  # An AI key of one's own, for reading photos of scores (ScoreReader):
+  # `provider` one of SCORE_READER_PROVIDERS, the key kept encrypted and
+  # shown only by its last four characters. An error message, or nil once
+  # kept.
+  def keep_ai_key(provider, model, key)
+    return "Choose a provider." unless SCORE_READER_PROVIDERS.has_key(provider.to_s)
+    return "Name the model to use." if model.to_s.trim.blank?
+    return "Paste the API key." if key.to_s.trim.length < 8
+    return "Keys cannot be kept on this server." unless User.two_step_available?()
+
+    this.ai_provider = provider
+    this.ai_model = model.to_s.trim
+    typed = key.to_s.trim
+    this.ai_key = Crypto.encrypt(typed, getenv("SOLI_ENCRYPTION_KEY"))
+    this.ai_key_hint = typed.substring(typed.length - 4, typed.length)
+    this.update()
+    nil
+  end
+
+  def own_ai?
+    !this.ai_key.blank?
+  end
+
+  def ai_provider_name
+    ScoreReader.provider_name(this.ai_provider)
+  end
+
+  # The providers a key may be for, as the account page lists them.
+  def ai_choices
+    SCORE_READER_PROVIDERS.keys.map do |id|
+      {
+        "id": id,
+        "name": SCORE_READER_PROVIDERS[id]["name"],
+        "models": SCORE_READER_PROVIDERS[id]["models"]
+      }
+    end
+  end
+
+  def forget_ai_key
+    this.ai_provider = null
+    this.ai_model = null
+    this.ai_key = null
+    this.ai_key_hint = null
+    this.update()
+  end
+
+  # What this person's photos are read with: their own key, else the
+  # server's; nil when there is neither.
+  def ai_settings
+    if this.own_ai?()
+      return {
+        "provider": this.ai_provider,
+        "model": this.ai_model,
+        "key": Crypto.decrypt(this.ai_key, getenv("SOLI_ENCRYPTION_KEY")),
+        "own": true
+      }
+    end
+
+    return nil unless ScoreReader.available?()
+
+    ScoreReader.server_settings()
+  end
+
   # The time step `code` is for, one step either side of `now`, or nil.
   static def totp_step(secret, code, now)
     text = code.to_s.replace(" ", "")

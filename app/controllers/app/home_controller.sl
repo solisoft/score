@@ -8,8 +8,24 @@ class AppHomeController < AppBaseController
     @user = current_user()
     @recent = @user.nil? ? [] : Score.recent(@user, 6)
     @eui_version = ScoreAssets.version
-    @photos_left = @user.nil? || !ScoreReader.available?() ? nil : ScoreReading.left_today(@user)
+    @photos = @user.nil? ? nil : @_photos(@user)
     @title = @user.nil? ? "Write music, keep it" : "Start"
     @description = "Write music in your browser: scores engraved as you type, played, saved to your account."
+  end
+
+  private
+
+  # What the photo card says: whether photos can be read, with what, and how
+  # many more today.
+  def _photos(user)
+    settings = user.ai_settings
+    return {"ready": false} if settings.nil?
+
+    with = settings["own"] ? "#{ScoreReader.provider_name(settings["provider"])}, #{settings["model"]}" : "Claude"
+    {
+      "ready": true,
+      "with": with,
+      "left": ScoreReading.left_today(user)
+    }
   end
 end
