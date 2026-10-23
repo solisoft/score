@@ -1,0 +1,15 @@
+<section class="auth">
+  <h1>Two-step sign-in</h1>
+  <p class="muted">Type the six-digit code your authenticator app shows for EUI Score — or one of your backup codes.</p>
+  <% if error.present? %>
+    <p class="form-error" role="alert"><%= error %></p>
+  <% end %>
+  <form action="<%= login_code_path() %>" method="POST" class="auth-form">
+    <%- csrf_field() %>
+    <label class="field">Code
+      <input id="code" name="code" type="text" required autofocus autocomplete="one-time-code" inputmode="text" maxlength="12" spellcheck="false">
+    </label>
+    <button type="submit" class="btn btn-primary">Sign in</button>
+  </form>
+  <p class="auth-alt"><a href="<%= login_path() %>">Start again</a></p>
+</section>

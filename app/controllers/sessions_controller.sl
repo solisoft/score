@@ -86,13 +86,33 @@ class SessionsController < Controller
     end
 
     user.clear_failed_attempts()
-    # New session id after a successful login defeats session fixation.
+    remember = params["remember_me"].to_s == "1"
+    # Two-step sign-in: the password is right, the code is still to come. The
+    # session says who is half-way, since when, and where they were going —
+    # it does not sign them in.
+    if user.two_step?()
+      session_regenerate()
+      session_set("two_step_user", user["_key"])
+      session_set("two_step_since", DateTime.utc().to_unix())
+      session_set("two_step_tries", 0)
+      session_set("two_step_remember", remember)
+      session_set("two_step_return", @_return_to)
+      return redirect(login_code_path())
+    end
+
+    @_finish_sign_in(user, remember)
+    redirect(@_after_sign_in)
+  end
+
+  # Signed in: a new session (which defeats session fixation), stamped with
+  # the version a later password reset invalidates; a remembered browser
+  # gets its cookie.
+  def _finish_sign_in(user, remember)
     session_regenerate()
     session_set("user_id", user["_key"])
-    # Stamped so a later password reset can invalidate this session.
     session_set("session_version", user.current_session_version())
 
-    if params["remember_me"].to_s == "1"
+    if remember
       token = user.start_remember_me()
       # `secure` matters more here than on the session cookie: this one is a
       # 30-day bearer credential, and without the flag a single plaintext
@@ -104,8 +124,7 @@ class SessionsController < Controller
         "secure": true
       })
     end
-
-    redirect(@_after_sign_in)
+    true
   end
 
   # Re-render the sign-in form with an error and an accurate status code.

@@ -328,6 +328,11 @@
   .account-unconfirmed { color: var(--accent); }
   .account-resend, .auth-resend { display: inline-block; margin: 6px 0 0; }
   .account-resend { margin-left: 10px; }
+  .two-step-steps { padding-left: 20px; color: var(--ink); }
+  .two-step-qr { width: 200px; margin: 8px 0; }
+  .two-step-qr svg { display: block; width: 100%; height: auto; background: #fff; }
+  .two-step-secret code, .two-step-codes code { font: 600 15px/1.6 var(--font-mono); letter-spacing: 0.06em; overflow-wrap: anywhere; }
+  .two-step-codes { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 24px; }
 
   .app-flash { margin: 16px auto 0; max-width: 1120px; width: calc(100% - 40px); border: 1px solid #c9dcc4; background: #eef6ec; color: #2c5427; border-radius: 10px; padding: 10px 14px; font-size: 14px; }
 

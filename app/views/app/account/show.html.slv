@@ -20,6 +20,31 @@
     </dd>
   </dl>
 
+  <h2>Two-step sign-in</h2>
+  <% if user.two_step?() %>
+    <p>On: signing in asks for a code from your authenticator app as well as your password.
+      <span class="muted"><%= user.backup_codes_left() %> backup codes left.</span></p>
+    <form action="<%= app_account_two_step_stop_path() %>" method="POST" class="auth-form">
+      <%- csrf_field() %>
+      <label class="field">Your password
+        <input id="stop_password" name="password" type="password" required autocomplete="current-password">
+      </label>
+      <label class="field">A code from the app, or a backup code
+        <input id="stop_code" name="code" type="text" required autocomplete="one-time-code" maxlength="12" spellcheck="false">
+      </label>
+      <button type="submit" class="btn btn-ghost">Turn two-step sign-in off</button>
+    </form>
+  <% elsif user.can_use_two_step?() %>
+    <p class="muted">Off. Turned on, signing in asks for a six-digit code from an authenticator app on your phone
+      (Google Authenticator, 1Password, Authy…) as well as your password.</p>
+    <form action="<%= app_account_two_step_path() %>" method="POST">
+      <%- csrf_field() %>
+      <button type="submit" class="btn btn-primary">Turn two-step sign-in on</button>
+    </form>
+  <% else %>
+    <p class="muted">Not available on this server yet.</p>
+  <% end %>
+
   <h2>Change your password</h2>
   <form action="<%= app_account_password_path() %>" method="POST" class="auth-form">
     <%- csrf_field() %>

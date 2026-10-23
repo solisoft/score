@@ -37,7 +37,8 @@ end
 # logout() leaves the browser's own session alone).
 def sign_out_in_browser
   visit("/app/account")
-  click_button("Sign out")
+  # The logout form's own button: the page has others that speak of signing in.
+  evaluate("document.querySelector('form[action=\"/logout\"] button').click()")
   assert_page_path("/login")
 end
 
@@ -49,16 +50,16 @@ def sign_up_in_browser(email)
   sleep(2.2)
   click("form.auth-form button[type=submit]")
   # The address is confirmed from the link in the email: here, from a fresh
-  # link, opened in the browser. Then a sign-in.
+  # link, opened in the browser. Then a sign-in, through the cookie jar the
+  # browser shares with the request helpers (a sign-in clicked in the browser
+  # renews the session, which the next visit() would put back as it was).
   wait_for_text("Check your inbox")
   token = User.find_by("email", email).start_email_confirmation
   visit("/confirm_email?token=#{token}")
   wait_for_text("Your email address is confirmed")
-  visit("/login")
-  fill_in("#email", email)
-  fill_in("#password", JOURNEY_PASSWORD)
-  click("form.auth-form button[type=submit]")
-  assert_page_path("/app")
+  login(email, JOURNEY_PASSWORD)
+  visit("/app")
+  wait_for_text("Your scores")
 end
 
 # Two bars for a violin and a third voice the editor does not write, as MusicXML.
@@ -194,5 +195,28 @@ describe("The app, in a browser") do
     wait_for_text("This is not a MusicXML score")
     assert_page_path("/app")
     assert_eq(Score.where({"user_id": User.find_by("email", email)._key}).count, 0)
+  end
+
+  test("two-step sign-in: set up from a QR code, then asked for at sign-in") do
+    email = journey_email()
+    sign_up_in_browser(email)
+    visit("/app/account")
+    click_button("Turn two-step sign-in on")
+    wait_for(".two-step-qr svg")
+    secret = User.find_by("email", email).pending_two_step
+    assert_text(secret)
+    fill_in("#code", Crypto.totp_generate(secret, DateTime.utc.to_unix, 30))
+    click("form.auth-form button[type=submit]")
+    wait_for_text("Two-step sign-in is on")
+    assert_eq(evaluate("document.querySelectorAll('.two-step-codes li').length"), 10)
+    sign_out_in_browser()
+    fill_in("#email", email)
+    fill_in("#password", JOURNEY_PASSWORD)
+    click("form.auth-form button[type=submit]")
+    assert_page_path("/login/code")
+    fill_in("#code", Crypto.totp_generate(secret, DateTime.utc.to_unix + 30, 30))
+    click("form.auth-form button[type=submit]")
+    assert_page_path("/app")
+    assert_no_page_errors()
   end
 end

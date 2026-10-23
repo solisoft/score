@@ -13,6 +13,9 @@ const AUTH_LOCKOUT_SECONDS = 1800  # auto-unlock after 30 minutes
 const AUTH_CONFIRMATION_TOKEN_TTL = 172800  # confirmation links last 48 hours
 const AUTH_REMEMBER_DAYS = 30  # remember-me cookie lifetime
 const AUTH_MIN_PASSWORD_LENGTH = 12  # shortest password accepted at sign-up
+const TOTP_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"  # Base32, for the authenticator's secret
+const TOTP_BACKUP_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"  # backup codes: no 0/o, 1/l/i
+const TOTP_BACKUP_COUNT = 10
 
 # Per-IP throttle on the credential endpoints (login, sign-up, reset). The
 # per-account lockout above cannot see these two attacks: credential stuffing
@@ -292,5 +295,137 @@ class User < Model
     this.failed_attempts = 0
     this.locked_at = null
     this.update()
+  end
+
+  # --- Two-step sign-in (TOTP) -------------------------------------------------
+  #
+  # An authenticator app's six-digit codes on top of the password, if the
+  # owner turns it on. The secret is stored encrypted (SOLI_ENCRYPTION_KEY):
+  # `totp_pending` while it is being set up, `totp_secret` once a first code
+  # proves the app holds it. The time step of each accepted code is kept, so
+  # a code is good once; ten backup codes, kept as digests, are good once each.
+
+  # Whether this server can keep the secrets: it has a key to encrypt them.
+  static def two_step_available?
+    getenv("SOLI_ENCRYPTION_KEY").present?
+  end
+
+  def two_step?
+    !this.totp_secret.blank?
+  end
+
+  # The same question as `two_step_available?`, asked of an account: what a
+  # page can call, where the model's class is out of reach.
+  def can_use_two_step?
+    User.two_step_available?()
+  end
+
+  # A new secret, kept aside until a code confirms it: its Base32 text.
+  def start_two_step
+    secret = Crypto.random_bytes(32).map do |b|
+      TOTP_ALPHABET[b % 32]
+    end.join("")
+    this.totp_pending = Crypto.encrypt(secret, getenv("SOLI_ENCRYPTION_KEY"))
+    this.update()
+    secret
+  end
+
+  # The secret being set up, or nil.
+  def pending_two_step
+    return nil if this.totp_pending.blank?
+
+    Crypto.decrypt(this.totp_pending, getenv("SOLI_ENCRYPTION_KEY"))
+  end
+
+  # What an authenticator app enrols from (the QR code's text).
+  def two_step_uri(secret)
+    Crypto.totp_uri(secret, this.email, "EUI Score")
+  end
+
+  # The pending secret turned on, if `code` is one of its: the backup codes,
+  # to show once; nil when the code is not.
+  def confirm_two_step(code)
+    secret = this.pending_two_step()
+    return nil if secret.nil?
+
+    step = User.totp_step(secret, code, DateTime.utc().to_unix())
+    return nil if step.nil?
+
+    codes = (1 .. TOTP_BACKUP_COUNT + 1).map do |_|
+      User.backup_code()
+    end
+    this.totp_secret = this.totp_pending
+    this.totp_pending = null
+    this.totp_last_step = step
+    this.totp_backup = codes.map do |c|
+      Crypto.sha256(User.backup_digest_text(c))
+    end
+    this.totp_enabled_at = DateTime.utc().to_unix()
+    this.update()
+    codes
+  end
+
+  # Whether `code` passes the second step: a code of the app not used
+  # before, or a backup code not used before — which is then spent.
+  def second_step?(code)
+    return false unless this.two_step?()
+
+    text = code.to_s.replace(" ", "")
+    if Regex.matches("^[0-9]{6}$", text)
+      secret = Crypto.decrypt(this.totp_secret, getenv("SOLI_ENCRYPTION_KEY"))
+      step = User.totp_step(secret, text, DateTime.utc().to_unix())
+      return false if step.nil? || step <= (this.totp_last_step ?? -1)
+
+      this.totp_last_step = step
+      this.update()
+      return true
+    end
+    digest = Crypto.sha256(User.backup_digest_text(text))
+    left = this.totp_backup ?? []
+    return false unless left.includes?(digest)
+
+    this.totp_backup = left.filter do |d|
+      d != digest
+    end
+    this.update()
+    true
+  end
+
+  def backup_codes_left
+    left = this.totp_backup ?? []
+    left.length
+  end
+
+  def stop_two_step
+    this.totp_secret = null
+    this.totp_pending = null
+    this.totp_backup = null
+    this.totp_last_step = null
+    this.totp_enabled_at = null
+    this.update()
+  end
+
+  # The time step `code` is for, one step either side of `now`, or nil.
+  static def totp_step(secret, code, now)
+    text = code.to_s.replace(" ", "")
+    return nil unless Regex.matches("^[0-9]{6}$", text)
+
+    here = now / 30
+    [here - 1, here, here + 1].find do |step|
+      Crypto.secure_compare(Crypto.totp_generate(secret, step * 30, 30), text)
+    end
+  end
+
+  # A backup code, xxxxx-xxxxx.
+  static def backup_code
+    letters = Crypto.random_bytes(10).map do |b|
+      TOTP_BACKUP_ALPHABET[b % TOTP_BACKUP_ALPHABET.length]
+    end
+    letters.slice(0, 5).join("") + "-" + letters.slice(5, 10).join("")
+  end
+
+  # A backup code as it is kept: lower case, without its dash or spaces.
+  static def backup_digest_text(code)
+    code.to_s.downcase().replace("-", "").replace(" ", "")
   end
 end

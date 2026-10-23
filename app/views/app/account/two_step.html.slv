@@ -1,0 +1,33 @@
+<section class="auth auth-wide">
+  <h1>Two-step sign-in</h1>
+  <ol class="two-step-steps">
+    <li>Open your authenticator app (Google Authenticator, 1Password, Authy…) and scan this code.</li>
+    <li>Then type the six-digit code it shows for EUI Score.</li>
+  </ol>
+  <figure class="two-step-qr" data-qr="<%= uri %>" aria-label="QR code to scan with your authenticator app"></figure>
+  <p class="muted">No camera? Type this key in the app instead:</p>
+  <p class="two-step-secret"><code><%= secret %></code></p>
+  <% if error.present? %>
+    <p class="form-error" role="alert"><%= error %></p>
+  <% end %>
+  <form action="<%= app_account_two_step_confirm_path() %>" method="POST" class="auth-form">
+    <%- csrf_field() %>
+    <label class="field">Code from the app
+      <input id="code" name="code" type="text" inputmode="numeric" required autofocus autocomplete="one-time-code" maxlength="7">
+    </label>
+    <button type="submit" class="btn btn-primary">Turn it on</button>
+  </form>
+  <p class="auth-alt"><a href="<%= app_account_path() %>">Not now</a></p>
+</section>
+<script src="<%= public_path("js/vendor/qrcode.js") %>"></script>
+<script>
+  // Drawn here, in the browser: the key never goes to another site.
+  (() => {
+    const box = document.querySelector("[data-qr]");
+    if (!box || typeof qrcode !== "function") return;
+    const qr = qrcode(0, "M");
+    qr.addData(box.dataset.qr);
+    qr.make();
+    box.innerHTML = qr.createSvgTag({ cellSize: 5, margin: 2, scalable: true });
+  })();
+</script>

@@ -13,6 +13,14 @@ class Changelog
       {"date": "2026-10-23", "entries": [
         {
           "area": "site",
+          "title": "Two-step sign-in, if you want it",
+          "text": "Your account can ask for a code from an authenticator app on your phone as well as your password: "
+          + "set it up from a QR code, keep ten backup codes, turn it off with your password and a code.",
+          "link": "app",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "Your email address, confirmed",
           "text": "A new account confirms its address from the link we email before it signs in; the link can be "
           + "sent again from the sign-in page or your account, and a password reset confirms it too.",

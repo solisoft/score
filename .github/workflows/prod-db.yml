@@ -10,17 +10,20 @@
 #             Nothing secret leaves the server. The .env is kept beside as
 #             .env.before-db, and nothing is done if it names a database already.
 #             The next deploy runs the migrations and opens /app.
+#   encryption-key — SOLI_ENCRYPTION_KEY, made on the server if the .env has
+#             none: two-step sign-in secrets are encrypted with it. Never
+#             replaced (the secrets kept with it would no longer open).
 name: production database
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: "inspect, or setup"
+        description: "inspect, setup, or encryption-key"
         required: true
         default: inspect
         type: choice
-        options: [inspect, setup]
+        options: [inspect, setup, encryption-key]
 
 concurrency:
   group: deploy-refs/heads/main
@@ -110,4 +113,19 @@ jobs:
           echo "done: the names now set, without their values:"
           grep -E '^(SOLIDB_|SOLI_SESSION|SOLI_MAIL|SOLI_SMTP)' .env | cut -d= -f1 | tr '\n' ' '; echo
           curl -s -o /dev/null -w 'SoliDB answers: %{http_code}\n' -m 3 http://127.0.0.1:6745/_api/databases || true
+          REMOTE
+
+      - name: Encryption key
+        if: inputs.action == 'encryption-key'
+        run: |
+          ssh "$USER@$HOST" SITES_DIR="$SITES_DIR" DOMAIN="$DOMAIN" bash -s <<'REMOTE'
+          set -euo pipefail
+          cd "$SITES_DIR/$DOMAIN"
+          if grep -qE '^SOLI_ENCRYPTION_KEY=.+' .env; then
+            echo "the .env has its key already: nothing done"; exit 0
+          fi
+          cp -p .env .env.before-key
+          printf '\n# Two-step sign-in secrets are encrypted with it: never replace it.\nSOLI_ENCRYPTION_KEY=%s\n' "$(openssl rand -hex 32)" >> .env
+          chmod 600 .env
+          echo "done: SOLI_ENCRYPTION_KEY added (its value stays on the server)"
           REMOTE

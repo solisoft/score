@@ -31,6 +31,45 @@ class AppAccountController < AppBaseController
     redirect(app_account_path())
   end
 
+  # POST /app/account/two-step — a new secret for an authenticator app, to confirm
+  def two_step
+    @user = current_user()
+    return redirect(app_account_path()) if @user.two_step?() || !User.two_step_available?()
+
+    @_show_enrolment(@user.start_two_step(), "")
+  end
+
+  # POST /app/account/two-step/confirm — a first code from the app turns it on
+  def confirm_two_step
+    @user = current_user()
+    secret = @user.pending_two_step()
+    return redirect(app_account_path()) if secret.nil?
+
+    codes = @user.confirm_two_step(params["code"])
+    wrong = "That code is not the app's: check its clock, and type the code it shows now."
+    return @_show_enrolment(secret, wrong) if codes.nil?
+
+    @codes = codes
+    @title = "Your backup codes"
+    @description = "The codes that sign you in without your phone."
+    render("app/account/backup_codes")
+  end
+
+  # POST /app/account/two-step/stop — the password and a code turn it off
+  def stop_two_step
+    @user = current_user()
+    unless @user.authenticate(params["password"].to_s) && @user.second_step?(params["code"])
+      @title = "Account"
+      @description = "Your EUI Score account."
+      @error = "Two-step sign-in is still on: that password or that code is not right."
+      return render("app/account/show", {}, {"status": 422})
+    end
+
+    @user.stop_two_step()
+    flash("notice", "Two-step sign-in is off.")
+    redirect(app_account_path())
+  end
+
   # DELETE /app/account — the password confirms it
   def destroy
     @user = current_user()
@@ -45,5 +84,15 @@ class AppAccountController < AppBaseController
     session_destroy()
     flash("notice", "Your account is deleted.")
     redirect(app_home_path())
+  end
+
+  # The page that sets an authenticator app up: the QR code and the secret.
+  def _show_enrolment(secret, error)
+    @secret = secret
+    @uri = @user.two_step_uri(secret)
+    @error = error
+    @title = "Two-step sign-in"
+    @description = "Sign in with a code from your phone, too."
+    render("app/account/two_step", {}, {"status": error.blank? ? 200 : 422})
   end
 end
