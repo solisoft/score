@@ -759,7 +759,7 @@ export function startStudio(root, options = {}) {
         if (edit((score) => M.transpose(score, { ...by, s: r.s, a: r.a, b: r.b }))) say(`${r.b - r.a + 1} selected, ${words}.`);
         return;
       }
-      case "save-midi": return toMidi(st.text).then((m) => download(m, `${fileName()}.mid`, "audio/midi")).catch((e) => refuse(e));
+      case "save-midi": return toMidi(...heard(st.score)).then((m) => download(m, `${fileName()}.mid`, "audio/midi")).catch((e) => refuse(e));
       case "save-wav": return saveWav();
       case "save-svg": case "save-png": return saveImage(name === "save-png");
       case "mode-select": return setInput(false);
@@ -2224,6 +2224,18 @@ export function startStudio(root, options = {}) {
   // the score with every repeat played out, and `passes` says when each bar
   // sounds on each pass: the notes light up on the second time through too.
 
+  /**
+   * toMidi's arguments for what is heard: the score with its repeats played
+   * out and its jumps taken; a piece edited in its text, as toMidi plays it
+   * (out, when the model reads it; as written otherwise). Play, Save as
+   * MIDI and Save the sound all play this, at 100 a quarter when the source
+   * sets no tempo.
+   */
+  const heard = (score) =>
+    score
+      ? [M.toLilyPond(score, { unfold: true }).source, { bpm: M.DEFAULT_BPM, beat: 4, unfold: false }]
+      : [st.text, { bpm: M.DEFAULT_BPM, beat: 4 }];
+
   // The Playback section's settings, kept from one visit to the next.
   const PLAYBACK = "eui-score-studio-playback";
   const playOption = (name) => root.querySelector(`[data-play="${name}"]`);
@@ -2279,8 +2291,7 @@ export function startStudio(root, options = {}) {
     const at = loop ? loop.start : from == null ? 0 : (passes.find((p) => p.bar === from)?.start ?? 0);
     let bytes;
     try {
-      // 100 a quarter when the source sets no tempo, as the model counts.
-      bytes = await toMidi(played ? M.toLilyPond(played, { unfold: true }).source : st.text, { bpm: 100, beat: 4 });
+      bytes = await toMidi(...heard(played));
     } catch (error) {
       return say(error.message ?? String(error), true);
     }
@@ -2580,7 +2591,7 @@ export function startStudio(root, options = {}) {
   async function saveWav() {
     let bytes;
     try {
-      bytes = await toMidi(st.score ? M.toLilyPond(st.score, { unfold: true }).source : st.text, { bpm: 100, beat: 4 });
+      bytes = await toMidi(...heard(st.score));
     } catch (error) {
       return refuse(error);
     }

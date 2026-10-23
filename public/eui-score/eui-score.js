@@ -52,10 +52,30 @@ export async function render(src, options = {}) {
   return engraveSvg(src, options.width ?? 760, options.staffSpace ?? 7, JSON.stringify(options.marks ?? {}));
 }
 
-/** The source as a Standard MIDI File, a Uint8Array. Options: `bpm`, `beat`, `program`. */
+/**
+ * The source as a Standard MIDI File, a Uint8Array, played as it sounds:
+ * every repeat played out, its endings in turn, and the D.S. and D.C.
+ * taken — for a source the editor's model reads; another is played as
+ * written. Options: `bpm` and `beat` for a source that sets no tempo (100
+ * a quarter, as the editor plays it), `program` for a staff with no
+ * instrument, `unfold: false` for a source already played out.
+ */
 export async function toMidi(src, options = {}) {
   await ready;
-  return engraveMidi(src, options.bpm ?? 0, options.beat ?? 4, options.program ?? 0);
+  const played = options.unfold === false ? src : await playedOut(src);
+  return engraveMidi(played, options.bpm ?? 100, options.beat ?? 4, options.program ?? 0);
+}
+
+// The editor's model plays the repeats out; it is fetched only for a source that has some.
+async function playedOut(src) {
+  if (!/\\(repeat|jump)\b/.test(src)) return src;
+  try {
+    // Under this module's own version, which covers the model's file too.
+    const model = await import(`./score-model.js${new URL(import.meta.url).search}`);
+    return model.playedSource(src, engine.score_json);
+  } catch {
+    return src;
+  }
 }
 
 /** The source on A4 as a PDF string; `title` for a source whose header names none. */

@@ -100,7 +100,9 @@ def _score_actions(figure, opts)
     play_attrs = "data-score-play data-midi=\"#{midi}\" data-src=\"#{html_escape(figure["src"])}\""
     buttons.push("<button type=\"button\" class=\"score-btn score-btn-play\" #{play_attrs}>"
     + "<span aria-hidden=\"true\">▶</span> Play</button>")
-    buttons.push("<a class=\"score-btn\" href=\"#{midi}\" download=\"#{html_escape(file_name)}.mid\">MIDI</a>")
+    # The MIDI link saves the file as Play plays it (score.js), repeats and all.
+    midi_attrs = "data-score-midi href=\"#{midi}\" download=\"#{html_escape(file_name)}.mid\""
+    buttons.push("<a class=\"score-btn\" #{midi_attrs}>MIDI</a>")
   end
   buttons.push("<a class=\"score-btn\" href=\"#{html_escape(opts["pdf"])}\">A4 PDF</a>") unless opts["pdf"].blank?
   unless name.blank? || opts["sandbox"].blank?

@@ -41,6 +41,45 @@ def choose_file(input, name, text)
   + " input.dispatchEvent(new Event('change', { bubbles: true })); })()")
 end
 
+# Two bars repeated, with a first and a second ending, then a last bar.
+const REPEATED = "\\header { title = \"Twice\" }\n{ \\time 4/4 \\repeat volta 2 { c'4 d' e' f' }"
++ " \\alternative { { g'1 } { a'1 } } b'1 \\bar \"|.\" }"
+
+# The keys of a saved MIDI file's notes, in the order they sound, and its
+# tempo: read in the page from the file the editor offered (window.savedHref).
+const MIDI_KEYS = """
+(async () => {
+  const bytes = new Uint8Array(await (await fetch(window.savedHref)).arrayBuffer());
+  const notes = [];
+  let tempo = 0;
+  let at = 14;
+  while (at < bytes.length) {
+    const end = at + 8 + ((bytes[at + 4] << 24) | (bytes[at + 5] << 16) | (bytes[at + 6] << 8) | bytes[at + 7]);
+    let q = at + 8, ticks = 0, running = 0;
+    const number = () => { let v = 0, b; do { b = bytes[q++]; v = (v << 7) | (b & 127); } while (b & 128); return v; };
+    while (q < end) {
+      ticks += number();
+      let status = bytes[q];
+      if (status & 128) q++; else status = running;
+      running = status;
+      if (status === 0xff) {
+        const type = bytes[q++], size = number();
+        if (type === 0x51) tempo = Math.round(60e6 / ((bytes[q] << 16) | (bytes[q + 1] << 8) | bytes[q + 2]));
+        q += size;
+      } else if (status === 0xf0 || status === 0xf7) q += number();
+      else {
+        const kind = status & 0xf0, key = bytes[q++];
+        const velocity = kind === 0xc0 || kind === 0xd0 ? 0 : bytes[q++];
+        if (kind === 0x90 && velocity > 0) notes.push([ticks, key]);
+      }
+    }
+    at = end;
+  }
+  notes.sort((a, b) => a[0] - b[0]);
+  return JSON.stringify({ tempo, keys: notes.map((n) => n[1]) });
+})()
+"""
+
 def marked_text
   evaluate("document.querySelector('[data-source-mark] mark')?.textContent ?? null")
 end
@@ -114,5 +153,31 @@ describe("The playground, in a browser") do
     choose_file("[data-act='open']", "notes.xml", "<html><body>no music</body></html>")
     wait_for_text("This is not a MusicXML score")
     assert_contains(evaluate("document.querySelector('[data-source]').value"), "Au clair de la lune")
+  end
+
+  test("Save as MIDI plays the repeat out, each ending in turn, at 100 a quarter") do
+    type_source(REPEATED)
+    evaluate("(() => { window.saved = null; HTMLAnchorElement.prototype.click = function () {"
+    + " window.saved = this.download; window.savedHref = this.href; }; })()")
+    evaluate("document.querySelector('[data-act=\"save-midi\"]').click()")
+    sleep(0.8)
+    assert_eq(evaluate("window.saved"), "twice.mid")
+    heard = JSON.parse(evaluate(MIDI_KEYS))
+    assert_eq(heard["tempo"], 100)
+    # C D E F G, C D E F A, then B: not the written C D E F G A B.
+    assert_eq(heard["keys"], [
+      60,
+      62,
+      64,
+      65,
+      67,
+      60,
+      62,
+      64,
+      65,
+      69,
+      71
+    ])
+    assert_no_page_errors()
   end
 end

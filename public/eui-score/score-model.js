@@ -19,6 +19,9 @@
 /** Ticks in a whole note, as eui-score counts them: a dotted 128th, and any of them in a triplet, quintuplet, sextuplet or septuplet — or a triplet in a triplet — is a whole number. */
 export const WHOLE = 80640;
 
+/** A quarter's speed when the source sets none: 100, on Play, in a saved MIDI file and in the embed alike. */
+export const DEFAULT_BPM = 100;
+
 const NAMES = ["c", "d", "e", "f", "g", "a", "b"];
 const NATURAL = [0, 2, 4, 5, 7, 9, 11];
 const SHARPS = [3, 0, 4, 1, 5, 2, 6];
@@ -160,7 +163,7 @@ function setChange(score, b, field, value) {
 export function secondsAt(score, t) {
   const marks = [{ at: 0, tempo: score.tempo }, ...(score.changes ?? []).filter((c) => c.tempo?.bpm).map((c) => ({ at: barStart(score, c.bar), tempo: tempoAt(score, c.bar) }))];
   let sec = 0;
-  let bpm = score.tempo?.bpm || 100;
+  let bpm = score.tempo?.bpm || DEFAULT_BPM;
   let base = score.tempo?.base || 4;
   let from = 0;
   for (const m of marks.slice(1)) {
@@ -2486,6 +2489,24 @@ export function playOrder(score) {
   return [...first, ...again];
 }
 
+/**
+ * The LilyPond a MIDI file is written from: `source` with every repeat
+ * played out and its D.S. and D.C. taken, when this model reads it —
+ * `parse` is eui-score's `score_json`. A source with neither, or one the
+ * model cannot read, is played as it is written: the engraver's own MIDI
+ * plays a repeat once, then each of its endings.
+ */
+export function playedSource(source, parse) {
+  if (!/\\(repeat|jump)\b/.test(source)) return source;
+  let read;
+  try {
+    read = fromParsed(JSON.parse(parse(source)));
+  } catch {
+    return source;
+  }
+  return read.score ? toLilyPond(read.score, { unfold: true }).source : source;
+}
+
 /** The bars in the order they sound, every repeat played out. */
 function repeatOrder(score) {
   const total = barsOf(score);
@@ -2518,7 +2539,7 @@ function repeatOrder(score) {
 
 /** The beat and its speed in bar `b`, as secondsAt counts them: 100 a quarter when none is set. */
 function speedAt(score, b) {
-  let bpm = score.tempo?.bpm || 100;
+  let bpm = score.tempo?.bpm || DEFAULT_BPM;
   let base = score.tempo?.base || 4;
   for (const c of score.changes ?? []) {
     if (c.bar > b || !c.tempo?.bpm) continue;

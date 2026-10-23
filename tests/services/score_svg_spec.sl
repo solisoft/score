@@ -81,6 +81,14 @@ describe("ScoreSvg") do
       assert(figure["midi"].starts_with?("data:audio/midi;base64,TVRoZ"))
     end
 
+    test("plays a source with no tempo at 100 a quarter, as the editor does") do
+      src = "{ c'4 d' }"
+      at_hundred = "data:audio/midi;base64," + Base64.encode(eui_score_midi(src, {"bpm": 100}))
+      at_default = "data:audio/midi;base64," + Base64.encode(eui_score_midi(src, {}))
+      assert_eq(ScoreSvg.midi_url(src), at_hundred)
+      assert_ne(ScoreSvg.midi_url(src), at_default)
+    end
+
     test("carries no MIDI when the source is refused") do
       figure = ScoreSvg.figure("{ c'64 }", 600, 7)
       assert_not_null(figure["error"])

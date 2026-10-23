@@ -29,10 +29,10 @@
   }
 
   /**
-   * The piece's MIDI: the server's, or — for a piece with repeats, which the
-   * server plays once — written here with every repeat played out, as the
-   * playground plays it. A source the editor's model cannot read keeps the
-   * server's.
+   * The piece's MIDI: the server's, or — for a piece with repeats or a D.S.,
+   * which the server plays once, as written — the browser module's, which
+   * plays every repeat out and takes the jumps, as the editor plays it. A
+   * source the editor's model cannot read is played as written there too.
    */
   function midiOf(button) {
     var server = function () {
@@ -41,22 +41,40 @@
       });
     };
     var src = button.getAttribute("data-src");
-    // The server's file plays every repeat once, and leaves out what the
-    // browser's module plays: arpeggios, glissandi, ornaments.
-    var repeats = /\\repeat\b/.test(src || "");
-    if (!src || (!repeats && !/\\(arpeggio|glissando|trill|prall|mordent|turn)\b/.test(src))) return server();
+    if (!src || !needsBrowser(src)) return server();
+    // The model under its own address: each file here is versioned by itself.
     return Promise.all([import(ENGINE_SRC), import(MODEL_SRC)])
       .then(function (mods) {
         var E = mods[0];
         var M = mods[1];
         return E.loaded().then(function () {
-          if (!repeats) return E.toMidi(src);
-          var read = M.fromParsed(JSON.parse(E.engine.score_json(src)));
-          if (!read.score) return server();
-          return E.toMidi(M.toLilyPond(read.score, { unfold: true }).source);
+          return E.toMidi(M.playedSource(src, E.engine.score_json), { unfold: false });
         });
       })
       .catch(server);
+  }
+
+  // Repeats and jumps, which the server's file plays once, and what it
+  // leaves out that the browser's module plays: arpeggios, glissandi, ornaments.
+  function needsBrowser(src) {
+    return /\\(repeat|jump|arpeggio|glissando|trill|prall|mordent|turn)\b/.test(src);
+  }
+
+  /** The MIDI link: the file as Play plays it, repeats and all. */
+  function saveMidi(link, event) {
+    var button = link.parentElement.querySelector("[data-score-play]");
+    if (!button || !needsBrowser(button.getAttribute("data-src") || "")) return;
+    event.preventDefault();
+    midiOf(button).then(function (bytes) {
+      var url = URL.createObjectURL(new Blob([bytes], { type: "audio/midi" }));
+      var save = document.createElement("a");
+      save.href = url;
+      save.download = link.getAttribute("download") || "score.mid";
+      document.body.appendChild(save);
+      save.click();
+      save.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    });
   }
 
   function clock(sec) {
@@ -165,6 +183,11 @@
     var playButton = event.target.closest("[data-score-play]");
     if (playButton) {
       play(playButton);
+      return;
+    }
+    var midiLink = event.target.closest("[data-score-midi]");
+    if (midiLink) {
+      saveMidi(midiLink, event);
       return;
     }
     var copyButton = event.target.closest("[data-score-copy]");

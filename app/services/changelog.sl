@@ -13,6 +13,16 @@ class Changelog
       {"date": "2026-10-23", "entries": [
         {
           "area": "site",
+          "title": "Saved MIDI files play the repeats",
+          "text": "File › Save as MIDI now plays the music the way Play does: every repeat played twice, each "
+          + "ending in its turn, and D.S., D.C. and the coda followed, instead of each bar once in the order it "
+          + "is written. So do the MIDI buttons under the site's scores and the embeddable eui-score module. A "
+          + "piece with no tempo plays at 100 beats a minute everywhere, as it does on Play.",
+          "link": "app",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "The site's menu fits on a phone",
           "text": "On a narrow screen the site's navigation stopped at Limits: Changelog, Playground and the "
           + "Open the app button were off the edge, with nothing to say the bar scrolled. Now the button stays "

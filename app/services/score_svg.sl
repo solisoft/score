@@ -171,8 +171,10 @@ class ScoreSvg
   end
 
   # The source as a Standard MIDI File, in a data: URL; nil when refused.
+  # 100 a quarter when the source sets no tempo, as the editor plays it
+  # (DEFAULT_BPM in public/eui-score/score-model.js).
   static def midi_url(src)
-    bytes = eui_score_midi(src, {}) rescue nil
+    bytes = eui_score_midi(src, {"bpm": 100}) rescue nil
     return nil if bytes.nil?
 
     "data:audio/midi;base64," + Base64.encode(bytes)

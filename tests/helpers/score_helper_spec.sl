@@ -42,6 +42,7 @@ describe("score_figure") do
     )
     assert_contains(html, "<div class=\"score-sheet\"><svg")
     assert_contains(html, "data-score-play data-midi=\"data:audio/midi;base64,")
+    assert_contains(html, "data-score-midi href=\"data:audio/midi;base64,")
     assert_contains(html, "download=\"waltz.mid\"")
     assert_contains(html, "href=\"/x.pdf\"")
     assert_contains(html, "href=\"/playground?source=piano/waltz\"")
