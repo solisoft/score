@@ -56,43 +56,56 @@ class Score < Model
   end
 
   # The scores `user` has out of the trash, matching `query` (in the title),
-  # in `sort` order: "updated" (the default), "title" or "created".
+  # in `sort` order: "updated" (the default), "title" or "created". As a
+  # list shows them (`listed`): without their sources.
   static def library(user, query, sort)
     needle = query.to_s.trim.downcase
     condition = "doc.user_id == @user AND doc.trashed_at == null"
     condition = condition + " AND CONTAINS(LOWER(doc.title), @needle)" unless needle.blank?
     binds = {"user": user._key}
     binds["needle"] = needle unless needle.blank?
-    builder = Score.where(condition, binds)
+    builder = Score.listed(Score.where(condition, binds))
     builder = builder.order("title", "asc") if sort == "title"
     builder = builder.order("created_at", "desc") if sort == "created"
     builder = builder.order("updated_at", "desc") unless ["title", "created"].includes?(sort)
     builder.limit(500).all
   end
 
+  # What a list of scores shows of each — its title, its owner, its times,
+  # its revision (in its preview's address) — and not its source, which may
+  # run to a megabyte: `query` reading only those. Read, never saved back.
+  static def listed(query)
+    query.select("title", "user_id", "updated_at", "created_at", "revision", "trashed_at")
+  end
+
   # The `count` scores `user` changed last, out of the trash.
   static def recent(user, count)
     mine = Score.where("doc.user_id == @user AND doc.trashed_at == null", {"user": user._key})
-    mine.order("updated_at", "desc").limit(count).all
+    Score.listed(mine).order("updated_at", "desc").limit(count).all
   end
 
-  # The scores `user` moved to the trash, the latest first.
+  # The scores in `user`'s trash, the latest first: those moved there less
+  # than SCORE_TRASH_DAYS ago. An older one is past its time: the nightly
+  # DataCleanupJob erases it (`purge_all_trash`).
   static def trash_of(user)
-    trashed = Score.where("doc.user_id == @user AND doc.trashed_at != null", {"user": user._key})
-    trashed.order("trashed_at", "desc").limit(500).all
+    Score.listed(Score.trashed_by(user)).order("trashed_at", "desc").limit(500).all
   end
 
-  # What has been in `user`'s trash longer than SCORE_TRASH_DAYS goes, with
-  # all that hangs off it (`erase`). Answers how many scores went.
-  static def purge_trash(user)
-    Score.erase_each(Score.where(
-      "doc.user_id == @user AND doc.trashed_at != null AND doc.trashed_at < @before",
-      {"user": user._key, "before": Score.trash_cutoff}
-    ))
+  # How many scores `user`'s trash shows, counted by the database.
+  static def trash_count(user)
+    Score.trashed_by(user).count
   end
 
-  # The same for everyone, owners who never open their library included:
-  # the daily DataCleanupJob's. Answers how many scores went.
+  static def trashed_by(user)
+    Score.where(
+      "doc.user_id == @user AND doc.trashed_at != null AND doc.trashed_at >= @since",
+      {"user": user._key, "since": Score.trash_cutoff}
+    )
+  end
+
+  # What has been in the trash longer than SCORE_TRASH_DAYS goes, with all
+  # that hangs off it (`erase`), every owner's: the nightly DataCleanupJob's.
+  # Answers how many scores went.
   static def purge_all_trash
     Score.erase_each(Score.where(
       "doc.trashed_at != null AND doc.trashed_at < @before",

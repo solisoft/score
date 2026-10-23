@@ -89,6 +89,31 @@ describe("DataCleanupJob") do
     assert_eq(untouched.request, "Add a coda")
   end
 
+  test("lets the engravings past their days go, and keeps a recent one") do
+    old_digest = Crypto.sha256("old-#{uuid_v4}")
+    Engraving.upsert(
+      old_digest,
+      {
+        "svg": "<svg/>",
+        "error": nil,
+        "created_at": DateTime.utc.to_unix - ENGRAVING_DAYS * 86400 - 60
+      }
+    )
+    recent_digest = Crypto.sha256("recent-#{uuid_v4}")
+    Engraving.upsert(
+      recent_digest,
+      {
+        "svg": "<svg/>",
+        "error": nil,
+        "created_at": DateTime.utc.to_unix
+      }
+    )
+    done = DataCleanupJob.perform_now({})
+    assert_gt(done["engravings"], 0)
+    assert_null(Engraving.find_by("_key", old_digest))
+    assert_not_null(Engraving.find_by("_key", recent_digest))
+  end
+
   test("leaves finished readings as they are") do
     user = cleanup_owner()
     finished = reading_started(user, SCORE_AI_STUCK_SECONDS * 10)

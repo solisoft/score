@@ -5,11 +5,12 @@ class AppScoresController < AppBaseController
   # GET /app/scores — ?q= searches the titles, ?sort= updated|title|created
   def index
     @user = current_user()
-    Score.purge_trash(@user)
     @query = params["q"].to_s
     @sort = ["title", "created"].includes?(params["sort"].to_s) ? params["sort"].to_s : "updated"
-    @scores = Score.library(@user, @query, @sort)
-    @trash_count = Score.trash_of(@user).length
+    grouped(fn() {
+      @scores = Score.library(@user, @query, @sort)
+      @trash_count = Score.trash_count(@user)
+    })
     @shared = ScoreShare.shared_with(@user)
     @title = "Your scores"
     @description = "Your scores, saved to your account."
@@ -18,7 +19,6 @@ class AppScoresController < AppBaseController
   # GET /app/trash — what was moved to the trash, kept SCORE_TRASH_DAYS days
   def trash
     @user = current_user()
-    Score.purge_trash(@user)
     @scores = Score.trash_of(@user)
     @trash_days = SCORE_TRASH_DAYS
     @title = "Trash"

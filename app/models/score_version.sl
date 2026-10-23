@@ -34,27 +34,34 @@ class ScoreVersion < Model
   # The score as it stands, kept if its latest version is older than
   # SCORE_VERSION_EVERY seconds (or it has none): called before each save.
   static def keep_if_due(score)
-    latest = ScoreVersion.where("doc.score_id == @score", {"score": score._key}).order("created_at", "desc").first
+    latest = ScoreVersion.of(score).select("created_at").order("created_at", "desc").first
     return nil unless latest.nil? || DateTime.utc.to_unix - latest.created_at >= SCORE_VERSION_EVERY
 
     ScoreVersion.keep(score, score.source, "auto")
   end
 
-  # `score`'s versions, the latest first.
+  # `score`'s versions, the latest first, as the History page lists them:
+  # without their sources (`find` one for its source).
   static def history(score)
-    versions = ScoreVersion.where("doc.score_id == @score", {"score": score._key})
-    versions.order("created_at", "desc").limit(SCORE_VERSIONS_KEPT).all
+    listed = ScoreVersion.of(score).select("title", "reason", "revision", "created_at")
+    listed.order("created_at", "desc").limit(SCORE_VERSIONS_KEPT).all
   end
 
+  # Past SCORE_VERSIONS_KEPT, the oldest versions go: found by the time of
+  # the last one kept, read alone, then removed in one statement.
   static def prune(score)
-    kept = ScoreVersion.history(score)
-    return nil if kept.length < SCORE_VERSIONS_KEPT
+    last_kept = ScoreVersion.of(score).select("created_at").order("created_at", "desc")
+    last_kept = last_kept.offset(SCORE_VERSIONS_KEPT - 1).limit(1).all
+    return nil if last_kept.length == 0
 
-    oldest = kept[kept.length - 1].created_at
     ScoreVersion.where(
       "doc.score_id == @score AND doc.created_at < @oldest",
-      {"score": score._key, "oldest": oldest}
+      {"score": score._key, "oldest": last_kept[0].created_at}
     ).delete_all
+  end
+
+  static def of(score)
+    ScoreVersion.where("doc.score_id == @score", {"score": score._key})
   end
 
   static def delete_all_for(score)

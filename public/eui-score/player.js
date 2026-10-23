@@ -112,7 +112,14 @@ async function sounds() {
   }
   try {
     // Before the synthesizer gets the buffer: it may take it for its worklet.
+    // The app's service worker (public/sw.js) keeps the sounds in this same
+    // cache, under this same address: one copy, whoever puts it first.
     await cache?.put(SOUNDS, new Response(bytes, { headers: { "content-type": "audio/x-soundfont" } }));
+    // An older version of the sounds goes: 38 MB each.
+    for (const kept of (await cache?.keys()) ?? []) {
+      const url = new URL(kept.url);
+      if (url.pathname === SOUNDS.pathname && url.search !== SOUNDS.search) await cache.delete(kept);
+    }
   } catch (error) {}
   return bytes.buffer;
 }

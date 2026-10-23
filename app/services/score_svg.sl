@@ -18,7 +18,29 @@ class ScoreSvg
   # 0 keeps them all. `marks` lights items as an editor shows a selection:
   # an item's number among the notes and rests, from 0, as a string, to a
   # CSS colour; their paths are drawn again over the score in it.
+  #
+  # Engraved once, then read back for ENGRAVING_DAYS (Engraving): the same
+  # score at the same size and cut, with the same items lit, is the same
+  # drawing, and an engraving costs tens of milliseconds a page.
   static def engrave(src, width, staff_space, max_height, marks)
+    digest = ScoreSvg.digest(src, width, staff_space, max_height, marks)
+    kept = Engraving.recall(digest)
+    return kept unless kept.nil?
+
+    engraved = ScoreSvg.draw(src, width, staff_space, max_height, marks)
+    Engraving.remember(digest, engraved)
+    engraved
+  end
+
+  # What an engraving is kept under: all that makes it. ENGRAVING_FORMAT is
+  # raised when the drawing itself changes (here, or in the engraver), so
+  # what was kept before is not read again.
+  static def digest(src, width, staff_space, max_height, marks)
+    Crypto.sha256("#{ENGRAVING_FORMAT}|#{width}|#{staff_space}|#{max_height}|#{marks.to_json}|#{src}")
+  end
+
+  # The engraving itself: `engrave`'s answer, every time anew.
+  static def draw(src, width, staff_space, max_height, marks)
     laid = eui_score_layout(src, width / staff_space, {})
     if laid.has_key("error")
       return {"svg": nil, "error": laid["error"]}

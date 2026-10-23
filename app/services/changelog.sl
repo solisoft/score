@@ -13,6 +13,18 @@ class Changelog
       {"date": "2026-10-23", "entries": [
         {
           "area": "site",
+          "title": "Your library, its history and its previews open faster",
+          "text": "Your scores now open with a handful of database reads however many you have, without loading "
+          + "every score's full text just to show its title, and the History page lists versions the same way. "
+          + "A score already drawn, in the editor or on a library card, is not drawn again for three days. The "
+          + "sounds kept for playing offline (about 40 MB) are stored once on your device instead of twice, "
+          + "and an older version of the editor's files is let go when a new one arrives. The trash still keeps "
+          + "a score 30 days.",
+          "link": "app",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "Zoom with Ctrl + and −, and menus you can move through with the keyboard",
           "text": "The score now zooms with Ctrl and + or − (⌘ on a Mac) instead of the whole page; + and − "
           + "alone still sharpen and flatten the selected note. The keyboard shortcuts sheet (?) now lists "

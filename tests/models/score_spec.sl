@@ -105,6 +105,9 @@ describe("Score") do
       }), ["Allemande"])
       assert_eq(Score.library(owner, "nothing like it", "updated").length, 0)
       assert_eq(Score.library(owner, "", "created")[0].title, "Allemande")
+      # A list reads no source.
+      assert_null(Score.library(owner, "", "title")[0].source)
+      assert_null(Score.recent(owner, 1)[0].source)
     end
   end
 
@@ -122,20 +125,29 @@ describe("Score") do
       assert_eq(Score.trash_of(owner).length, 0)
     end
 
-    test("lets go of what has been there more than 30 days, and only that") do
+    test("no longer shows what has been there more than 30 days, nor counts it") do
       owner = score_owner()
-      old = Score.start(owner, Score.blank_source("Old"))
-      old.move_to_trash
-      stale = Score.find(old._key)
-      stale.trashed_at = DateTime.utc.to_unix - (SCORE_TRASH_DAYS + 1) * 86400
-      stale.save
+      old = trashed_long_ago(owner, "Old")
       Score.start(owner, Score.blank_source("Recent")).move_to_trash
       Score.start(owner, Score.blank_source("Kept"))
-      Score.purge_trash(owner)
       assert_eq(Score.trash_of(owner).map(&{ |kept|
         kept.title
       }), ["Recent"])
+      assert_eq(Score.trash_count(owner), 1)
       assert_eq(Score.library(owner, "", "updated").length, 1)
+      # Not erased on the way: the nightly purge does that.
+      assert_not_null(Score.find_by("_key", old._key))
+    end
+
+    test("lists and counts by the database, without the sources") do
+      owner = score_owner()
+      Score.start(owner, Score.blank_source("Light")).move_to_trash
+      listed = Score.trash_of(owner)[0]
+      assert_eq(listed.title, "Light")
+      assert_not_null(listed.trashed_at)
+      assert_null(listed.source)
+      assert_eq(Score.library(score_owner(), "", "updated").length, 0)
+      assert_eq(Score.trash_count(score_owner()), 0)
     end
   end
 
@@ -157,7 +169,7 @@ describe("Score") do
       [old, kept].each do |score|
         hang_off(score)
       end
-      assert_eq(Score.purge_trash(owner), 1)
+      assert_gt(Score.purge_all_trash, 0)
       assert_null(Score.find_by("_key", old._key))
       assert_eq(remains_of(old), [
         0,
@@ -222,7 +234,7 @@ describe("Score") do
         version.reason == "conflict"
       end
       assert_eq(conflicts.length, 1)
-      assert_contains(conflicts[0].source, "d'1")
+      assert_contains(ScoreVersion.find(conflicts[0]._key).source, "d'1")
     end
 
     test("sets what a save sets: the title from the source, the time, the next revision") do

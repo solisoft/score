@@ -54,16 +54,23 @@ class ScoreShare < Model
   end
 
   # The scores shared with `user`, out of the trash, each with the role:
-  # [{"score", "role"}].
+  # [{"score", "role"}]: the shares, then their scores in one query, as a
+  # list shows them (Score.listed) — two queries however many there are.
   static def shared_with(user)
-    ScoreShare.where({"email": user.email}).limit(500).all.map do |share|
-      score = Score.find_by("_key", share.score_id)
-      score.nil? || score.trashed? ? nil : {
-        "score": score,
-        "role": share.role
-      }
-    end.filter do |entry|
-      !entry.nil?
+    shares = ScoreShare.where({"email": user.email}).limit(500).all
+    return [] if shares.length == 0
+
+    keys = shares.map(&:score_id)
+    live = Score.where("doc._key IN @keys AND doc.trashed_at == null", {"keys": keys})
+    scores = Score.listed(live).limit(500).all
+    by_key = {}
+    scores.each do |score|
+      by_key[score._key] = score
+    end
+    shares.filter do |share|
+      by_key.has_key(share.score_id)
+    end.map do |share|
+      {"score": by_key[share.score_id], "role": share.role}
     end
   end
 

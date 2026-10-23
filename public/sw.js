@@ -2,25 +2,61 @@
 // answers only for the app's pages, /app and /s/, and the files they load):
 // what it needs to open and write without a network.
 //
-// - The engraver, the editor, the sounds, styles and fonts: kept the first
-//   time they are fetched, served from here after (their URLs carry their
-//   version, so a deploy brings new ones, and old ones are let go below).
+// - The engraver, the editor, styles and fonts: kept the first time they
+//   are fetched, served from here after. Their URLs carry their version: a
+//   deploy brings new ones, and each replaces the version kept before it.
+// - The sounds (38 MB): kept once, in the cache the player keeps them in
+//   too (SOUNDS, public/eui-score/player.js), under the same address.
 // - The app's pages: from the network when there is one, kept as they come;
 //   without one, the copy kept, or a page that says so.
 //
 // What is typed offline is not this file's: the editor page keeps it in the
 // browser and sends it when the network is back (app/views/app/scores/show).
-const ASSETS = "eui-score-assets-v1";
+// v2: v1 kept every version of every file, and the sounds a second time
+// (#368); its sounds move to SOUNDS on activation, the rest goes.
+const ASSETS = "eui-score-assets-v2";
+// The player's own cache (public/eui-score/player.js): one copy of the sounds.
+const SOUNDS = "eui-score-sounds";
 // v2: the pages kept before sign-out cleared them (#356) go with v1.
 const PAGES = "eui-score-pages-v2";
 
 self.addEventListener("install", () => self.skipWaiting());
-// Caches of an older version of this file are let go.
+// Caches of an older version of this file are let go — the sounds they
+// hold moved to SOUNDS first, so they are not downloaded again.
 self.addEventListener("activate", (event) => event.waitUntil(forgetOldCaches().then(() => self.clients.claim())));
 
+const CURRENT = [ASSETS, PAGES, SOUNDS];
+const isSounds = (url) => url.origin === self.location.origin && url.pathname.startsWith("/soundfonts/");
+
 async function forgetOldCaches() {
-  const names = await caches.keys();
-  await Promise.all(names.filter((name) => name.startsWith("eui-score-") && name !== ASSETS && name !== PAGES).map((name) => caches.delete(name)));
+  const old = (await caches.keys()).filter((name) => name.startsWith("eui-score-") && !CURRENT.includes(name));
+  for (const name of old) await moveSounds(name);
+  await Promise.all(old.map((name) => caches.delete(name)));
+}
+
+async function moveSounds(name) {
+  const from = await caches.open(name);
+  const to = await caches.open(SOUNDS);
+  for (const request of await from.keys()) {
+    if (!isSounds(new URL(request.url)) || (await to.match(request))) continue;
+    const response = await from.match(request);
+    if (response) await keep(to, request, response);
+  }
+}
+
+// `response` kept for `request`, in place of the other versions of the same
+// file of this site (same path, another ?v=): a deploy's new engraver
+// replaces the old. (Another site's addresses differ by more than a
+// version: the fonts' stylesheets are one path for every family.)
+async function keep(cache, request, response) {
+  await cache.put(request, response);
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+  const older = (await cache.keys()).filter((kept) => {
+    const other = new URL(kept.url);
+    return other.origin === url.origin && other.pathname === url.pathname && other.search !== url.search;
+  });
+  await Promise.all(older.map((kept) => cache.delete(kept)));
 }
 
 // Signed out (the page after says so, app/views/layouts/app): the app's pages
@@ -49,12 +85,12 @@ self.addEventListener("fetch", (event) => {
 });
 
 async function fromCacheFirst(request) {
-  const cache = await caches.open(ASSETS);
+  const cache = await caches.open(isSounds(new URL(request.url)) ? SOUNDS : ASSETS);
   const kept = await cache.match(request);
   if (kept) return kept;
   const response = await fetch(request);
   // An opaque answer (a font from another origin) is kept too: it is what the page would use.
-  if (response.ok || response.type === "opaque") cache.put(request, response.clone());
+  if (response.ok || response.type === "opaque") keep(cache, request, response.clone()).catch(() => {});
   return response;
 }
 

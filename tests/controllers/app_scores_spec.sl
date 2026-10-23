@@ -75,7 +75,7 @@ describe("AppScoresController") do
       )
       created = Score.library(owner, "", "updated")[0]
       assert_eq(created.title, "my-tune")
-      assert_contains(created.source, "c4 d e f")
+      assert_contains(Score.find(created._key).source, "c4 d e f")
       post(
         "/app/scores",
         {"source": "\\header { title = \"Its own\" }\n{ c'1 }", "title": "file-name"}
@@ -113,6 +113,38 @@ describe("AppScoresController") do
     get("/app/scores?sort=nonsense")
     assert_eq(assigns()["sort"], "updated")
     assert_contains(res_body(get("/app/scores?q=zzz")), "No title has")
+  end
+
+  test("reads a library of many scores, shares and a trash in a few queries, however many there are") do
+    owner = library_user()
+    sharer = library_user()
+    (0 .. 12).each do |i|
+      Score.start(owner, Score.blank_source("Own #{i}"))
+    end
+    (0 .. 3).each do |i|
+      Score.start(owner, Score.blank_source("Thrown #{i}")).move_to_trash
+    end
+    shared = (0 .. 5).map do |i|
+      Score.start(sharer, Score.blank_source("Lent #{i}"))
+    end
+    shared.each do |score|
+      ScoreShare.invite(score, owner.email, "read")
+    end
+    # Trashed by its owner: no longer listed for the one it was shared with.
+    shared[0].move_to_trash
+    library_sign_in(owner)
+    response = get("/app/scores")
+    assert_eq(res_status(response), 200)
+    assert_no_n_plus_one(response)
+    assert_max_queries(response, 6)
+    assert_eq(assigns()["scores"].length, 12)
+    assert_eq(assigns()["trash_count"], 3)
+    assert_eq(assigns()["shared"].map(&{ |entry|
+      entry["score"]["title"]
+    }).sort(), ["Lent 1", "Lent 2", "Lent 3", "Lent 4"])
+    assert_contains(res_body(response), "Trash (3)")
+    assert_contains(res_body(response), "/app/scores/#{shared[1]._key}/preview.svg?r=")
+    assert_not(res_body(response).contains("Lent 0"))
   end
 
   test("says what to do with an empty library") do
@@ -238,7 +270,7 @@ describe("AppScoresController") do
         version.reason == "conflict"
       end
       assert_eq(conflicts.length, 1)
-      assert_contains(conflicts[0].source, "f'1")
+      assert_contains(ScoreVersion.find(conflicts[0]._key).source, "f'1")
     end
 
     test("a signed-out save that wants JSON is answered 401 JSON, and writes nothing") do
