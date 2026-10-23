@@ -71,6 +71,10 @@ describe("PagesController") do
       assert_contains(body, "change-tag-engine\">Engraver")
       assert_contains(body, "change-tag-site\">Site &amp; editor")
       assert_contains(body, "A note too long for its bar is cut into tied notes")
+      # The day's latest, the app's among them.
+      assert_contains(body, "Record live from a MIDI keyboard")
+      assert_contains(body, "The MIDI view: every track at a glance")
+      assert_contains(body, "Notes dragged and resized on the MIDI view")
     end
 
     test("links a change to the page that shows it, and no further") do

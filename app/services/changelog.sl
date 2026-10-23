@@ -13,6 +13,90 @@ class Changelog
       {"date": "2026-10-23", "entries": [
         {
           "area": "site",
+          "title": "Notes dragged and resized on the MIDI view's keyboard",
+          "text": "On the Keyboard layout, drag a note up or down to change its pitch, along to move it, and its "
+          + "right edge to make it longer or shorter, on the Quantize grid; the score follows, ties and all, "
+          + "and Ctrl+Z puts it back.",
+          "link": "app",
+          "app": true
+        },
+        {
+          "area": "site",
+          "title": "A loop of its own, and a click to let a selection go",
+          "text": "Drag on the MIDI view's bar numbers to set the bars that play over and over (or Play › Loop "
+          + "the selected bars); what you select no longer loops by itself. A click on an empty bar lets a "
+          + "selection go, and a double click on a track's name shows it alone on the keyboard.",
+          "link": "app",
+          "app": true
+        },
+        {
+          "area": "site",
+          "title": "The editor's commands fit a phone",
+          "text": "On a phone, Undo, MIDI, Play, Rec and the zoom have rows of their own under the menus, wrapping "
+          + "where the screen is narrow: nothing is cut off any more.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
+          "title": "Hear your own virtual instruments as you play",
+          "text": "With a MIDI device chosen in Sound to (EastWest, Logic or GarageBand, through the Mac's IAC "
+          + "bus), the keys you play while recording and the notes you write go to it too, each on its "
+          + "staff's channel, as hard as you struck them.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
+          "title": "Recording: triplets, drums, dynamics and loops",
+          "text": "Quantize to eighth or sixteenth triplets, record a drum part from a pad (each key its drum), "
+          + "let how hard you strike the keys write the dynamics, and record into a loop pass after pass, "
+          + "each adding its notes. ● Rec and the grid now sit next to Play.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
+          "title": "Record live from a MIDI keyboard",
+          "text": "Press R (or ● Rec): after a bar of count-in, play along with the other staves and the "
+          + "metronome; what you played is written into the staff, fitted to the grid you chose, chords "
+          + "and ties included. One Undo takes the whole take back.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
+          "title": "The MIDI view: every track at a glance",
+          "text": "View › MIDI view shows the score as it sounds: a strip per track, or a piano roll. Select "
+          + "bars across tracks, copy them, paste them over other bars, or insert them as new bars to "
+          + "repeat a verse — Edit › Insert the copied bars, also in the score.",
+          "link": "app",
+          "app": true
+        },
+        {
+          "area": "site",
+          "title": "An AI assistant in the editor",
+          "text": "The AI menu adds chord symbols to a melody, harmonizes it, suggests improvements or does what "
+          + "you ask; it explains what it did beside the score it proposes, and nothing changes until you "
+          + "apply it.",
+          "link": "app",
+          "app": true
+        },
+        {
+          "area": "site",
+          "title": "Your own AI key: Claude, GPT, Gemini, Mistral, DeepSeek, Kimi",
+          "text": "Bring a key from the AI provider of your choice on your account page, with the model you "
+          + "want: photos and the assistant use it, kept encrypted and never shown again.",
+          "link": "app",
+          "app": true
+        },
+        {
+          "area": "site",
+          "title": "A score from a photo",
+          "text": "Start a score from a photo or scan of printed or handwritten music, or open one in the editor "
+          + "(File › Open a photo…): an AI reads it, the engraver checks it, and you see it beside the photo "
+          + "before keeping it.",
+          "link": "app",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "Two-step sign-in, if you want it",
           "text": "Your account can ask for a code from an authenticator app on your phone as well as your password: "
           + "set it up from a QR code, keep ten backup codes, turn it off with your password and a code.",
