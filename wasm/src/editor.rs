@@ -49,6 +49,11 @@ struct Found<'a> {
     previous: Option<i64>,
 }
 
+/// Every note and rest by its number: one pass, where `find` looks for one.
+fn events_by_item(parsed: &Parsed) -> std::collections::HashMap<usize, &parse::Ev> {
+    parsed.staves.iter().flat_map(|s| s.events.iter()).filter(|e| matches!(e.k, Kind::Note | Kind::Rest)).map(|e| (e.i, e)).collect()
+}
+
 fn find(parsed: &Parsed, item: usize) -> Option<Found<'_>> {
     for staff in &parsed.staves {
         let (mut clef, mut fifths, mut previous) = (Clef::default(), 0, None);
@@ -101,10 +106,11 @@ fn written_span(src: &str, at_byte: usize) -> Option<std::ops::Range<usize>> {
 pub fn spans(src: &str) -> Result<Value, String> {
     let parsed = parse::parse(src).map_err(|e| e.message)?;
     let bytes = byte_offsets(src);
+    let units = utf16_offsets(src);
     let mut out: Vec<(usize, Value)> = Vec::new();
     for staff in &parsed.staves {
         for ev in staff.events.iter().filter(|e| matches!(e.k, Kind::Note | Kind::Rest)) {
-            let span = bytes.get(ev.at).and_then(|&at| written_span(src, at)).map(|r| json!([utf16_at(src, r.start), utf16_at(src, r.end)]));
+            let span = bytes.get(ev.at).and_then(|&at| written_span(src, at)).map(|r| json!([units[r.start], units[r.end]]));
             out.push((ev.i, span.unwrap_or(Value::Null)));
         }
     }
@@ -116,9 +122,20 @@ pub fn spans(src: &str) -> Result<Value, String> {
     Ok(Value::Array(list))
 }
 
-/// A byte offset into `src` as a count of UTF-16 units.
-fn utf16_at(src: &str, byte: usize) -> usize {
-    src.get(..byte).map_or(0, |s| s.encode_utf16().count())
+/// For each byte offset into `src`, the count of UTF-16 units before it — as
+/// a textarea counts — made once: counting from the start for every note
+/// made a long score's view quadratic.
+fn utf16_offsets(src: &str) -> Vec<usize> {
+    let mut out = vec![0; src.len() + 1];
+    let mut units = 0;
+    for (byte, ch) in src.char_indices() {
+        for k in byte..byte + ch.len_utf8() {
+            out[k] = units;
+        }
+        units += ch.len_utf16();
+    }
+    out[src.len()] = units;
+    out
 }
 
 /// Engraves `src` and answers it, or the engraver's reason for refusing it.
@@ -151,65 +168,51 @@ pub fn view(src: &str, width: f64, sp: f64, selected: i64, head: i64) -> Result<
     view_lit(src, width, sp, &lit)
 }
 
-/// [`view`] with any number of items and heads lit: `lit` is
-/// `{"items": {"3": "#colour", …}, "heads": [[item, head index, "#colour"], …]}`.
-pub fn view_lit(src: &str, width: f64, sp: f64, lit: &Value) -> Result<Value, String> {
+/// What a view draws of a source, whatever is lit in it: the engraving, its
+/// SVG unlit, its items and bars. A redraw of the same source — a note
+/// selected, the notes lit one after the other as the score plays — reuses
+/// it, and only the lit paths are drawn again.
+struct Base {
+    key: (String, u64, u64),
+    paths: Vec<Path>,
+    ranges: Vec<(usize, std::ops::Range<usize>)>,
+    heads: Vec<(usize, i64, std::ops::Range<usize>)>,
+    /// Each item's heads' diatonic pitches, in the order the source writes them.
+    pitches: std::collections::HashMap<usize, Vec<i64>>,
+    /// The SVG up to its lit paths, and the JSON after "svg".
+    svg_start: String,
+    rest_json: String,
+}
+
+thread_local! {
+    static LAST_VIEW: std::cell::RefCell<Option<std::rc::Rc<Base>>> = const { std::cell::RefCell::new(None) };
+}
+
+fn base(src: &str, width: f64, sp: f64) -> Result<std::rc::Rc<Base>, String> {
+    let key = (src.to_string(), width.to_bits(), sp.to_bits());
+    if let Some(found) = LAST_VIEW.with(|last| last.borrow().as_ref().filter(|b| b.key == key).cloned()) {
+        return Ok(found);
+    }
     let eng = eui_score::engrave(src, (width / sp).max(10.0), &Layout::default()).map_err(|e| e.message)?;
     let (paths, ranges, heads) = eui_score::paths_heads(&eng, sp, 0).map_err(|e| e.message)?;
     let parsed = parse::parse(src).map_err(|e| e.message)?;
-
-    // Which paths light, and in which colour: whole items, then single heads.
-    let safe = |c: &str| !c.is_empty() && c.len() < 40 && c.chars().all(|ch| ch.is_ascii_alphanumeric() || "#(),.% -".contains(ch));
-    let mut colour: BTreeMap<usize, String> = BTreeMap::new();
-    if let Some(items) = lit["items"].as_object() {
-        for (item, range) in &ranges {
-            if let Some(c) = items.get(&item.to_string()).and_then(Value::as_str).filter(|c| safe(c)) {
-                for k in range.clone() {
-                    colour.insert(k, c.to_string());
-                }
-            }
-        }
-    }
-    for entry in lit["heads"].as_array().map_or(&[][..], Vec::as_slice) {
-        let (Some(item), Some(index), Some(c)) = (entry[0].as_u64(), entry[1].as_u64(), entry[2].as_str()) else { continue };
-        if !safe(c) {
-            continue;
-        }
-        let Some(Found { ev, .. }) = find(&parsed, item as usize) else { continue };
-        let Some(want) = ev.pitches.get(index as usize).map(|p| p.d) else { continue };
-        for (i, d, range) in &heads {
-            if *i as u64 == item && *d == want {
-                for k in range.clone() {
-                    colour.insert(k, c.to_string());
-                }
-            }
-        }
-    }
+    let by_item = events_by_item(&parsed);
 
     let mut glyph_ids: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-    let (mut defs, mut body, mut over) = (String::new(), String::new(), String::new());
+    let (mut defs, mut body) = (String::new(), String::new());
     let mut right = 0.0_f64;
     let mut boxes: Vec<[f64; 4]> = Vec::with_capacity(paths.len());
-    for (k, path) in paths.iter().enumerate() {
-        let lit = colour.get(&k).map(String::as_str);
+    for path in &paths {
         match path {
             Path::Rect(r) => {
                 right = right.max(r[0] + r[2]);
                 boxes.push([r[0], r[1], r[0] + r[2], r[1] + r[3]]);
-                rect(if lit.is_some() { &mut over } else { &mut body }, r, 0.0, lit);
+                rect(&mut body, r, 0.0, None);
             }
             Path::Fill(cmds) => {
                 let (d, x, y, r) = outline(cmds);
                 right = right.max(r);
                 boxes.push(fill_box(cmds));
-                if let Some(c) = lit {
-                    let _ = write!(over, "<path fill=\"{c}\" transform=\"translate(");
-                    px(&mut over, x);
-                    over.push(' ');
-                    px(&mut over, y);
-                    let _ = write!(over, ")\" d=\"{d}\"/>");
-                    continue;
-                }
                 let next = glyph_ids.len();
                 let n = *glyph_ids.entry(d.clone()).or_insert_with(|| {
                     let _ = write!(defs, "<path id=\"ed-{next}\" d=\"{d}\"/>");
@@ -231,8 +234,9 @@ pub fn view_lit(src: &str, width: f64, sp: f64, lit: &Value) -> Result<Value, St
     let total = ink_bottom - y0;
     let w = (right + 2.0).ceil();
     let (head, label) = crate::describe::svg_head(&parsed, eng.staves.first().map_or(0, Vec::len), "ed");
-    let svg = format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 {y0} {w} {total}\" width=\"{w}\" height=\"{total}\" role=\"img\" {label}>{head}<defs>{defs}</defs><g fill=\"currentColor\">{body}</g>{over}</svg>"
+    // Lit paths are drawn again over the ink, after the body.
+    let svg_start = format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 {y0} {w} {total}\" width=\"{w}\" height=\"{total}\" role=\"img\" {label}>{head}<defs>{defs}</defs><g fill=\"currentColor\">{body}</g>"
     );
 
     let union = |range: &std::ops::Range<usize>, acc: Option<[f64; 4]>| {
@@ -250,14 +254,20 @@ pub fn view_lit(src: &str, width: f64, sp: f64, lit: &Value) -> Result<Value, St
         }
     }
     let bytes = byte_offsets(src);
+    let units = utf16_offsets(src);
+    // Each item's heads, gathered once.
+    let mut heads_of: BTreeMap<usize, Vec<&(usize, i64, std::ops::Range<usize>)>> = BTreeMap::new();
+    for h in &heads {
+        heads_of.entry(h.0).or_default().push(h);
+    }
     let mut items = Vec::new();
     for (item, b) in &item_boxes {
-        let Some(found) = find(&parsed, *item) else { continue };
-        let ev = found.ev;
+        let Some(ev) = by_item.get(item).copied() else { continue };
         let kind = if ev.k == Kind::Rest { if ev.full { "bar-rest" } else { "rest" } } else { "note" };
-        let head_list: Vec<Value> = heads
+        let head_list: Vec<Value> = heads_of
+            .get(item)
+            .map_or(&[][..], Vec::as_slice)
             .iter()
-            .filter(|(i, _, _)| i == item)
             .filter_map(|(_, d, range)| {
                 let hb = union(range, None)?;
                 let index = ev.pitches.iter().position(|p| p.d == *d)?;
@@ -265,7 +275,7 @@ pub fn view_lit(src: &str, width: f64, sp: f64, lit: &Value) -> Result<Value, St
             })
             .collect();
         // Where it is written, in UTF-16 units as a textarea counts them.
-        let span = bytes.get(ev.at).and_then(|&at| written_span(src, at)).map(|r| [utf16_at(src, r.start), utf16_at(src, r.end)]);
+        let span = bytes.get(ev.at).and_then(|&at| written_span(src, at)).map(|r| [units[r.start], units[r.end]]);
         items.push(json!({ "item": item, "kind": kind, "box": b, "heads": head_list, "span": span }));
     }
     // Every bar's box, in the SVG's pixels: from its start to its bar line,
@@ -283,7 +293,72 @@ pub fn view_lit(src: &str, width: f64, sp: f64, lit: &Value) -> Result<Value, St
             bar_boxes.push(json!({ "bar": b, "system": k, "box": [bar.x0 * sp, y0, bar.x1 * sp, y1], "staves": staves }));
         }
     }
-    Ok(json!({ "svg": svg, "width": w, "height": total, "y0": y0, "items": items, "bars": bar_boxes, "editable": not_editable(src).unwrap_or("yes") }))
+    let rest = json!({ "width": w, "height": total, "y0": y0, "items": items, "bars": bar_boxes, "editable": not_editable(src).unwrap_or("yes") });
+    let rest_json = rest.to_string();
+    let pitches = by_item.iter().map(|(i, ev)| (*i, ev.pitches.iter().map(|p| p.d).collect())).collect();
+    let made = std::rc::Rc::new(Base { key, paths, ranges, heads, pitches, svg_start, rest_json });
+    LAST_VIEW.with(|last| *last.borrow_mut() = Some(made.clone()));
+    Ok(made)
+}
+
+/// [`view`] with any number of items and heads lit: `lit` is
+/// `{"items": {"3": "#colour", …}, "heads": [[item, head index, "#colour"], …]}`.
+pub fn view_lit(src: &str, width: f64, sp: f64, lit: &Value) -> Result<Value, String> {
+    serde_json::from_str(&view_lit_json(src, width, sp, lit)?).map_err(|e| e.to_string())
+}
+
+/// [`view_lit`] as the JSON text the page reads: the engraving reused when
+/// the source is the last one's, the lit paths drawn anew.
+pub fn view_lit_json(src: &str, width: f64, sp: f64, lit: &Value) -> Result<String, String> {
+    let base = base(src, width, sp)?;
+    // Which paths light, and in which colour: whole items, then single heads.
+    let safe = |c: &str| !c.is_empty() && c.len() < 40 && c.chars().all(|ch| ch.is_ascii_alphanumeric() || "#(),.% -".contains(ch));
+    let mut colour: BTreeMap<usize, String> = BTreeMap::new();
+    if let Some(items) = lit["items"].as_object().filter(|items| !items.is_empty()) {
+        for (item, range) in &base.ranges {
+            if let Some(c) = items.get(&item.to_string()).and_then(Value::as_str).filter(|c| safe(c)) {
+                for k in range.clone() {
+                    colour.insert(k, c.to_string());
+                }
+            }
+        }
+    }
+    for entry in lit["heads"].as_array().map_or(&[][..], Vec::as_slice) {
+        let (Some(item), Some(index), Some(c)) = (entry[0].as_u64(), entry[1].as_u64(), entry[2].as_str()) else { continue };
+        if !safe(c) {
+            continue;
+        }
+        let Some(want) = base.pitches.get(&(item as usize)).and_then(|p| p.get(index as usize)).copied() else { continue };
+        for (i, d, range) in &base.heads {
+            if *i as u64 == item && *d == want {
+                for k in range.clone() {
+                    colour.insert(k, c.to_string());
+                }
+            }
+        }
+    }
+    let mut over = String::new();
+    for (k, c) in &colour {
+        match base.paths.get(*k) {
+            Some(Path::Rect(r)) => rect(&mut over, r, 0.0, Some(c)),
+            Some(Path::Fill(cmds)) => {
+                let (d, x, y, _) = outline(cmds);
+                let _ = write!(over, "<path fill=\"{c}\" transform=\"translate(");
+                px(&mut over, x);
+                over.push(' ');
+                px(&mut over, y);
+                let _ = write!(over, ")\" d=\"{d}\"/>");
+            }
+            None => {}
+        }
+    }
+    let svg = format!("{}{over}</svg>", base.svg_start);
+    let mut out = String::with_capacity(svg.len() + base.rest_json.len() + 16);
+    out.push_str("{\"svg\":");
+    out.push_str(&serde_json::to_string(&svg).map_err(|e| e.to_string())?);
+    out.push(',');
+    out.push_str(&base.rest_json[1..]);
+    Ok(out)
 }
 
 /// The bounding box of an outline's points.

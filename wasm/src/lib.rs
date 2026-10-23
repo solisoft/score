@@ -239,7 +239,7 @@ pub fn editor_apply(src: &str, op: &str) -> Result<String, JsError> {
 pub fn editor_view_lit(src: &str, width: f64, staff_space: f64, lit: &str) -> Result<String, JsError> {
     let sp = if staff_space > 0.0 { staff_space } else { 7.0 };
     let lit: serde_json::Value = serde_json::from_str(lit).unwrap_or_else(|_| serde_json::json!({}));
-    editor::view_lit(src, width, sp, &lit).map(|v| v.to_string()).map_err(|e| JsError::new(&e))
+    editor::view_lit_json(src, width, sp, &lit).map_err(|e| JsError::new(&e))
 }
 
 /// Where each note and rest is written in `src`, by item number, as JSON:

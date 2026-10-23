@@ -13,6 +13,13 @@ class Changelog
       {"date": "2026-10-23", "entries": [
         {
           "area": "site",
+          "title": "Long scores stay quick in the editor",
+          "text": "On a 200-bar quartet, selecting a note or following the playback redraws in 4 ms instead of 90, "
+          + "and an edit takes a fifth less time.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
           "title": "MusicXML in and out",
           "text": "Open a score from MuseScore, Sibelius, Finale or Dorico (.musicxml, .mxl) in the editor or the "
           + "app's Import, and save yours as MusicXML for them. In your browser; what the editor does not write "

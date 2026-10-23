@@ -166,3 +166,26 @@ fn spans_list_every_item_as_the_view_does() {
     }
     assert!(spans("{ c'4 (").is_err());
 }
+
+#[test]
+fn a_redraw_of_the_same_source_lights_anew_and_an_edit_draws_anew() {
+    use eui_score_web::editor::view_lit;
+    let lit = |item: &str| json!({ "items": { item: "#0f9d47" } });
+    let count = |v: &serde_json::Value| v["svg"].as_str().unwrap().matches("fill=\"#0f9d47\"").count();
+    let first = view_lit(TUNE, 600.0, 8.0, &lit("0")).unwrap();
+    let again = view_lit(TUNE, 600.0, 8.0, &lit("5")).unwrap();
+    let none = view_lit(TUNE, 600.0, 8.0, &json!({})).unwrap();
+    assert!(count(&first) > 0);
+    assert!(count(&again) > count(&first), "the chord has more paths than one note");
+    assert_eq!(count(&none), 0, "nothing lit is left from before");
+    assert_eq!(first["items"], none["items"]);
+    // A head of the chord, by its index: the second head only.
+    let head = view_lit(TUNE, 600.0, 8.0, &json!({ "heads": [[5, 1, "#e0662a"]] })).unwrap();
+    let head_paths = head["svg"].as_str().unwrap().matches("fill=\"#e0662a\"").count();
+    assert!(head_paths > 0 && head_paths < count(&again), "a head and its dot, not the whole chord");
+    // Another source, even at the same size: its own items.
+    let edited = TUNE.replace("g'4 a'", "g'4 c''");
+    let other = view_lit(&edited, 600.0, 8.0, &json!({})).unwrap();
+    assert_ne!(other["items"][1]["box"], none["items"][1]["box"]);
+    assert_ne!(view_lit(TUNE, 300.0, 8.0, &json!({})).unwrap()["width"], none["width"], "and at another width, its own drawing");
+}
