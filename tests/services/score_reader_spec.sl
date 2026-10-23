@@ -144,6 +144,20 @@ describe("ScoreReading") do
     assert_not(User.find(user._key).own_ai?)
   end
 
+  test("ends failed, not stuck, when its work breaks") do
+    reading = ScoreReading.create({
+      "user_id": "no-such-user",
+      "state": "reading",
+      "picture": "abc",
+      "created_at": DateTime.utc.to_unix
+    })
+    ScoreReadingJob.perform({"reading_id": reading._key})
+    stored = ScoreReading.find(reading._key)
+    assert_eq(stored.state, "failed")
+    assert_eq(stored.error, "Something went wrong while reading the photo. Try again.")
+    assert_null(stored.picture)
+  end
+
   test("refuses a state it does not know") do
     reading = ScoreReading.create({
       "user_id": "someone",

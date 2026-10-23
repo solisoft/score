@@ -32,10 +32,12 @@ export async function readPhoto(file, { readings = "/app/readings", started = ()
   const answer = await sent.json();
   if (sent.status !== 202) throw new Error(answer.error);
   started();
-  for (;;) {
+  // Five minutes, then the page stops waiting.
+  for (let tries = 0; tries < 100; tries++) {
     await wait(3000);
     const reading = await (await fetch(`${readings}/${answer.id}`, { headers: { Accept: "application/json" } })).json();
     if (reading.state === "done") return reading;
     if (reading.state === "failed") throw new Error(reading.error);
   }
+  throw new Error("No answer after five minutes. Try again in a moment.");
 }

@@ -192,7 +192,9 @@ class AiClient
       return "#{who} refused your API key. Check it on your account page."
     end
 
-    return "#{who} refused the request (#{status})." if body.nil? || body["error"].nil?
+    # Gemini's compatible endpoint wraps its error in a list.
+    body = body[0] if body.is_a?("array") && body.length > 0
+    return "#{who} refused the request (#{status})." unless body.is_a?("hash") && !body["error"].nil?
 
     said = body["error"].is_a?("string") ? body["error"] : body["error"]["message"].to_s
     "#{who} refused the request (#{status}): #{said.substring(0, 300)}"

@@ -41,17 +41,21 @@ class ScoreReading < Model
   def perform
     return true unless @state == "reading"
 
-    settings = User.find(@user_id).ai_settings
-    outcome = settings.nil? ? {"error": "There is no AI key to read photos with."} : ScoreReader.read(
-      @picture.to_s,
-      settings
-    )
+    outcome = @_outcome rescue {"error": "Something went wrong while reading the photo. Try again."}
     @state = outcome["error"].nil? ? "done" : "failed"
     @source = outcome["source"]
     @error = outcome["error"]
     @picture = nil
     @finished_at = DateTime.utc.to_unix
     @save
+  end
+
+  # What the AI answered, or why there is no answer.
+  def _outcome
+    settings = User.find(@user_id).ai_settings
+    return {"error": "There is no AI key to read photos with."} if settings.nil?
+
+    ScoreReader.read(@picture.to_s, settings)
   end
 
   def owned_by?(user)

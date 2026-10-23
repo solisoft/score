@@ -109,6 +109,21 @@ describe("ScoreSuggestion") do
     assert_eq(ScoreSuggestion.find(suggestion._key).source, "{ c4 }")
   end
 
+  test("ends failed, not stuck, when its work breaks") do
+    suggestion = ScoreSuggestion.create({
+      "user_id": "no-such-user",
+      "score_id": "s",
+      "action": "chords",
+      "state": "working",
+      "original": "{ c'4 }",
+      "created_at": DateTime.utc.to_unix
+    })
+    ScoreSuggestionJob.perform({"suggestion_id": suggestion._key})
+    stored = ScoreSuggestion.find(suggestion._key)
+    assert_eq(stored.state, "failed")
+    assert_eq(stored.error, "Something went wrong while asking the AI. Try again.")
+  end
+
   test("refuses an action or a state it does not know") do
     assert_null(ScoreSuggestion.create({
       "user_id": "u",

@@ -283,7 +283,8 @@
       });
       const started = await sent.json();
       if (sent.status !== 202) return fail(started.error);
-      for (;;) {
+      // Five minutes, then the page stops waiting.
+      for (let tries = 0; tries < 100; tries++) {
         await new Promise((done) => setTimeout(done, 3000));
         if (!ai.open) return;
         const answer = await (await fetch("<%= app_suggestion_path("ID") %>".replace("ID", started.id), { headers: { Accept: "application/json" } })).json();
@@ -298,6 +299,7 @@
         aiPart("apply").hidden = aiPart("again").hidden = false;
         return;
       }
+      fail("No answer after five minutes. Try again in a moment.");
     } catch (problem) {
       fail("The request could not be sent. Check your connection and try again.");
     }

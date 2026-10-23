@@ -49,19 +49,21 @@ class ScoreSuggestion < Model
   def perform
     return true unless @state == "working"
 
-    settings = User.find(@user_id).ai_settings
-    outcome = settings.nil? ? {"error": "There is no AI key to ask with."} : ScoreAssistant.suggest(
-      @original.to_s,
-      @action,
-      @request,
-      settings
-    )
+    outcome = @_outcome rescue {"error": "Something went wrong while asking the AI. Try again."}
     @state = outcome["error"].nil? ? "done" : "failed"
     @source = outcome["source"]
     @explanation = outcome["explanation"]
     @error = outcome["error"]
     @finished_at = DateTime.utc.to_unix
     @save
+  end
+
+  # What the AI answered, or why there is no answer.
+  def _outcome
+    settings = User.find(@user_id).ai_settings
+    return {"error": "There is no AI key to ask with."} if settings.nil?
+
+    ScoreAssistant.suggest(@original.to_s, @action, @request, settings)
   end
 
   def owned_by?(user)
