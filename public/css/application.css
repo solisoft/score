@@ -2700,6 +2700,45 @@
     justify-self: start;
     cursor: pointer;
   }
+  .photo-reading {
+    background: var(--sheet);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px;
+    display: grid;
+    gap: 12px;
+    margin-top: 24px;
+  }
+  .photo-reading-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .photo-reading-pair figure {
+    margin: 0;
+    display: grid;
+    gap: 6px;
+    align-content: start;
+    min-width: 0;
+  }
+  .photo-reading-pair img, .photo-reading-score svg {
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: #fff;
+  }
+  .photo-reading-score {
+    color: #111;
+  }
+  .photo-reading .btn-primary {
+    justify-self: start;
+  }
+  @media (max-width: 760px) {
+    .photo-reading-pair {
+      grid-template-columns: 1fr;
+    }
+  }
   .start-recent {
     display: grid;
     gap: 12px;

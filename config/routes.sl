@@ -79,6 +79,8 @@ middleware("require_app_database", fn() {
     get("/app/scores", "app/scores#index", name: "app_scores")
     post("/app/scores", "app/scores#create")
     get("/app/trash", "app/scores#trash", name: "app_trash")
+    post("/app/readings", "app/score_readings#create", name: "app_readings")
+    get("/app/readings/:id", "app/score_readings#show", name: "app_reading")
     get("/app/scores/:id", "app/scores#show", name: "app_score")
     get("/app/scores/:id/preview.svg", "app/scores#preview", name: "app_score_preview")
     post("/app/scores/:id/rename", "app/scores#rename", name: "app_score_rename")
