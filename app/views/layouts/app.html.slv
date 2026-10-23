@@ -74,5 +74,29 @@
     <script>
       if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
     </script>
+    <%# Just signed out, or the account deleted (a "signed_out" flash): the
+        computer may be shared, so the app's pages kept for offline use and
+        the editor's unsent text go. %>
+    <% signed_out = false %>
+    <% for message in flashes() %>
+      <% signed_out = true if message["type"] == "signed_out" %>
+    <% end %>
+    <% if signed_out %>
+    <script data-signed-out>
+      (() => {
+        try {
+          for (let i = localStorage.length - 1; i >= 0; i--) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith("eui-score-pending:")) localStorage.removeItem(key);
+          }
+        } catch (error) {}
+        navigator.serviceWorker?.controller?.postMessage({ type: "signed-out" });
+        if (!window.caches) return;
+        caches.keys()
+          .then((names) => Promise.all(names.filter((name) => name.startsWith("eui-score-pages")).map((name) => caches.delete(name))))
+          .catch(() => {});
+      })();
+    </script>
+    <% end %>
 </body>
 </html>

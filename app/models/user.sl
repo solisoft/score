@@ -469,6 +469,16 @@ class User < Model
     AiClient.server_settings()
   end
 
+  # The account gone, and all it left: its scores (trash, versions, shares
+  # and the AI's suggestions included), what was shared with it, its photo
+  # readings and the requests it made of the AI.
+  def erase_account
+    Score.delete_all_of(this)
+    ScoreReading.delete_all_of(this)
+    ScoreSuggestion.delete_all_of(this)
+    @delete
+  end
+
   # The time step `code` is for, one step either side of `now`, or nil.
   static def totp_step(secret, code, now)
     text = code.to_s.replace(" ", "")

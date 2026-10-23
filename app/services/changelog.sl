@@ -13,6 +13,18 @@ class Changelog
       {"date": "2026-10-23", "entries": [
         {
           "area": "site",
+          "title": "Nothing left behind: the trash, a deleted account, signing out",
+          "text": "A score deleted for good, by you or when the trash empties after 30 days, now takes its history, "
+          + "its shares and the AI's suggestions with it, every night, even if you never open your library. "
+          + "Deleting your account also deletes your photo readings and what you asked the AI. A photo reading "
+          + "or an AI request cut off by a restart now says it failed instead of waiting forever. And signing "
+          + "out clears the scores this browser kept for offline use, and any unsent text, so the next person "
+          + "on a shared computer cannot open them.",
+          "link": "app",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "Unshared means unshared, in the live editor too",
           "text": "When you stop sharing a score with someone, or move it to the trash, an editor they still "
           + "have open no longer receives your changes as you make them: it is taken out of the score's live "

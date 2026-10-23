@@ -45,6 +45,35 @@ class ScoreSuggestion < Model
     [limit - used, 0].max()
   end
 
+  # The suggestions still "working" after SCORE_AI_STUCK_SECONDS: failed,
+  # the score's text and the request sent with them dropped. Answers how many.
+  static def expire_stuck
+    since = DateTime.utc.to_unix - SCORE_AI_STUCK_SECONDS
+    stuck = ScoreSuggestion.where(
+      "doc.state == @state AND doc.created_at < @since",
+      {"state": "working", "since": since}
+    ).limit(5000).all
+    stuck.each do |suggestion|
+      suggestion.state = "failed"
+      suggestion.error = "The request was interrupted. Try again."
+      suggestion.original = nil
+      suggestion.request = nil
+      suggestion.finished_at = DateTime.utc.to_unix
+      suggestion.save
+    end
+    stuck.length
+  end
+
+  # What was asked of `score`: it is going.
+  static def delete_all_for(score)
+    ScoreSuggestion.where({"score_id": score._key}).delete_all
+  end
+
+  # Every request `user` made, scores' texts included: their account is going.
+  static def delete_all_of(user)
+    ScoreSuggestion.where({"user_id": user._key}).delete_all
+  end
+
   # The job's work: the assistant asked, the outcome kept.
   def perform
     return true unless @state == "working"

@@ -190,9 +190,13 @@ describe("Account flows") do
 
     test("forgets it on sign-out") do
       user = flow_user()
-      flow_sign_in(user, {"remember_me": "1"})
-      request("DELETE", "/logout", {}, {})
+      signed_in = flow_sign_in(user, {"remember_me": "1"})
+      cookie = str(res_headers(signed_in)).split("remember_token=")[1].split(";")[0]
+      set_request_cookie("remember_token", cookie)
+      response = request("DELETE", "/logout", {}, {})
       assert_null(User.find(user._key).remember_token_digest)
+      # The browser's cookie is expired too.
+      assert_contains(str(res_headers(response)), "remember_token=; Path=/; Max-Age=0")
     end
   end
 end

@@ -165,9 +165,7 @@ class AppScoresController < AppBaseController
     score = @_score("destroy")
     halt(422, "Move the score to the trash first.") unless score.trashed?
 
-    ScoreVersion.delete_all_for(score)
-    ScoreShare.delete_all_for(score)
-    score.delete
+    score.erase
     flash("notice", "“#{score.title}” is deleted.")
     redirect(app_trash_path())
   end

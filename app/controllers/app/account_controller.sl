@@ -101,10 +101,11 @@ class AppAccountController < AppBaseController
       return render("app/account/show", {}, {"status": 422})
     end
 
-    Score.delete_all_of(@user)
-    @user.delete
+    @user.erase_account
     session_destroy()
-    flash("notice", "Your account is deleted.")
+    session_regenerate()
+    # "signed_out": the layout clears what this browser kept of the app.
+    flash("signed_out", "Your account is deleted.")
     redirect(app_home_path())
   end
 

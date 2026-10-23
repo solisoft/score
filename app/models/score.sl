@@ -82,20 +82,44 @@ class Score < Model
     trashed.order("trashed_at", "desc").limit(500).all
   end
 
-  # What has been in `user`'s trash longer than SCORE_TRASH_DAYS goes.
+  # What has been in `user`'s trash longer than SCORE_TRASH_DAYS goes, with
+  # all that hangs off it (`erase`). Answers how many scores went.
   static def purge_trash(user)
-    before = DateTime.utc.to_unix - SCORE_TRASH_DAYS * 86400
-    Score.where(
+    Score.erase_each(Score.where(
       "doc.user_id == @user AND doc.trashed_at != null AND doc.trashed_at < @before",
-      {"user": user._key, "before": before}
-    ).delete_all
+      {"user": user._key, "before": Score.trash_cutoff}
+    ))
   end
 
-  # Every score of `user`, trash included: their account is going.
+  # The same for everyone, owners who never open their library included:
+  # the daily DataCleanupJob's. Answers how many scores went.
+  static def purge_all_trash
+    Score.erase_each(Score.where(
+      "doc.trashed_at != null AND doc.trashed_at < @before",
+      {"before": Score.trash_cutoff}
+    ))
+  end
+
+  # A score trashed before this has been in the trash long enough to go.
+  static def trash_cutoff
+    DateTime.utc.to_unix - SCORE_TRASH_DAYS * 86400
+  end
+
+  # Every score `query` finds (up to 5000 a run), erased. Answers how many.
+  static def erase_each(query)
+    scores = query.limit(5000).all
+    scores.each do |score|
+      score.erase
+    end
+    scores.length
+  end
+
+  # Every score of `user`, trash included, with all that hangs off them,
+  # and what was shared with them: their account is going.
   static def delete_all_of(user)
+    Score.erase_each(Score.where("doc.user_id == @user", {"user": user._key}))
     ScoreShare.delete_all_of(user)
     ScoreVersion.delete_all_of(user)
-    Score.where("doc.user_id == @user", {"user": user._key}).delete_all
   end
 
   # A new score in `user`'s library.
@@ -185,6 +209,16 @@ class Score < Model
     ScoreVersion.keep(this, @source, "restore")
     @source = version.source
     @save
+  end
+
+  # The score gone for good, with all that hangs off it: its versions, its
+  # shares, the AI suggestions asked of it. "Delete for good", the trash's
+  # purge and a deleted account all go through here.
+  def erase
+    ScoreVersion.delete_all_for(this)
+    ScoreShare.delete_all_for(this)
+    ScoreSuggestion.delete_all_for(this)
+    @delete
   end
 
   def owned_by?(user)

@@ -11,10 +11,24 @@
 // What is typed offline is not this file's: the editor page keeps it in the
 // browser and sends it when the network is back (app/views/app/scores/show).
 const ASSETS = "eui-score-assets-v1";
-const PAGES = "eui-score-pages-v1";
+// v2: the pages kept before sign-out cleared them (#356) go with v1.
+const PAGES = "eui-score-pages-v2";
 
 self.addEventListener("install", () => self.skipWaiting());
-self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
+// Caches of an older version of this file are let go.
+self.addEventListener("activate", (event) => event.waitUntil(forgetOldCaches().then(() => self.clients.claim())));
+
+async function forgetOldCaches() {
+  const names = await caches.keys();
+  await Promise.all(names.filter((name) => name.startsWith("eui-score-") && name !== ASSETS && name !== PAGES).map((name) => caches.delete(name)));
+}
+
+// Signed out (the page after says so, app/views/layouts/app): the app's pages
+// kept here are someone's scores, and the computer may be shared. The
+// engraver's files and the sounds stay: they are no one's.
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "signed-out") event.waitUntil(caches.delete(PAGES));
+});
 
 // Kept for good once fetched: what carries its version in its URL (?v=…),
 // the sounds, the fonts. Other files of the site go to the network first.

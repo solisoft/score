@@ -9,6 +9,38 @@ def score_owner
   user
 end
 
+# A score of `owner`'s, in the trash longer than SCORE_TRASH_DAYS.
+def trashed_long_ago(owner, title)
+  score = Score.start(owner, Score.blank_source(title))
+  score.move_to_trash
+  stale = Score.find(score._key)
+  stale.trashed_at = DateTime.utc.to_unix - (SCORE_TRASH_DAYS + 1) * 86400
+  stale.save
+  stale
+end
+
+# A version, a share and an AI suggestion hanging off `score`.
+def hang_off(score)
+  ScoreVersion.keep(score, score.source, "manual")
+  ScoreShare.invite(score, "friend-#{uuid_v4}@example.com", "read")
+  ScoreSuggestion.create({
+    "user_id": score.user_id,
+    "score_id": score._key,
+    "action": "improve",
+    "request": "",
+    "original": score.source,
+    "state": "done",
+    "created_at": DateTime.utc.to_unix
+  })
+end
+
+# How many [versions, shares, suggestions] `score` still has.
+def remains_of(score)
+  [ScoreVersion, ScoreShare, ScoreSuggestion].map do |model|
+    model.where({"score_id": score._key}).count
+  end
+end
+
 describe("Score") do
   describe("its title") do
     test("is read from the source's header") do
@@ -115,6 +147,58 @@ describe("Score") do
     assert_ne(copy._key, score._key)
     assert_contains(copy.source, "r1 | r1 | r1 | r1")
     assert_eq(Score.library(owner, "", "title").length, 2)
+  end
+
+  describe("erased for good") do
+    test("the trash's purge takes the versions, shares and suggestions with the score, and only that score's") do
+      owner = score_owner()
+      old = trashed_long_ago(owner, "Old")
+      kept = Score.start(owner, Score.blank_source("Kept"))
+      [old, kept].each do |score|
+        hang_off(score)
+      end
+      assert_eq(Score.purge_trash(owner), 1)
+      assert_null(Score.find_by("_key", old._key))
+      assert_eq(remains_of(old), [
+        0,
+        0,
+        0
+      ])
+      assert_eq(remains_of(kept), [
+        1,
+        1,
+        1
+      ])
+    end
+
+    test("erase leaves nothing of the score behind") do
+      score = Score.start(score_owner(), Score.blank_source("Gone"))
+      hang_off(score)
+      score.erase
+      assert_null(Score.find_by("_key", score._key))
+      assert_eq(remains_of(score), [
+        0,
+        0,
+        0
+      ])
+    end
+
+    test("the purge for everyone takes every owner's expired trash, and nothing recent") do
+      first = trashed_long_ago(score_owner(), "First")
+      second = trashed_long_ago(score_owner(), "Second")
+      recent_owner = score_owner()
+      Score.start(recent_owner, Score.blank_source("Recent")).move_to_trash
+      hang_off(first)
+      assert_gt(Score.purge_all_trash, 1)
+      assert_null(Score.find_by("_key", first._key))
+      assert_null(Score.find_by("_key", second._key))
+      assert_eq(remains_of(first), [
+        0,
+        0,
+        0
+      ])
+      assert_eq(Score.trash_of(recent_owner).length, 1)
+    end
   end
 
   test("goes with its owner's account, trash and all") do

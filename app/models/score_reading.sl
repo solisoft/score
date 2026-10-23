@@ -5,6 +5,10 @@
 # key, SCORE_READINGS_OWN_PER_DAY on a key of their own.
 const SCORE_READINGS_PER_DAY = 20
 const SCORE_READINGS_OWN_PER_DAY = 200
+# A reading or a suggestion still at work after this many seconds was cut off
+# (a restart, a deploy: their jobs are not retried) and never will finish:
+# DataCleanupJob marks it failed and lets its picture or its text go.
+const SCORE_AI_STUCK_SECONDS = 600
 
 class ScoreReading < Model
   validates("user_id", {"presence": true})
@@ -35,6 +39,29 @@ class ScoreReading < Model
     ).count
     limit = user.own_ai?() ? SCORE_READINGS_OWN_PER_DAY : SCORE_READINGS_PER_DAY
     [limit - used, 0].max()
+  end
+
+  # The readings still "reading" after SCORE_AI_STUCK_SECONDS: failed, their
+  # picture dropped. Answers how many.
+  static def expire_stuck
+    since = DateTime.utc.to_unix - SCORE_AI_STUCK_SECONDS
+    stuck = ScoreReading.where(
+      "doc.state == @state AND doc.created_at < @since",
+      {"state": "reading", "since": since}
+    ).limit(5000).all
+    stuck.each do |reading|
+      reading.state = "failed"
+      reading.error = "The reading was interrupted. Try again."
+      reading.picture = nil
+      reading.finished_at = DateTime.utc.to_unix
+      reading.save
+    end
+    stuck.length
+  end
+
+  # Every reading of `user`, pictures and answers: their account is going.
+  static def delete_all_of(user)
+    ScoreReading.where({"user_id": user._key}).delete_all
   end
 
   # The job's work: the picture read, the outcome kept, the picture dropped.

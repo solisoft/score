@@ -249,6 +249,51 @@ describe("Accounts") do
       assert_null(User.find_by("email", email))
       assert_eq(res_status(get("/app/account")), 302)
     end
+
+    test("takes the photo readings and the AI requests with it, sources and prompts included") do
+      user = make_user(fresh_email())
+      other = make_user(fresh_email())
+      score = Score.start(user, Score.blank_source("Asked"))
+      [user, other].each do |owner|
+        ScoreReading.create({
+          "user_id": owner._key,
+          "state": "done",
+          "source": "{ c'1 }",
+          "created_at": DateTime.utc.to_unix
+        })
+        ScoreSuggestion.create({
+          "user_id": owner._key,
+          "score_id": score._key,
+          "action": "ask",
+          "request": "A private prompt",
+          "original": score.source,
+          "state": "done",
+          "created_at": DateTime.utc.to_unix
+        })
+      end
+      sign_in_as(user.email)
+      response = request("DELETE", "/app/account", {"password": SPEC_PASSWORD}, {})
+      assert_eq(res_status(response), 302)
+      assert_eq(ScoreReading.where({"user_id": user._key}).count, 0)
+      assert_eq(ScoreSuggestion.where({"user_id": user._key}).count, 0)
+      assert_eq(ScoreSuggestion.where({"score_id": score._key}).count, 0, "asked of the deleted score")
+      assert_eq(ScoreReading.where({"user_id": other._key}).count, 1, "someone else's reading stays")
+      # The page after clears what the browser kept of the app.
+      assert_contains(res_body(get(res_location(response))), "data-signed-out")
+    end
+
+    test("a wrong password leaves the readings and requests where they were") do
+      user = make_user(fresh_email())
+      ScoreReading.create({
+        "user_id": user._key,
+        "state": "done",
+        "source": "{ c'1 }",
+        "created_at": DateTime.utc.to_unix
+      })
+      sign_in_as(user.email)
+      request("DELETE", "/app/account", {"password": "wrong"}, {})
+      assert_eq(ScoreReading.where({"user_id": user._key}).count, 1)
+    end
   end
 
   describe("DELETE /logout") do
@@ -259,6 +304,27 @@ describe("Accounts") do
       response = request("DELETE", "/logout", {}, {})
       assert_eq(res_status(response), 302)
       assert_eq(res_status(get("/app/account")), 302)
+    end
+
+    test("the page after clears the app's pages kept offline and the editor's unsent text, once") do
+      email = fresh_email()
+      make_user(email)
+      sign_in_as(email)
+      assert_not(res_body(get("/login")).includes?("data-signed-out"), "not before signing out")
+      response = request("DELETE", "/logout", {}, {})
+      # The spec client drops every cookie on a /logout path; a browser keeps
+      # the new session's, which carries the flash.
+      headers = res_headers(response)
+      session_cookie = (headers["set-cookie"] ?? headers["Set-Cookie"]).to_s.split(";")[0]
+      assert_contains(session_cookie, "session_id=")
+      set_request_cookie("session_id", session_cookie.split("=")[1])
+      page = res_body(get(res_location(response)))
+      assert_contains(page, "You are signed out.")
+      assert_contains(page, "data-signed-out")
+      assert_contains(page, "\"eui-score-pending:\"")
+      assert_contains(page, "\"eui-score-pages\"")
+      assert_contains(page, "type: \"signed-out\"")
+      assert_not(res_body(get("/login")).includes?("data-signed-out"), "only on the page right after")
     end
   end
 

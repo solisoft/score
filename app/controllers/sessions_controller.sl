@@ -160,14 +160,23 @@ class SessionsController < Controller
       user = User.find_by("_key", user_id) rescue null
       user&.forget_me()
     end
-    # Expire the remember-me cookie immediately.
-    set_cookie("remember_token", "", {
-      "max_age": 0,
-      "http_only": true,
-      "same_site": "Lax",
-      "secure": true
-    })
+    # Expire the remember-me cookie immediately, when the browser has one
+    # (without one, the new session's cookie is the answer's only one).
+    remembered = cookies["remember_token"] rescue nil
+    unless remembered.blank?
+      set_cookie("remember_token", "", {
+        "max_age": 0,
+        "http_only": true,
+        "same_site": "Lax",
+        "secure": true
+      })
+    end
+    # A new, empty session: the old one is gone, and the flash below needs one.
     session_destroy()
+    session_regenerate()
+    # The layout, seeing it, clears the app's pages this browser kept for
+    # offline use and the editor's unsent text: the computer may be shared.
+    flash("signed_out", "You are signed out.")
     redirect("/login")
   end
 end
