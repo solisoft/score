@@ -65,7 +65,8 @@ test("a point of the roll names its bar, its track and its note", () => {
   const geo = R.rollLayout(score);
   const middle = (b) => geo.x(M.barStart(score, b)) + 5;
   const lane1 = geo.tracks[1].y + 5;
-  assert.deepEqual(R.rollHit(score, geo, middle(2), lane1), { bar: 2, lane: 1, note: null });
+  assert.deepEqual(R.rollHit(score, geo, middle(2), lane1), { bar: 2, lane: 1, note: null, ruler: false });
+  assert.deepEqual(R.rollHit(score, geo, middle(2), 10), { bar: 2, lane: null, note: null, ruler: true }, "the ruler, where the loop is set");
   assert.equal(R.rollHit(score, geo, 10, lane1).bar, null, "the track names are no bar");
   assert.equal(R.rollHit(score, geo, middle(99), lane1).bar, 3, "past the end: the last bar");
   const target = { dataset: { lane: "0", index: "3" } };
@@ -134,4 +135,29 @@ test("a section keeps its staves' order, skips staves the score lacks, refuses t
   assert.throws(() => M.copySection(score, [], 0, 1), /choose a staff/);
   const tuplets = read("{ \\tuplet 3/2 { c'8 d' e' } f'4 g'2 }");
   assert.throws(() => M.copySection(tuplets, [0], 0, 0), /tuplets/);
+});
+
+test("one track alone on the keyboard: its notes, at its own range", () => {
+  const score = read(PIANO);
+  const bass = R.rollLayout(score, { layout: "keys", only: 1 });
+  assert.ok(bass.notes.every((n) => n.lane === 1));
+  assert.equal(bass.notes.length, 5);
+  assert.equal(bass.tracks[0].high, 48 + 2, "up to the bass's c, not the treble's c''");
+  assert.equal(R.rollLayout(score, { layout: "tracks", only: 1 }).notes.length, R.rollNotes(score).length, "the tracks layout shows them all");
+  const svg = R.drawRoll(score, { layout: "keys", only: 1 });
+  assert.equal((svg.match(/data-lane="0"/g) ?? []).length, 0);
+  assert.equal((svg.match(/data-lane="1"/g) ?? []).length, 5);
+});
+
+test("the loop is drawn on the ruler, apart from the selection", () => {
+  const score = read(PIANO);
+  const svg = R.drawRoll(score, { loop: [1, 2] });
+  const geo = R.rollLayout(score);
+  const loop = /<rect class="roll-loop" x="([\d.]+)" y="3" width="([\d.]+)"/.exec(svg);
+  assert.ok(loop, "on the ruler");
+  assert.equal(Number(loop[1]), geo.x(M.barStart(score, 1)) + 1);
+  assert.equal(Number(loop[2]), geo.x(M.barStart(score, 3)) - geo.x(M.barStart(score, 1)) - 2);
+  assert.match(svg, /class="roll-loop-span"/);
+  assert.doesNotMatch(svg, /roll-band/, "no selection drawn for it");
+  assert.doesNotMatch(R.drawRoll(score), /roll-loop/);
 });

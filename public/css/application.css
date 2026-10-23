@@ -3551,6 +3551,27 @@
     stroke-width: 2;
     pointer-events: none;
   }
+  .roll-loop {
+    fill: rgba(37, 99, 201, .28);
+    stroke: #2563c9;
+    stroke-width: 1;
+    pointer-events: none;
+  }
+  .roll-loop-span {
+    fill: rgba(37, 99, 201, .06);
+    pointer-events: none;
+  }
+  .roll-track-name, .roll-track-range {
+    cursor: zoom-in;
+  }
+  .studio-roll-only {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink);
+    background: var(--accent-soft);
+    border-radius: 999px;
+    padding: 2px 10px;
+  }
   .studio-sheet.studio-dragging {
     cursor: ns-resize;
   }
@@ -3764,25 +3785,32 @@
       padding: 6px 10px;
       gap: 2px 10px;
     }
+    .studio-menubar {
+      flex-wrap: wrap;
+    }
     .studio-menu-scroll {
-      display: flex;
-      gap: 10px;
+      display: contents;
+    }
+    .studio-menus {
       flex: 1 1 0;
       min-width: 0;
       overflow-x: auto;
       scrollbar-width: none;
     }
-    .studio-menubar {
-      flex-wrap: wrap;
-    }
-    .studio-menu-scroll::-webkit-scrollbar {
-      display: none;
-    }
     .studio-menu-group {
+      flex: 1 0 100%;
+      order: 1;
       flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding-bottom: 2px;
+    }
+    .studio-menus::-webkit-scrollbar, .studio-menu-group::-webkit-scrollbar {
+      display: none;
     }
     .studio-state {
       flex-basis: 100%;
+      order: 2;
       text-align: left;
       padding: 0 4px 2px;
     }

@@ -110,6 +110,35 @@ def roll_drag(a, l0, b, l1)
   evaluate("(#{ROLL_DRAG.trim})(#{a}, #{l0}, #{b}, #{l1})")
 end
 
+# A drag (or a click) on the MIDI view's ruler, from bar `a` to bar `b`: the loop's.
+const ROLL_RULER = """
+(a, b) => {
+  const svg = document.querySelector('.studio-roll-scroll svg');
+  const box = svg.getBoundingClientRect();
+  const bars = [...svg.querySelectorAll('.roll-ruler')].map((r) => r.getBBox());
+  const host = document.querySelector('.studio-roll');
+  const at = (bar) => [box.left + bars[bar].x + 8, box.top + 10];
+  const [x1, y1] = at(a);
+  const [x2, y2] = at(b);
+  const press = (type, x, y, el) =>
+    el.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX: x, clientY: y, pointerId: 1 }));
+  press('pointerdown', x1, y1, document.elementFromPoint(x1, y1));
+  if (a !== b) press('pointermove', x2, y2, host);
+  press('pointerup', x2, y2, host);
+}
+"""
+
+# A double click on track `lane`'s name in the MIDI view.
+const ROLL_TRACK_NAME = """
+(lane) => {
+  const svg = document.querySelector('.studio-roll-scroll svg');
+  const box = svg.getBoundingClientRect();
+  const track = [...svg.querySelectorAll('.roll-track')][lane].getBBox();
+  const [x, y] = [box.left + 30, box.top + track.y + 12];
+  document.elementFromPoint(x, y).dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: x, clientY: y }));
+}
+"""
+
 # The note first drawn on the MIDI view, pressed.
 const ROLL_PICK = """
 (() => {
@@ -243,7 +272,11 @@ describe("The app, in a browser") do
     wait_for_text("Bars 1–2, 2 tracks")
     roll_keys("c", false)
     wait_for_text("2 bars of 2 tracks copied")
+    # A click elsewhere lets the selection go; a click then picks bar 3.
     roll_drag(2, 0, 2, 0)
+    assert_null(evaluate("document.querySelector('#studio').studio.sel"))
+    roll_drag(2, 0, 2, 0)
+    assert_eq(evaluate("document.querySelector('#studio').studio.sel.bars[0]"), 2)
     roll_keys("V", true)
     wait_for_text("2 bars put in as bars 3–4")
     wait_saved()
@@ -253,7 +286,18 @@ describe("The app, in a browser") do
       evaluate("document.querySelector('.studio-roll-scroll svg').getAttribute('aria-label')"),
       "6 bars"
     )
-    # The keyboard layout, and a note picked there is the editor's selection.
+    # The loop is set on the ruler, apart from the selection, and a click on it takes it away.
+    evaluate("(#{ROLL_RULER.trim})(0, 1)")
+    assert_eq(evaluate("JSON.stringify(document.querySelector('#studio').studio.loopBars)"), "[0,1]")
+    wait_for(".roll-loop")
+    evaluate("(#{ROLL_RULER.trim})(1, 1)")
+    assert_null(evaluate("document.querySelector('#studio').studio.loopBars"))
+    # A double click on a track's name: that track alone, on the keyboard.
+    evaluate("(#{ROLL_TRACK_NAME.trim})(1)")
+    wait_for(".studio-roll-scroll svg.roll-keys")
+    assert_eq(evaluate("document.querySelectorAll('.roll-note[data-lane=\"0\"]').length"), 0)
+    assert_contains(evaluate("document.querySelector('[data-roll-only]').textContent"), "only")
+    # The keyboard layout, every track, and a note picked there is the editor's selection.
     click("[data-layout='keys']")
     wait_for(".studio-roll-scroll svg.roll-keys")
     evaluate(ROLL_PICK.trim)

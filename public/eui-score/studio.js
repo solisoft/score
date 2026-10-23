@@ -95,7 +95,7 @@ export function startStudio(root, options = {}) {
   // The MIDI view, in place of the engraving when it is on: its layout's
   // switch, and the roll, which scrolls sideways.
   const rollHost = Object.assign(document.createElement("div"), { className: "studio-roll", hidden: true, tabIndex: 0 });
-  rollHost.innerHTML = `<div class="studio-roll-bar"><span class="studio-roll-layouts" role="group" aria-label="MIDI view layout"><button type="button" class="studio-menu" data-act="roll-layout" data-layout="tracks" aria-pressed="true">Tracks</button><button type="button" class="studio-menu" data-act="roll-layout" data-layout="keys" aria-pressed="false">Keyboard</button></span><span class="studio-roll-hint">Click a note to select it. Drag across bars and tracks to select a section: copy it, paste it over other bars, or insert it as new bars.</span></div><div class="studio-roll-scroll" data-roll-scroll></div>`;
+  rollHost.innerHTML = `<div class="studio-roll-bar"><span class="studio-roll-layouts" role="group" aria-label="MIDI view layout"><button type="button" class="studio-menu" data-act="roll-layout" data-layout="tracks" aria-pressed="true">Tracks</button><button type="button" class="studio-menu" data-act="roll-layout" data-layout="keys" aria-pressed="false">Keyboard</button></span><span class="studio-roll-only" data-roll-only hidden></span><span class="studio-roll-hint">Drag across bars and tracks to select a section; a click elsewhere lets it go. Drag on the bar numbers to set a loop; a click on it takes it away.</span></div><div class="studio-roll-scroll" data-roll-scroll></div>`;
   sheet.after(rollHost);
   const rollScroll = rollHost.querySelector("[data-roll-scroll]");
 
@@ -122,8 +122,10 @@ export function startStudio(root, options = {}) {
     written: false, // transposing instruments shown as written, for reading only
     mode: "score", // or "midi": the MIDI view in place of the engraving
     rollLayout: "tracks", // the MIDI view's: a strip per track, or "keys", one keyboard
+    rollOnly: null, // on the keyboard, one lane only (a double click on its track's name)
     rollDrag: null,
     recording: null, // { lane, bar, program, down, played } while keys are recorded
+    loopBars: null, // [a, b]: the bars played over and over, set apart from the selection
   };
   // For a console or a test: the studio's state, on its element.
   root.studio = st;
@@ -669,11 +671,14 @@ export function startStudio(root, options = {}) {
       }
       case "roll-layout":
         st.rollLayout = data.layout === "keys" ? "keys" : "tracks";
+        st.rollOnly = null;
         // A section on some tracks covers them all on one keyboard: the selection follows what is shown.
         if (st.rollLayout === "keys" && st.sel?.lanes) st.sel = null;
         return draw();
       case "insert-copied": return insertCopied();
       case "record": return record();
+      case "set-loop": return setLoop(selectedBarsOrNull());
+      case "clear-loop": return setLoop(null);
       case "written": {
         if (!st.score) return say("Written pitch needs the score tools: this piece is edited in its text.", true);
         st.written = !st.written;
@@ -947,6 +952,15 @@ export function startStudio(root, options = {}) {
       case "paste": return paste();
       case "next": case "previous": return step(name === "next" ? 1 : -1, data.extend);
       case "head-up": case "head-down": return chordHead(name === "head-up" ? 1 : -1);
+    }
+  }
+
+  /** The selected bars, or null when nothing is selected. */
+  function selectedBarsOrNull() {
+    try {
+      return selectedBars();
+    } catch (error) {
+      return null;
     }
   }
 
@@ -1347,7 +1361,10 @@ export function startStudio(root, options = {}) {
       cursor = cursor == null ? t : Math.min(cursor, t);
     }
     const left = rollScroll.scrollLeft;
-    rollScroll.innerHTML = R.drawRoll(st.score, { layout: st.rollLayout, zoom: st.zoom, sel: st.sel, lit, cursor });
+    rollScroll.innerHTML = R.drawRoll(st.score, { layout: st.rollLayout, zoom: st.zoom, sel: st.sel, lit, cursor, loop: st.loopBars, only: st.rollLayout === "keys" ? st.rollOnly : null });
+    const only = rollHost.querySelector("[data-roll-only]");
+    only.hidden = !(st.rollLayout === "keys" && st.rollOnly != null);
+    if (!only.hidden) only.textContent = `${R.laneNames(st.score)[st.rollOnly] ?? ""} only`;
     rollScroll.scrollLeft = left;
     for (const button of rollHost.querySelectorAll("[data-layout]")) button.setAttribute("aria-pressed", String(button.dataset.layout === st.rollLayout));
   }
@@ -1357,7 +1374,7 @@ export function startStudio(root, options = {}) {
     const svg = rollScroll.querySelector("svg");
     if (!svg) return null;
     const box = svg.getBoundingClientRect();
-    const geo = R.rollLayout(st.score, { layout: st.rollLayout, zoom: st.zoom });
+    const geo = R.rollLayout(st.score, { layout: st.rollLayout, zoom: st.zoom, only: st.rollOnly });
     return R.rollHit(st.score, geo, event.clientX - box.left, event.clientY - box.top, event.target.closest("[data-lane]"));
   }
 
@@ -1390,26 +1407,74 @@ export function startStudio(root, options = {}) {
     const p = rollPoint(event);
     if (!p) return;
     if (p.note) return select(p.note.lane, p.note.index, -1, event.shiftKey);
-    if (p.bar == null) return;
+    // The ruler: the loop's.
+    if (p.ruler && p.bar != null) {
+      st.loopDrag = { a: p.bar, bar: p.bar, moved: false };
+      rollHost.setPointerCapture?.(event.pointerId);
+      return;
+    }
+    if (p.bar == null) {
+      if (st.sel) {
+        st.sel = null;
+        draw();
+      }
+      return;
+    }
+    // A drag selects bars and tracks; a click selects its bar, or —
+    // something selected already — takes the selection away.
     const keep = event.shiftKey && st.sel?.bars;
-    st.rollDrag = { a: keep ? st.sel.bars[0] : p.bar, lane: keep ? (st.sel.lanes?.[0] ?? p.lane) : p.lane, bar: p.bar, to: p.lane };
-    selectSection(st.rollDrag.a, p.bar, st.rollDrag.lane, p.lane);
+    st.rollDrag = { a: keep ? st.sel.bars[0] : p.bar, lane: keep ? (st.sel.lanes?.[0] ?? p.lane) : p.lane, bar: p.bar, to: p.lane, moved: Boolean(keep), deselect: !keep && Boolean(st.sel) };
+    if (keep) selectSection(st.rollDrag.a, p.bar, st.rollDrag.lane, p.lane);
     rollHost.setPointerCapture?.(event.pointerId);
   });
 
   rollHost.addEventListener("pointermove", (event) => {
-    if (!st.rollDrag) return;
-    const p = rollPoint(event);
+    const p = (st.rollDrag || st.loopDrag) && rollPoint(event);
     if (!p || p.bar == null) return;
+    if (st.loopDrag) {
+      if (p.bar === st.loopDrag.bar) return;
+      Object.assign(st.loopDrag, { bar: p.bar, moved: true });
+      st.loopBars = [Math.min(st.loopDrag.a, p.bar), Math.max(st.loopDrag.a, p.bar)];
+      return draw();
+    }
     const lane = p.lane ?? st.rollDrag.to;
     if (p.bar === st.rollDrag.bar && lane === st.rollDrag.to) return;
-    Object.assign(st.rollDrag, { bar: p.bar, to: lane });
+    Object.assign(st.rollDrag, { bar: p.bar, to: lane, moved: true });
     selectSection(st.rollDrag.a, p.bar, st.rollDrag.lane, lane);
   });
 
+  // A double click on a track's name: that track alone, on the keyboard.
+  rollHost.addEventListener("dblclick", (event) => {
+    if (st.rollLayout !== "tracks" || !st.score) return;
+    const p = rollPoint(event);
+    if (!p || p.bar != null || p.lane == null) return;
+    st.rollLayout = "keys";
+    st.rollOnly = p.lane;
+    if (st.sel?.lanes) st.sel = null;
+    say(`${R.laneNames(st.score)[p.lane]} on the keyboard: Tracks or Keyboard shows them all again.`);
+    draw();
+  });
+
   const endRollDrag = () => {
+    if (st.loopDrag) {
+      const drag = st.loopDrag;
+      st.loopDrag = null;
+      // A click: on the loop, it goes; elsewhere, the loop is that bar.
+      if (drag.moved) return setLoop(st.loopBars);
+      const on = st.loopBars && drag.a >= st.loopBars[0] && drag.a <= st.loopBars[1];
+      return setLoop(on ? null : [drag.a, drag.a]);
+    }
     if (!st.rollDrag) return;
+    const drag = st.rollDrag;
     st.rollDrag = null;
+    if (!drag.moved) {
+      if (drag.deselect) {
+        st.sel = null;
+        say("");
+        return draw();
+      }
+      selectSection(drag.a, drag.a, drag.lane, drag.lane);
+    }
     sayRange();
   };
   rollHost.addEventListener("pointerup", endRollDrag);
@@ -1763,10 +1828,12 @@ export function startStudio(root, options = {}) {
       // The empty part of a bar: it is selected, and a drag selects the bars it crosses.
       const on = p && !st.input.on ? barHit(p) : null;
       if (on) {
+        // A drag selects the bars it crosses; a click selects its bar, or —
+        // something selected already — takes the selection away.
         const keep = event.shiftKey && st.sel?.bars && st.sel.staff === on.staff;
         const from = keep ? st.sel.bars[0] : on.bar;
-        st.barDrag = { s: on.staff, a: from };
-        selectBars(on.staff, from, on.bar);
+        st.barDrag = { s: on.staff, a: from, at: on.bar, moved: Boolean(keep), deselect: !keep && Boolean(st.sel) };
+        if (keep) selectBars(on.staff, from, on.bar);
         sheet.setPointerCapture(event.pointerId);
         return;
       }
@@ -1797,7 +1864,9 @@ export function startStudio(root, options = {}) {
   sheet.addEventListener("pointermove", (event) => {
     if (st.barDrag) {
       const on = point(event) && barHit(point(event));
-      if (on && on.bar !== st.sel?.bars?.[1]) selectBars(st.barDrag.s, st.barDrag.a, on.bar);
+      if (!on || (!st.barDrag.moved && on.bar === st.barDrag.at)) return;
+      st.barDrag.moved = true;
+      if (on.bar !== st.sel?.bars?.[1] || !st.sel?.bars) selectBars(st.barDrag.s, st.barDrag.a, on.bar);
       return;
     }
     if (st.grip) return moveGrip(event);
@@ -1862,8 +1931,13 @@ export function startStudio(root, options = {}) {
 
   const endDrag = () => {
     if (st.barDrag) {
+      const drag = st.barDrag;
       st.barDrag = null;
-      return;
+      if (drag.moved) return;
+      if (!drag.deselect) return selectBars(drag.s, drag.a, drag.a);
+      st.sel = null;
+      say("");
+      return draw();
     }
     if (st.grip) {
       const grip = st.grip;
@@ -2100,19 +2174,21 @@ export function startStudio(root, options = {}) {
     // Inside the click, before anything waits: a browser starts sound only
     // from a gesture, and a gesture does not outlive a download.
     P.unlock();
-    // Looped: the selected bars over and over — asked for in Playback, or a
-    // section selected in the MIDI view, recorded into or not. Recorded into
-    // or looped, the score plays on past its last note (M.padded).
-    const looping = playOption("loop")?.checked || sectionLoops();
+    // Looped: the loop's bars over and over (set on the MIDI view's ruler,
+    // or Play › Loop), else the selected bars when Playback asks for it —
+    // recorded into or not. Recorded into or looped, the score plays on past
+    // its last note (M.padded).
+    const looping = Boolean(st.loopBars) || playOption("loop")?.checked;
     const played = st.score && (st.recording || looping) ? M.padded(st.score) : st.score;
     // The staff recorded into is silent: in this browser it is muted, and a
     // MIDI device (Sound to) is not sent its old notes at all.
     if (st.recording) M.write(played, st.recording.lane, 0, M.barStart(played, M.barsOf(played)), { rest: true });
     const passes = played ? M.playback(played) : [];
     // From the selection's bar (its first pass), or from the start.
-    const loop = looping && st.score ? loopOf(passes) : null;
+    const loopBars = st.loopBars ?? (looping ? selectedBarsOrNull() : null);
+    const loop = loopBars && st.score ? loopOf(passes, loopBars) : null;
     if (looping && !loop) say("Select the bars to loop: playing from the start.");
-    if (st.recording) st.recording.loop = loop ? selectedBars() : null;
+    if (st.recording) st.recording.loop = loop ? loopBars : null;
     const from = changeBar();
     const at = loop ? loop.start : from == null ? 0 : (passes.find((p) => p.bar === from)?.start ?? 0);
     let bytes;
@@ -2158,18 +2234,14 @@ export function startStudio(root, options = {}) {
     follow();
   }
 
-  /** Whether the selection loops by itself: a section selected in the MIDI view. */
-  function sectionLoops() {
-    return st.mode === "midi" && Boolean(st.sel?.bars);
-  }
-
   /** The selected bars as a loop: from their first pass to the end of that pass through the last; null with none selected. */
-  function loopOf(passes) {
-    let bars;
-    try {
-      bars = selectedBars();
-    } catch (error) {
-      return null;
+  function loopOf(passes, bars = null) {
+    if (!bars) {
+      try {
+        bars = selectedBars();
+      } catch (error) {
+        return null;
+      }
     }
     const first = passes.findIndex((p) => p.bar === bars[0]);
     if (first < 0) return null;
@@ -2493,6 +2565,21 @@ export function startStudio(root, options = {}) {
       M.setPitch(score, t.s, t.i, M.pitchOfKey(key, M.keyOf(score, t.s, M.starts(score.staves[t.s])[t.i])), false, t.head);
     });
     hear();
+  }
+
+  // ---- The loop ---------------------------------------------------------------------
+  //
+  // The bars played over and over, kept apart from the selection: set on the
+  // MIDI view's ruler (a drag, or a click on a bar), or with Play › Loop the
+  // selected bars; a click on it, or Play › No loop, takes it away.
+
+  function setLoop(bars) {
+    if (bars === undefined || (bars === null && !st.loopBars)) return say(bars === null ? "No loop" : "Select the bars to loop first", bars !== null);
+    st.loopBars = bars ? [Math.min(...bars), Math.max(...bars)] : null;
+    if (st.playing) stopPlay();
+    const [a, b] = st.loopBars ?? [];
+    say(st.loopBars ? `Loop: ${a === b ? `bar ${a + 1}` : `bars ${a + 1}–${b + 1}`}, played over and over (and recorded into). A click on it in the MIDI view's ruler, or Play › No loop, takes it away.` : "No loop: the music plays on.");
+    draw();
   }
 
   // ---- Recording from a MIDI keyboard --------------------------------------------

@@ -73,10 +73,11 @@ export function laneColour(score, s) {
 /**
  * Where everything goes: `{ layout, width, height, left, x(t), notes,
  * tracks: [{ lane, y, h, low, high, row }] }` — for "keys", one track holding
- * every lane. Drawing and hit-testing both read it.
+ * every lane, or lane `only`. Drawing and hit-testing both read it.
  */
-export function rollLayout(score, { layout = "tracks", zoom = 1 } = {}) {
-  const notes = rollNotes(score);
+export function rollLayout(score, { layout = "tracks", zoom = 1, only = null } = {}) {
+  // `only`: one lane on the keyboard, the rest left out.
+  const notes = rollNotes(score).filter((n) => only == null || layout !== "keys" || n.lane === only);
   const bars = M.barsOf(score);
   const perTick = (QUARTER_W * zoom * 4) / M.WHOLE;
   const left = layout === "keys" ? KEYS_W : HEADS_W;
@@ -108,7 +109,7 @@ export function rollHit(score, geo, px, py, target = null) {
   const track = geo.tracks.find((tr) => py >= tr.y && py < tr.y + tr.h);
   const lane = geo.layout === "tracks" ? (track?.lane ?? null) : null;
   const note = target?.dataset?.lane != null ? { lane: Number(target.dataset.lane), index: Number(target.dataset.index) } : null;
-  return { bar, lane, note };
+  return { bar, lane, note, ruler: py < RULER_H };
 }
 
 /**
@@ -116,8 +117,8 @@ export function rollHit(score, geo, px, py, target = null) {
  * selection, whose `lanes` a section covers), `lit` (notes being played,
  * "lane:index"), `cursor` (the tick being played, or null).
  */
-export function drawRoll(score, { layout = "tracks", zoom = 1, sel = null, lit = new Set(), cursor = null } = {}) {
-  const geo = rollLayout(score, { layout, zoom });
+export function drawRoll(score, { layout = "tracks", zoom = 1, sel = null, lit = new Set(), cursor = null, loop = null, only = null } = {}) {
+  const geo = rollLayout(score, { layout, zoom, only });
   const { x, width, height, left } = geo;
   const names = laneNames(score);
   const parts = [];
@@ -158,6 +159,12 @@ export function drawRoll(score, { layout = "tracks", zoom = 1, sel = null, lit =
     }
     parts.push(`<rect class="roll-ruler" data-bar="${bar}" x="${bx}" y="0" width="${next - bx}" height="${RULER_H}"/>`);
     parts.push(`<text class="roll-bar-number" x="${bx + 6}" y="16">${bar + 1}</text>`);
+  }
+  // The loop, on the ruler and faintly down every track.
+  if (loop) {
+    const [lx0, lx1] = [x(M.barStart(score, loop[0])), x(M.barStart(score, loop[1] + 1))];
+    parts.push(`<rect class="roll-loop-span" x="${lx0}" y="${RULER_H}" width="${lx1 - lx0}" height="${height - RULER_H}"/>`);
+    parts.push(`<rect class="roll-loop" x="${lx0 + 1}" y="3" width="${lx1 - lx0 - 2}" height="${RULER_H - 6}" rx="4"/>`);
   }
   parts.push(`<line class="roll-ruler-edge" x1="0" x2="${width}" y1="${RULER_H}" y2="${RULER_H}"/>`);
   // Notes: the selection outlined, those being played lit.
