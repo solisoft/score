@@ -72,7 +72,7 @@
       </select>
     </label>
     <label class="field"><span>Model <span class="muted">— one that reads images</span></span>
-      <input name="model" type="text" required list="ai-models" value="<%= user.ai_model ?? "" %>" spellcheck="false" autocomplete="off" data-ai-model>
+      <input name="model" type="text" required list="ai-models" value="<%= user.ai_model.to_s %>" spellcheck="false" autocomplete="off" data-ai-model>
       <datalist id="ai-models" data-ai-models></datalist>
     </label>
     <label class="field">API key
