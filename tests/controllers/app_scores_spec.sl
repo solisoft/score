@@ -217,7 +217,8 @@ describe("AppScoresController") do
       assert_contains(page, "let revision = #{score.revision};")
       assert_contains(page, "shareUrl: \"/app/scores/#{score._key}/share\"")
       assert_contains(page, "data-act=\"properties\"")
-      assert_contains(page, "/ws/scores?ticket=#{score._key}.#{owner._key}.")
+      assert_contains(page, "/ws/scores?ticket=")
+      assert_contains(page, "fetch(\"/app/scores/#{score._key}/room_ticket\"")
       assert_contains(page, "data-room")
       assert_contains(page, "href=\"/app/scores/#{score._key}/versions\"")
       # File › Open a photo…, read on the account's AI.

@@ -162,9 +162,31 @@
     roomBox.textContent = others.length ? `With ${others.join(", ")}` : "";
     roomBox.title = others.length ? `Also editing: ${others.join(", ")}` : "";
   };
-  function joinRoom() {
+  // Each (re)connect asks for a fresh ticket (they last an hour): once the
+  // score is no longer shared with this person, or is in the trash, none
+  // comes, and the editor stops trying.
+  let roomDelay = 3000;
+  async function joinRoom() {
+    let ticket;
+    try {
+      const answer = await fetch("<%= app_score_room_ticket_path(editing_score) %>", {
+        headers: { Accept: "application/json" },
+        credentials: "same-origin",
+      });
+      if ([401, 403, 404].includes(answer.status) || answer.redirected) {
+        people = {};
+        showPeople();
+        return;
+      }
+      if (!answer.ok) throw new Error(`ticket: ${answer.status}`);
+      ticket = (await answer.json()).ticket;
+    } catch (error) {
+      setTimeout(joinRoom, roomDelay);
+      return;
+    }
     const scheme = location.protocol === "https:" ? "wss:" : "ws:";
-    const socket = new WebSocket(`${scheme}//${location.host}/ws/scores?ticket=<%= room_ticket %>`);
+    const socket = new WebSocket(`${scheme}//${location.host}/ws/scores?ticket=${encodeURIComponent(ticket)}`);
+    socket.onopen = () => (roomDelay = 3000);
     socket.onmessage = (message) => {
       let data;
       try {
@@ -172,7 +194,11 @@
       } catch (error) {
         return;
       }
-      if (data.event === "presence_state") {
+      if (data.event === "refused") {
+        // Turned away at the door: ask again, later, for a fresh ticket.
+        roomDelay = Math.min(roomDelay * 2, 60000);
+        socket.close();
+      } else if (data.event === "presence_state") {
         people = data.payload;
         showPeople();
       } else if (data.event === "presence_diff") {
@@ -196,7 +222,11 @@
         show("Saved", "ok");
       }
     };
-    socket.onclose = () => setTimeout(joinRoom, 3000);
+    socket.onclose = () => {
+      people = {};
+      showPeople();
+      setTimeout(joinRoom, roomDelay);
+    };
   }
   joinRoom();
 

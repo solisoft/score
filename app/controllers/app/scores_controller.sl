@@ -53,9 +53,17 @@ class AppScoresController < AppBaseController
     @eui_version = ScoreAssets.version
     @editing_score = @score
     @ai_with = @_ai_with(current_user())
-    @room_ticket = ScoreRoom.ticket(@score, current_user(), DateTime.utc.to_unix)
     @title = @score.title
     @description = "#{this.score.title}, in the EUI Score editor."
+  end
+
+  # GET /app/scores/:id/room_ticket — JSON {ticket}: the editor's way into the
+  # score's live room (ScoreRoom), asked for before each (re)connect
+  def room_ticket
+    score = @_score("update")
+    halt(404, "That score is in the trash.") if score.trashed?
+
+    render_json({"ticket": ScoreRoom.ticket(score, current_user(), DateTime.utc.to_unix)})
   end
 
   # PUT /app/scores/:id — the editor's autosave, JSON {source, revision}:

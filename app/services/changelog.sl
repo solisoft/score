@@ -13,6 +13,15 @@ class Changelog
       {"date": "2026-10-23", "entries": [
         {
           "area": "site",
+          "title": "Unshared means unshared, in the live editor too",
+          "text": "When you stop sharing a score with someone, or move it to the trash, an editor they still "
+          + "have open no longer receives your changes as you make them: it is taken out of the score's live "
+          + "room at your next save, and cannot come back in.",
+          "link": "app",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "New and Open make a new score, the open one left as it is",
           "text": "In the app's editor, File › New, Open a file, Open an example and Open a photo now make a new "
           + "score in your library and open it, instead of writing over the score you had open.",

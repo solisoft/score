@@ -151,6 +151,36 @@ describe("Sharing") do
       assert_not(Score.find(score._key).trashed?)
     end
 
+    test("the live room's ticket: for those who may edit, and no one else") do
+      owner = share_user()
+      writer = share_user()
+      reader = share_user()
+      stranger = share_user()
+      score = Score.start(owner, Score.blank_source("Room"))
+      assert_eq(res_status(get("/app/scores/#{score._key}/room_ticket")), 302)
+      share_sign_in(stranger)
+      refused = get("/app/scores/#{score._key}/room_ticket")
+      assert_eq(res_status(refused), 403)
+      assert_not(res_body(refused).contains("ticket"))
+      assert_eq(res_status(get("/app/scores/no-such-score/room_ticket")), 404)
+      ScoreShare.invite(score, reader.email, "read")
+      share_sign_in(reader)
+      assert_eq(res_status(get("/app/scores/#{score._key}/room_ticket")), 403)
+      share = ScoreShare.invite(score, writer.email, "write")
+      share_sign_in(writer)
+      answer = get("/app/scores/#{score._key}/room_ticket")
+      assert_eq(res_status(answer), 200)
+      admitted = ScoreRoom.admit(res_json(answer)["ticket"], DateTime.utc.to_unix)
+      assert_eq(admitted["score"], score._key)
+      assert_eq(admitted["user"], writer._key)
+      share.delete
+      assert_eq(res_status(get("/app/scores/#{score._key}/room_ticket")), 403)
+      share_sign_in(owner)
+      assert_eq(res_status(get("/app/scores/#{score._key}/room_ticket")), 200)
+      score.move_to_trash
+      assert_eq(res_status(get("/app/scores/#{score._key}/room_ticket")), 404)
+    end
+
     test("a copy made by someone it is shared with goes to their own library") do
       owner = share_user()
       reader = share_user()
