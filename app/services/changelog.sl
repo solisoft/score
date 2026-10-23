@@ -28,7 +28,7 @@ class Changelog
         {
           "area": "engine",
           "title": "Figured bass",
-          "text": "\\new FiguredBass \\figuremode { <6 4> <7 5-> }: the figures stacked under the bass, each on "
+          "text": "\\new FiguredBass \\figuremode { <6 4> <7 5- 3!> }: the figures stacked under the bass, each on "
           + "its note, with their sharps, flats and naturals.",
           "sample": "figured-bass"
         },

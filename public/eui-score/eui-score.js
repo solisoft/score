@@ -22,10 +22,13 @@
 //   import { render, toMidi, toPdf, check } from ".../eui-score.js";
 //   const svg = await render(src, { width: 640, staffSpace: 7 });
 
-// The files are served immutable, for a year: the version this module was
-// loaded with (`?v=…`) goes to the binding and the WebAssembly beside it, so
-// one deploy's files are never mixed with another's.
-const V = new URL(import.meta.url).search;
+// The files are served immutable, for a year. The engraver's own version,
+// written here by wasm/build.sh, is what the binding and the WebAssembly are
+// asked for by: a new engraver is never taken from the cache of an old one,
+// whatever address loaded this module, and it changes this file — and so
+// this file's address — too.
+const WASM = "18e7bc6ff9bd3ac5";
+const V = `?v=${WASM}`;
 
 /** The WebAssembly binding itself: every function the module exports. */
 export const engine = await import(`./eui_score_web.js${V}`);

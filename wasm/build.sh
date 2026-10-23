@@ -15,4 +15,6 @@ fi
 # The WebAssembly's own digest: the site's asset version is made from it
 # and from the JavaScript (app/services/score_assets.sl).
 sha256sum "$out/eui_score_web_bg.wasm" | cut -c1-16 > "$out/wasm.version"
+# …and eui-score.js asks for the binding and the WebAssembly by it.
+perl -pi -e "s/^const WASM = \".*\";/const WASM = \"$(cat "$out/wasm.version")\";/" "$out/eui-score.js"
 ls -l "$out"
