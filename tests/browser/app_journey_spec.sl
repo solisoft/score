@@ -51,6 +51,26 @@ def sign_up_in_browser(email)
   assert_page_path("/app")
 end
 
+# Two bars for a violin and a third voice the editor does not write, as MusicXML.
+const VIOLIN_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0"><work><work-title>Imported</work-title></work>
+<part-list><score-part id="P1"><part-name>Violin</part-name></score-part></part-list>
+<part id="P1"><measure number="1"><attributes><divisions>1</divisions>
+<time><beats>2</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
+<note><pitch><step>E</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>half</type></note>
+<backup><duration>2</duration></backup>
+<note><pitch><step>C</step><octave>5</octave></pitch><duration>2</duration><voice>2</voice><type>half</type></note>
+<backup><duration>2</duration></backup>
+<note><pitch><step>A</step><octave>4</octave></pitch><duration>2</duration><voice>3</voice><type>half</type></note>
+</measure></part></score-partwise>"""
+
+# Chooses a file for the start screen's Import, as a person does.
+def import_in_browser(name, text)
+  evaluate("(() => { const input = document.querySelector('[data-import]'); const files = new DataTransfer();"
+  + " files.items.add(new File([#{JSON.stringify(text)}], #{JSON.stringify(name)})); input.files = files.files;"
+  + " input.dispatchEvent(new Event('change', { bubbles: true })); })()")
+end
+
 describe("The app, in a browser") do
   before_each() do
     logout()
@@ -140,5 +160,28 @@ describe("The app, in a browser") do
     assert_text("Forbidden")
     visit(read_path)
     assert_text("No such score")
+  end
+
+  test("import a MusicXML file: what it leaves out is named first, then the score is created") do
+    sign_up_in_browser(journey_email())
+    import_in_browser("imported.musicxml", VIOLIN_XML)
+    wait_for_text("Left out of imported.musicxml: a third voice on a staff, left out.")
+    assert_page_path("/app")
+    click_button("Create the score anyway")
+    wait_for("[data-save-state]")
+    assert_match(page_path(), "^/app/scores/")
+    assert_text("Imported")
+    assert_contains(editor_source(), "e''2")
+    assert_contains(editor_source(), "c''2")
+    assert_not(editor_source().includes?("a'2"))
+  end
+
+  test("import a file that is not MusicXML: refused, nothing created") do
+    email = journey_email()
+    sign_up_in_browser(email)
+    import_in_browser("page.xml", "<html></html>")
+    wait_for_text("This is not a MusicXML score")
+    assert_page_path("/app")
+    assert_eq(Score.where({"user_id": User.find_by("email", email)._key}).count, 0)
   end
 end

@@ -19,6 +19,10 @@ const M = await import(`./score-model.js${V}`);
 const P = await import(`./player.js${V}`);
 const { editor_view_lit, score_json, source_spans } = engine;
 
+/** The MusicXML reader and writer, loaded the first time a file needs it. */
+const musicXml = () => import(`./musicxml.js${V}`);
+const isMusicXmlName = (name) => /\.(musicxml|mxl|xml)$/i.test(name ?? "");
+
 const COLOURS = { selection: "#b4373a", head: "#e0662a", cursor: "#2563c9", playing: "#0f9d47" };
 const DRAFT = "eui-score-studio-draft";
 const KEY_DURATIONS = { 2: 32, 3: 16, 4: 8, 5: 4, 6: 2, 7: 1 };
@@ -688,6 +692,13 @@ export function startStudio(root, options = {}) {
       }
       case "zoom-out": st.zoom = Math.max(0.5, Math.round((st.zoom - 0.1) * 10) / 10); return draw();
       case "save-ly": return download(st.text, `${fileName()}.ly`, "text/x-lilypond");
+      case "save-musicxml": {
+        // Written from the editor's own score: a text it cannot read has none.
+        if (!st.score) return say("MusicXML is written from the score the editor reads; this text holds what it does not edit.", true);
+        return musicXml()
+          .then((X) => download(X.toMusicXML(st.score), `${fileName()}.musicxml`, "application/vnd.recordare.musicxml+xml"))
+          .catch((error) => say(error.message ?? String(error), true));
+      }
       case "save-pdf": return toPdf(st.text, title()).then((pdf) => download(pdf, `${fileName()}.pdf`, "application/pdf")).catch((e) => refuse(e));
       // In the app, a saved score's own sharing page; elsewhere a link that holds the score.
       case "share": return options.shareUrl ? location.assign(options.shareUrl) : share();
@@ -1806,8 +1817,17 @@ export function startStudio(root, options = {}) {
       return;
     }
     if (el.matches('[data-act="open"]') && el.files?.[0]) {
-      el.files[0].text().then((text) => load(text, `${el.files[0].name} opened.`));
+      const file = el.files[0];
       el.value = "";
+      if (!isMusicXmlName(file.name)) {
+        file.text().then((text) => load(text, `${file.name} opened.`));
+        return;
+      }
+      // MusicXML, from MuseScore, Sibelius, Finale or Dorico: read as LilyPond.
+      musicXml()
+        .then(async (X) => X.fromMusicXML(await X.musicXmlOf(file)))
+        .then(({ source, warnings }) => load(source, `${file.name} opened.${warnings.length ? ` Left out: ${warnings.join("; ")}.` : ""}`))
+        .catch((error) => say(error.message ?? String(error), true));
       return;
     }
     if (el.matches("select[data-field], input[type=number][data-field], input[type=checkbox][data-field]")) onField(event);

@@ -17,6 +17,7 @@ class ScoreAssets
       "eui-score-editor.js",
       "studio.js",
       "score-model.js",
+      "musicxml.js",
       "player.js",
       "vendor/README.md",
       "eui_score_web.js",

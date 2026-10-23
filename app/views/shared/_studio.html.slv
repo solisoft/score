@@ -16,7 +16,7 @@
           <summary class="studio-menu">File</summary>
           <div class="studio-dropdown-items" role="menu">
             <button type="button" role="menuitem" data-act="new">New… <kbd>from a template</kbd></button>
-            <label role="menuitem" class="studio-dropdown-file">Open a .ly file…<input type="file" accept=".ly,.ily,.txt,text/plain" data-act="open" hidden></label>
+            <label role="menuitem" class="studio-dropdown-file">Open a file… <kbd>.ly, MusicXML</kbd><input type="file" accept=".ly,.ily,.txt,.musicxml,.mxl,.xml,text/plain" data-act="open" hidden></label>
             <label class="studio-dropdown-select">Open an example
               <select data-act="example" aria-label="Open an example">
                 <option value="">Examples…</option>
@@ -30,6 +30,7 @@
             <button type="button" role="menuitem" data-act="save-ly">Save the LilyPond source <kbd>.ly</kbd></button>
             <button type="button" role="menuitem" data-act="save-pdf">Print as PDF <kbd>A4</kbd></button>
             <button type="button" role="menuitem" data-act="save-midi">Save as MIDI <kbd>.mid</kbd></button>
+            <button type="button" role="menuitem" data-act="save-musicxml">Save as MusicXML <kbd>.musicxml</kbd></button>
             <button type="button" role="menuitem" data-act="save-wav">Save the sound <kbd>.wav</kbd></button>
             <button type="button" role="menuitem" data-act="save-png">Save a picture <kbd>.png</kbd></button>
             <button type="button" role="menuitem" data-act="save-svg">Save a drawing <kbd>.svg</kbd></button>

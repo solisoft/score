@@ -1992,6 +1992,11 @@ export function drumPitch(name) {
   return { d: drum.d, alter: 0, drum: drum.name };
 }
 
+/** The drum General MIDI key `key` plays, by name, or null. */
+export function drumByKey(key) {
+  return (DRUMS.find((x) => x.key === key) ?? MORE_DRUMS.find((x) => x.key === key))?.name ?? null;
+}
+
 /** A drum's General MIDI key. */
 export function drumKey(name) {
   return (DRUMS.find((x) => x.name === name) ?? MORE_DRUMS.find((x) => x.name === name))?.key ?? 38;

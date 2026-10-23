@@ -13,6 +13,14 @@ class Changelog
       {"date": "2026-10-23", "entries": [
         {
           "area": "site",
+          "title": "MusicXML in and out",
+          "text": "Open a score from MuseScore, Sibelius, Finale or Dorico (.musicxml, .mxl) in the editor or the "
+          + "app's Import, and save yours as MusicXML for them. In your browser; what the editor does not write "
+          + "is named.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
           "title": "Each engraver change shows a score",
           "text": "Here, under a change to the engraver, a short score drawn by today's engraver shows it, with "
           + "its LilyPond to read or copy."
