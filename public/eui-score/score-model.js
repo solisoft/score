@@ -997,6 +997,80 @@ export function paste(score, s, t, clip) {
   return last;
 }
 
+// ---- Recording ------------------------------------------------------------------
+//
+// Keys played live, as { key, t0, t1 } in ticks, written into a lane: their
+// starts and ends moved to the nearest step of the grid, keys sounding
+// together as a chord, a note held on over the next one's start tied to it.
+
+/** The grids a recording is fitted to, in ticks: the finest step it keeps. */
+export const RECORDING_GRIDS = { quarter: WHOLE / 4, eighth: WHOLE / 8, sixteenth: WHOLE / 16, "thirty-second": WHOLE / 32 };
+
+/** How far past its end a recording may go on: the bars played after the last one. */
+export const RECORDING_MORE_BARS = 32;
+
+/**
+ * The score as it plays while lane `s` is recorded: RECORDING_MORE_BARS more
+ * bars, so the music (and its metronome) goes on past the end, and does at
+ * all in an empty score — a short note at their very end, in the lane being
+ * recorded, which is muted, makes them last.
+ */
+export function forRecording(score, s) {
+  const out = structuredClone(score);
+  const end = barsOf(out);
+  insertBars(out, end, RECORDING_MORE_BARS);
+  const last = barStart(out, end + RECORDING_MORE_BARS);
+  write(out, s, last - WHOLE / 16, WHOLE / 16, { rest: false, pitches: [{ d: 28, alter: 0 }] });
+  return out;
+}
+
+/** The notes moved to `grid` (ticks): a note shorter than a step lasts a step. */
+export function quantize(notes, grid) {
+  return notes.map((n) => {
+    const t0 = Math.round(n.t0 / grid) * grid;
+    const t1 = Math.max(t0 + grid, Math.round(n.t1 / grid) * grid);
+    return { key: n.key, t0, t1 };
+  });
+}
+
+/**
+ * The keys played written over lane `s` from `from` to `to` (ticks, bar
+ * lines): what was there replaced, the rest of it left as it was. Answers how
+ * many notes were written. Drum staves are not recorded into.
+ */
+export function writeRecording(score, s, from, to, played, grid) {
+  if (isDrums(score, s)) throw new Error("drums cannot be recorded yet");
+  if (to <= from) return 0;
+  const notes = quantize(played, grid).filter((n) => n.t1 > from && n.t0 < to).map((n) => ({ ...n, t0: Math.max(from, n.t0), t1: Math.min(to, n.t1) }));
+  write(score, s, from, to - from, { rest: true });
+  // Where anything starts or stops: between two of them, the keys sounding are one chord.
+  const edges = [...new Set([from, to, ...notes.flatMap((n) => [n.t0, n.t1])])].sort((a, b) => a - b);
+  const spans = [];
+  for (let k = 0; k + 1 < edges.length; k++) {
+    const [a, b] = [edges[k], edges[k + 1]];
+    const keys = [...new Set(notes.filter((n) => n.t0 <= a && n.t1 >= b).map((n) => n.key))].sort((x, y) => x - y);
+    // Struck again here: a key starting at `a` is a new note, not the held one.
+    const struck = notes.some((n) => n.t0 === a);
+    const last = spans[spans.length - 1];
+    if (last && !struck && last.keys.join() === keys.join()) last.b = b;
+    else spans.push({ a, b, keys, struck });
+  }
+  for (const span of spans) {
+    if (!span.keys.length) continue;
+    const fifths = keyOf(score, s, span.a);
+    write(score, s, span.a, span.b - span.a, { rest: false, pitches: span.keys.map((key) => pitchOfKey(key, fifths)) });
+  }
+  // The ties last: writing a span cuts any tie into it. A key held on into
+  // the next span, not struck again there, ties the span's last note to it.
+  const staff = score.staves[s];
+  spans.forEach((span, k) => {
+    const next = spans[k + 1];
+    const held = next && span.keys.some((key) => next.keys.includes(key) && !notes.some((n) => n.t0 === next.a && n.key === key));
+    if (held) staff.events[eventAt(staff, span.b) - 1].tie = true;
+  });
+  return notes.length;
+}
+
 // A section is bars a…b of several lanes at once: what the MIDI view copies.
 // Each part keeps its place among the lanes copied, counted from the first.
 
@@ -2409,6 +2483,19 @@ export function passAt(passes, sec) {
   let k = 0;
   while (k + 1 < passes.length && passes[k + 1].start <= sec + 1e-6) k++;
   return passes[k] ?? null;
+}
+
+/**
+ * The time (ticks) sounding at `sec` of the playback `passes`: the bar of the
+ * pass then sounding, so far through it as that pass is — a repeat played
+ * again gives its bars again.
+ */
+export function tickAtPlayed(score, passes, sec) {
+  const p = passAt(passes, sec);
+  if (!p) return 0;
+  const length = barLength(score, p.bar);
+  const into = p.end > p.start ? ((sec - p.start) / (p.end - p.start)) * length : 0;
+  return barStart(score, p.bar) + Math.max(0, Math.min(length, into));
 }
 
 /** The metronome's beats, every repeat played out: [{ sec, down }], `down` on each bar's first. */

@@ -11,6 +11,9 @@ describe("PlaygroundController") do
       assert_not(body.includes?("data-ai-ask"), "no AI assistant without an account")
       assert_not(body.includes?("data-act=\"midi-view\""), "the MIDI view is the app's")
       assert_contains(body, "data-act=\"insert-copied\"")
+      # Recording from a MIDI keyboard, its grid sixteenths to begin with.
+      assert_contains(body, "data-act=\"record\" data-record")
+      assert_contains(body, "<option value=\"sixteenth\" selected>sixteenths</option>")
       assert_contains(body, "data-act=\"tuplet\" data-n=\"3\"")
       assert_contains(body, "data-act=\"lyrics\"")
       assert_contains(body, "data-act=\"chord\"")

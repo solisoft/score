@@ -270,9 +270,10 @@ let input = null;
 /**
  * Listens to MIDI keyboard `id` (null: to none). `onKey(key, held)` is
  * called on each key pressed, `held` the other keys still down — keys
- * played together make a chord.
+ * played together make a chord — and `onRelease(key)`, when given, on each
+ * key let go.
  */
-export function listen(id, onKey) {
+export function listen(id, onKey, onRelease = null) {
   if (input) input.onmidimessage = null;
   input = id && access ? access.inputs.get(id) ?? null : null;
   if (!input) return null;
@@ -284,7 +285,10 @@ export function listen(id, onKey) {
       const held = [...down];
       down.add(key);
       onKey(key, held);
-    } else if (kind === 0x80 || kind === 0x90) down.delete(key);
+    } else if (kind === 0x80 || kind === 0x90) {
+      down.delete(key);
+      onRelease?.(key);
+    }
   };
   return input;
 }
@@ -318,6 +322,22 @@ export function preview(keys, program = 0, { drums = false } = {}) {
     setTimeout(() => {
       for (const key of keys) synth.noteOff(channel, key);
     }, 450);
+  });
+  return true;
+}
+
+/**
+ * Sounds `key` with General MIDI `program` for as long as it is held — a key
+ * played while recording — and stops it with `on` false. Silent until the
+ * sounds have loaded.
+ */
+export function hold(key, on, program = 0) {
+  if (!engine?.done) return false;
+  engine.promise.then(({ ctx, synth }) => {
+    ctx.resume().catch(() => {});
+    if (!on) return synth.noteOff(PREVIEW, key);
+    synth.programChange(PREVIEW, program);
+    synth.noteOn(PREVIEW, key, 100);
   });
   return true;
 }

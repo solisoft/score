@@ -104,6 +104,7 @@
           <div class="studio-dropdown-items" role="menu">
             <button type="button" role="menuitem" data-act="play">Play or pause <kbd>Space</kbd></button>
             <button type="button" role="menuitem" data-act="stop">Stop, back to the start</button>
+            <button type="button" role="menuitem" data-act="record">Record from the MIDI keyboard <kbd>R</kbd></button>
           </div>
         </details>
         <% if locals["app"] %>
@@ -149,6 +150,15 @@
             <option value="">none</option><option value="find">find keyboards…</option>
           </select>
         </label>
+        <label class="tool-field">Quantize
+          <select data-quantize title="The finest step a recording keeps: each note's start and end move to it">
+            <option value="quarter">quarter notes</option>
+            <option value="eighth">eighths</option>
+            <option value="sixteenth" selected>sixteenths</option>
+            <option value="thirty-second">32nds, the lightest</option>
+          </select>
+        </label>
+        <button type="button" class="tool tool-wide studio-record" data-act="record" data-record title="Play live on the MIDI keyboard: from the selected bar of the selected staff, after a bar of count-in (R)">● Record</button>
       </details>
 
       <details class="tool-section" data-section="playback" open>

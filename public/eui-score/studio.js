@@ -123,6 +123,7 @@ export function startStudio(root, options = {}) {
     mode: "score", // or "midi": the MIDI view in place of the engraving
     rollLayout: "tracks", // the MIDI view's: a strip per track, or "keys", one keyboard
     rollDrag: null,
+    recording: null, // { lane, bar, program, down, played } while keys are recorded
   };
   // For a console or a test: the studio's state, on its element.
   root.studio = st;
@@ -672,6 +673,7 @@ export function startStudio(root, options = {}) {
         if (st.rollLayout === "keys" && st.sel?.lanes) st.sel = null;
         return draw();
       case "insert-copied": return insertCopied();
+      case "record": return record();
       case "written": {
         if (!st.score) return say("Written pitch needs the score tools: this piece is edited in its text.", true);
         st.written = !st.written;
@@ -1944,6 +1946,7 @@ export function startStudio(root, options = {}) {
     if (key === "l" || key === "L") return run("lyrics");
     if (key === "k" || key === "K") return run("chord");
     if (key === "t" || key === "T") return run("tie");
+    if (key === "r" || key === "R") return run("record");
     if (key === "s" || key === "S") return run("slur");
   });
 
@@ -2097,21 +2100,23 @@ export function startStudio(root, options = {}) {
     // Inside the click, before anything waits: a browser starts sound only
     // from a gesture, and a gesture does not outlive a download.
     P.unlock();
-    const passes = st.score ? M.playback(st.score) : [];
+    // Recorded into, the score plays on past its end (M.forRecording).
+    const played = st.score && st.recording ? M.forRecording(st.score, st.recording.lane) : st.score;
+    const passes = played ? M.playback(played) : [];
     // From the selection's bar (its first pass), or from the start; looped,
     // the selected bars over and over.
-    const loop = playOption("loop")?.checked && st.score ? loopOf(passes) : null;
+    const loop = playOption("loop")?.checked && st.score && !st.recording ? loopOf(passes) : null;
     if (playOption("loop")?.checked && !loop) say("Select the bars to loop: playing from the start.");
     const from = changeBar();
     const at = loop ? loop.start : from == null ? 0 : (passes.find((p) => p.bar === from)?.start ?? 0);
     let bytes;
     try {
       // 100 a quarter when the source sets no tempo, as the model counts.
-      bytes = await toMidi(st.score ? M.toLilyPond(st.score, { unfold: true }).source : st.text, { bpm: 100, beat: 4 });
+      bytes = await toMidi(played ? M.toLilyPond(played, { unfold: true }).source : st.text, { bpm: 100, beat: 4 });
     } catch (error) {
       return say(error.message ?? String(error), true);
     }
-    const state = { handle: null, passes, times: noteTimes(passes), beats: st.score ? M.beats(st.score, passes) : [], loop, next: null, now: [], lit: -1, frame: 0, timer: 0, ticker: 0 };
+    const state = { handle: null, passes, times: noteTimes(passes), beats: played ? M.beats(played, passes) : [], loop, next: null, now: [], lit: -1, frame: 0, timer: 0, ticker: 0 };
     st.playing = state;
     showState();
     const progress = (f) => st.playing === state && say(`Loading the sounds… ${Math.round(100 * f)} % (38 MB, once)`);
@@ -2119,7 +2124,8 @@ export function startStudio(root, options = {}) {
       if (!P.isReady()) say("Loading the sounds…");
       await P.prepare(progress);
       if (st.playing !== state) return;
-      if (playOption("count-in")?.checked && passes.length) await countIn(state, at);
+      // A recording always counts a bar in.
+      if ((st.recording || playOption("count-in")?.checked) && passes.length) await countIn(state, at);
       if (st.playing !== state) return;
       state.handle = await P.play(bytes, { at, onStop: () => st.playing === state && stopPlay() });
     } catch (error) {
@@ -2177,7 +2183,8 @@ export function startStudio(root, options = {}) {
       state.next = null;
       return;
     }
-    if (!playOption("metronome")?.checked || !state.beats.length) return;
+    // A recording always has the metronome.
+    if (!(st.recording || playOption("metronome")?.checked) || !state.beats.length) return;
     const beats = state.beats;
     // After a jump — a seek, the loop — the count starts again where the music is.
     const lost = state.next == null || (state.next > 0 && beats[state.next - 1].sec > now + 0.3) || (beats[state.next] && beats[state.next].sec < now - 0.3);
@@ -2202,6 +2209,8 @@ export function startStudio(root, options = {}) {
 
   function stopPlay() {
     const playing = st.playing;
+    // Where the music got to, for the keys still held when a recording stops.
+    const reached = st.recording && playing?.handle ? M.tickAtPlayed(st.score, playing.passes, playing.handle.heard) : null;
     st.playing = null;
     if (playing) {
       clearInterval(playing.timer);
@@ -2213,6 +2222,7 @@ export function startStudio(root, options = {}) {
     progress.hidden = true;
     playhead.hidden = true;
     say("");
+    if (st.recording) return finishRecording(reached);
     draw();
   }
 
@@ -2466,6 +2476,101 @@ export function startStudio(root, options = {}) {
       M.setPitch(score, t.s, t.i, M.pitchOfKey(key, M.keyOf(score, t.s, M.starts(score.staves[t.s])[t.i])), false, t.head);
     });
     hear();
+  }
+
+  // ---- Recording from a MIDI keyboard --------------------------------------------
+  //
+  // R (or Record) plays the score from the selected bar after a bar of
+  // count-in, the metronome on and the staff recorded into silent; the keys
+  // played are kept with the times they were heard at, and written when the
+  // music stops, fitted to the Quantize grid. One Undo takes it all back.
+
+  const quantizeBox = root.querySelector("[data-quantize]");
+  const recordButtons = () => root.querySelectorAll("[data-record]");
+
+  function keyboardChosen() {
+    return midiIn && midiIn.value && midiIn.value !== "find" ? midiIn.value : null;
+  }
+
+  async function record() {
+    if (st.recording) return stopPlay();
+    if (!st.score) return say("Recording needs the score tools: this piece is edited in its text.", true);
+    const port = keyboardChosen();
+    if (!port) return say("Choose a MIDI keyboard first (Playback › MIDI keyboard), then record.", true);
+    const lane = st.input.on ? st.input.staff : (st.sel?.staff ?? 0);
+    if (M.isDrums(st.score, lane)) return say("Drum staves cannot be recorded into yet: choose another staff.", true);
+    if (st.playing) stopPlay();
+    if (st.input.on) setInput(false);
+    const sound = st.score.staves[M.upperOf(st.score, lane)]?.instrument;
+    const muted = !st.mix.mute.has(lane);
+    st.mix.mute.add(lane);
+    st.recording = { lane, bar: changeBar() ?? 0, program: M.programOf(sound), down: new Map(), played: [], muted };
+    P.listen(port, recordKey, releaseKey);
+    for (const button of recordButtons()) {
+      button.textContent = "■ Stop recording";
+      button.setAttribute("aria-pressed", "true");
+    }
+    await togglePlay();
+    if (st.recording && st.playing) say(`Recording into ${laneName(lane)} from bar ${st.recording.bar + 1}: play after the count-in; R stops.`);
+  }
+
+  function laneName(s) {
+    const staff = st.score.staves[M.upperOf(st.score, s)];
+    return staff?.name || `staff ${M.staffNumber(st.score, s) + 1}`;
+  }
+
+  /** The tick being heard now, while recording; null before the music has started or while it is paused. */
+  function recordingNow() {
+    const handle = st.playing?.handle;
+    return st.recording && handle && !handle.paused ? M.tickAtPlayed(st.score, st.playing.passes, handle.heard) : null;
+  }
+
+  function recordKey(key) {
+    if (!st.recording) return;
+    P.hold(key, true, st.recording.program);
+    const t = recordingNow();
+    if (t != null) st.recording.down.set(key, t);
+  }
+
+  function releaseKey(key) {
+    if (!st.recording) return;
+    P.hold(key, false);
+    const t0 = st.recording.down.get(key);
+    if (t0 == null) return;
+    st.recording.down.delete(key);
+    const t1 = recordingNow() ?? t0;
+    // A repeat played again goes back: the note lasts until its bar's end at most.
+    st.recording.played.push({ key, t0, t1: t1 > t0 ? t1 : M.barStart(st.score, M.barAt(st.score, t0) + 1) });
+  }
+
+  /** The music stopped: the keys played written into the staff, from the bar recording began to the end of the last note's. */
+  function finishRecording(reached) {
+    const rec = st.recording;
+    st.recording = null;
+    P.listen(keyboardChosen(), playKey);
+    if (rec.muted) st.mix.mute.delete(rec.lane);
+    renderMix();
+    for (const button of recordButtons()) {
+      button.textContent = "● Record";
+      button.setAttribute("aria-pressed", "false");
+    }
+    for (const [key, t0] of rec.down) {
+      P.hold(key, false);
+      rec.played.push({ key, t0, t1: Math.max(reached ?? t0, t0 + 1) });
+    }
+    if (!rec.played.length) {
+      say("Nothing was played: the score is as it was.");
+      return draw();
+    }
+    const grid = M.RECORDING_GRIDS[quantizeBox?.value] ?? M.RECORDING_GRIDS.sixteenth;
+    const from = M.barStart(st.score, rec.bar);
+    const lastBar = M.barAt(st.score, Math.max(from, Math.max(...rec.played.map((n) => n.t1)) - 1));
+    let written = 0;
+    edit((score) => {
+      written = M.writeRecording(score, rec.lane, from, M.barStart(score, lastBar + 1), rec.played, grid);
+    });
+    const bars = lastBar === rec.bar ? `bar ${rec.bar + 1}` : `bars ${rec.bar + 1}–${lastBar + 1}`;
+    say(`Recorded ${written === 1 ? "1 note" : `${written} notes`} into ${laneName(rec.lane)}, ${bars}, fitted to ${quantizeBox?.selectedOptions[0]?.textContent ?? "sixteenths"}. Ctrl+Z takes it back.`);
   }
 
   /** The "MIDI keyboard" menu: none, or a keyboard, found when asked for. */

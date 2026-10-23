@@ -227,6 +227,7 @@ describe("AppScoresController") do
       assert_contains(page, "data-act=\"midi-view\" data-midi-label")
       assert_contains(page, "data-midi-button")
       assert_contains(page, "data-act=\"insert-copied\"")
+      assert_contains(page, "data-quantize")
     end
 
     test("keeps a version on request, lists it, shows it, and restores it") do
