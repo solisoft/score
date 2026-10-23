@@ -154,10 +154,13 @@
           <select data-quantize title="The finest step a recording keeps: each note's start and end move to it">
             <option value="quarter">quarter notes</option>
             <option value="eighth">eighths</option>
+            <option value="eighth-triplet">eighth triplets</option>
             <option value="sixteenth" selected>sixteenths</option>
+            <option value="sixteenth-triplet">sixteenth triplets</option>
             <option value="thirty-second">32nds, the lightest</option>
           </select>
         </label>
+        <label class="tool-check" title="Write the dynamics of how hard the keys are struck, where they change"><input type="checkbox" data-record-dynamics checked> Dynamics from how hard keys are hit</label>
         <button type="button" class="tool tool-wide studio-record" data-act="record" data-record title="Play live on the MIDI keyboard: from the selected bar of the selected staff, after a bar of count-in (R)">● Record</button>
       </details>
 

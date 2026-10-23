@@ -1003,8 +1003,24 @@ export function paste(score, s, t, clip) {
 // starts and ends moved to the nearest step of the grid, keys sounding
 // together as a chord, a note held on over the next one's start tied to it.
 
-/** The grids a recording is fitted to, in ticks: the finest step it keeps. */
-export const RECORDING_GRIDS = { quarter: WHOLE / 4, eighth: WHOLE / 8, sixteenth: WHOLE / 16, "thirty-second": WHOLE / 32 };
+/**
+ * The grids a recording is fitted to, in ticks: the finest step it keeps. A
+ * triplet grid writes as triplets the beats where a note starts or stops
+ * off the beat, the others as they are.
+ */
+export const RECORDING_GRIDS = {
+  quarter: WHOLE / 4,
+  eighth: WHOLE / 8,
+  "eighth-triplet": WHOLE / 12,
+  sixteenth: WHOLE / 16,
+  "sixteenth-triplet": WHOLE / 24,
+  "thirty-second": WHOLE / 32,
+};
+
+/** A triplet grid's beat (three of its steps), or 0 for a plain grid. */
+function tripletBeat(grid) {
+  return Math.round(WHOLE / grid) % 3 === 0 ? 3 * grid : 0;
+}
 
 /** How far past its end a recording may go on: the bars played after the last one. */
 export const RECORDING_MORE_BARS = 32;
@@ -1020,7 +1036,8 @@ export function forRecording(score, s) {
   const end = barsOf(out);
   insertBars(out, end, RECORDING_MORE_BARS);
   const last = barStart(out, end + RECORDING_MORE_BARS);
-  write(out, s, last - WHOLE / 16, WHOLE / 16, { rest: false, pitches: [{ d: 28, alter: 0 }] });
+  const pitch = isDrums(out, s) ? drumPitch("bd") : { d: 28, alter: 0 };
+  write(out, s, last - WHOLE / 16, WHOLE / 16, { rest: false, pitches: [pitch] });
   return out;
 }
 
@@ -1029,46 +1046,100 @@ export function quantize(notes, grid) {
   return notes.map((n) => {
     const t0 = Math.round(n.t0 / grid) * grid;
     const t1 = Math.max(t0 + grid, Math.round(n.t1 / grid) * grid);
-    return { key: n.key, t0, t1 };
+    return { ...n, t0, t1 };
   });
 }
 
+/** The dynamic a key struck at `velocity` (1–127) reads as. */
+export function dynamicOfVelocity(velocity) {
+  if (velocity < 32) return "pp";
+  if (velocity < 48) return "p";
+  if (velocity < 64) return "mp";
+  if (velocity < 80) return "mf";
+  if (velocity < 100) return "f";
+  return "ff";
+}
+
 /**
- * The keys played written over lane `s` from `from` to `to` (ticks, bar
- * lines): what was there replaced, the rest of it left as it was. Answers how
- * many notes were written. Drum staves are not recorded into.
+ * The keys played (`{ key, t0, t1, velocity? }`) written over lane `s` from
+ * `from` to `to` (ticks, bar lines): what was there replaced, the rest of it
+ * left as it was. Keys sounding together are a chord, a key held on into the
+ * next is tied to it; on a drum staff each key is its General MIDI drum, and
+ * keys no drum answers to are left out. With `dynamics`, the dynamic of how
+ * hard the keys were struck is marked where it changes and holds for two
+ * notes at least. Answers how many notes were written.
  */
-export function writeRecording(score, s, from, to, played, grid) {
-  if (isDrums(score, s)) throw new Error("drums cannot be recorded yet");
+export function writeRecording(score, s, from, to, played, grid, { dynamics = false } = {}) {
   if (to <= from) return 0;
-  const notes = quantize(played, grid).filter((n) => n.t1 > from && n.t0 < to).map((n) => ({ ...n, t0: Math.max(from, n.t0), t1: Math.min(to, n.t1) }));
+  const drums = isDrums(score, s);
+  const notes = quantize(played, grid)
+    .filter((n) => n.t1 > from && n.t0 < to && (!drums || drumByKey(n.key)))
+    .map((n) => ({ ...n, t0: Math.max(from, n.t0), t1: Math.min(to, n.t1) }));
   write(score, s, from, to - from, { rest: true });
-  // Where anything starts or stops: between two of them, the keys sounding are one chord.
-  const edges = [...new Set([from, to, ...notes.flatMap((n) => [n.t0, n.t1])])].sort((a, b) => a - b);
+  // The beats written as triplets: those where something starts or stops off the beat.
+  const beat = tripletBeat(grid);
+  const triplets = new Set();
+  if (beat) {
+    for (const t of notes.flatMap((n) => [n.t0, n.t1])) if (t > from && t < to && (t - from) % beat) triplets.add(t - ((t - from) % beat));
+  }
+  const inTriplet = (t) => [...triplets].some((u) => t >= u && t < u + beat);
+  const sounding = (a, b) => [...new Set(notes.filter((n) => n.t0 <= a && n.t1 >= b).map((n) => n.key))].sort((x, y) => x - y);
+  const pitches = (keys, at) => sortPitches(keys.map((key) => (drums ? drumPitch(drumByKey(key)) : pitchOfKey(key, keyOf(score, s, at)))));
+  // Where anything starts or stops, and the triplets' edges: between two of them, one chord.
+  const edges = [...new Set([from, to, ...notes.flatMap((n) => [n.t0, n.t1]), ...[...triplets].flatMap((u) => [u, u + beat])])].sort((x, y) => x - y);
   const spans = [];
   for (let k = 0; k + 1 < edges.length; k++) {
     const [a, b] = [edges[k], edges[k + 1]];
-    const keys = [...new Set(notes.filter((n) => n.t0 <= a && n.t1 >= b).map((n) => n.key))].sort((x, y) => x - y);
+    if (inTriplet(a)) continue;
+    const keys = sounding(a, b);
     // Struck again here: a key starting at `a` is a new note, not the held one.
     const struck = notes.some((n) => n.t0 === a);
     const last = spans[spans.length - 1];
-    if (last && !struck && last.keys.join() === keys.join()) last.b = b;
-    else spans.push({ a, b, keys, struck });
+    if (last && last.b === a && !struck && last.keys.join() === keys.join()) last.b = b;
+    else spans.push({ a, b, keys });
   }
   for (const span of spans) {
-    if (!span.keys.length) continue;
-    const fifths = keyOf(score, s, span.a);
-    write(score, s, span.a, span.b - span.a, { rest: false, pitches: span.keys.map((key) => pitchOfKey(key, fifths)) });
+    if (span.keys.length) write(score, s, span.a, span.b - span.a, { rest: false, pitches: pitches(span.keys, span.a) });
   }
-  // The ties last: writing a span cuts any tie into it. A key held on into
-  // the next span, not struck again there, ties the span's last note to it.
+  for (const u of [...triplets].sort((x, y) => x - y)) {
+    const i = tupletAt(score, s, u, beat, 3);
+    for (let k = 0; k < 3; k++) {
+      const keys = sounding(u + k * grid, u + (k + 1) * grid);
+      if (keys.length) Object.assign(score.staves[s].events[i + k], { rest: false, pitches: pitches(keys, u) });
+    }
+  }
   const staff = score.staves[s];
-  spans.forEach((span, k) => {
-    const next = spans[k + 1];
-    const held = next && span.keys.some((key) => next.keys.includes(key) && !notes.some((n) => n.t0 === next.a && n.key === key));
-    if (held) staff.events[eventAt(staff, span.b) - 1].tie = true;
-  });
+  const at = starts(staff);
+  const keysOf = (ev) => ev.pitches.map((p) => (p.drum ? drumKey(p.drum) : midiKey(p.d, p.alter)));
+  // The ties last, as writing cuts any tie into what it writes: a key held
+  // on from one note into the next, not struck again there, ties them.
+  if (!drums) {
+    for (let i = 0; i + 1 < staff.events.length; i++) {
+      const [ev, next, t] = [staff.events[i], staff.events[i + 1], at[i + 1]];
+      if (t <= from || t >= to || ev.rest || next.rest) continue;
+      if (notes.some((n) => n.t0 < t && n.t1 > t && keysOf(ev).includes(n.key) && keysOf(next).includes(n.key))) ev.tie = true;
+    }
+  }
+  if (dynamics) markDynamics(staff, at, notes);
   return notes.length;
+}
+
+/** The dynamics of how hard the keys were struck, where the level changes and holds for two notes (or starts). */
+function markDynamics(staff, at, notes) {
+  const times = [...new Set(notes.map((n) => n.t0))].sort((x, y) => x - y);
+  const levels = times.map((t) => {
+    const struck = notes.filter((n) => n.t0 === t);
+    return dynamicOfVelocity(struck.reduce((sum, n) => sum + (n.velocity ?? 80), 0) / struck.length);
+  });
+  let current = null;
+  levels.forEach((level, k) => {
+    if (level === current) return;
+    if (current !== null && levels[k + 1] !== level) return;
+    const i = at.indexOf(times[k]);
+    if (i < 0 || staff.events[i].rest) return;
+    staff.events[i].dynamic = level;
+    current = level;
+  });
 }
 
 // A section is bars a…b of several lanes at once: what the MIDI view copies.

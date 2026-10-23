@@ -14,6 +14,8 @@ describe("PlaygroundController") do
       # Recording from a MIDI keyboard, its grid sixteenths to begin with.
       assert_contains(body, "data-act=\"record\" data-record")
       assert_contains(body, "<option value=\"sixteenth\" selected>sixteenths</option>")
+      assert_contains(body, "<option value=\"eighth-triplet\">eighth triplets</option>")
+      assert_contains(body, "data-record-dynamics checked")
       assert_contains(body, "data-act=\"tuplet\" data-n=\"3\"")
       assert_contains(body, "data-act=\"lyrics\"")
       assert_contains(body, "data-act=\"chord\"")

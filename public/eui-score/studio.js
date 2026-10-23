@@ -2486,6 +2486,7 @@ export function startStudio(root, options = {}) {
   // music stops, fitted to the Quantize grid. One Undo takes it all back.
 
   const quantizeBox = root.querySelector("[data-quantize]");
+  const dynamicsBox = root.querySelector("[data-record-dynamics]");
   const recordButtons = () => root.querySelectorAll("[data-record]");
 
   function keyboardChosen() {
@@ -2498,13 +2499,12 @@ export function startStudio(root, options = {}) {
     const port = keyboardChosen();
     if (!port) return say("Choose a MIDI keyboard first (Playback › MIDI keyboard), then record.", true);
     const lane = st.input.on ? st.input.staff : (st.sel?.staff ?? 0);
-    if (M.isDrums(st.score, lane)) return say("Drum staves cannot be recorded into yet: choose another staff.", true);
     if (st.playing) stopPlay();
     if (st.input.on) setInput(false);
     const sound = st.score.staves[M.upperOf(st.score, lane)]?.instrument;
     const muted = !st.mix.mute.has(lane);
     st.mix.mute.add(lane);
-    st.recording = { lane, bar: changeBar() ?? 0, program: M.programOf(sound), down: new Map(), played: [], muted };
+    st.recording = { lane, bar: changeBar() ?? 0, program: M.programOf(sound), drums: M.isDrums(st.score, lane), down: new Map(), played: [], muted };
     P.listen(port, recordKey, releaseKey);
     for (const button of recordButtons()) {
       button.textContent = "■ Stop recording";
@@ -2525,22 +2525,23 @@ export function startStudio(root, options = {}) {
     return st.recording && handle && !handle.paused ? M.tickAtPlayed(st.score, st.playing.passes, handle.heard) : null;
   }
 
-  function recordKey(key) {
+  function recordKey(key, held, velocity = 100) {
     if (!st.recording) return;
-    P.hold(key, true, st.recording.program);
+    P.hold(key, true, st.recording.program, { drums: st.recording.drums, velocity });
     const t = recordingNow();
-    if (t != null) st.recording.down.set(key, t);
+    if (t != null) st.recording.down.set(key, { t, velocity });
   }
 
   function releaseKey(key) {
     if (!st.recording) return;
-    P.hold(key, false);
-    const t0 = st.recording.down.get(key);
-    if (t0 == null) return;
+    P.hold(key, false, 0, { drums: st.recording.drums });
+    const down = st.recording.down.get(key);
+    if (!down) return;
     st.recording.down.delete(key);
+    const { t: t0, velocity } = down;
     const t1 = recordingNow() ?? t0;
     // A repeat played again goes back: the note lasts until its bar's end at most.
-    st.recording.played.push({ key, t0, t1: t1 > t0 ? t1 : M.barStart(st.score, M.barAt(st.score, t0) + 1) });
+    st.recording.played.push({ key, t0, t1: t1 > t0 ? t1 : M.barStart(st.score, M.barAt(st.score, t0) + 1), velocity });
   }
 
   /** The music stopped: the keys played written into the staff, from the bar recording began to the end of the last note's. */
@@ -2554,9 +2555,9 @@ export function startStudio(root, options = {}) {
       button.textContent = "● Record";
       button.setAttribute("aria-pressed", "false");
     }
-    for (const [key, t0] of rec.down) {
-      P.hold(key, false);
-      rec.played.push({ key, t0, t1: Math.max(reached ?? t0, t0 + 1) });
+    for (const [key, { t: t0, velocity }] of rec.down) {
+      P.hold(key, false, 0, { drums: rec.drums });
+      rec.played.push({ key, t0, t1: Math.max(reached ?? t0, t0 + 1), velocity });
     }
     if (!rec.played.length) {
       say("Nothing was played: the score is as it was.");
@@ -2567,7 +2568,7 @@ export function startStudio(root, options = {}) {
     const lastBar = M.barAt(st.score, Math.max(from, Math.max(...rec.played.map((n) => n.t1)) - 1));
     let written = 0;
     edit((score) => {
-      written = M.writeRecording(score, rec.lane, from, M.barStart(score, lastBar + 1), rec.played, grid);
+      written = M.writeRecording(score, rec.lane, from, M.barStart(score, lastBar + 1), rec.played, grid, { dynamics: Boolean(dynamicsBox?.checked) });
     });
     const bars = lastBar === rec.bar ? `bar ${rec.bar + 1}` : `bars ${rec.bar + 1}–${lastBar + 1}`;
     say(`Recorded ${written === 1 ? "1 note" : `${written} notes`} into ${laneName(rec.lane)}, ${bars}, fitted to ${quantizeBox?.selectedOptions[0]?.textContent ?? "sixteenths"}. Ctrl+Z takes it back.`);

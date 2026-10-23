@@ -268,8 +268,8 @@ export async function midiInputs() {
 let input = null;
 
 /**
- * Listens to MIDI keyboard `id` (null: to none). `onKey(key, held)` is
- * called on each key pressed, `held` the other keys still down — keys
+ * Listens to MIDI keyboard `id` (null: to none). `onKey(key, held,
+ * velocity)` is called on each key pressed, `held` the other keys still down — keys
  * played together make a chord — and `onRelease(key)`, when given, on each
  * key let go.
  */
@@ -284,7 +284,7 @@ export function listen(id, onKey, onRelease = null) {
     if (kind === 0x90 && velocity > 0) {
       const held = [...down];
       down.add(key);
-      onKey(key, held);
+      onKey(key, held, velocity);
     } else if (kind === 0x80 || kind === 0x90) {
       down.delete(key);
       onRelease?.(key);
@@ -327,17 +327,18 @@ export function preview(keys, program = 0, { drums = false } = {}) {
 }
 
 /**
- * Sounds `key` with General MIDI `program` for as long as it is held — a key
- * played while recording — and stops it with `on` false. Silent until the
- * sounds have loaded.
+ * Sounds `key` with General MIDI `program` (or the drum kit) for as long as
+ * it is held — a key played while recording, as hard as it was struck — and
+ * stops it with `on` false. Silent until the sounds have loaded.
  */
-export function hold(key, on, program = 0) {
+export function hold(key, on, program = 0, { drums = false, velocity = 100 } = {}) {
   if (!engine?.done) return false;
   engine.promise.then(({ ctx, synth }) => {
     ctx.resume().catch(() => {});
-    if (!on) return synth.noteOff(PREVIEW, key);
-    synth.programChange(PREVIEW, program);
-    synth.noteOn(PREVIEW, key, 100);
+    const channel = drums ? 9 : PREVIEW;
+    if (!on) return synth.noteOff(channel, key);
+    if (!drums) synth.programChange(channel, program);
+    synth.noteOn(channel, key, velocity);
   });
   return true;
 }
