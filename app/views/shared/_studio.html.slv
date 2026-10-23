@@ -548,6 +548,13 @@
             <% end %>
           </select>
         </label>
+        <label class="tool-field">Pickup
+          <select data-field="pickup">
+            <% for pickup in editor_pickups() %>
+              <option value="<%= pickup[0] %>"><%= pickup[1] %></option>
+            <% end %>
+          </select>
+        </label>
         <label class="tool-field">Tempo <input type="number" min="20" max="300" step="1" data-field="bpm"></label>
         <label class="tool-field">Tempo text <input type="text" data-field="tempo-text" placeholder="Allegro"></label>
         <label class="tool-field">Staves
@@ -617,6 +624,13 @@
         <select id="new-time" name="time">
           <% for metre in editor_metres() %>
             <option value="<%= metre %>"<%= metre == "4/4" ? " selected" : "" %>><%= metre %></option>
+          <% end %>
+        </select>
+      </label>
+      <label class="tool-field">Pickup
+        <select id="new-pickup" name="pickup">
+          <% for pickup in editor_pickups() %>
+            <option value="<%= pickup[0] %>"><%= pickup[1] %></option>
           <% end %>
         </select>
       </label>

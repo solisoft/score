@@ -94,7 +94,7 @@ test("musicxml: a piano piece as MuseScore writes it — two staves, two voices,
   assert.equal(bass[0].dots, 1);
 });
 
-test("musicxml: a pickup bar is kept as LilyPond writes it, for the engraver; the editor names it", () => {
+test("musicxml: a pickup bar is kept as LilyPond writes it, and the editor edits it", () => {
   const xml = partwise(
     `<part id="P1"><measure number="0" implicit="yes">
       <attributes><divisions>2</divisions><time><beats>3</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
@@ -106,7 +106,32 @@ test("musicxml: a pickup bar is kept as LilyPond writes it, for the engraver; th
   assert.match(source, /\\time 3\/4 \\clef treble \\partial 4 d''4 \| g''2\./);
   const parsed = JSON.parse(score_json(source));
   assert.equal(parsed.staves[0].events.filter((ev) => ev.k === "Note").length, 2);
-  assert.deepEqual(M.fromParsed(parsed).unsupported, ["a pickup bar"]);
+  // Not text-only: the score tools have it, its first bar a quarter long.
+  const read = M.fromParsed(parsed);
+  assert.equal(read.unsupported, undefined);
+  assert.equal(read.score.pickup, M.notated(4));
+  assert.equal(M.barLength(read.score, 0), M.notated(4));
+  assert.equal(M.barsOf(read.score), 2);
+  assert.equal(M.barNumber(read.score, 1), 1);
+  // Written back as MusicXML: measure 0, implicit, a quarter long.
+  const back = X.toMusicXML(read.score);
+  assert.match(back, /<measure number="0" implicit="yes">/);
+  assert.match(back, /<measure number="1">/);
+  assert.match(X.fromMusicXML(back).source, /\\partial 4 /);
+});
+
+test("musicxml: a pickup of an odd length is written as a count of a value", () => {
+  const xml = partwise(
+    `<part id="P1"><measure number="0" implicit="yes">
+      <attributes><divisions>2</divisions><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
+      ${note("D", 5, 5, "quarter")}</measure>
+      <measure number="1">${note("G", 5, 8, "whole")}</measure></part>`,
+    `<score-part id="P1"><part-name>Flute</part-name></score-part>`,
+  );
+  const { source } = X.fromMusicXML(xml);
+  assert.match(source, /\\partial 8\*5 /);
+  const read = M.fromParsed(JSON.parse(score_json(source)));
+  assert.equal(read.score?.pickup, 5 * M.notated(8));
 });
 
 test("musicxml: lyrics, a verse each, hyphens and melismata where they fall", () => {

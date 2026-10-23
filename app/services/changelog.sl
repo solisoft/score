@@ -13,6 +13,17 @@ class Changelog
       {"date": "2026-10-23", "entries": [
         {
           "area": "site",
+          "title": "Songs that start with a pickup can be edited",
+          "text": "A piece that starts before the first full bar, as many songs, hymns and folk tunes do, no "
+          + "longer leaves the note tools, Parts, Transpose and the MusicXML export unavailable: the short "
+          + "first bar is edited, numbered, played and counted in like any other. A new \"Pickup\" choice in "
+          + "New score and in Score properties sets its length, and a MusicXML file that starts with one opens "
+          + "in the editor.",
+          "link": "app",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "Open a MIDI file as a score",
           "text": "Import on the start screen and File › Open a file now take MIDI files (.mid). Each track "
           + "becomes a staff with its instrument, channel 10 becomes a drum kit, and the file's tempo, metre "

@@ -124,6 +124,21 @@ def score_snippet(figures, name, sandbox)
   )
 end
 
+# The pickups the editor's menus offer: [value, label], the value as
+# \partial writes it (score-model.js reads it with pickupOf), "" for none.
+def editor_pickups
+  [
+    ["", "None"],
+    ["16", "A sixteenth"],
+    ["8", "An eighth"],
+    ["8.", "A dotted eighth"],
+    ["4", "A quarter"],
+    ["4.", "A dotted quarter"],
+    ["2", "A half"],
+    ["2.", "A dotted half"]
+  ]
+end
+
 # The metres the editor's menus offer: the usual, the odd, the added up.
 def editor_metres
   ["2/4", "3/4", "4/4", "5/4", "6/4", "7/4", "2/2", "3/2", "3/8", "5/8", "6/8", "7/8", "9/8", "12/8"]

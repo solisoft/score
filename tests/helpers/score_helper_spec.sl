@@ -92,6 +92,29 @@ describe("score_figure") do
   end
 end
 
+describe("editor_pickups") do
+  test("offers none first, then values as \\partial writes them, each named") do
+    pickups = editor_pickups()
+    assert_eq(pickups[0], ["", "None"])
+    values = pickups.map do |pickup|
+      pickup[0]
+    end
+    assert_eq(values, [
+      "",
+      "16",
+      "8",
+      "8.",
+      "4",
+      "4.",
+      "2",
+      "2."
+    ])
+    assert(pickups.all?(&{ |pickup|
+      pickup[1].length > 0
+    }))
+  end
+end
+
 describe("score_snippet") do
   test("names the snippet after its file under syntax/") do
     figures = {"notes": ScoreSvg.figure("{ c'4 }", 600, 7)}

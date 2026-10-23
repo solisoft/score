@@ -66,9 +66,15 @@ export function ticksOf(ev) {
 // a staff's `clefs` its own changes of clef, { bar, clef }. Bar 0's are the
 // score's and the staff's own settings. Every bar line is found here.
 
-/** Where each metre starts: [{ bar, start, len, time }], the first at bar 0. */
+/**
+ * Where each metre starts: [{ bar, start, len, time }], the first at bar 0.
+ * A pickup (`score.pickup`, in ticks) makes bar 0 that short, as LilyPond's
+ * \\partial does: the full bars start after it, at bar 1.
+ */
 function metres(score) {
-  const out = [{ bar: 0, start: 0, len: (WHOLE * score.time[0]) / score.time[1], time: score.time }];
+  const full = (WHOLE * score.time[0]) / score.time[1];
+  const pickup = score.pickup > 0 && score.pickup < full ? score.pickup : 0;
+  const out = pickup ? [{ bar: 0, start: 0, len: pickup, time: score.time }, { bar: 1, start: pickup, len: full, time: score.time }] : [{ bar: 0, start: 0, len: full, time: score.time }];
   for (const c of score.changes ?? []) {
     if (!c.time) continue;
     const prev = out[out.length - 1];
@@ -110,6 +116,60 @@ export function nextBarLine(score, t) {
 
 export function isBarLine(score, t) {
   return Math.abs(barStart(score, barAt(score, t)) - t) < 1e-6;
+}
+
+/** Bar `b`'s number as the page shows it: 1 and on, or 0 and on after a pickup (its bar 0). */
+export function barNumber(score, b) {
+  return score.pickup > 0 ? b : b + 1;
+}
+
+/** A pickup's length in ticks from its value as \\partial writes it: "4", "8.", "8*3"; 0 for "" (none). */
+export function pickupOf(text) {
+  const value = String(text ?? "").trim();
+  if (!value) return 0;
+  const match = /^(1|2|4|8|16|32|64|128)(\.*)(?:\*(\d+))?$/.exec(value);
+  if (!match) throw new Error("a pickup is a duration, like 4, 8. or 8*3");
+  return notated(Number(match[1]), match[2].length) * Number(match[3] ?? 1);
+}
+
+/** A pickup's length as \\partial writes it: one value ("4."), or a count of the longest that divides it ("8*3"). */
+export function pickupText(ticks) {
+  const one = VALUES.find((v) => v.ticks === ticks);
+  if (one) return `${one.base}${".".repeat(one.dots)}`;
+  const base = [1, 2, 4, 8, 16, 32, 64, 128].find((b) => ticks % (WHOLE / b) === 0);
+  if (!base) throw new Error("a pickup is a whole number of 128ths");
+  return `${base}*${ticks / (WHOLE / base)}`;
+}
+
+/**
+ * The first bar made a pickup `ticks` long (0: a full bar again). The bars
+ * after it keep their music and their numbers in the score; a pickup is
+ * the end of a bar, so a shorter one loses the start of the first bar,
+ * which must be rests, and a longer one gets rests before its music.
+ */
+export function setPickup(score, ticks) {
+  const full = (WHOLE * score.time[0]) / score.time[1];
+  if (!Number.isInteger(ticks) || ticks < 0 || ticks % (WHOLE / 128) !== 0) throw new Error("a pickup is a whole number of 128ths");
+  if (ticks >= full) throw new Error(`a pickup is shorter than a bar of ${score.time[0]}/${score.time[1]}`);
+  const was = barLength(score, 0);
+  const now = ticks || full;
+  if (now === was) return;
+  const work = structuredClone(score);
+  work.pickup = ticks || 0;
+  if (!work.pickup) delete work.pickup;
+  for (const staff of work.staves) {
+    if (now < was) {
+      const from = cut(score, staff, was - now);
+      const at = starts(staff);
+      if (from !== was - now || staff.events.some((ev, k) => at[k] < from && (!ev.rest || ev.tuplet))) throw new Error("the first bar's start holds notes: a shorter pickup would lose them");
+      staff.events = staff.events.filter((_, k) => at[k] >= from);
+    } else {
+      staff.events.unshift(...rests(work, 0, now - was));
+    }
+    tidy(work, staff);
+  }
+  if (!work.pickup) delete score.pickup;
+  Object.assign(score, work);
 }
 
 /** The metre bar `b` is in. */
@@ -418,9 +478,10 @@ export const TEMPLATES = [
 
 /**
  * A new score from template `id`, with its settings: title, composer,
- * key (fifths), time ([n, d]), bpm (0 for none), bars.
+ * key (fifths), time ([n, d]), bpm (0 for none), bars, and a pickup (ticks,
+ * 0 for none): a short bar before the `bars` full ones.
  */
-export function fromTemplate(id, { title = "Untitled", composer = "", key = 0, time = [4, 4], bpm = 0, bars = 8 } = {}) {
+export function fromTemplate(id, { title = "Untitled", composer = "", key = 0, time = [4, 4], bpm = 0, bars = 8, pickup = 0 } = {}) {
   const template = TEMPLATES.find((t) => t.id === id);
   if (!template) throw new Error("no such template");
   if (!Number.isInteger(bars) || bars < 1 || bars > 500) throw new Error("a score has 1 to 500 bars");
@@ -428,7 +489,11 @@ export function fromTemplate(id, { title = "Untitled", composer = "", key = 0, t
   // A drum kit alone has no key.
   const drumsOnly = template.staves.every((spec) => spec.instrument === "Drum kit");
   const score = { header: { title: title || "Untitled", composer }, key: drumsOnly ? 0 : key, time, tempo: bpm > 0 ? { text: "", base: 4, bpm } : null, group: template.group, groups: [], staves: [], repeats: [], changes: [] };
-  const length = barStart(score, bars);
+  if (pickup) {
+    if (!Number.isInteger(pickup) || pickup < 0 || pickup >= (WHOLE * time[0]) / time[1]) throw new Error(`a pickup is shorter than a bar of ${time[0]}/${time[1]}`);
+    score.pickup = pickup;
+  }
+  const length = barStart(score, pickup ? bars + 1 : bars);
   template.staves.forEach((spec) => {
     const it = INSTRUMENTS.find((x) => x.name === spec.instrument);
     const named = !spec.unnamed && !spec.piano && template.staves.length > 1;
@@ -1345,13 +1410,18 @@ function retime(score, b, num, den) {
   if (b < 0 || b >= bars) throw new Error("no such bar");
   if (![1, 2, 4, 8, 16].includes(den) || !Number.isInteger(num) || num < 1 || num > 32) throw new Error("no such metre");
   const len = (WHOLE * num) / den;
-  const old = { time: score.time, changes: structuredClone(score.changes ?? []) };
+  const old = { time: score.time, changes: structuredClone(score.changes ?? []), pickup: score.pickup };
+  // A pickup stays as long as it is, before the full bars of the first metre.
+  const pickup = score.pickup > 0 ? score.pickup : 0;
+  if (b === 0 && pickup >= len) throw new Error(`the pickup is not shorter than a bar of ${num}/${den}: change it first`);
   const from = barStart(old, b);
   const next = old.changes.find((c) => c.bar > b && c.time);
   const total = lengthOf(score.staves[0]);
   const to = next ? barStart(old, next.bar) : total;
-  if (next && (to - from) % len !== 0) throw new Error(`the bars up to the next change of metre would not make whole bars of ${num}/${den}`);
-  const grown = (next ? to - from : Math.ceil((to - from) / len) * len) - (to - from);
+  // What is laid out in full bars: after the pickup, when the first metre changes.
+  const inBars = to - from - (b === 0 ? pickup : 0);
+  if (next && inBars % len !== 0) throw new Error(`the bars up to the next change of metre would not make whole bars of ${num}/${den}`);
+  const grown = (next ? inBars : Math.ceil(inBars / len) * len) - inBars;
   for (const staff of score.staves) {
     const at = starts(staff);
     if (staff.events.some((ev, k) => ev.tuplet && at[k] >= from && at[k] < to)) throw new Error("move or remove the tuplets in those bars before changing the metre");
@@ -1364,14 +1434,16 @@ function retime(score, b, num, den) {
   const repeats = (score.repeats ?? []).map((r) => ({ from: tick(r.from), to: tick(r.to + 1), ends: r.endings.map((_, k) => tick(r.to + 1 + r.endings.slice(0, k + 1).reduce((x, y) => x + y, 0))) }));
   const clefs = score.staves.map((staff) => (staff.clefs ?? []).map((c) => ({ ...c, at: tick(c.bar) })));
   // The new bars: each mark's bar counted in the new metres.
-  const shift = (t) => (t > from ? t + grown : t);
-  let seg = { bar: 0, at: 0, len: b === 0 ? len : (WHOLE * score.time[0]) / score.time[1] };
+  // The bars laid out again stay where they were; what is after them moves by what they grew.
+  const shift = (t) => (t > from && t >= to ? t + grown : t);
+  // After a pickup, the full bars are counted from bar 1, where it ends.
+  let seg = { bar: pickup ? 1 : 0, at: pickup, len: b === 0 ? len : (WHOLE * score.time[0]) / score.time[1] };
   const changes = [];
   for (const m of marks) {
     const at = shift(m.at);
     const rel = (at - seg.at) / seg.len;
-    if (!Number.isInteger(rel)) throw new Error("the changes of key, tempo or clef there would fall inside bars: move them first");
-    const bar = seg.bar + rel;
+    if (at > 0 && !Number.isInteger(rel)) throw new Error("the changes of key, tempo or clef there would fall inside bars: move them first");
+    const bar = at === 0 ? 0 : seg.bar + rel;
     const { at: _, ...change } = m;
     change.bar = bar;
     if (bar === 0) {
@@ -1381,7 +1453,7 @@ function retime(score, b, num, den) {
       if (change.time && change.time[0] === (seg.time ?? score.time)[0] && change.time[1] === (seg.time ?? score.time)[1]) delete change.time;
       if (Object.keys(change).length > 1) changes.push(change);
     }
-    if (m.time) seg = { bar, at, len: (WHOLE * m.time[0]) / m.time[1], time: m.time };
+    if (m.time) seg = bar === 0 && pickup ? { bar: 1, at: pickup, len: (WHOLE * m.time[0]) / m.time[1], time: m.time } : { bar, at, len: (WHOLE * m.time[0]) / m.time[1], time: m.time };
   }
   if (b === 0) {
     score.time = [num, den];
@@ -1530,6 +1602,8 @@ export function deleteBars(score, a, b) {
     staff.events = staff.events.filter((_, k) => at[k] < from || at[k] >= to);
     mend(staff);
   }
+  // The pickup gone, the piece starts on a full bar.
+  if (a === 0) delete score.pickup;
   // The changes and clefs inside the bars go; those after them move back.
   const shift = (list) => (list ?? []).filter((c) => c.bar < a || c.bar > b).map((c) => (c.bar > b ? { ...c, bar: c.bar - count } : c));
   score.changes = shift(score.changes);
@@ -1693,6 +1767,7 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
     const tempo = s === 0 && score.tempo && (score.tempo.text || score.tempo.bpm) ? ` ${tempoText(score.tempo)}` : "";
     const clef = clefText(staff.clef);
     const time = staff.time ?? score.time;
+    const partial = score.pickup > 0 ? ` \\partial ${pickupText(score.pickup)}` : "";
     const settings = name + short + midi;
     // A piece that ends on a repeat's end keeps its :|. sign, not a final bar.
     const ending = lastRepeat ? "" : ' \\bar "|."';
@@ -1701,8 +1776,8 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
     const brace = moved ? `\\transpose c ${moved} {` : "{";
     // A drum staff: its strokes in \\drummode, with no clef and no key.
     const opening = staff.drums
-      ? `\\new DrumStaff ${settings ? `\\with { ${settings}} ` : ""}\\drummode {\n  \\time ${timeText(score, time)}${tempo}`
-      : `\\new Staff ${settings ? `\\with { ${settings}} ` : ""}${brace}\n  \\clef ${clef} \\key ${KEYS[keyOf(score, s)]} \\major \\time ${timeText(score, time)}${tempo}`;
+      ? `\\new DrumStaff ${settings ? `\\with { ${settings}} ` : ""}\\drummode {\n  \\time ${timeText(score, time)}${partial}${tempo}`
+      : `\\new Staff ${settings ? `\\with { ${settings}} ` : ""}${brace}\n  \\clef ${clef} \\key ${KEYS[keyOf(score, s)]} \\major \\time ${timeText(score, time)}${partial}${tempo}`;
     let out = `${opening}\n  ${music.replace(/\n {4}/g, "\n  ")}${ending}\n}`;
     // Each verse a line under the one before.
     for (let verse = 1; verse <= versesOf(staff); verse++) out += `\n\\addlyrics { ${lyricText(staff, verse)} }`;
@@ -2021,6 +2096,7 @@ export function endingFromBars(score, a, b) {
 
 /** `count` bars of rests put in every staff before bar `at`; the repeats after it move along. */
 export function insertBars(score, at, count) {
+  if (at === 0 && score.pickup > 0) throw new Error("the pickup starts the piece: bars go after it");
   const t = barStart(score, at);
   if (score.staves.some((staff) => t > lengthOf(staff))) throw new Error("no such bar");
   // What changes from bar `at` moves along: the new bars keep the metre before them.
@@ -2637,7 +2713,12 @@ export function beats(score, passes) {
   const out = [];
   for (const p of passes) {
     const [num, den] = timeAt(score, p.bar);
-    for (let k = 0; k < num; k++) out.push({ sec: p.start + intoPass(p, (k * WHOLE) / den), down: k === 0 });
+    // A pickup is the end of a bar: its beats are the bar's last ones.
+    const missing = (WHOLE * num) / den - barLength(score, p.bar);
+    for (let k = 0; k < num; k++) {
+      const into = (k * WHOLE) / den - missing;
+      if (into >= 0) out.push({ sec: p.start + intoPass(p, into), down: k === 0 });
+    }
   }
   return out;
 }
@@ -2762,6 +2843,11 @@ export function fromParsed(parsed) {
           if (bar === 0) score.tempo = ev.tempo;
           else setChange(score, bar, "tempo", { text: ev.tempo.text ?? "", base: ev.tempo.base || 4, bpm: ev.tempo.bpm || 0 });
         }
+      } else if (k === "Partial") {
+        // A pickup: the first staff's is the score's, the others' the same.
+        if (started) unsupported.add("a pickup after the first note");
+        else if (first) score.pickup = ev.ticks;
+        else if (ev.ticks !== (score.pickup ?? 0)) unsupported.add("staves whose pickups differ");
       } else if (k === "Mark") {
         // A mark over a bar line: a jump over the end of the bar before it
         // (or of the last bar), else the bar's own mark.

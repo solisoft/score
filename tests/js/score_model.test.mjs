@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import init, { editor_view, midi, pdf, score_json } from "../../public/eui-score/eui_score_web.js";
 import * as M from "../../public/eui-score/score-model.js";
+import { onsetSeconds } from "./midi_onsets.mjs";
 
 await init({ module_or_path: readFileSync(new URL("../../public/eui-score/eui_score_web_bg.wasm", import.meta.url)) });
 
@@ -887,56 +888,6 @@ test("playing: the metronome's beats follow the metre, the speed and the repeats
   assert.ok(Math.abs(b[20].sec - 12) < 1e-9);
 });
 
-/** A MIDI file's note-ons, in seconds from its start, through its tempo changes. */
-function onsetSeconds(bytes) {
-  const v = new DataView(bytes.buffer, bytes.byteOffset);
-  const ppq = v.getUint16(12);
-  const ons = [];
-  const tempos = [];
-  for (let i = 14; i < bytes.length; i += 8 + v.getUint32(i + 4)) {
-    let p = i + 8;
-    const end = p + v.getUint32(i + 4);
-    let t = 0;
-    let status = 0;
-    const vlq = () => {
-      let x = 0;
-      for (;;) {
-        const b = bytes[p++];
-        x = (x << 7) | (b & 127);
-        if (!(b & 128)) return x;
-      }
-    };
-    while (p < end) {
-      t += vlq();
-      if (bytes[p] === 0xff) {
-        const type = bytes[p + 1];
-        p += 2;
-        const len = vlq();
-        if (type === 0x51) tempos.push([t, (bytes[p] << 16) | (bytes[p + 1] << 8) | bytes[p + 2]]);
-        p += len;
-        continue;
-      }
-      if (bytes[p] & 128) status = bytes[p++];
-      if ((status & 0xf0) === 0x90 && bytes[p + 1] > 0) ons.push(t);
-      p += (status & 0xf0) === 0xc0 || (status & 0xf0) === 0xd0 ? 1 : 2;
-    }
-  }
-  tempos.sort((a, b) => a[0] - b[0]);
-  const sec = (tick) => {
-    let s = 0;
-    let last = 0;
-    let us = 500000;
-    for (const [at, u] of tempos) {
-      if (at >= tick) break;
-      s += ((at - last) * us) / ppq / 1e6;
-      last = at;
-      us = u;
-    }
-    return s + ((tick - last) * us) / ppq / 1e6;
-  };
-  return [...new Set(ons)].sort((a, b) => a - b).map(sec);
-}
-
 test("playing: a fermata holds the music, and the notes are lit when they sound", () => {
   const s = M.newScore();
   // Bar 1: C D E(fermata) F — the fermata on the third beat holds it a beat more.
@@ -982,12 +933,17 @@ test("playing: every gallery piece is lit as the MIDI file sounds it", () => {
       if (!read.score) continue;
       const s = read.score;
       const passes = M.playback(s);
-      const shown = s.staves.flatMap((staff) => {
+      // Each note lit from its start to when it is heard: its grace notes, before it, are lit with it.
+      const shown = s.staves.flatMap((staff, lane) => {
         const at = M.starts(staff);
-        return staff.events.flatMap((ev, k) => (ev.rest ? [] : M.playedAt(s, passes, at[k])));
+        return staff.events.flatMap((ev, k) => {
+          if (ev.rest) return [];
+          const heardAt = M.heardAt(s, passes, lane, k, at[k]);
+          return M.playedAt(s, passes, at[k]).map((x, n) => [x, heardAt[n]]);
+        });
       });
       for (const h of onsetSeconds(midi(M.toLilyPond(s, { unfold: true }).source, 100, 4, 0))) {
-        assert.ok(shown.some((x) => Math.abs(x - h) < 1e-3), `${group}/${file}: a note heard at ${h.toFixed(2)} s is lit then`);
+        assert.ok(shown.some(([from, to]) => h > from - 1e-3 && h < to + 1e-3), `${group}/${file}: a note heard at ${h.toFixed(2)} s is lit then`);
       }
     }
   }
@@ -1049,7 +1005,14 @@ test("repeats refuse what does not fit, and follow the bars around them", () => 
   M.setTime(s, 4, 4);
   assert.deepEqual(s.repeats, [{ from: 3, to: 4, endings: [] }]);
   M.setTime(s, 2, 4);
-  assert.throws(() => M.setTime(s, 3, 4), /inside bars/);
+  // The music laid out again stays where it is in time: a repeat on a bar line of 3/4 too follows.
+  M.setTime(s, 3, 4);
+  assert.deepEqual(s.repeats, [{ from: 4, to: 6, endings: [] }], "in 3/4, the same music");
+  engrave(s);
+  const odd = M.newScore();
+  M.setTime(odd, 2, 4);
+  M.toggleRepeat(odd, 1, 2);
+  assert.throws(() => M.setTime(odd, 3, 4), /inside bars/);
 });
 
 test("a repeat's edges move, and selected bars become its endings", () => {

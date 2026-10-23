@@ -439,13 +439,18 @@ function readPart(part, info, first, warnings) {
     const filled = Math.max(measureLength, ...lanes.flatMap((st) => st.pos.map((p) => p - measureStart)));
     const length = filled > 0 ? filled : metre;
     if (firstMeasure && length < metre - 1e-9 && measure.attrs.implicit === "yes") {
-      const partial = spell(length / divisions);
-      if (partial.length !== 1) warnings.add("a pickup bar of an odd length");
+      // Its length as \\partial writes it: one value, or a count of one (8*3).
+      let partial = null;
+      try {
+        partial = M.pickupText(Math.round((length / divisions) * (M.WHOLE / 4)));
+      } catch {
+        warnings.add("a pickup bar of an odd length");
+      }
       // Just before the first note, after the clef, key and metre.
-      else {
+      if (partial) {
         for (const st of lanes) {
           const k = st.lanes[0].findIndex((x) => x && !x.startsWith("\\"));
-          st.lanes[0].splice(k < 0 ? st.lanes[0].length : k, 0, `\\partial ${durationText(partial[0])}`);
+          st.lanes[0].splice(k < 0 ? st.lanes[0].length : k, 0, `\\partial ${partial}`);
         }
       }
     }
@@ -882,7 +887,8 @@ export function toMusicXML(score) {
     for (let b = 0; b < bars; b++) {
       const change = M.changeAt(score, b);
       const brk = score.breaks?.[b - 1];
-      out.push(`<measure number="${b + 1}">`);
+      // A pickup is measure 0, shorter than its metre says.
+      out.push(`<measure number="${M.barNumber(score, b)}"${b === 0 && score.pickup > 0 ? ' implicit="yes"' : ""}>`);
       if (b > 0 && brk) out.push(brk === "page" ? '<print new-page="yes"/>' : '<print new-system="yes"/>');
       const bl = lines[b]?.left;
       if (bl?.length) out.push(`<barline location="left">${bl.join("")}</barline>`);

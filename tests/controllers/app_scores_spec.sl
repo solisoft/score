@@ -132,6 +132,10 @@ describe("AppScoresController") do
     assert_contains(page, "id=\"studio\"")
     assert_contains(page, "startStudio(root")
     assert_contains(page, SCORE_UNTITLED)
+    # A pickup is chosen in Score properties and in New score.
+    assert_contains(page, "data-field=\"pickup\"")
+    assert_contains(page, "name=\"pickup\"")
+    assert_contains(page, "<option value=\"4.\">A dotted quarter</option>")
   end
 
   test("renames, copies, trashes, restores, then deletes for good") do

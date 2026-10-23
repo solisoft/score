@@ -220,6 +220,7 @@ export function startStudio(root, options = {}) {
         time: metre.time,
         bpm: Number(form.get("bpm")) || 0,
         bars: Number(form.get("bars")) || 16,
+        pickup: M.pickupOf(form.get("pickup") ?? ""),
       });
       score.timeParts = metre.parts;
       open(M.toLilyPond(score).source, `A new score: ${template.name.toLowerCase()}. Press N, then the letters, to write notes.`);
@@ -261,6 +262,11 @@ export function startStudio(root, options = {}) {
   });
 
   // ---- Model ↔ text ----------------------------------------------------------
+
+  /** Bar `b`'s number as the score shows it: after a pickup, the pickup is bar 0. */
+  function barNo(b) {
+    return st.score ? M.barNumber(st.score, b) : b + 1;
+  }
 
   function readText(text) {
     st.text = text;
@@ -709,7 +715,7 @@ export function startStudio(root, options = {}) {
           return say("Select a bar first: the line or the page ends after it.", true);
         }
         const kind = (st.score?.breaks ?? {})[bar] === data.kind ? null : data.kind;
-        if (edit((score) => M.setBreak(score, bar, kind))) say(kind ? `A new ${kind} after bar ${bar + 1}: the PDF is laid out so.` : `Bar ${bar + 1}: the line goes on.`);
+        if (edit((score) => M.setBreak(score, bar, kind))) say(kind ? `A new ${kind} after bar ${barNo(bar)}: the PDF is laid out so.` : `Bar ${barNo(bar)}: the line goes on.`);
         return;
       }
       case "undo": return undo();
@@ -888,13 +894,13 @@ export function startStudio(root, options = {}) {
         const [b] = selectedBars();
         M.setMark(score, b, data.mark);
         const on = M.changeAt(score, b)?.mark === data.mark;
-        say(`Bar ${b + 1}: ${on ? { letter: "a rehearsal letter", segno: "a segno", coda: "a coda" }[data.mark] : "mark taken away"}`);
+        say(`Bar ${barNo(b)}: ${on ? { letter: "a rehearsal letter", segno: "a segno", coda: "a coda" }[data.mark] : "mark taken away"}`);
       });
       case "jump": return edit((score) => {
         const [, b] = selectedBars();
         const jump = root.querySelector("[data-jump]").value;
         M.setJump(score, b, jump);
-        say(M.changeAt(score, b)?.jump === jump ? `${M.JUMPS[jump]} at the end of bar ${b + 1} — Play takes it` : `Bar ${b + 1}: ${M.JUMPS[jump]} taken away`);
+        say(M.changeAt(score, b)?.jump === jump ? `${M.JUMPS[jump]} at the end of bar ${barNo(b)} — Play takes it` : `Bar ${barNo(b)}: ${M.JUMPS[jump]} taken away`);
       });
       case "pedal": return edit((score) => {
         const t = need();
@@ -903,13 +909,13 @@ export function startStudio(root, options = {}) {
       case "repeat": return edit((score) => {
         const [a, b] = selectedBars();
         M.toggleRepeat(score, a, b);
-        say(`Bars ${a + 1}–${b + 1}${(score.repeats ?? []).some((r) => r.from === a && r.to === b) ? " repeated" : ": repeat taken away"}`);
+        say(`Bars ${barNo(a)}–${barNo(b)}${(score.repeats ?? []).some((r) => r.from === a && r.to === b) ? " repeated" : ": repeat taken away"}`);
       });
       case "ending": return edit((score) => {
         const [a, b] = selectedBars();
         const ending = M.endingFromBars(score, a, b);
         const r = score.repeats.find((x) => x.to < a && M.repeatEnd(x) >= b);
-        const at = (k) => r.to + 2 + r.endings.slice(0, k).reduce((x, y) => x + y, 0);
+        const at = (k) => barNo(r.to + 1) + r.endings.slice(0, k).reduce((x, y) => x + y, 0);
         const bars = (k) => (r.endings[k] > 1 ? `bars ${at(k)}–${at(k) + r.endings[k] - 1}` : `bar ${at(k)}`);
         say(ending === 1
           ? `Ending 1: ${bars(0)} · ending 2: ${bars(1)} — drag the 2. handle to change it`
@@ -928,14 +934,14 @@ export function startStudio(root, options = {}) {
         M.insertBars(score, at, 1);
         if (st.input.on) st.input.t = M.barStart(score, at);
         else if (st.sel) st.sel = { staff: st.sel.staff, t0: M.barStart(score, at), t1: M.barStart(score, at), head: -1 };
-        say(`A bar put in as bar ${at + 1}`);
+        say(`A bar put in as bar ${barNo(at)}`);
       });
       case "delete-bars": return edit((score) => {
         const [a, b] = selectedBars();
         M.deleteBars(score, a, b);
         st.sel = null;
         if (st.input.on) st.input = { ...st.input, t: Math.min(st.input.t, M.barStart(score, Math.min(a, M.barsOf(score) - 1))), last: null };
-        say(a === b ? `Bar ${a + 1} taken away` : `Bars ${a + 1}–${b + 1} taken away`);
+        say(a === b ? `Bar ${barNo(a)} taken away` : `Bars ${barNo(a)}–${barNo(b)} taken away`);
       });
       case "add-staff": return edit((score) => {
         const [k, clef] = root.querySelector('[data-field="new-staff"]').value.split("|");
@@ -1113,7 +1119,7 @@ export function startStudio(root, options = {}) {
       selectSectionQuietly(score, place.bar, place.bar + clip.section.bars - 1, place.lane, clip.section);
     });
     const n = clip.section.bars;
-    say(`${n === 1 ? "1 bar" : `${n} bars`} put in as bar${n === 1 ? "" : "s"} ${place.bar + 1}${n === 1 ? "" : `–${place.bar + n}`}${sectionSaid(skipped)}`);
+    say(`${n === 1 ? "1 bar" : `${n} bars`} put in as bar${n === 1 ? "" : "s"} ${barNo(place.bar)}${n === 1 ? "" : `–${barNo(place.bar + n - 1)}`}${sectionSaid(skipped)}`);
   }
 
   /** After a paste or an insert: the bars written selected, on the tracks they went to. */
@@ -1154,7 +1160,7 @@ export function startStudio(root, options = {}) {
         skipped = M.pasteSection(score, place.lane, place.bar, clip.section);
         selectSectionQuietly(score, place.bar, place.bar + clip.section.bars - 1, place.lane, clip.section);
       });
-      return say(`Pasted over bar${clip.section.bars === 1 ? "" : "s"} ${place.bar + 1}${clip.section.bars === 1 ? "" : `–${place.bar + clip.section.bars}`}${sectionSaid(skipped)}`);
+      return say(`Pasted over bar${clip.section.bars === 1 ? "" : "s"} ${barNo(place.bar)}${clip.section.bars === 1 ? "" : `–${barNo(place.bar + clip.section.bars - 1)}`}${sectionSaid(skipped)}`);
     }
     edit((score) => {
       M.paste(score, s, t, clip);
@@ -1411,7 +1417,7 @@ export function startStudio(root, options = {}) {
     if (!st.sel?.bars) return;
     const [a, b] = st.sel.bars;
     const n = st.sel.lanes?.length ?? 1;
-    say(`${a === b ? `Bar ${a + 1}` : `Bars ${a + 1}–${b + 1}`}, ${n === 1 ? "one track" : `${n} tracks`}: Ctrl+C copies them.`);
+    say(`${a === b ? `Bar ${barNo(a)}` : `Bars ${barNo(a)}–${barNo(b)}`}, ${n === 1 ? "one track" : `${n} tracks`}: Ctrl+C copies them.`);
   }
 
   rollHost.addEventListener("pointerdown", (event) => {
@@ -1671,6 +1677,7 @@ export function startStudio(root, options = {}) {
     set("composer", st.score.header.composer);
     set("key", String(st.score.key));
     set("time", M.timeText(st.score));
+    fillPickup();
     set("bpm", st.score.tempo?.bpm || "");
     set("tempo-text", st.score.tempo?.text || "");
     set("group", st.score.group);
@@ -1700,6 +1707,20 @@ export function startStudio(root, options = {}) {
     filling = false;
   }
 
+  /** The pickup field: its value as \\partial writes it, a length the menu does not offer shown as itself. */
+  function fillPickup() {
+    const field = root.querySelector('[data-field="pickup"]');
+    if (!field || document.activeElement === field) return;
+    const value = st.score.pickup > 0 ? M.pickupText(st.score.pickup) : "";
+    field.querySelector("[data-other]")?.remove();
+    if (![...field.options].some((o) => o.value === value)) {
+      const other = new Option(`Other: \\partial ${value}`, value);
+      other.dataset.other = "";
+      field.append(other);
+    }
+    field.value = value;
+  }
+
   const KEY_NAMES = ["C♭", "G♭", "D♭", "A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯"];
 
   /** The changes section: the bar's own changes, and what is in force there otherwise. */
@@ -1708,10 +1729,10 @@ export function startStudio(root, options = {}) {
     const section = root.querySelector("[data-changes]");
     if (!section) return;
     const on = b != null && b > 0;
-    section.querySelector("[data-change-bar]").textContent = b == null ? "—" : String(b + 1);
+    section.querySelector("[data-change-bar]").textContent = b == null ? "—" : String(barNo(b));
     section.querySelector("[data-change-hint]").textContent = b == null
       ? "Select a bar, or put the cursor in it: what changes here goes on to the next change."
-      : b === 0 ? "Bar 1 is the piece's start: its key, metre and tempo are in File ▸ Score properties, its clef under This staff." : "What changes here goes on to the next change.";
+      : b === 0 ? `Bar ${barNo(0)} is the piece's start${st.score.pickup ? ", its pickup" : ""}: its key, metre and tempo are in File ▸ Score properties, its clef under This staff.` : "What changes here goes on to the next change.";
     for (const el of section.querySelectorAll("[data-field]")) el.disabled = !on;
     if (!on) return;
     const s = staffOf();
@@ -1744,6 +1765,7 @@ export function startStudio(root, options = {}) {
         case "title": case "subtitle": case "composer": score.header[el.dataset.field] = value; break;
         case "key": M.setKey(score, Number(value)); break;
         case "time": M.setMetre(score, value); break;
+        case "pickup": M.setPickup(score, M.pickupOf(value)); break;
         case "bpm": score.tempo = { ...(score.tempo ?? { text: "", base: 4 }), bpm: Number(value) || 0 }; break;
         case "tempo-text": score.tempo = { ...(score.tempo ?? { base: 4, bpm: 0 }), text: value }; break;
         case "group": score.group = value; break;
@@ -2458,7 +2480,7 @@ export function startStudio(root, options = {}) {
     progress.hidden = false;
     progress.querySelector(".studio-progress-fill").style.width = total ? `${(100 * now) / total}%` : "0";
     const pass = M.passAt(st.playing.passes, now);
-    const bars = pass && st.score ? ` · bar ${pass.bar + 1} of ${M.barsOf(st.score)}` : "";
+    const bars = pass && st.score ? ` · bar ${barNo(pass.bar)} of ${barNo(M.barsOf(st.score) - 1)}` : "";
     progress.querySelector(".studio-progress-text").textContent = `${clock(now)} / ${clock(total)}${bars}`;
     state.textContent = `Playing${bars} · ${clock(now)} / ${clock(total)} — Space to stop`;
   }
@@ -2694,7 +2716,7 @@ export function startStudio(root, options = {}) {
     st.loopBars = bars ? [Math.min(...bars), Math.max(...bars)] : null;
     if (st.playing) stopPlay();
     const [a, b] = st.loopBars ?? [];
-    say(st.loopBars ? `Loop: ${a === b ? `bar ${a + 1}` : `bars ${a + 1}–${b + 1}`}, played over and over (and recorded into). A click on it in the MIDI view's ruler, or Play › No loop, takes it away.` : "No loop: the music plays on.");
+    say(st.loopBars ? `Loop: ${a === b ? `bar ${barNo(a)}` : `bars ${barNo(a)}–${barNo(b)}`}, played over and over (and recorded into). A click on it in the MIDI view's ruler, or Play › No loop, takes it away.` : "No loop: the music plays on.");
     draw();
   }
 
@@ -2734,8 +2756,8 @@ export function startStudio(root, options = {}) {
     if (st.recording && st.playing) {
       const loop = st.recording.loop;
       say(loop
-        ? `Recording into ${laneName(lane)}, bars ${loop[0] + 1}–${loop[1] + 1} in a loop: each pass adds its notes; R stops.`
-        : `Recording into ${laneName(lane)} from bar ${st.recording.bar + 1}: play after the count-in; R stops.`);
+        ? `Recording into ${laneName(lane)}, bars ${barNo(loop[0])}–${barNo(loop[1])} in a loop: each pass adds its notes; R stops.`
+        : `Recording into ${laneName(lane)} from bar ${barNo(st.recording.bar)}: play after the count-in; R stops.`);
     }
   }
 
@@ -2803,7 +2825,7 @@ export function startStudio(root, options = {}) {
     edit((score) => {
       written = M.writeRecording(score, rec.lane, from, M.barStart(score, lastBar + 1), rec.played, grid, { dynamics: Boolean(dynamicsBox?.checked) });
     });
-    const bars = lastBar === first ? `bar ${first + 1}` : `bars ${first + 1}–${lastBar + 1}`;
+    const bars = lastBar === first ? `bar ${barNo(first)}` : `bars ${barNo(first)}–${barNo(lastBar)}`;
     say(`Recorded ${written === 1 ? "1 note" : `${written} notes`} into ${laneName(rec.lane)}, ${bars}, fitted to ${quantizeBox?.selectedOptions[0]?.textContent ?? "sixteenths"}. Ctrl+Z takes it back.`);
   }
 

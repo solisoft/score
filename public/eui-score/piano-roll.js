@@ -161,11 +161,12 @@ export function drawRoll(score, { layout = "tracks", zoom = 1, sel = null, lit =
     parts.push(`<line class="roll-bar-line" x1="${bx}" x2="${bx}" y1="0" y2="${height}"/>`);
     if (bar === geo.bars) break;
     const next = x(M.barStart(score, bar + 1));
-    for (let beat = M.barStart(score, bar) + M.WHOLE / 4; x(beat) < next - 1; beat += M.WHOLE / 4) {
+    // Counted back from the bar's end: a pickup's beats are its bar's last.
+    for (let beat = M.barStart(score, bar + 1) - M.WHOLE / 4; x(beat) > bx + 1; beat -= M.WHOLE / 4) {
       parts.push(`<line class="roll-beat" x1="${x(beat)}" x2="${x(beat)}" y1="${RULER_H}" y2="${height}"/>`);
     }
     parts.push(`<rect class="roll-ruler" data-bar="${bar}" x="${bx}" y="0" width="${next - bx}" height="${RULER_H}"/>`);
-    parts.push(`<text class="roll-bar-number" x="${bx + 6}" y="16">${bar + 1}</text>`);
+    parts.push(`<text class="roll-bar-number" x="${bx + 6}" y="16">${M.barNumber(score, bar)}</text>`);
   }
   // The loop, on the ruler and faintly down every track.
   if (loop) {
@@ -189,7 +190,7 @@ export function drawRoll(score, { layout = "tracks", zoom = 1, sel = null, lit =
     const ny = track.y + (track.high - n.key) * track.row;
     const h = Math.max(2, track.row - (layout === "keys" ? 2 : 1));
     const classes = ["roll-note", chosen(n) ? "roll-note-chosen" : "", lit.has(`${n.lane}:${n.index}`) ? "roll-note-lit" : ""].filter(Boolean).join(" ");
-    parts.push(`<rect class="${classes}" data-lane="${n.lane}" data-index="${n.index}" data-key="${n.key}" x="${x(n.t0) + 1}" y="${ny + 0.5}" width="${Math.max(3, x(n.t1) - x(n.t0) - 2)}" height="${h}" rx="${Math.min(3, h / 2)}" fill="${laneColour(score, n.lane)}"><title>${keyName(n.key)}, bar ${M.barAt(score, n.t0) + 1}</title></rect>`);
+    parts.push(`<rect class="${classes}" data-lane="${n.lane}" data-index="${n.index}" data-key="${n.key}" x="${x(n.t0) + 1}" y="${ny + 0.5}" width="${Math.max(3, x(n.t1) - x(n.t0) - 2)}" height="${h}" rx="${Math.min(3, h / 2)}" fill="${laneColour(score, n.lane)}"><title>${keyName(n.key)}, bar ${M.barNumber(score, M.barAt(score, n.t0))}</title></rect>`);
   }
   if (cursor != null) parts.push(`<line class="roll-cursor" x1="${x(cursor)}" x2="${x(cursor)}" y1="0" y2="${height}"/>`);
   const label = `MIDI view: ${geo.bars} bars, ${geo.notes.length} notes`;
