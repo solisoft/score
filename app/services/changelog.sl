@@ -13,6 +13,19 @@ class Changelog
       {"date": "2026-10-23", "entries": [
         {
           "area": "site",
+          "title": "Daily limits on the AI, invitations and account emails",
+          "text": "On the site's AI, each person can read 20 photos and ask the assistant 30 questions a day, and "
+          + "the AI menu says how many questions are left today. With your own AI key you can do more (200 of "
+          + "each). A request to the assistant can be up to 2,000 characters long. When the site's AI has done "
+          + "its share for the day, it asks you to add your own key in Account. You can send 50 invitations a "
+          + "day. Confirmation links and password resets can only be asked for a few times an hour, for each "
+          + "address and from each connection. A shared score's PDF is reused by your browser until the score "
+          + "changes.",
+          "link": "app",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "Three and four voices on one staff",
           "text": "A staff can now hold up to four voices in the editor, instead of two: a score with a third or "
           + "fourth voice opens in the editor instead of as text only. Voices 1 and 3 have their stems up, 2 and "

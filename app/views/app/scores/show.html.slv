@@ -17,8 +17,8 @@
       <button type="button" class="studio-menu" data-ai-close aria-label="Close">×</button>
     </div>
     <p class="muted studio-parts-note" data-ai-about></p>
-    <textarea class="studio-ai-request" data-ai-request rows="3"></textarea>
-    <p class="muted studio-parts-note" data-ai-with><%= ai_with %></p>
+    <textarea class="studio-ai-request" data-ai-request rows="3" maxlength="<%= ai_request_limit %>"></textarea>
+    <p class="muted studio-parts-note" data-ai-with><%= ai_with %><% unless ai_left.nil? %> <span data-ai-left><%= ai_left %></span> questions left today.<% end %></p>
     <p class="studio-parts-note" data-ai-status hidden></p>
     <p class="form-error" data-ai-error hidden></p>
     <div class="studio-ai-result" data-ai-result hidden>
@@ -429,6 +429,8 @@
       });
       const started = await sent.json();
       if (sent.status !== 202) return fail(started.error);
+      const left = aiPart("left");
+      if (left) left.textContent = Math.max(0, Number(left.textContent) - 1);
       // Five minutes, then the page stops waiting.
       for (let tries = 0; tries < 100; tries++) {
         await new Promise((done) => setTimeout(done, 3000));

@@ -18,27 +18,56 @@ class ScoreReading < Model
     "failed"
   ]})
 
-  # A reading of `picture` (base64 JPEG) for `user`, handed to the job.
+  # A reading of `picture` (base64 JPEG) for `user`, handed to the job; or,
+  # when it may not be, why (`refusal`), with nothing kept and nothing
+  # queued. Counted once written: of two asked at once for the last one,
+  # neither passes unseen by the other.
   static def start(user, picture)
     reading = ScoreReading.create({
       "user_id": user._key,
       "state": "reading",
       "picture": picture,
+      "own": user.own_ai?(),
       "created_at": DateTime.utc.to_unix
     })
+    refusal = ScoreReading.refusal(user, 1)
+    unless refusal.nil?
+      reading.delete
+      return refusal
+    end
+
     ScoreReadingJob.perform_later({"reading_id": reading._key}, {"max_retries": 0})
     reading
   end
 
+  # Why `user` may not start one more reading now, or nil: "used_up" (their
+  # day's), "busy" (the server key's day, AI_SERVER_ASKS_PER_DAY, for those
+  # without a key of their own). `counted`: 1 once the reading is written,
+  # as it then counts itself.
+  static def refusal(user, counted = 0)
+    return "used_up" if ScoreReading.used_today(user) - counted >= ScoreReading.limit_for(user)
+    return nil if user.own_ai?()
+    return "busy" if AiClient.server_used_today - counted >= AI_SERVER_ASKS_PER_DAY
+
+    nil
+  end
+
   # How many more readings `user` may start now.
   static def left_today(user)
+    [ScoreReading.limit_for(user) - ScoreReading.used_today(user), 0].max()
+  end
+
+  static def limit_for(user)
+    user.own_ai?() ? SCORE_READINGS_OWN_PER_DAY : SCORE_READINGS_PER_DAY
+  end
+
+  # The readings `user` started in the last 24 hours.
+  static def used_today(user)
     since = DateTime.utc.to_unix - 86400
-    used = ScoreReading.where(
+    ScoreReading.where(
       "doc.user_id == @user AND doc.created_at > @since",
       {"user": user._key, "since": since}
     ).count
-    limit = user.own_ai?() ? SCORE_READINGS_OWN_PER_DAY : SCORE_READINGS_PER_DAY
-    [limit - used, 0].max()
   end
 
   # The readings still "reading" after SCORE_AI_STUCK_SECONDS: failed, their

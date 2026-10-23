@@ -61,6 +61,44 @@ ENV
 
 It is `/health/deep`, not `/health/ready`: soli-proxy answers `/health/ready` itself (a plain `OK`) before the request reaches the app, so a check there proves nothing about the database.
 
+## Client addresses (the per-address limits)
+
+The sign-in, sign-up and reset throttle (`AUTH_ATTEMPTS_PER_IP`, 15 in 5
+minutes) and the account e-mails' limit (`AUTH_EMAILS_PER_IP`, 20 an hour)
+count requests per client address (`client_ip(req)`, the rate limiter). The
+app only sees soli-proxy, on `127.0.0.1`: **without the lines below, every
+visitor is the same address**, and 15 sign-ins or 20 e-mails in the window
+lock everyone out.
+
+A request reaches the app through Cloudflare, then soli-proxy. Cloudflare
+puts the visitor's address in `CF-Connecting-IP` (and appends it to
+`X-Forwarded-For`); soli-proxy connects from `127.0.0.1`. So:
+
+```bash
+cat >> .env <<'ENV'
+# Read forwarded headers, only from soli-proxy on this host.
+SOLI_TRUST_PROXY=1
+SOLI_TRUSTED_PROXIES=127.0.0.1,::1
+# The visitor's address, as Cloudflare sends it (read before X-Forwarded-For).
+SOLI_CLIENT_IP_HEADER=cf-connecting-ip
+ENV
+```
+
+Then `soli-proxy restart -c /home/rocky/proxy.conf score`.
+
+- `CF-Connecting-IP` is only as good as the guarantee that requests come
+  through Cloudflare: a client reaching the server's address directly can set
+  it to anything, and gets a fresh identity per request. Allow ports 80/443
+  to Cloudflare's ranges only (https://www.cloudflare.com/ips/), or, if the
+  site is ever served without Cloudflare, drop `SOLI_CLIENT_IP_HEADER`: the
+  address is then the right-most `X-Forwarded-For` entry, the one soli-proxy
+  adds.
+- The counts live in each worker process's memory: a deploy or a restart
+  starts them again, and with two workers a client may get up to twice the
+  limit. The AI caps and the invitations' cap are kept in the database
+  instead, and survive both.
+- `prod-db.yml`'s `inspect` action reports the three as `<set>`/`<unset>`.
+
 ## Health, errors and alerts
 
 - `/health` is liveness (the process answers; soli-proxy's slot check).

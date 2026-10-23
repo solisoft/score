@@ -32,17 +32,46 @@ class SharedScoresController < Controller
   end
 
   # GET /s/:token/score.pdf — on the paper its \paper sets, saved under the score's title
+  # — kept by the browser and the CDN under its revision (ETag), so a visit
+  # that has it already gets a 304, not a new engraving
   def pdf
     score = @_readable_score
+    caching = {"ETag": @_pdf_etag(score), "Cache-Control": @_pdf_cache_control(score)}
+    known = req["headers"]["if-none-match"].to_s.split(",").map do |tag|
+      tag.trim
+    end
+    if known.includes?(caching["ETag"])
+      return {
+        "status": 304,
+        "headers": caching,
+        "body": ""
+      }
+    end
+
     document = eui_score_pdf(score.source, score.title)
+    headers = {"Content-Type": "application/pdf", "Content-Disposition": score.content_disposition("inline", "pdf")}
     {
       "status": 200,
-      "headers": {"Content-Type": "application/pdf", "Content-Disposition": score.content_disposition("inline", "pdf")},
+      "headers": headers.merge(caching),
       "body": document
     }
   end
 
   private
+
+  # Which PDF this is: the score at its revision (every save, its title and
+  # its visibility included, makes a new one), drawn as ENGRAVING_FORMAT draws.
+  def _pdf_etag(score)
+    "\"pdf-#{score._key}-#{score.revision}-#{ENGRAVING_FORMAT}\""
+  end
+
+  # A score open by link or in public may be kept by a CDN for a minute; a
+  # private one only by the browser that may read it, asked again each time.
+  def _pdf_cache_control(score)
+    return "private, no-cache" if score.visibility == "private"
+
+    "public, max-age=60, must-revalidate"
+  end
 
   def _readable_score
     score = Score.by_token(params["token"])

@@ -16,6 +16,15 @@ def flow_sign_in(user, extra = {})
   post("/login", {"email": user.email, "password": FLOW_PASSWORD}.merge(extra))
 end
 
+# `times` account emails asked for `email`, a confirmation and a reset in
+# turn: the answers' statuses.
+def flow_ask_emails(email, times)
+  (0 .. times).map do |i|
+    path = i % 2 == 0 ? "/confirmation/resend" : "/password/reset"
+    res_status(post(path, {"email": email}))
+  end
+end
+
 describe("Account flows") do
   before_each() do
     as_guest()
@@ -153,6 +162,58 @@ describe("Account flows") do
       unknown = post("/confirmation/resend", {"email": "nobody-#{uuid_v4}@example.com"})
       assert_contains(res_body(known), "a fresh link is on its way")
       assert_contains(res_body(unknown), "a fresh link is on its way")
+    end
+  end
+
+  describe("account emails asked for") do
+    test("to one address: an hour's few, then refused the same whether it has an account or not") do
+      user = flow_user(false)
+      nobody = "nobody-#{uuid_v4}@example.com"
+      # Resends and resets share one count per address.
+      assert_eq(flow_ask_emails(user.email, AUTH_EMAILS_PER_ADDRESS), (0 .. AUTH_EMAILS_PER_ADDRESS).map(&{ |_|
+        200
+      }))
+      assert_eq(flow_ask_emails(nobody, AUTH_EMAILS_PER_ADDRESS), (0 .. AUTH_EMAILS_PER_ADDRESS).map(&{ |_|
+        200
+      }))
+      digest = User.find(user._key).confirmation_token_digest
+      reset_digest = User.find(user._key).reset_token_digest
+      known = post("/confirmation/resend", {"email": " #{user.email.upcase} "})
+      unknown = post("/confirmation/resend", {"email": nobody})
+      assert_eq(res_status(known), 429)
+      assert_eq(res_status(unknown), 429)
+      assert_eq(res_body(known).replace(user.email.upcase, ""), res_body(unknown).replace(nobody, ""))
+      assert_contains(res_body(known), "Too many emails asked for: try again in an hour.")
+      assert_not(res_body(known).contains("on its way"))
+      assert_eq(User.find(user._key).confirmation_token_digest, digest, "no new link made")
+      reset = post("/password/reset", {"email": user.email})
+      assert_eq(res_status(reset), 429)
+      assert_contains(res_body(reset), "Too many emails asked for")
+      assert_eq(User.find(user._key).reset_token_digest, reset_digest, "no reset link made")
+      # Another address is not held up.
+      assert_contains(res_body(post("/confirmation/resend", {"email": "other-#{uuid_v4}@example.com"})), "on its way")
+    end
+
+    test("from one source address: so many, whatever the addresses") do
+      ip = "203.0.113.#{uuid_v4}"
+      (0 .. AUTH_EMAILS_PER_IP).each do |i|
+        assert(User.account_email_allowed?("someone-#{i}-#{uuid_v4}@example.com", ip))
+      end
+      assert_not(User.account_email_allowed?("fresh-#{uuid_v4}@example.com", ip))
+      assert(User.account_email_allowed?("fresh-#{uuid_v4}@example.com", "198.51.100.#{uuid_v4}"))
+    end
+
+    test("a refusal on one count does not spend the other") do
+      address = "spent-#{uuid_v4}@example.com"
+      ip = "192.0.2.#{uuid_v4}"
+      (0 .. AUTH_EMAILS_PER_ADDRESS).each do |_|
+        assert(User.account_email_allowed?(address, ip))
+      end
+      (0 .. 3).each do |_|
+        assert_not(User.account_email_allowed?(address, ip))
+      end
+      left = RateLimiter("account-email-ip:#{ip}", AUTH_EMAILS_PER_IP, AUTH_EMAILS_WINDOW_SECONDS).status()["remaining"]
+      assert_eq(left, AUTH_EMAILS_PER_IP - AUTH_EMAILS_PER_ADDRESS)
     end
   end
 

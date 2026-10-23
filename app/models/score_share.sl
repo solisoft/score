@@ -2,6 +2,8 @@
 # lets them change it too. The address need not have an account yet: the
 # share is theirs once they sign up with it.
 const SCORE_SHARE_ROLES = ["read", "write"]
+# A person may send SCORE_INVITATIONS_PER_DAY invitations in any 24 hours.
+const SCORE_INVITATIONS_PER_DAY = 50
 
 class ScoreShare < Model
   validates("score_id", {"presence": true})
@@ -29,6 +31,37 @@ class ScoreShare < Model
     return {"error": "That is not an email address."} unless share.save
 
     share
+  end
+
+  # Share `score` as `invite` does, on `user`'s say: refused, with nothing
+  # written or mailed, once they have sent the day's invitations. Each
+  # invitation sent (a new share, or a role changed, which mails again)
+  # counts for 24 hours, even once the share is gone.
+  static def invite_by(user, score, email, role)
+    if ScoreShare.invitations_left(user) <= 0
+      used_up = "You have sent the #{SCORE_INVITATIONS_PER_DAY} invitations a day allows: try again tomorrow."
+      return {"error": used_up, "limit": true}
+    end
+
+    share = ScoreShare.invite(score, email, role)
+    return share if type(share) == "hash"
+
+    user.invitations_sent = ScoreShare.sent_today(user) + [DateTime.utc.to_unix]
+    user.update()
+    share
+  end
+
+  # How many more invitations `user` may send now.
+  static def invitations_left(user)
+    [SCORE_INVITATIONS_PER_DAY - ScoreShare.sent_today(user).length, 0].max()
+  end
+
+  # When `user` sent the invitations of the last 24 hours (unix seconds).
+  static def sent_today(user)
+    since = DateTime.utc.to_unix - 86400
+    (user.invitations_sent ?? []).filter do |sent|
+      sent > since
+    end
   end
 
   # What the owner reads once `share` is made on the score titled `title`:

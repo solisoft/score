@@ -7,6 +7,11 @@
 # "image"?}: the image a base64 JPEG, sent before the text.
 
 const AI_SERVER_MODEL = "claude-opus-5-5"
+# What the server's key answers in any 24 hours, for everyone together:
+# photo readings and the assistant's questions. Past it, only those with a
+# key of their own are answered.
+const AI_SERVER_ASKS_PER_DAY = 400
+const AI_SERVER_BUSY = "The site's AI is busy for today: add your own key in Account to keep going."
 
 # The providers a person may bring a key for. "anthropic" speaks Anthropic's
 # Messages API; "openai" the chat-completions API the others share. `models`
@@ -71,6 +76,15 @@ class AiClient
       "key": getenv("ANTHROPIC_API_KEY").to_s,
       "own": false
     }
+  end
+
+  # The readings and suggestions asked of the server's key in the last 24
+  # hours, everyone's (each one written with `own`: false).
+  static def server_used_today
+    since = DateTime.utc.to_unix - 86400
+    condition = "doc.own == false AND doc.created_at > @since"
+    ScoreReading.where(condition, {"since": since}).count
+    + ScoreSuggestion.where(condition, {"since": since}).count
   end
 
   # The provider's name as a page says it.

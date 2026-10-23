@@ -116,6 +116,55 @@ describe("Sharing") do
       assert_not(res_body(broken).contains("data-score-pdf"))
     end
 
+    test("the PDF is kept under its revision: asked again with its ETag, a 304; once changed, a new one") do
+      owner = share_user()
+      score = Score.start(owner, Score.blank_source("Kept"))
+      score.make_visible("link")
+      clear_cookies()
+      clear_headers()
+      path = "/s/#{score.share_token}/score.pdf"
+      first = get(path)
+      assert_eq(res_status(first), 200)
+      etag = res_header(first, "ETag")
+      kept = Score.find(score._key)
+      assert_eq(etag, "\"pdf-#{score._key}-#{kept.revision}-#{ENGRAVING_FORMAT}\"")
+      assert_eq(res_header(first, "Cache-Control"), "public, max-age=60, must-revalidate")
+      set_header("If-None-Match", "\"other\", #{etag}")
+      again = get(path)
+      clear_headers()
+      assert_eq(res_status(again), 304)
+      assert_eq(res_body(again), "")
+      assert_eq(res_header(again, "ETag"), etag)
+      set_header("If-None-Match", "\"stale\"")
+      assert_eq(res_status(get(path)), 200)
+      clear_headers()
+      # Changed: a new revision, a new PDF.
+      kept.rename("Kept anew")
+      set_header("If-None-Match", etag)
+      changed = get(path)
+      clear_headers()
+      assert_eq(res_status(changed), 200)
+      assert_ne(res_header(changed, "ETag"), etag)
+      assert(res_body(changed).starts_with?("%PDF"))
+    end
+
+    test("a private score's PDF: kept by its reader's browser only, and no 304 to anyone else") do
+      owner = share_user()
+      score = Score.start(owner, Score.blank_source("Mine"))
+      share_sign_in(owner)
+      path = "/s/#{score.share_token}/score.pdf"
+      mine = get(path)
+      assert_eq(res_status(mine), 200)
+      assert_eq(res_header(mine, "Cache-Control"), "private, no-cache")
+      etag = res_header(mine, "ETag")
+      clear_cookies()
+      set_header("If-None-Match", etag)
+      guest = get(path)
+      clear_headers()
+      assert_eq(res_status(guest), 404)
+      assert_null(res_header(guest, "ETag"))
+    end
+
     test("a private score's files are refused to a guest, the PDF included, and say nothing of its title") do
       score = Score.start(share_user(), Score.blank_source("Hidden title"))
       clear_cookies()
@@ -410,6 +459,55 @@ describe("Sharing") do
       assert_eq(ScoreShare.where({"score_id": score._key}).count, 1)
       assert_not(Score.find(score._key).trashed?)
       assert_eq(res_status(post("/app/scores/no-such-score/leave", {})), 404)
+    end
+  end
+
+  describe("the day's invitations") do
+    test("the 50th goes, the 51st is refused with nothing written; taking one back gives none back") do
+      owner = share_user()
+      score = Score.start(owner, Score.blank_source("Chorus"))
+      assert_eq(SCORE_INVITATIONS_PER_DAY, 50)
+      now = DateTime.utc.to_unix
+      sent = (0 .. SCORE_INVITATIONS_PER_DAY - 1).map do |_|
+        now - 60
+      end
+      # One sent more than a day ago no longer counts.
+      owner.invitations_sent = sent + [now - 86400 - 60]
+      owner.update()
+      assert_eq(ScoreShare.invitations_left(User.find(owner._key)), 1)
+      share_sign_in(owner)
+      last = post(
+        "/app/scores/#{score._key}/invitations",
+        {"email": "fiftieth@example.com", "role": "read"}
+      )
+      assert_eq(res_status(last), 302)
+      assert_eq(ScoreShare.of(score).length, 1)
+      assert_eq(User.find(owner._key).invitations_sent.length, SCORE_INVITATIONS_PER_DAY)
+      # Taking it back does not give the invitation back.
+      delete("/app/scores/#{score._key}/invitations/#{ScoreShare.of(score)[0]._key}")
+      assert_eq(ScoreShare.of(score).length, 0)
+      refused = post(
+        "/app/scores/#{score._key}/invitations",
+        {"email": "fifty-first@example.com", "role": "write"}
+      )
+      assert_eq(res_status(refused), 429)
+      assert_contains(res_body(refused), "You have sent the 50 invitations a day allows: try again tomorrow.")
+      assert_eq(ScoreShare.of(score).length, 0)
+      assert_eq(ScoreShare.where({"email": "fifty-first@example.com"}).count, 0)
+      assert_eq(User.find(owner._key).invitations_sent.length, SCORE_INVITATIONS_PER_DAY)
+    end
+
+    test("a refused invitation is not counted, and another person's day is their own") do
+      owner = share_user()
+      score = Score.start(owner, Score.blank_source("Canon"))
+      share_sign_in(owner)
+      bad = post(
+        "/app/scores/#{score._key}/invitations",
+        {"email": "not an address", "role": "read"}
+      )
+      assert_eq(res_status(bad), 422)
+      assert_eq(ScoreShare.invitations_left(User.find(owner._key)), SCORE_INVITATIONS_PER_DAY)
+      assert_eq(ScoreShare.invitations_left(share_user()), SCORE_INVITATIONS_PER_DAY)
     end
   end
 end

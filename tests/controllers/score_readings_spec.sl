@@ -29,11 +29,18 @@ def readings_of(user)
   ScoreReading.where({"user_id": user._key}).count
 end
 
+# Whose readings fill the server key's day in a spec: theirs go after it.
+const SITE_BUSY_READER = "site-busy-readings-spec"
+
 describe("AppScoreReadingsController") do
   before_each() do
     as_guest()
     clear_cookies()
     clear_headers()
+  end
+
+  after_each() do
+    ScoreReading.where({"user_id": SITE_BUSY_READER}).delete_all
   end
 
   test("the Start page offers it, with the day's readings left") do
@@ -79,9 +86,66 @@ describe("AppScoreReadingsController") do
     end
     response = send_picture(SMALL_PNG)
     assert_eq(res_status(response), 429)
-    assert_contains(res_json(response)["error"], "try again tomorrow")
+    assert_eq(
+      res_json(response)["error"],
+      "You have read the 20 photos a day the site's AI reads: try again tomorrow, "
+      + "or add your own AI key on your account page to read more."
+    )
     assert_eq(readings_of(user), SCORE_READINGS_PER_DAY)
     assert_contains(res_body(get("/app")), "data-photo hidden disabled")
+  end
+
+  test("with one's own key, past the site's 20, up to the own key's day") do
+    user = reading_user()
+    user.keep_ai_key("mistral", "pixtral-large-latest", "sk-mistral-2222")
+    rows = (0 .. SCORE_READINGS_OWN_PER_DAY - 1).map do |_|
+      {
+        "user_id": user._key,
+        "state": "done",
+        "own": true,
+        "created_at": DateTime.utc.to_unix
+      }
+    end
+    ScoreReading.create_many(rows)
+    last = send_picture(SMALL_PNG)
+    assert_eq(res_status(last), 202)
+    assert_eq(ScoreReading.find(res_json(last)["id"]).own, true)
+    refused = send_picture(SMALL_PNG)
+    assert_eq(res_status(refused), 429)
+    assert_eq(res_json(refused)["error"], "You have read all of today's photos: try again tomorrow.")
+    assert_eq(readings_of(user), SCORE_READINGS_OWN_PER_DAY)
+  end
+
+  test("once the site's AI has answered its day, a photo on the server's key is refused, nothing kept") do
+    user = reading_user()
+    # Exactly the day's, with what other specs asked of the server's key.
+    rows = (0 .. AI_SERVER_ASKS_PER_DAY - AiClient.server_used_today).map do |_|
+      {
+        "user_id": SITE_BUSY_READER,
+        "state": "done",
+        "own": false,
+        "created_at": DateTime.utc.to_unix
+      }
+    end
+    ScoreReading.create_many(rows)
+    refused = send_picture(SMALL_PNG)
+    assert_eq(res_status(refused), 429)
+    assert_eq(
+      res_json(refused)["error"],
+      "The site's AI is busy for today: add your own key in Account to keep going."
+    )
+    assert_eq(readings_of(user), 0)
+    # Taken back when written for the last slot after the check passed.
+    ScoreReading.where({"user_id": SITE_BUSY_READER}).limit(1).all[0].delete
+    assert_null(ScoreReading.refusal(user))
+    ScoreReading.create({
+      "user_id": SITE_BUSY_READER,
+      "state": "done",
+      "own": false,
+      "created_at": DateTime.utc.to_unix
+    })
+    assert_eq(ScoreReading.start(user, "abc"), "busy")
+    assert_eq(readings_of(user), 0)
   end
 
   test("answers the music once read, engraved") do

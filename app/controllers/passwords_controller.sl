@@ -39,6 +39,14 @@ class PasswordsController < Controller
     end
 
     email = params["email"].to_s.trim().downcase()
+    unless User.account_email_allowed?(email, client_ip(req))
+      return render("passwords/new", {
+        "title": "Reset password",
+        "notice": "",
+        "error": AUTH_EMAILS_REFUSED
+      }, {"status": 429})
+    end
+
     user = User.find_by("email", email)
     if !user.nil?
       token = user.start_password_reset()

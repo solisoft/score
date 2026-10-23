@@ -69,6 +69,8 @@ class AppScoresController < AppBaseController
     @eui_version = ScoreAssets.version
     @editing_score = @score
     @ai_with = @_ai_with(current_user())
+    @ai_left = current_user().ai_settings.nil? ? nil : ScoreSuggestion.left_today(current_user())
+    @ai_request_limit = SCORE_SUGGESTION_REQUEST_LIMIT
     @title = @score.title
     @description = "#{this.score.title}, in the EUI Score editor."
   end
@@ -247,11 +249,11 @@ class AppScoresController < AppBaseController
   # POST /app/scores/:id/invitations — share with an email address, read or write
   def invite
     @score = @_score("share")
-    share = ScoreShare.invite(@score, params["email"].to_s, params["role"].to_s)
+    share = ScoreShare.invite_by(current_user(), @score, params["email"].to_s, params["role"].to_s)
     if type(share) == "hash"
       @_share_page(@score)
       @error = share["error"]
-      return render("app/scores/share", {}, {"status": 422})
+      return render("app/scores/share", {}, {"status": share["limit"] ? 429 : 422})
     end
 
     inviter = current_user().email
@@ -299,15 +301,14 @@ class AppScoresController < AppBaseController
     }
   end
 
-  # Which AI the editor's assistant answers with, in a sentence.
+  # Which AI the editor's assistant answers with, in a sentence (the view
+  # follows it with how many questions are left today, @ai_left).
   def _ai_with(user)
     settings = user.ai_settings
     return "There is no AI key yet: add one on your account page." if settings.nil?
+    return "Answered by Claude." unless settings["own"]
 
-    left = "#{ScoreSuggestion.left_today(user)} questions left today."
-    return "Answered by Claude. #{left}" unless settings["own"]
-
-    "Answered by #{AiClient.provider_name(settings["provider"])}, #{settings["model"]}, with your key. #{left}"
+    "Answered by #{AiClient.provider_name(settings["provider"])}, #{settings["model"]}, with your key."
   end
 
   # The editor's JSON calls on a score this person may not (or no longer)

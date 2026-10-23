@@ -24,6 +24,16 @@ const TOTP_BACKUP_COUNT = 10
 # source address covers both.
 const AUTH_ATTEMPTS_PER_IP = (getenv("AUTH_ATTEMPTS_PER_IP") ?? "15").to_i
 const AUTH_IP_WINDOW_SECONDS = 300
+# Account e-mails asked for from a form (a confirmation link sent again, a
+# password reset): at most AUTH_EMAILS_PER_ADDRESS to one address, and
+# AUTH_EMAILS_PER_IP asked from one source address, in AUTH_EMAILS_WINDOW_SECONDS.
+# Counted whether or not the address has an account, so a refusal says
+# nothing of it.
+const AUTH_EMAILS_PER_ADDRESS = 5
+const AUTH_EMAILS_PER_IP = (getenv("AUTH_EMAILS_PER_IP") ?? "20").to_i
+const AUTH_EMAILS_WINDOW_SECONDS = 3600
+# What a refused request reads, the same for any address.
+const AUTH_EMAILS_REFUSED = "Too many emails asked for: try again in an hour."
 
 # Base URL used in password-reset / confirmation emails.
 #
@@ -112,6 +122,20 @@ class User < Model
   static def burn_password_work(plaintext)
     Crypto.password_hash(plaintext.to_s)
     return false
+  end
+
+  # Whether an account e-mail may go to `email`, asked from `ip`: each one
+  # allowed counts against both, whether or not `email` has an account.
+  static def account_email_allowed?(email, ip)
+    by_ip = RateLimiter("account-email-ip:#{ip}", AUTH_EMAILS_PER_IP, AUTH_EMAILS_WINDOW_SECONDS)
+    by_address = RateLimiter(
+      "account-email-to:#{email.to_s.trim.downcase}",
+      AUTH_EMAILS_PER_ADDRESS,
+      AUTH_EMAILS_WINDOW_SECONDS
+    )
+    return false if by_ip.throttle() > 0 || by_address.throttle() > 0
+
+    by_ip.allowed() && by_address.allowed()
   end
 
   def admin?

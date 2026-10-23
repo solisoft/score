@@ -16,10 +16,16 @@ class AppScoreReadingsController < AppBaseController
     picture = ScoreReader.picture(data)
     return render_json({"error": "That file is not a picture."}, 422) if picture.nil?
 
-    used_up = "You have read all of today's photos: try again tomorrow."
-    return render_json({"error": used_up}, 429) if ScoreReading.left_today(user) <= 0
+    refusal = ScoreReading.refusal(user)
+    unless refusal.nil?
+      return render_json({"error": @_refused(user, refusal)}, 429)
+    end
 
     reading = ScoreReading.start(user, picture)
+    if type(reading) == "string"
+      return render_json({"error": @_refused(user, reading)}, 429)
+    end
+
     render_json(
       {"id": reading._key, "state": reading.state},
       202
@@ -42,5 +48,17 @@ class AppScoreReadingsController < AppBaseController
       "source": reading.source,
       "svg": ScoreSvg.engrave(reading.source, 1000, 7, 0, {})["svg"]
     })
+  end
+
+  private
+
+  # Why `user` may not read another photo today (`refusal`,
+  # ScoreReading.refusal); on the server's key, how to read more.
+  def _refused(user, refusal)
+    return AI_SERVER_BUSY if refusal == "busy"
+    return "You have read all of today's photos: try again tomorrow." if user.own_ai?()
+
+    "You have read the #{SCORE_READINGS_PER_DAY} photos a day the site's AI reads: try again tomorrow, "
+    + "or add your own AI key on your account page to read more."
   end
 end

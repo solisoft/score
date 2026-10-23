@@ -20,13 +20,26 @@ class AppScoreSuggestionsController < AppBaseController
       return render_json({"error": "Write what you would like done."}, 422)
     end
 
+    if request.trim.length > SCORE_SUGGESTION_REQUEST_LIMIT
+      return render_json(
+        {"error": "Your request is too long: keep it under #{SCORE_SUGGESTION_REQUEST_LIMIT} characters."},
+        422
+      )
+    end
+
     too_long = source.length > SCORE_ASSISTANT_SOURCE_LIMIT
     return render_json({"error": "This score is too long for the assistant."}, 422) if too_long
 
-    used_up = "You have asked all of today's questions: try again tomorrow."
-    return render_json({"error": used_up}, 429) if ScoreSuggestion.left_today(user) <= 0
+    refusal = ScoreSuggestion.refusal(user)
+    unless refusal.nil?
+      return render_json({"error": @_refused(user, refusal)}, 429)
+    end
 
     suggestion = ScoreSuggestion.start(user, score, action, request, source)
+    if type(suggestion) == "string"
+      return render_json({"error": @_refused(user, suggestion)}, 429)
+    end
+
     render_json(
       {"id": suggestion._key, "state": suggestion.state},
       202
@@ -50,5 +63,17 @@ class AppScoreSuggestionsController < AppBaseController
       "explanation": suggestion.explanation.to_s,
       "svg": ScoreSvg.engrave(suggestion.source, 1000, 7, 0, {})["svg"]
     })
+  end
+
+  private
+
+  # Why `user` may not ask again today (`refusal`, ScoreSuggestion.refusal);
+  # on the server's key, how to ask more.
+  def _refused(user, refusal)
+    return AI_SERVER_BUSY if refusal == "busy"
+    return "You have asked all of today's questions: try again tomorrow." if user.own_ai?()
+
+    "You have asked the #{SCORE_SUGGESTIONS_PER_DAY} questions a day the site's AI answers: try again tomorrow, "
+    + "or add your own AI key on your account page to ask more."
   end
 end
