@@ -65,7 +65,7 @@ class ConfirmationsController < Controller
     user = User.find_by("email", email)
     if !user.nil? && !user.confirmed?()
       token = user.start_email_confirmation()
-      AuthMailer.confirm_email(user, token).deliver_now() rescue null
+      MailDelivery.attempt("confirmation", fn() { AuthMailer.confirm_email(user, token) })
     end
 
     return render(

@@ -42,7 +42,7 @@ class PasswordsController < Controller
     user = User.find_by("email", email)
     if !user.nil?
       token = user.start_password_reset()
-      AuthMailer.reset_password(user, token).deliver_now() rescue null
+      MailDelivery.attempt("password reset", fn() { AuthMailer.reset_password(user, token) })
     end
 
     return render(

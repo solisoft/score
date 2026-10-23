@@ -210,11 +210,9 @@ class AppScoresController < AppBaseController
       return render("app/scores/share", {}, {"status": 422})
     end
 
-    ShareMailer.invited(share, @score, current_user().email).deliver_now rescue nil
-    flash(
-      "notice",
-      "#{share.email} may now #{share.role == "write" ? "open and change" : "open"} “#{this.score.title}”."
-    )
+    inviter = current_user().email
+    mailed = MailDelivery.attempt("invitation", fn() { ShareMailer.invited(share, @score, inviter) })
+    flash("notice", ScoreShare.invited_notice(share, @score.title, mailed))
     redirect(app_score_share_path(@score))
   end
 

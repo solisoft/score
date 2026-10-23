@@ -48,11 +48,11 @@ class RegistrationsController < Controller
     user.save()
     return this._reject(user, "Could not create your account", 422) if user._errors
 
-    # Send the confirmation link. `rescue null` keeps signup working before
-    # SMTP is configured (set SOLI_MAIL_DELIVERY_METHOD=logger in dev to see
-    # the email in the console instead).
+    # Send the confirmation link. A failure is logged, not raised, so signup
+    # works before SMTP is configured (set SOLI_MAIL_DELIVERY_METHOD=logger in
+    # dev to see the email in the console instead).
     token = user.start_email_confirmation()
-    AuthMailer.confirm_email(user, token).deliver_now() rescue null
+    MailDelivery.attempt("confirmation", fn() { AuthMailer.confirm_email(user, token) })
 
     if auth_require_confirmed_email()
       return render(

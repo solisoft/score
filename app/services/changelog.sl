@@ -13,6 +13,15 @@ class Changelog
       {"date": "2026-10-23", "entries": [
         {
           "area": "site",
+          "title": "Sharing says when the invitation email did not leave",
+          "text": "When you share a score with someone and the invitation email cannot be sent, the notice now "
+          + "says so and asks you to send them the link yourself, instead of saying only that they may now "
+          + "open it. The share itself is made either way.",
+          "link": "app",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "Your first edit keeps what you wrote",
           "text": "Editing a score in the editor no longer quietly drops what it did not understand. Invisible "
           + "rests stay invisible (no more rests appearing in a piano left hand), beams you drew stay, a "

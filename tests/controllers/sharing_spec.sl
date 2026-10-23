@@ -108,7 +108,11 @@ describe("Sharing") do
         "/app/scores/#{score._key}/invitations",
         {"email": reader.email.upcase, "role": "read"}
       )
-      assert_contains(res_body(get("/app/scores/#{score._key}/share")), reader.email)
+      share_page = res_body(get("/app/scores/#{score._key}/share"))
+      assert_contains(share_page, reader.email)
+      # The invitation left: the notice says nothing of a failed email.
+      assert_contains(share_page, "#{reader.email} may now open “Chorale”.")
+      assert_not(share_page.contains("could not be sent"))
       share_sign_in(reader)
       get("/app/scores")
       assert_eq(assigns()["shared"].map(&{ |entry|

@@ -2,7 +2,9 @@
 # Run workflow): the server is reached only with the deploy key.
 #
 #   inspect — what the server has: SoliDB, its port, and how the other sites
-#             on it reach it (hosts, databases, user names; never a password).
+#             on it reach it (hosts, databases, user names; never a password),
+#             and which of this site's error-tracking and alert variables
+#             are set (<set>/<unset>, never their values).
 #   setup   — gives this site its database as the server's other sites have
 #             theirs: SoliDB on 127.0.0.1:6745 as its admin, a database of its
 #             own (score), the admin password and the mail relay copied on the
@@ -72,6 +74,11 @@ jobs:
             grep -qE '^SOLIDB_PASSWORD=.+' "$f" && printf 'SOLIDB_PASSWORD=<set> '
             grep -qE '^SOLI_SESSION_SECRET=.+' "$f" && printf 'SOLI_SESSION_SECRET=<set>'
             echo
+          done
+          echo "== this site's error tracking and alerts (set or not, never the values)"
+          for k in SOLI_ERRORS_USER SOLI_ERRORS_PASSWORD SOLI_ERRORS_TOKEN SOLI_ADMIN_USER SOLI_ADMIN_PASSWORD \
+                   SOLI_ADMIN_TOKEN SOLI_NOTIFY_WEBHOOKS SOLI_NOTIFY_EMAILS SOLI_NOTIFY_FROM SOLI_NOTIFY_URL; do
+            if grep -qE "^$k=.+" "$SITES_DIR/$DOMAIN/.env" 2>/dev/null; then echo "$k=<set>"; else echo "$k=<unset>"; fi
           done
           REMOTE
 

@@ -56,7 +56,55 @@ ENV
   ```
 
   The next deploy runs the migrations (`soli db:migrate up`) before it
-  switches slots.
+  switches slots, then fails unless `/health/ready` answers 200 and `/app`
+  answers 200 or a redirect to `/login`.
+
+## Health, errors and alerts
+
+- `/health` is liveness (the process answers; soli-proxy's slot check).
+  `/health/ready` is readiness: 200 when the database answers a one-row read
+  and no job waits more than 30 minutes past its time, else 503 with
+  `{"status":"not ready","problems":[…]}` (`database not configured`,
+  `database unreachable`, `job queue unreadable`, `N job(s) waiting past
+  their time`). The details go to the site's log, not the page.
+- `.github/workflows/uptime.yml` probes `/health/ready` every 15 minutes from
+  GitHub; a failed run is mailed by GitHub to whoever receives Actions
+  notifications for the repository (Settings › Notifications › Actions).
+- Mail that fails to leave (confirmation, password reset, invitations) is
+  logged as `[WARN] <purpose> email could not be sent error=…`.
+
+The error tracker (`/__soli/errors`, also `/__soli/jobs` and
+`/__soli/slow_queries`) records every 500 already, but answers 404 in
+production until credentials are set, and nobody is told of a new error until
+a destination is set. Add to the server's `.env`
+(`/home/rocky/sites/score.solisoft.net/.env`), then redeploy or
+`soli-proxy restart -c /home/rocky/proxy.conf score`:
+
+```bash
+cat >> .env <<'ENV'
+# /__soli/errors, /__soli/jobs, /__soli/slow_queries: Basic auth for a
+# browser, the token as "Authorization: Bearer …" for scripts.
+SOLI_ADMIN_USER=ops
+SOLI_ADMIN_PASSWORD=<openssl rand -hex 24>
+SOLI_ADMIN_TOKEN=<openssl rand -hex 32>
+# Who hears of a new, regressed or spiking error, or a new slow query.
+# Either or both; comma-separated lists.
+SOLI_NOTIFY_EMAILS=<your address>
+SOLI_NOTIFY_WEBHOOKS=<a Slack / Teams / Discord / Google Chat incoming webhook URL>
+# Optional: the sender (default SOLI_SMTP_FROM) and the links' base URL
+# (default https:// + the first SOLI_APP_HOSTS).
+SOLI_NOTIFY_FROM=EUI Score alerts <no-reply@solisoft.net>
+SOLI_NOTIFY_URL=https://score.solisoft.net
+ENV
+chmod 600 .env
+```
+
+`SOLI_ERRORS_USER` / `SOLI_ERRORS_PASSWORD` / `SOLI_ERRORS_TOKEN` gate
+`/__soli/errors` alone, if the jobs and slow-query pages should stay closed.
+Notification e-mails go through the app's own SMTP settings (`SOLI_SMTP_*`
+above). See `docs/observability.md` (Error tracking, Notifications).
+Actions › production database › Run workflow › `inspect` reports which of
+these are set (`<set>` / `<unset>`, never their values).
 - The players' sounds, `public/soundfonts/MuseScore_General.sf3` (38 MB),
   are not in git: the workflow fetches them with `deploy/soundfont.sh`
   before its rsync. A local checkout runs that script once.

@@ -12,12 +12,23 @@ class HomeController < Controller
     @example_count = ScoreLibrary.examples.length
   end
 
-  # GET /health
+  # GET /health — liveness: the process answers (soli-proxy's slot check)
   def health
     {
       "status": 200,
       "headers": {"Content-Type": "application/json"},
       "body": "{\"status\":\"ok\"}"
+    }
+  end
+
+  # GET /health/ready — readiness: the database answers and no job waits
+  # far past its time; 503 with the reasons otherwise (Readiness)
+  def ready
+    report = Readiness.check
+    {
+      "status": report["ready"] ? 200 : 503,
+      "headers": {"Content-Type": "application/json", "Cache-Control": "no-store"},
+      "body": {"status": report["ready"] ? "ok" : "not ready", "problems": report["problems"]}.to_json
     }
   end
 end

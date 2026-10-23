@@ -40,4 +40,33 @@ describe("HomeController") do
       assert_eq(res_json(response)["status"], "ok")
     end
   end
+
+  describe("GET /health/ready") do
+    # Jobs other specs queued wait unclaimed (`soli test` runs no worker).
+    before_each() do
+      Job.list().each do |job|
+        Job.cancel(job["_key"]) rescue nil
+      end
+    end
+
+    test("answers 200 where the database answers and no job is late") do
+      response = get("/health/ready")
+      assert_eq(res_status(response), 200)
+      assert_eq(res_json(response)["status"], "ok")
+      assert_eq(res_json(response)["problems"], [])
+      assert_eq(res_header(response, "Cache-Control"), "no-store")
+    end
+
+    test("answers 503 with a short reason when a job is left far past its time") do
+      job_id = Job.enqueue_at("DataCleanupJob", "2020-01-01T00:00:00Z", {})
+      response = get("/health/ready")
+      Job.cancel(job_id)
+      assert_eq(res_status(response), 503)
+      assert_eq(res_json(response)["status"], "not ready")
+      assert_eq(res_json(response)["problems"], ["1 job(s) waiting past their time: no worker claims them"])
+      assert_not(res_body(response).contains("6745"))
+      # Liveness stays green: the process runs.
+      assert_eq(res_status(get("/health")), 200)
+    end
+  end
 end

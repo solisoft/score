@@ -31,6 +31,16 @@ class ScoreShare < Model
     share
   end
 
+  # What the owner reads once `share` is made on the score titled `title`:
+  # `mailed` says whether the invitation email left. When it did not, the
+  # notice says so, so the owner sends the link themselves.
+  static def invited_notice(share, title, mailed)
+    may = "#{share.email} may now #{share.role == "write" ? "open and change" : "open"} “#{title}”"
+    return "#{may}." if mailed
+
+    "#{may}, but the invitation email could not be sent: send them the link yourself."
+  end
+
   # What `user` may do with `score` through a share: "read", "write" or nil.
   static def role_for(score, user)
     return nil if user.nil?
