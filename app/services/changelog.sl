@@ -12,6 +12,12 @@ class Changelog
     [
       {"date": "2026-10-23", "entries": [
         {
+          "area": "engine",
+          "title": "Pages cut evenly, and no lone line on the last",
+          "text": "The PDF's pages are cut over the whole score: as few pages as before, each about as full as the "
+          + "others, where a line too many used to sit alone on the last page."
+        },
+        {
           "area": "site",
           "title": "Long scores stay quick in the editor",
           "text": "On a 200-bar quartet, selecting a note or following the playback redraws in 4 ms instead of 90, "
