@@ -56,18 +56,20 @@ ENV
   ```
 
   The next deploy runs the migrations (`soli db:migrate up`) before it
-  switches slots, then fails unless `/health/ready` answers 200 and `/app`
+  switches slots, then fails unless `/health/deep` answers 200 and `/app`
   answers 200 or a redirect to `/login`.
+
+It is `/health/deep`, not `/health/ready`: soli-proxy answers `/health/ready` itself (a plain `OK`) before the request reaches the app, so a check there proves nothing about the database.
 
 ## Health, errors and alerts
 
 - `/health` is liveness (the process answers; soli-proxy's slot check).
-  `/health/ready` is readiness: 200 when the database answers a one-row read
+  `/health/deep` is readiness: 200 when the database answers a one-row read
   and no job waits more than 30 minutes past its time, else 503 with
   `{"status":"not ready","problems":[…]}` (`database not configured`,
   `database unreachable`, `job queue unreadable`, `N job(s) waiting past
   their time`). The details go to the site's log, not the page.
-- `.github/workflows/uptime.yml` probes `/health/ready` every 15 minutes from
+- `.github/workflows/uptime.yml` probes `/health/deep` every 15 minutes from
   GitHub; a failed run is mailed by GitHub to whoever receives Actions
   notifications for the repository (Settings › Notifications › Actions).
 - Mail that fails to leave (confirmation, password reset, invitations) is

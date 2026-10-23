@@ -21,7 +21,7 @@ class HomeController < Controller
     }
   end
 
-  # GET /health/ready — readiness: the database answers and no job waits
+  # GET /health/deep — readiness: the database answers and no job waits
   # far past its time; 503 with the reasons otherwise (Readiness)
   def ready
     report = Readiness.check

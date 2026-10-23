@@ -1,4 +1,4 @@
-# Readiness (/health/ready): the database answers, and no job waits far
+# Readiness (/health/deep): the database answers, and no job waits far
 # past its time.
 
 # Jobs other specs queued wait here unclaimed (`soli test` runs no worker):

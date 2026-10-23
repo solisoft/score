@@ -41,7 +41,7 @@ describe("HomeController") do
     end
   end
 
-  describe("GET /health/ready") do
+  describe("GET /health/deep") do
     # Jobs other specs queued wait unclaimed (`soli test` runs no worker).
     before_each() do
       Job.list().each do |job|
@@ -50,7 +50,7 @@ describe("HomeController") do
     end
 
     test("answers 200 where the database answers and no job is late") do
-      response = get("/health/ready")
+      response = get("/health/deep")
       assert_eq(res_status(response), 200)
       assert_eq(res_json(response)["status"], "ok")
       assert_eq(res_json(response)["problems"], [])

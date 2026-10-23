@@ -22,7 +22,7 @@ get("/eui-score-editor.js", "assets#editor")
 
 get("/", "home#index", name: "root")
 get("/health", "home#health")
-get("/health/ready", "home#ready")
+get("/health/deep", "home#ready")
 
 get("/guide", "pages#guide", name: "guide")
 get("/syntax", "pages#syntax", name: "syntax")

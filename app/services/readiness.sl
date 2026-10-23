@@ -1,4 +1,4 @@
-# Whether this process can serve the app (/health/ready), as opposed to
+# Whether this process can serve the app (/health/deep), as opposed to
 # merely running (/health): its database answers, and the job queue is not
 # left behind. The deploy checks it after each slot switch, and a scheduled
 # workflow every 15 minutes. Its reasons are short and name no host, user

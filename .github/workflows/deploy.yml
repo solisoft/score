@@ -7,7 +7,7 @@
 #
 # The app (/app) keeps accounts and scores in SoliDB: once the server's .env
 # names a database (SOLIDB_HOST), each deploy runs its migrations before the
-# switch, and the deploy fails unless /health/ready then answers 200 (the
+# switch, and the deploy fails unless /health/deep then answers 200 (the
 # database answers, no job left far behind). The browser engraver
 # (public/eui-score/) is committed, built by wasm/build.sh, so a deploy needs
 # no Rust to deploy; the `engraver` job only tests it. See deploy/README.md
@@ -241,7 +241,7 @@ jobs:
         run: ssh "$USER@$HOST" "soli-proxy restart -c '$PROXY_CONF' '$APP'"
 
       # End to end, through the proxy, with the real hostname. /health only
-      # says the process runs; /health/ready that its database answers and
+      # says the process runs; /health/deep that its database answers and
       # no job is left far behind (503 with the reason otherwise), and /app
       # answers 200 or sends a visitor to /login: a broken migration or a
       # stopped database fails the deploy here.
@@ -250,17 +250,19 @@ jobs:
           set -euo pipefail
           for attempt in 1 2 3 4 5; do
             sleep 4
-            codes="$(ssh "$USER@$HOST" "for p in /health /health/ready / /examples /eui-score/eui_score_web_bg.wasm; do curl -sk -m 8 --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{http_code} ' \"https://$DOMAIN\$p\"; done" || true)"
+            codes="$(ssh "$USER@$HOST" "for p in /health /health/deep / /examples /eui-score/eui_score_web_bg.wasm; do curl -sk -m 8 --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{http_code} ' \"https://$DOMAIN\$p\"; done" || true)"
             app="$(ssh "$USER@$HOST" "curl -sk -m 8 --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{http_code} %{redirect_url}' 'https://$DOMAIN/app'" || true)"
-            echo "attempt $attempt: $codes| /app -> $app"
-            if [ "$codes" = "200 200 200 200 200 " ]; then
+            # The app's own answer, not a 200 from something in front of it.
+            ready="$(ssh "$USER@$HOST" "curl -sk -m 8 --resolve '$DOMAIN:443:127.0.0.1' 'https://$DOMAIN/health/deep'" || true)"
+            echo "attempt $attempt: $codes| /app -> $app | ready: $ready"
+            if [ "$codes" = "200 200 200 200 200 " ] && echo "$ready" | grep -q '"status":"ok"'; then
               case "$app" in
                 "200 "|"302 "*/login*|"303 "*/login*) exit 0 ;;
               esac
             fi
           done
           echo "The site does not answer through the proxy, or is not ready:" >&2
-          ssh "$USER@$HOST" "curl -sk -m 8 --resolve '$DOMAIN:443:127.0.0.1' 'https://$DOMAIN/health/ready'" >&2 || true
+          ssh "$USER@$HOST" "curl -sk -m 8 --resolve '$DOMAIN:443:127.0.0.1' 'https://$DOMAIN/health/deep'" >&2 || true
           echo >&2
           echo "  ssh $USER@$HOST 'soli-proxy logs -c $PROXY_CONF $APP'" >&2
           exit 1
