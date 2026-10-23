@@ -323,6 +323,8 @@ describe("The app, in a browser") do
     assert_contains(editor_source(), "d'4 d'4 e'4 f'4 | g'1 | c'4")
     roll_keys("z", false)
     assert_contains(editor_source(), "c'4 d'4 e'4 f'4 | g'1 | c'4")
+    # Saved before the next page: a change not yet saved holds the page.
+    wait_saved()
     # Back to the score: the engraving, with the bars put in.
     click("[data-midi-button]")
     wait_for(".studio-sheet:not([hidden]) svg")
