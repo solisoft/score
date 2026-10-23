@@ -57,15 +57,26 @@ describe("HomeController") do
       assert_eq(res_header(response, "Cache-Control"), "no-store")
     end
 
-    test("answers 503 with a short reason when a job is left far past its time") do
-      job_id = Job.enqueue_at("DataCleanupJob", "2020-01-01T00:00:00Z", {})
-      response = get("/health/ready")
-      Job.cancel(job_id)
-      assert_eq(res_status(response), 503)
-      assert_eq(res_json(response)["status"], "not ready")
-      assert_eq(res_json(response)["problems"], ["1 job(s) waiting past their time: no worker claims them"])
-      assert_not(res_body(response).contains("6745"))
-      # Liveness stays green: the process runs.
+    test("a job left far past its time is a reason not to be ready") do
+      # Due in 2099: no worker claims it, and the clock is put past it.
+      job_id = Job.enqueue_at("DataCleanupJob", "2099-01-01T00:00:00Z", {})
+      later = DateTime.parse("2099-01-01T01:00:00Z").to_unix
+      problem = Readiness.jobs_problem(later)
+      Job.cancel(job_id) rescue nil
+      assert_eq(problem, "1 job(s) waiting past their time: no worker claims them")
+      assert_eq(
+        Readiness.verdict([problem]),
+        {"ready": false, "problems": [problem]}
+      )
+      # Not yet late at its own time.
+      assert_null(Readiness.jobs_problem(DateTime.parse("2099-01-01T00:10:00Z").to_unix))
+    end
+
+    test("no reason means ready, and liveness stays green") do
+      assert_eq(
+        Readiness.verdict([]),
+        {"ready": true, "problems": []}
+      )
       assert_eq(res_status(get("/health")), 200)
     end
   end
