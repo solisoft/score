@@ -127,6 +127,19 @@
         <% end %>
         <button type="button" class="studio-menu studio-play" data-act="play" title="Play from the selection, or from the start; pause (Space)">▶ Play</button>
         <button type="button" class="studio-menu" data-act="stop" title="Stop, back to the start" hidden>■ Stop</button>
+        <%# Recording from the MIDI keyboard chosen in Mode: the grid it is fitted to, and its dynamics. %>
+        <span class="studio-record-group" role="group" aria-label="Recording">
+          <button type="button" class="studio-menu studio-record" data-act="record" data-record aria-pressed="false" title="Play live on the MIDI keyboard: from the selected bar of the selected staff, after a bar of count-in (R)">● Rec</button>
+          <select class="studio-menu-select" data-quantize aria-label="Quantize" title="Quantize: the finest step a recording keeps; each note's start and end move to it">
+            <option value="quarter">quarters</option>
+            <option value="eighth">eighths</option>
+            <option value="eighth-triplet">eighth triplets</option>
+            <option value="sixteenth" selected>sixteenths</option>
+            <option value="sixteenth-triplet">sixteenth triplets</option>
+            <option value="thirty-second">32nds</option>
+          </select>
+          <label class="studio-menu-check" title="Write the dynamics of how hard the keys are struck, where they change"><input type="checkbox" data-record-dynamics checked> Dynamics</label>
+        </span>
         <span class="studio-zoom">
           <button type="button" class="studio-menu" data-act="zoom-out" title="Smaller" aria-label="Zoom out">−</button>
           <span data-zoom-label>100 %</span>
@@ -150,18 +163,6 @@
             <option value="">none</option><option value="find">find keyboards…</option>
           </select>
         </label>
-        <label class="tool-field">Quantize
-          <select data-quantize title="The finest step a recording keeps: each note's start and end move to it">
-            <option value="quarter">quarter notes</option>
-            <option value="eighth">eighths</option>
-            <option value="eighth-triplet">eighth triplets</option>
-            <option value="sixteenth" selected>sixteenths</option>
-            <option value="sixteenth-triplet">sixteenth triplets</option>
-            <option value="thirty-second">32nds, the lightest</option>
-          </select>
-        </label>
-        <label class="tool-check" title="Write the dynamics of how hard the keys are struck, where they change"><input type="checkbox" data-record-dynamics checked> Dynamics from how hard keys are hit</label>
-        <button type="button" class="tool tool-wide studio-record" data-act="record" data-record title="Play live on the MIDI keyboard: from the selected bar of the selected staff, after a bar of count-in (R)">● Record</button>
       </details>
 
       <details class="tool-section" data-section="playback" open>

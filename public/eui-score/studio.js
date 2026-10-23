@@ -2521,7 +2521,7 @@ export function startStudio(root, options = {}) {
     st.recording = { lane, bar: changeBar() ?? 0, program: M.programOf(sound), drums: M.isDrums(st.score, lane), down: new Map(), played: [], muted };
     P.listen(port, recordKey, releaseKey);
     for (const button of recordButtons()) {
-      button.textContent = "■ Stop recording";
+      button.textContent = "■ Stop rec";
       button.setAttribute("aria-pressed", "true");
     }
     await togglePlay();
@@ -2572,7 +2572,7 @@ export function startStudio(root, options = {}) {
     if (rec.muted) st.mix.mute.delete(rec.lane);
     renderMix();
     for (const button of recordButtons()) {
-      button.textContent = "● Record";
+      button.textContent = "● Rec";
       button.setAttribute("aria-pressed", "false");
     }
     for (const [key, { t: t0, velocity }] of rec.down) {

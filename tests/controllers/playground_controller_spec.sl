@@ -12,7 +12,8 @@ describe("PlaygroundController") do
       assert_not(body.includes?("data-act=\"midi-view\""), "the MIDI view is the app's")
       assert_contains(body, "data-act=\"insert-copied\"")
       # Recording from a MIDI keyboard, its grid sixteenths to begin with.
-      assert_contains(body, "data-act=\"record\" data-record")
+      assert_contains(body, "data-act=\"record\" data-record aria-pressed=\"false\"")
+      assert_contains(body, "class=\"studio-record-group\"")
       assert_contains(body, "<option value=\"sixteenth\" selected>sixteenths</option>")
       assert_contains(body, "<option value=\"eighth-triplet\">eighth triplets</option>")
       assert_contains(body, "data-record-dynamics checked")
