@@ -13,6 +13,17 @@ class Changelog
       {"date": "2026-10-23", "entries": [
         {
           "area": "site",
+          "title": "Your first edit keeps what you wrote",
+          "text": "Editing a score in the editor no longer quietly drops what it did not understand. Invisible "
+          + "rests stay invisible (no more rests appearing in a piano left hand), beams you drew stay, a "
+          + "repeat played three times stays three times, a key in D dorian or A minor keeps its mode, bold "
+          + "words stay bold, and a double bar line between sections stays. The few things the editor still "
+          + "cannot keep, such as a double bar line in the middle of a bar, are named in a notice the first "
+          + "time an edit rewrites the score, and Undo puts the text back as it was.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
           "title": "Songs that start with a pickup can be edited",
           "text": "A piece that starts before the first full bar, as many songs, hymns and folk tunes do, no "
           + "longer leaves the note tools, Parts, Transpose and the MusicXML export unavailable: the short "

@@ -25,7 +25,6 @@ export const DEFAULT_BPM = 100;
 const NAMES = ["c", "d", "e", "f", "g", "a", "b"];
 const NATURAL = [0, 2, 4, 5, 7, 9, 11];
 const SHARPS = [3, 0, 4, 1, 5, 2, 6];
-const KEYS = { "-7": "ces", "-6": "ges", "-5": "des", "-4": "aes", "-3": "ees", "-2": "bes", "-1": "f", 0: "c", 1: "g", 2: "d", 3: "a", 4: "e", 5: "b", 6: "fis", 7: "cis" };
 const CLEFS = ["treble", "bass", "alto", "tenor", "treble_8", "bass_8", "soprano", "percussion"];
 const SCRIPTS = {
   staccato: "-.", accent: "->", tenuto: "--", marcato: "-^", staccatissimo: "-!", portato: "-_", fermata: "\\fermata",
@@ -180,6 +179,26 @@ export function timeAt(score, b) {
 /** What changes at the start of bar `b`, or null. */
 export function changeAt(score, b) {
   return (score.changes ?? []).find((c) => c.bar === b) ?? null;
+}
+
+// A key's mode, and how far round the circle of fifths its signature is
+// from its tonic's major key: \\key d \\dorian has C major's signature.
+export const MODES = { major: 0, minor: -3, ionian: 0, aeolian: -3, dorian: -2, phrygian: -4, lydian: 1, mixolydian: -1, locrian: -5 };
+
+/** A key as \\key writes it: its tonic, for `fifths` (the signature) in `mode`, then the mode — "d \\dorian". */
+export function keyText(fifths, mode = "major") {
+  const name = MODES[mode] == null ? "major" : mode;
+  const tonic = fifths - MODES[name];
+  const letter = "fcgdaeb"[(((tonic + 1) % 7) + 7) % 7];
+  const accidentals = Math.floor((tonic + 1) / 7);
+  return `${letter}${accidentals > 0 ? "is".repeat(accidentals) : "es".repeat(-accidentals)} \\${name}`;
+}
+
+/** The mode in force in bar `b`: the score's, as its changes of key leave it. */
+export function modeAt(score, b) {
+  let mode = score.mode ?? "major";
+  for (const c of score.changes ?? []) if (c.bar <= b && c.key != null) mode = c.mode ?? "major";
+  return mode;
 }
 
 /** The score's key in bar `b`, as its changes leave it. */
@@ -433,14 +452,14 @@ function cloneEvent(ev, fields = {}) {
   return makeEvent({ ...structuredClone({ ...ev, id: undefined }), ...fields, id: newId() });
 }
 
-/** Rests filling `ticks` from `at`, cut at the bar lines. */
-function rests(score, at, ticks) {
+/** Rests filling `ticks` from `at`, cut at the bar lines; `spacer`: rests that are not drawn (`s`). */
+function rests(score, at, ticks, spacer = false) {
   const out = [];
   let t = at;
   const end = at + ticks;
   while (t < end - 1e-6) {
     const piece = Math.min(end, nextBarLine(score, t)) - t;
-    for (const v of spellDuration(piece)) out.push(makeEvent({ base: v.base, dots: v.dots }));
+    for (const v of spellDuration(piece)) out.push(makeEvent({ base: v.base, dots: v.dots, ...(spacer ? { spacer: true } : {}) }));
     t += piece;
   }
   return out;
@@ -583,6 +602,8 @@ function pieces(score, ev, at, ticks, role) {
   out.forEach((p, k) => {
     const last = k === out.length - 1;
     p.tie = !p.rest && (last ? (role === "head" ? true : Boolean(ev.tie)) : true);
+    if (!(k === 0 && keepsStart)) delete p.beamStart;
+    if (!(last && keepsEnd)) delete p.beamEnd;
     if (!(k === 0 && keepsStart)) Object.assign(p, { slurStart: false, dynamic: null, hairpin: null, arts: [], chord: "", texts: [], lyric: null, verses: [], graces: [], grace: null, arpeggio: false, pedalOn: false, pedalOff: false });
     if (!(last && keepsEnd)) Object.assign(p, { slurEnd: false, hairpinEnd: false, gliss: false });
     // A tremolo's strokes are shorter than the note they repeat.
@@ -643,19 +664,20 @@ export function tidy(score, staff) {
   let run = null;
   const flush = () => {
     if (!run) return;
-    out.push(...rests(score, run.start, run.ticks));
+    out.push(...rests(score, run.start, run.ticks, run.spacer));
     run = null;
   };
   staff.events.forEach((ev, i) => {
-    const plain = ev.rest && !ev.tuplet && !ev.dynamic && !ev.hairpin && !ev.hairpinEnd && !ev.texts.length && !ev.chord && !ev.arts.length && !ev.pedalOn && !ev.pedalOff;
-    const sameBar = run && barAt(score, at[i]) === barAt(score, run.start);
+    const plain = ev.rest && !ev.tuplet && !ev.dynamic && !ev.hairpin && !ev.hairpinEnd && !ev.texts.length && !ev.chord && !ev.arts.length && !ev.pedalOn && !ev.pedalOff && !ev.beamStart && !ev.beamEnd;
+    // Spacers run with spacers, drawn rests with drawn rests.
+    const sameBar = run && barAt(score, at[i]) === barAt(score, run.start) && run.spacer === Boolean(ev.spacer);
     if (plain && sameBar) {
       run.ticks += ticksOf(ev);
       run.events.push(ev);
       return;
     }
     flush();
-    if (plain) run = { start: at[i], ticks: ticksOf(ev), events: [ev] };
+    if (plain) run = { start: at[i], ticks: ticksOf(ev), events: [ev], spacer: Boolean(ev.spacer) };
     else out.push(ev);
   });
   flush();
@@ -1431,7 +1453,7 @@ function retime(score, b, num, den) {
   const marks = old.changes.filter((c) => c.bar !== b).map((c) => ({ ...c, at: tick(c.bar) }));
   marks.push({ ...(old.changes.find((c) => c.bar === b) ?? {}), bar: b, at: from, time: [num, den] });
   marks.sort((x, y) => x.at - y.at);
-  const repeats = (score.repeats ?? []).map((r) => ({ from: tick(r.from), to: tick(r.to + 1), ends: r.endings.map((_, k) => tick(r.to + 1 + r.endings.slice(0, k + 1).reduce((x, y) => x + y, 0))) }));
+  const repeats = (score.repeats ?? []).map((r) => ({ from: tick(r.from), to: tick(r.to + 1), ends: r.endings.map((_, k) => tick(r.to + 1 + r.endings.slice(0, k + 1).reduce((x, y) => x + y, 0))), times: r.times }));
   const clefs = score.staves.map((staff) => (staff.clefs ?? []).map((c) => ({ ...c, at: tick(c.bar) })));
   // The new bars: each mark's bar counted in the new metres.
   // The bars laid out again stay where they were; what is after them moves by what they grew.
@@ -1475,7 +1497,7 @@ function retime(score, b, num, den) {
       last = end;
       return n;
     });
-    return { from: f, to: t, endings };
+    return { from: f, to: t, endings, ...(r.times ? { times: r.times } : {}) };
   });
   clefs.forEach((list, k) => {
     if (!list.length) return;
@@ -1507,6 +1529,8 @@ export function setKeyAt(score, b, fifths) {
   if (b <= 0) return setKey(score, fifths);
   const to = fifths == null ? null : Math.max(-7, Math.min(7, fifths));
   setChange(score, b, "key", to === scoreKeyAt(score, b - 1) ? null : to);
+  // A change of key set here is a major key's; none, no mode.
+  setChange(score, b, "mode", null);
 }
 
 /** A double bar line before bar `b`, or none. */
@@ -1666,7 +1690,13 @@ function mend(staff) {
 
 const quote = (text) => `"${String(text).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 
-function eventText(ev) {
+/** Words above or below a note: a plain string, or \\markup in italics, bold, or both. */
+function wordsText(t) {
+  const styles = (t.bold ? "\\bold " : "") + (t.italic ? "\\italic " : "");
+  return styles ? `\\markup ${styles}${quote(t.text)}` : quote(t.text);
+}
+
+function eventText(ev, beam = "") {
   const head = (p) => p.drum ?? spellPitch(p.d, p.alter);
   const notes = (pitches) => (pitches.length === 1 ? head(pitches[0]) : `<${pitches.map(head).join(" ")}>`);
   let out = "";
@@ -1674,9 +1704,10 @@ function eventText(ev) {
     const graces = ev.graces.map((g) => notes(g.pitches) + g.base + ".".repeat(g.dots));
     out += `\\${ev.grace ?? "grace"} ${graces.length === 1 ? graces[0] : `{ ${graces.join(" ")} }`} `;
   }
-  out += ev.rest ? "r" : notes(ev.pitches);
+  out += ev.rest ? (ev.spacer ? "s" : "r") : notes(ev.pitches);
   out += ev.base + ".".repeat(ev.dots);
   if (ev.tremolo && !ev.rest) out += `:${ev.tremolo}`;
+  out += beam;
   if (ev.tie && !ev.rest) out += "~";
   if (ev.slurStart) out += "(";
   if (ev.slurEnd) out += ")";
@@ -1685,7 +1716,7 @@ function eventText(ev) {
   if (ev.hairpin) out += ev.hairpin === "<" ? "\\<" : "\\>";
   for (const a of ev.arts) out += SCRIPTS[a] ?? "";
   if (ev.chord) out += `^${quote(ev.chord)}`;
-  for (const t of ev.texts) out += `${t.dir > 0 ? "_" : "^"}${t.italic ? `\\markup \\italic ${quote(t.text)}` : quote(t.text)}`;
+  for (const t of ev.texts) out += `${t.dir > 0 ? "_" : "^"}${wordsText(t)}`;
   if (ev.arpeggio && !ev.rest) out += "\\arpeggio";
   if (ev.gliss && !ev.rest) out += "\\glissando";
   // Let go before pressed again, when a note has both.
@@ -1777,7 +1808,7 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
     // A drum staff: its strokes in \\drummode, with no clef and no key.
     const opening = staff.drums
       ? `\\new DrumStaff ${settings ? `\\with { ${settings}} ` : ""}\\drummode {\n  \\time ${timeText(score, time)}${partial}${tempo}`
-      : `\\new Staff ${settings ? `\\with { ${settings}} ` : ""}${brace}\n  \\clef ${clef} \\key ${KEYS[keyOf(score, s)]} \\major \\time ${timeText(score, time)}${partial}${tempo}`;
+      : `\\new Staff ${settings ? `\\with { ${settings}} ` : ""}${brace}\n  \\clef ${clef} \\key ${keyText(keyOf(score, s), score.mode)} \\time ${timeText(score, time)}${partial}${tempo}`;
     let out = `${opening}\n  ${music.replace(/\n {4}/g, "\n  ")}${ending}\n}`;
     // Each verse a line under the one before.
     for (let verse = 1; verse <= versesOf(staff); verse++) out += `\n\\addlyrics { ${lyricText(staff, verse)} }`;
@@ -1865,8 +1896,10 @@ export function setText(score, s, i, style, text) {
   const ev = noteOf(score, s, i);
   const italic = style === "expression";
   const kept = ev.texts.filter((t) => Boolean(t.italic) !== italic);
+  const was = ev.texts.find((t) => Boolean(t.italic) === italic);
   const words = String(text ?? "").trim();
-  ev.texts = words ? [...kept, { text: words, dir: italic ? 1 : -1, italic }] : kept;
+  // Bold words stay bold when they are changed.
+  ev.texts = words ? [...kept, { text: words, dir: italic ? 1 : -1, italic, ...(was?.bold ? { bold: true } : {}) }] : kept;
 }
 
 /** Event `i`'s words of `style`, as setText writes them; "" when it has none. */
@@ -1881,15 +1914,38 @@ function changesText(score, s, b) {
   const clef = (score.staves[s].clefs ?? []).find((c) => c.bar === b);
   if (clef && !drums) parts.push(`\\clef ${clefText(clef.clef)}`);
   const c = changeAt(score, b);
-  if (c?.key != null && !drums) parts.push(`\\key ${KEYS[keyOf(score, s, barStart(score, b))]} \\major`);
+  if (c?.key != null && !drums) parts.push(`\\key ${keyText(keyOf(score, s, barStart(score, b)), c.mode)}`);
   if (c?.time) parts.push(`\\time ${c.time[0]}/${c.time[1]}`);
   if (c?.tempo && staffNumber(score, s) === 0) parts.push(tempoText(c.tempo));
   if (c?.line) parts.unshift(`\\bar "${c.line}"`);
   return parts.length ? parts.join(" ") + " " : "";
 }
 
+/**
+ * The beams written by hand that a lane keeps: [ on the note it starts on, ]
+ * on its last — each opened and closed in one bar, in one tuplet, on notes
+ * of an eighth or shorter. A beam an edit broke is left out, never written
+ * half. Answers `beam[i]`, what event `i` writes: "[", "]" or "".
+ */
+export function handBeams(score, staff) {
+  const at = starts(staff);
+  const beam = staff.events.map(() => "");
+  let open = -1;
+  staff.events.forEach((ev, i) => {
+    if (open >= 0 && (barAt(score, at[i]) !== barAt(score, at[open]) || ev.tuplet?.id !== staff.events[open].tuplet?.id || (!ev.rest && ev.base < 8))) open = -1;
+    if (ev.beamEnd && open >= 0 && i > open && !ev.rest) {
+      beam[open] = "[";
+      beam[i] = "]";
+      open = -1;
+    }
+    if (ev.beamStart && !ev.rest && ev.base >= 8) open = i;
+  });
+  return beam;
+}
+
 /** A lane's music, a string per bar, with its events and items; a tuplet never leaves its bar. */
 function staffBars(score, staff, s) {
+  const beams = handBeams(score, staff);
   const bars = [];
   let current = { parts: [], items: [], events: [] };
   let t = 0;
@@ -1912,7 +1968,7 @@ function staffBars(score, staff, s) {
       current.parts.push(`\\tuplet ${ev.tuplet.n}/${ev.tuplet.d} {`);
       open = tid;
     }
-    current.parts.push(eventText(ev));
+    current.parts.push(eventText(ev, beams[i]));
     t += ticksOf(ev);
     if (Math.abs(t - barStart(score, bars.length + 1)) < 1e-6) close();
   });
@@ -1931,7 +1987,7 @@ function withRepeats(bars, repeats) {
       b++;
       continue;
     }
-    let text = `\\repeat volta ${Math.max(2, r.endings.length)} { ${bars.slice(r.from, r.to + 1).join(" | ")} }`;
+    let text = `\\repeat volta ${Math.max(r.times ?? 2, r.endings.length)} { ${bars.slice(r.from, r.to + 1).join(" | ")} }`;
     let next = r.to + 1;
     if (r.endings.length) {
       const alts = r.endings.map((len) => {
@@ -1960,15 +2016,16 @@ function repeatsFrom(signs) {
   let volta = null;
   const close = () => {
     if (open === null) return;
-    out.push({ from: open.from, to: open.to, endings: endings ?? [] });
+    // Played more times than its endings say: \\repeat volta 3.
+    out.push({ from: open.from, to: open.to, endings: endings ?? [], ...(open.times > Math.max(2, (endings ?? []).length) ? { times: open.times } : {}) });
     open = null;
     endings = null;
   };
-  for (const { mark, at } of signs) {
+  for (const { mark, at, times } of signs) {
     if (mark === "start") {
       if (open && open.to === null) return null;
       close();
-      open = { from: at, to: null };
+      open = { from: at, to: null, times };
     } else if (mark === "end") {
       // A repeat's body ends here — unless an ending is running, whose own end it is.
       if (volta !== null) continue;
@@ -2056,7 +2113,7 @@ export function repeatEnd(r) {
 export function setRepeat(score, i, next) {
   const r = score.repeats?.[i];
   if (!r) throw new Error("there is no such repeat");
-  const candidate = { from: next.from ?? r.from, to: next.to ?? r.to, endings: [...(next.endings ?? r.endings)] };
+  const candidate = { from: next.from ?? r.from, to: next.to ?? r.to, endings: [...(next.endings ?? r.endings)], ...(r.times ? { times: r.times } : {}) };
   if (candidate.from < 0 || candidate.to < candidate.from) throw new Error("a repeat keeps one bar at least");
   if (candidate.endings.some((n) => !Number.isInteger(n) || n < 1)) throw new Error("an ending keeps one bar at least");
   if (candidate.endings.length === 1) throw new Error("a repeat has two endings at least, or none");
@@ -2595,7 +2652,7 @@ function repeatOrder(score) {
       order.push(b++);
       continue;
     }
-    const passes = Math.max(2, r.endings.length);
+    const passes = Math.max(r.times ?? 2, r.endings.length);
     const starts = [];
     let next = r.to + 1;
     for (const n of r.endings) {
@@ -2762,6 +2819,8 @@ const CLEF_NAMES = { "G,-2,0": "treble", "G,-2,-1": "treble_8", "F,2,0": "bass",
  */
 export function fromParsed(parsed) {
   const unsupported = new Set();
+  // What the model reads and does not keep: the first edit writes the text without it.
+  const lost = new Set();
   const score = { header: { ...parsed.header }, key: 0, time: [4, 4], tempo: null, group: "none", groups: [], staves: [], repeats: [], changes: [] };
   score.paper = paperFrom(parsed.paper);
   score.breaks = {};
@@ -2789,6 +2848,7 @@ export function fromParsed(parsed) {
     let started = false;
     const tuplets = new Map();
     let key = null;
+    let mode = null;
     let time = null;
     for (const ev of staff.events) {
       ev.unsupported.forEach((u) => unsupported.add(u));
@@ -2816,9 +2876,16 @@ export function fromParsed(parsed) {
           out.clefs = [...(out.clefs ?? []).filter((c) => c.bar !== bar), { bar, clef: name ?? "treble" }];
         }
       } else if (k === "Key") {
-        if (!started) key = ev.fifths;
-        else if (bar < 0) unsupported.add("a change of key inside a bar");
-        else if (first) setChange(score, bar, "key", ev.fifths === scoreKeyAt(score, bar - 1) ? null : ev.fifths);
+        const named = ev.mode && ev.mode !== "major" && MODES[ev.mode] != null ? ev.mode : null;
+        if (!started) {
+          key = ev.fifths;
+          mode = named;
+        } else if (bar < 0) unsupported.add("a change of key inside a bar");
+        else if (first) {
+          const same = ev.fifths === scoreKeyAt(score, bar - 1) && (named ?? "major") === modeAt(score, bar - 1);
+          setChange(score, bar, "key", same ? null : ev.fifths);
+          setChange(score, bar, "mode", same ? null : named);
+        }
         else if (ev.fifths !== Math.max(-7, Math.min(7, scoreKeyAt(score, bar) + (out.key ?? score.key) - score.key))) unsupported.add("staves changing key apart");
       } else if (k === "Time") {
         const added = (ev.time_parts ?? []).filter((p) => p > 0);
@@ -2861,6 +2928,8 @@ export function fromParsed(parsed) {
         if (jump && bar > 0) setChange(score, bar - 1, "jump", jump);
         else if (own) setChange(score, bar, "mark", own);
         else unsupported.add("a mark this editor does not name");
+      } else if (k === "Compress") {
+        lost.add("\\compressEmptyMeasures (empty bars gathered into one)");
       } else if (k === "Voices") {
         if (voices) unsupported.add("voices inside voices");
         voices = 1;
@@ -2881,14 +2950,18 @@ export function fromParsed(parsed) {
         const at = bar >= 0 ? bar : barAt(score, here) + 0.5;
         const marks = { RepeatStart: ["start"], RepeatEnd: ["end"], VoltaStart: ["volta"], VoltaEnd: ["volta-end"], Bar: { ".|:": ["start"], ":|.": ["end"], ":|.|:": ["end", "start"] }[ev.bar] ?? [] }[k];
         if (marks.length && !Number.isInteger(at)) unsupported.add("a repeat inside a bar");
-        // A double bar line between sections: the bar after it keeps it.
-        if (k === "Bar" && ev.bar === "||" && bar > 0) setChange(score, bar, "line", "||");
-        for (const mark of marks) signs.push({ mark, at });
+        // A double bar line between sections (or a final one, before a coda): the bar after it keeps it.
+        if (k === "Bar" && ["||", "|."].includes(ev.bar)) {
+          if (bar > 0) setChange(score, bar, "line", ev.bar);
+          else if (bar < 0) lost.add("a double bar line inside a bar");
+        }
+        for (const mark of marks) signs.push({ mark, at, times: ev.times ?? null });
       } else if (k === "Note" || k === "Rest") {
         if (!started) {
           started = true;
           if (first) {
             score.key = key ?? 0;
+            if (mode) score.mode = mode;
             score.time = time ?? [4, 4];
           } else {
             // A staff in a key of its own (a horn in E♭), or a metre of its own
@@ -2911,9 +2984,9 @@ export function fromParsed(parsed) {
           if (!tuplets.has(tid)) tuplets.set(tid, newId());
           tuplet = { id: tuplets.get(tid), n, d };
         }
-        const texts = ev.texts.map(([text, dir, italic]) => (italic ? { text, dir, italic: true } : { text, dir }));
+        const texts = ev.texts.map(([text, dir, italic, bold]) => ({ text, dir, ...(italic ? { italic: true } : {}), ...(bold ? { bold: true } : {}) }));
         // A short word above a note that reads as a chord is its chord symbol.
-        const chordAt = texts.findIndex((w) => w.dir < 0 && /^[A-G][#b♯♭]?(m|maj|min|dim|aug|sus|add|°|ø|\+)?[0-9]*(\/[A-G][#b♯♭]?)?$/.test(w.text));
+        const chordAt = texts.findIndex((w) => w.dir < 0 && !w.bold && /^[A-G][#b♯♭]?(m|maj|min|dim|aug|sus|add|°|ø|\+)?[0-9]*(\/[A-G][#b♯♭]?)?$/.test(w.text));
         const chord = chordAt >= 0 ? texts.splice(chordAt, 1)[0].text : ev.chord_name || "";
         // An open or a stopped hi-hat's sign comes with its drum.
         const scripts = drums ? ev.scripts.filter(([name]) => !["open", "stopped"].includes(name)) : ev.scripts;
@@ -2930,6 +3003,10 @@ export function fromParsed(parsed) {
           graces: (ev.graces ?? []).map(([pitches, base, dots]) => ({ pitches: pitches.map(([d, alter]) => ({ d, alter })), base, dots })),
           grace: ev.grace ?? null, arpeggio: Boolean(ev.arpeggio), gliss: Boolean(ev.gliss), tremolo: ev.tremolo ?? 0,
           pedalOn: Boolean(ev.pedal_on), pedalOff: Boolean(ev.pedal_off),
+          // A spacer, `s`: takes its time, drawn as nothing. Beams written by hand.
+          ...(k === "Rest" && ev.spacer ? { spacer: true } : {}),
+          ...(ev.beam_on ? { beamStart: true } : {}),
+          ...(ev.beam_off ? { beamEnd: true } : {}),
         });
         // A note past its bar line, as the engraver cuts it: tied pieces.
         const at = lengthOf(lane);
@@ -2967,5 +3044,10 @@ export function fromParsed(parsed) {
   if (score.staves.some((st) => !isBarLine(score, lengthOf(st)))) return { unsupported: ["a bar left unfinished"] };
   // A double bar at the very end is the final bar line, written anyway.
   score.changes = score.changes.filter((c) => c.bar < barsOf(score));
-  return { score };
+  // A beam written by hand that does not close in its bar is not written again.
+  for (const staff of score.staves) {
+    const kept = handBeams(score, staff).filter((b) => b === "[").length;
+    if (kept < staff.events.filter((ev) => ev.beamStart).length) lost.add("a beam across a bar line, or around a rest or a longer note");
+  }
+  return lost.size ? { score, lost: [...lost] } : { score };
 }

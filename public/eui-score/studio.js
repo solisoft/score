@@ -115,6 +115,8 @@ export function startStudio(root, options = {}) {
     score: null, // the model, or null when the text is all there is
     text: sourceBox.value,
     unsupported: [],
+    lost: [], // what the text holds that the model does not keep: the first rewrite drops it
+    lostNotice: "", // said once it has been dropped
     items: [], // item number → { staff, index }
     view: null,
     sel: null, // { staff, t0, t1, head } — times, so an edit that merges rests keeps it
@@ -271,17 +273,41 @@ export function startStudio(root, options = {}) {
   function readText(text) {
     st.text = text;
     try {
-      const result = M.fromParsed(JSON.parse(score_json(text)));
+      const parsed = JSON.parse(score_json(text));
+      const result = M.fromParsed(parsed);
       st.score = result.score ?? null;
       st.unsupported = result.unsupported ?? [];
+      st.lost = result.lost ?? [];
+      // The notes and rests the engraver numbers in this text.
+      st.textItems = 1 + Math.max(-1, ...parsed.staves.flatMap((staff) => staff.events.filter((ev) => ev.k === "Note" || ev.k === "Rest").map((ev) => ev.i)));
     } catch (error) {
       st.score = null;
       st.unsupported = [];
+      st.lost = [];
     }
+    st.lostNotice = "";
   }
 
-  function writeText() {
+  /**
+   * The text read: written again from the model, unless that would drop what
+   * the model does not keep — then it waits for the first edit, as long as
+   * the model numbers its notes as the text does.
+   */
+  function adoptText() {
     if (!st.score) return;
+    const { items } = M.toLilyPond(st.score);
+    if (st.lost.length && items.length === st.textItems) st.items = items;
+    else writeText({ undo: false });
+  }
+
+  function writeText({ undo = true } = {}) {
+    if (!st.score) return;
+    // The first rewrite of a text holding what the model does not keep: said, once.
+    if (st.lost.length) {
+      const what = st.lost.length > 1 ? "those" : "that";
+      st.lostNotice = `The score editor rewrote this piece's text without ${st.lost.join(", ")}: it does not keep ${what}.${undo ? " Undo puts the text back as it was." : ""}`;
+      st.lost = [];
+    }
     const { source, items } = M.toLilyPond(st.score);
     st.text = source;
     st.items = items;
@@ -289,7 +315,7 @@ export function startStudio(root, options = {}) {
   }
 
   function snapshot() {
-    return JSON.stringify({ score: st.score, text: st.text, sel: st.sel, input: st.input });
+    return JSON.stringify({ score: st.score, text: st.text, sel: st.sel, input: st.input, lost: st.lost });
   }
 
   function restore(snap) {
@@ -299,7 +325,12 @@ export function startStudio(root, options = {}) {
     st.sel = s.sel;
     st.input = s.input;
     st.unsupported = [];
-    if (st.score) writeText();
+    if (s.lost?.length) {
+      // The text as it was, with what the model does not keep.
+      sourceBox.value = st.text;
+      readText(st.text);
+      adoptText();
+    } else if (st.score) writeText();
     else {
       sourceBox.value = st.text;
       readText(st.text);
@@ -378,7 +409,7 @@ export function startStudio(root, options = {}) {
     st.future = [];
     sourceBox.value = text;
     readText(text);
-    if (st.score) writeText();
+    adoptText();
     st.sel = null;
     st.input = { ...st.input, on: false, t: 0, staff: 0, last: null };
     saveDraft();
@@ -1618,10 +1649,10 @@ export function startStudio(root, options = {}) {
   function showState() {
     root.classList.toggle("studio-input", st.input.on);
     root.classList.toggle("studio-text-only", !st.score);
-    notice.hidden = Boolean(st.score) || !st.unsupported.length;
+    notice.hidden = (Boolean(st.score) || !st.unsupported.length) && !(st.score && st.lostNotice);
     if (!st.score && st.unsupported.length) {
       notice.textContent = `This piece uses ${st.unsupported.join(", ")}: the score editor does not edit those yet. It is engraved, and its text below can be edited.`;
-    }
+    } else if (st.score && st.lostNotice) notice.textContent = st.lostNotice;
     for (const button of root.querySelectorAll('[data-act="duration"]')) button.classList.toggle("on", Number(button.dataset.base) === st.input.base);
     root.querySelector('.studio-toolbox [data-act="dot"]')?.classList.toggle("on", st.input.dots > 0);
     // The toolbox's toggles show their state; the menus' items of the same name do not.
@@ -2252,6 +2283,8 @@ export function startStudio(root, options = {}) {
   // notation, and every note where the score's tools expect it.
   sourceBox.addEventListener("change", () => {
     if (!st.score) return;
+    // Rewriting it drops what the model does not keep: one Undo away.
+    if (st.lost.length) st.past.push(snapshot());
     writeText();
     saveDraft();
     draw();
@@ -2928,7 +2961,7 @@ export function startStudio(root, options = {}) {
     else if (shared && draft) start = draft;
     sourceBox.value = start;
     readText(start);
-    if (st.score) writeText();
+    adoptText();
     if (sharedText != null) saveDraft();
     return draw().then(() => sharedText);
   }).then((sharedText) => {

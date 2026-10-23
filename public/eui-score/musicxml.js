@@ -269,6 +269,8 @@ function readPart(part, info, first, warnings) {
   const tupletOpen = new Map();
   const graces = new Map();
   const lastNote = new Map();
+  // A lane's beam begun and not yet ended: the note it begins on.
+  const beamFrom = new Map();
   const slurDepth = new Map();
   let firstMeasure = true;
   const laneKey = (s, v) => `${s}:${v}`;
@@ -395,9 +397,9 @@ function readPart(part, info, first, warnings) {
               const type = d.attrs.type;
               attach(at(s), type === "crescendo" ? "\\<" : type === "diminuendo" ? "\\>" : "\\!");
             } else if (d.name === "words" && d.text.trim()) {
-              const italic = d.attrs["font-style"] === "italic";
+              const styles = (d.attrs["font-weight"] === "bold" ? "\\bold " : "") + (d.attrs["font-style"] === "italic" ? "\\italic " : "");
               const words = d.text.trim();
-              attach(at(s), `${above ? "^" : "_"}${italic ? `\\markup \\italic ${quoted(words)}` : quoted(words)}`);
+              attach(at(s), `${above ? "^" : "_"}${styles ? `\\markup ${styles}${quoted(words)}` : quoted(words)}`);
             } else if (d.name === "pedal") {
               const type = d.attrs.type;
               if (type === "start") attach(at(s), "\\sustainOn");
@@ -421,6 +423,8 @@ function readPart(part, info, first, warnings) {
         const ending = kid(el, "ending");
         if (repeat === "forward") signs.forward = true;
         if (repeat === "backward") signs.backward = true;
+        // Played more than twice: <repeat direction="backward" times="3"/>.
+        if (repeat === "backward" && Number(kid(el, "repeat").attrs.times) > 2) signs.times = Number(kid(el, "repeat").attrs.times);
         if (ending?.attrs.type === "start") signs.start = Number(/\d+/.exec(ending.attrs.number ?? "1")?.[0] ?? 1);
         if (ending && ending.attrs.type !== "start") signs.stop = true;
         const side = el.attrs.location === "left" ? leftBar : rightBar;
@@ -501,10 +505,14 @@ function readPart(part, info, first, warnings) {
         lane[lane.length - 1] = "}";
         st.repeatFrom = lane.length;
       }
-      // The number of times: the endings', once they are all known.
+      if (signs.times) st.times = Math.max(st.times ?? 0, signs.times);
+      // The number of times: the endings', once they are all known, or the times the repeat sign says.
       if (st.alternative !== "in") {
         const k = lane.lastIndexOf("\\repeat volta @ {");
-        if (k >= 0) lane[k] = `\\repeat volta ${Math.max(2, st.alternative === "between" ? st.endings : 2)} {`;
+        if (k >= 0) {
+          lane[k] = `\\repeat volta ${Math.max(2, st.alternative === "between" ? st.endings : 2, st.times ?? 0)} {`;
+          st.times = 0;
+        }
       }
       st.measureFrom = lane.length;
     }
@@ -600,6 +608,8 @@ function readPart(part, info, first, warnings) {
       const each = (name) => notations.flatMap((n) => kids(n, name));
       let suffix = "";
       if (kids(note, "tie").some((t) => t.attrs.type === "start") || each("tied").some((t) => t.attrs.type === "start")) suffix += "~";
+      // A beam as it was drawn, written once it ends: its first note opens it, its last closes it.
+      const beam = isChord ? null : kids(note, "beam").find((b) => (b.attrs.number ?? "1") === "1")?.text.trim();
       const depth = slurDepth.get(key) ?? 0;
       const slurStops = each("slur").filter((x) => x.attrs.type === "stop").length;
       const slurStarts = each("slur").filter((x) => x.attrs.type === "start").length;
@@ -645,11 +655,21 @@ function readPart(part, info, first, warnings) {
       const extra = v === 0 ? staff.pending.splice(0).join("") : "";
       const entry = { pitches: rest ? [] : [pitch], start, index: lane.length, render: null };
       entry.render = () => {
-        const head = rest ? (kid(note, "rest").attrs.measure === "yes" && values.length === 1 && !ratio ? "R" : "r") : entry.pitches.length > 1 ? `<${entry.pitches.join(" ")}>` : entry.pitches[0];
+        // A rest not printed (print-object="no") is a spacer.
+        const head = rest ? (note.attrs["print-object"] === "no" ? "s" : kid(note, "rest").attrs.measure === "yes" && values.length === 1 && !ratio ? "R" : "r") : entry.pitches.length > 1 ? `<${entry.pitches.join(" ")}>` : entry.pitches[0];
         const pieces = values.map((value, k) => head + durationText(value) + (k < values.length - 1 && !rest ? "~" : ""));
-        lane[entry.index] = pieces.join(" ") + suffix + extra;
+        lane[entry.index] = pieces.join(" ") + suffix + (entry.beam ?? "") + extra;
       };
       lane.push("");
+      // Kept within its measure, as the editor keeps it.
+      if (beam === "begin") beamFrom.set(key, { entry, measure: measureStart });
+      const begun = beam === "end" && beamFrom.get(key)?.measure === measureStart ? beamFrom.get(key).entry : null;
+      if (begun && !rest) {
+        begun.beam = "[";
+        begun.render();
+        entry.beam = "]";
+      }
+      if (beam === "end") beamFrom.delete(key);
       entry.render();
       lastNote.set(key, entry);
       if (closes && tupletOpen.get(key)) {
@@ -688,7 +708,7 @@ function readPart(part, info, first, warnings) {
     if (st.alternative === "between") st.lanes[0].push("}");
     else if (st.alternative === "in") st.lanes[0].push("} }");
     const k = st.lanes[0].lastIndexOf("\\repeat volta @ {");
-    if (k >= 0) st.lanes[0][k] = `\\repeat volta ${Math.max(2, st.endings ?? 2)} {`;
+    if (k >= 0) st.lanes[0][k] = `\\repeat volta ${Math.max(2, st.endings ?? 2, st.times ?? 0)} {`;
   }
 
   // The staves, each with its voices and its verses.
@@ -858,7 +878,7 @@ export function toMusicXML(score) {
   };
   for (const r of score.repeats ?? []) {
     line(r.from, "left", '<repeat direction="forward"/>');
-    if (!r.endings.length) line(r.to, "right", '<repeat direction="backward"/>');
+    if (!r.endings.length) line(r.to, "right", `<repeat direction="backward"${r.times > 2 ? ` times="${r.times}"` : ""}/>`);
     let at = r.to + 1;
     r.endings.forEach((len, k) => {
       const last = k === r.endings.length - 1;
@@ -879,7 +899,16 @@ export function toMusicXML(score) {
       const lower = M.lowerOf(score, s);
       return [s, ...(lower >= 0 ? [lower] : [])].map((lane) => {
         const at = M.starts(score.staves[lane]);
-        return score.staves[lane].events.map((ev, i) => ({ ev, t: at[i], bar: M.barAt(score, at[i]), i, lane }));
+        // The beams written by hand: begin, continue and end on their notes.
+        const marks = M.handBeams(score, score.staves[lane]);
+        let open = false;
+        const beams = marks.map((mark, i) => {
+          if (mark === "[") open = true;
+          const state = mark === "[" ? "begin" : mark === "]" ? "end" : open && !score.staves[lane].events[i].rest ? "continue" : null;
+          if (mark === "]") open = false;
+          return state;
+        });
+        return score.staves[lane].events.map((ev, i) => ({ ev, t: at[i], bar: M.barAt(score, at[i]), i, lane, beam: beams[i] }));
       });
     });
     const interval = writtenInterval(score.staves[p.staves[0]]);
@@ -896,7 +925,8 @@ export function toMusicXML(score) {
       const attrs = [];
       if (b === 0) attrs.push(`<divisions>${divisions}</divisions>`);
       const key = b === 0 ? score.staves[p.staves[0]].key ?? score.key : change?.key;
-      if (key != null && !drums) attrs.push(`<key><fifths>${interval ? writtenKey(key, interval) : key}</fifths></key>`);
+      const mode = b === 0 ? score.mode : change?.mode;
+      if (key != null && !drums) attrs.push(`<key><fifths>${interval ? writtenKey(key, interval) : key}</fifths>${mode && mode !== "major" ? `<mode>${mode}</mode>` : ""}</key>`);
       const time = b === 0 ? score.time : change?.time;
       if (time) attrs.push(`<time><beats>${b === 0 && score.timeParts ? score.timeParts.join("+") : time[0]}</beats><beat-type>${time[1]}</beat-type></time>`);
       if (b === 0 && p.staves.length > 1) attrs.push(`<staves>${p.staves.length}</staves>`);
@@ -976,7 +1006,7 @@ function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, 
   if (ev.dynamic) out.push(direction(`<dynamics><${ev.dynamic}/></dynamics>`));
   if (ev.hairpinEnd) out.push(direction('<wedge type="stop"/>'));
   if (ev.hairpin) out.push(direction(`<wedge type="${ev.hairpin === "<" ? "crescendo" : "diminuendo"}"/>`));
-  for (const t of ev.texts) out.push(direction(`<words${t.italic ? ' font-style="italic"' : ""}>${xml(t.text)}</words>`, t.dir > 0 ? "below" : "above"));
+  for (const t of ev.texts) out.push(direction(`<words${t.italic ? ' font-style="italic"' : ""}${t.bold ? ' font-weight="bold"' : ""}>${xml(t.text)}</words>`, t.dir > 0 ? "below" : "above"));
   if (ev.pedalOff) out.push(direction('<pedal type="stop"/>'));
   if (ev.pedalOn) out.push(direction('<pedal type="start" line="no" sign="yes"/>'));
 
@@ -1025,6 +1055,7 @@ function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, 
     if (!wholeBar) n.push(type);
     n.push(tm);
     if (staffNo) n.push(staffTag);
+    if (item.beam && p) n.push(`<beam number="1">${item.beam}</beam>`);
     // Notations go on the first head only, but ties on each.
     const notations = [];
     if (tiedFrom) notations.push('<tied type="stop"/>');
@@ -1046,7 +1077,8 @@ function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, 
     if (ev.arpeggio && p) notations.push("<arpeggiate/>");
     if (notations.length) n.push(`<notations>${notations.join("")}</notations>`);
     if (k === 0 && p && firstLane) n.push(...lyricsXml(lane, i));
-    out.push(`<note>${n.join("")}</note>`);
+    // A spacer takes its time and is not printed.
+    out.push(`<note${ev.rest && ev.spacer ? ' print-object="no"' : ""}>${n.join("")}</note>`);
   });
   return out;
 }

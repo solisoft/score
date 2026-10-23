@@ -642,11 +642,40 @@ fn absolute(src: &str) -> Result<String, String> {
     checked(out)
 }
 
+/// The source from character `at`, after the command `word` written there
+/// and the blanks after it; `None` when `word` is not what is written there.
+fn after_command<'a>(src: &'a str, bytes: &[usize], at: usize, word: &str) -> Option<&'a str> {
+    let rest = src.get(*bytes.get(at)?..)?.strip_prefix('\\')?.strip_prefix(word)?;
+    if rest.starts_with(|c: char| c.is_ascii_alphabetic()) {
+        return None;
+    }
+    Some(rest.trim_start())
+}
+
+/// `\\key d \\dorian`'s mode, written at character `at` — "major" when it
+/// cannot be read there (the parse keeps the key as fifths alone).
+fn key_mode(src: &str, bytes: &[usize], at: usize) -> String {
+    let Some(rest) = after_command(src, bytes, at, "key") else { return "major".into() };
+    let rest = rest[pitch_len(rest)..].trim_start();
+    let mode: String = rest.strip_prefix('\\').unwrap_or("").chars().take_while(char::is_ascii_alphabetic).collect();
+    if mode.is_empty() {
+        "major".into()
+    } else {
+        mode
+    }
+}
+
+/// `\\repeat volta 3`'s count, written at character `at`.
+fn repeat_times(src: &str, bytes: &[usize], at: usize) -> Option<i64> {
+    let rest = after_command(src, bytes, at, "repeat")?.strip_prefix("volta")?.trim_start();
+    rest.chars().take_while(char::is_ascii_digit).collect::<String>().parse().ok()
+}
+
 /// Words as the editor keeps them: `text` (a `\\markup`'s words joined),
 /// `italic` when every word is, and `glyph`, the sign it is when it is one.
 fn words_json(w: &parse::Words) -> Value {
     if w.runs.is_empty() {
-        return json!({ "text": w.text, "italic": false, "glyph": Value::Null });
+        return json!({ "text": w.text, "italic": false, "bold": false, "glyph": Value::Null });
     }
     let mut text = String::new();
     for r in w.runs.iter().filter(|r| !r.glyph) {
@@ -657,8 +686,9 @@ fn words_json(w: &parse::Words) -> Value {
     }
     let words: Vec<_> = w.runs.iter().filter(|r| !r.glyph).collect();
     let italic = !words.is_empty() && words.iter().all(|r| r.weight == eui_score::glyphs::Weight::Italic);
+    let bold = !words.is_empty() && words.iter().all(|r| r.weight == eui_score::glyphs::Weight::Bold);
     let glyph = w.runs.iter().find(|r| r.glyph).map(|r| r.text.clone());
-    json!({ "text": text, "italic": italic, "glyph": glyph })
+    json!({ "text": text, "italic": italic, "bold": bold, "glyph": glyph })
 }
 
 /// The piece as the editor's model reads it: the header, the staff groups,
@@ -667,6 +697,7 @@ fn words_json(w: &parse::Words) -> Value {
 /// page can say so instead of losing it.
 pub fn score(src: &str) -> Result<Value, String> {
     let parsed = parse::parse(src).map_err(|e| e.message)?;
+    let bytes = byte_offsets(src);
     let header: serde_json::Map<String, Value> = parsed.header.iter().map(|(k, v)| (k.clone(), Value::String(v.clone()))).collect();
     let groups: Vec<Value> = parsed
         .groups
@@ -718,11 +749,11 @@ pub fn score(src: &str) -> Result<Value, String> {
                 .filter(|w| !w.runs.iter().any(|r| r.glyph && r.text.starts_with("keyboardPedal")))
                 .map(|w| {
                     let shown = words_json(w);
-                    json!([shown["text"], w.dir, shown["italic"]])
+                    json!([shown["text"], w.dir, shown["italic"], shown["bold"]])
                 })
                 .collect();
             let chord_name: String = ev.chord_name.iter().map(|r| r.text.as_str()).collect();
-            events.push(json!({
+            let mut event = json!({
                 "k": format!("{:?}", ev.k),
                 // A \break's kind: true for \pageBreak.
                 "page": ev.page,
@@ -770,7 +801,16 @@ pub fn score(src: &str) -> Result<Value, String> {
                 "gliss": ev.gliss,
                 "tremolo": ev.tremolo,
                 "unsupported": unsupported,
-            }));
+            });
+            // `s`: a rest that takes its time and is not drawn.
+            event["spacer"] = json!(ev.spacer);
+            // A beam written by hand, `c8[ d e f]`.
+            event["beam_on"] = json!(ev.beam_on);
+            event["beam_off"] = json!(ev.beam_off);
+            // What the parse keeps as fifths alone: the key's mode, and a repeat's count.
+            event["mode"] = json!((ev.k == Kind::Key).then(|| key_mode(src, &bytes, ev.at)));
+            event["times"] = json!((ev.k == Kind::RepeatStart).then(|| repeat_times(src, &bytes, ev.at)).flatten());
+            events.push(event);
         }
         let words = |syl: &[parse::Syllable]| syl.iter().map(|s| json!({ "text": s.text, "hyphen": s.hyphen, "extend": s.extend })).collect::<Vec<_>>();
         let lyrics = staff.lyrics.as_deref().map(words);
