@@ -15,17 +15,25 @@
 #   encryption-key — SOLI_ENCRYPTION_KEY, made on the server if the .env has
 #             none: two-step sign-in secrets are encrypted with it. Never
 #             replaced (the secrets kept with it would no longer open).
+#   own-user — a SoliDB user of this site's own (score_app), admin of the
+#             score database only, instead of the server's admin shared with
+#             the other sites (#367). Made on the server with a password made
+#             there; tried first (reads, the job queue, a collection made and
+#             dropped, as migrations do), and only then put in the .env (kept
+#             beside as .env.before-own-user). The site restarts and must
+#             answer /health/deep with "ok", or the old .env comes back. The
+#             server's admin and the other sites are left as they are.
 name: production database
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: "inspect, setup, encryption-key, or jobs"
+        description: "inspect, setup, encryption-key, jobs, or own-user"
         required: true
         default: inspect
         type: choice
-        options: [inspect, setup, encryption-key, jobs]
+        options: [inspect, setup, encryption-key, jobs, own-user]
 
 concurrency:
   group: deploy-refs/heads/main
@@ -162,4 +170,59 @@ jobs:
           echo "== the site's journal"
           journalctl --no-pager -n 60 2>/dev/null | grep -iE 'score|job|error' | hide | tail -40
           for f in *.log log/*.log logs/*.log; do [ -f "$f" ] && { echo "== $f"; tail -40 "$f" | hide; }; done
+          REMOTE
+
+      - name: A database user of its own
+        if: inputs.action == 'own-user'
+        env:
+          PROXY_CONF: ${{ vars.DEPLOY_PROXY_CONF || '/home/rocky/proxy.conf' }}
+          APP: ${{ vars.DEPLOY_APP || 'score' }}
+        run: |
+          ssh "$USER@$HOST" SITES_DIR="$SITES_DIR" DOMAIN="$DOMAIN" PROXY_CONF="$PROXY_CONF" APP="$APP" bash -s <<'REMOTE'
+          set -euo pipefail
+          cd "$SITES_DIR/$DOMAIN"
+          value() { grep -E "^$1=" .env | head -1 | cut -d= -f2-; }
+          db="$(value SOLIDB_DATABASE)"; name=score_app; api=http://127.0.0.1:6745
+          [ "$(value SOLIDB_USERNAME)" = "admin" ] || { echo "the .env does not use the admin user: nothing done"; exit 0; }
+          [ -n "$db" ] || { echo "no SOLIDB_DATABASE in the .env" >&2; exit 1; }
+          token_of() { curl -s -m 5 -X POST "$api/auth/login" -H 'content-type: application/json' \
+            -d "{\"username\":\"$1\",\"password\":\"$2\"}" | sed -nE 's/.*"token":"([^"]*)".*/\1/p'; }
+          admin="$(token_of admin "$(value SOLIDB_PASSWORD)")"
+          [ -n "$admin" ] || { echo "the admin could not sign in" >&2; exit 1; }
+          as_admin() { curl -s -m 10 -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $admin" -H 'content-type: application/json' "$@"; }
+          password="$(openssl rand -hex 24)"
+          as_admin -X DELETE "$api/_api/auth/users/$name" >/dev/null || true
+          code="$(as_admin -X POST "$api/_api/auth/users" -d "{\"username\":\"$name\",\"password\":\"$password\"}")"
+          [ "$code" = "201" ] || [ "$code" = "200" ] || { echo "user not made: HTTP $code" >&2; exit 1; }
+          code="$(as_admin -X POST "$api/_api/auth/users/$name/roles" -d "{\"role\":\"admin\",\"database\":\"$db\"}")"
+          [ "$code" = "201" ] || [ "$code" = "200" ] || { echo "role not given: HTTP $code" >&2; as_admin -X DELETE "$api/_api/auth/users/$name" >/dev/null; exit 1; }
+          own="$(token_of "$name" "$password")"
+          undo() { echo "$1: the user is removed, the .env untouched" >&2; as_admin -X DELETE "$api/_api/auth/users/$name" >/dev/null; exit 1; }
+          [ -n "$own" ] || undo "the new user could not sign in"
+          as_own() { curl -s -m 10 -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $own" -H 'content-type: application/json' "$@"; }
+          query() { as_own -X POST "$api/_api/database/$db/cursor" -d "{\"query\":\"$1\"}"; }
+          for q in "FOR u IN users LIMIT 1 RETURN u._key" "FOR s IN scores LIMIT 1 RETURN s._key" "FOR j IN _jobs LIMIT 1 RETURN j._key"; do
+            code="$(query "$q")"; echo "as $name: $q -> $code"
+            [ "$code" = "200" ] || [ "$code" = "201" ] || undo "a read was refused"
+          done
+          code="$(as_own -X POST "$api/_api/database/$db/collection" -d '{"name":"own_user_probe"}')"; echo "as $name: make a collection -> $code"
+          [ "$code" = "200" ] || [ "$code" = "201" ] || undo "a collection could not be made"
+          code="$(as_own -X DELETE "$api/_api/database/$db/collection/own_user_probe")"; echo "as $name: drop it -> $code"
+          [ "$code" = "200" ] || [ "$code" = "204" ] || undo "a collection could not be dropped"
+          code="$(as_own -X POST "$api/_api/database/_system/cursor" -d '{"query":"RETURN 1"}')"; echo "as $name: another database -> $code (refused is right)"
+          cp -p .env .env.before-own-user
+          sed -i -E "s/^SOLIDB_USERNAME=.*/SOLIDB_USERNAME=$name/; s/^SOLIDB_PASSWORD=.*/SOLIDB_PASSWORD=$password/" .env
+          chmod 600 .env
+          soli-proxy restart -c "$PROXY_CONF" "$APP" >/dev/null 2>&1 || true
+          for attempt in 1 2 3 4 5 6; do
+            sleep 5
+            ready="$(curl -sk -m 8 --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/health/deep" || true)"
+            echo "attempt $attempt: $ready"
+            if echo "$ready" | grep -q '"status":"ok"'; then echo "done: the site reads its database as $name"; exit 0; fi
+          done
+          echo "the site is not ready as $name: the old .env comes back" >&2
+          cp -p .env.before-own-user .env
+          soli-proxy restart -c "$PROXY_CONF" "$APP" >/dev/null 2>&1 || true
+          as_admin -X DELETE "$api/_api/auth/users/$name" >/dev/null
+          exit 1
           REMOTE
