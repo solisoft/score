@@ -190,7 +190,7 @@
         keepLocally(studio.source());
         openConflict();
       } else if (!response.ok) {
-        show(answer.error ? `Not saved: ${answer.error}` : "Not saved", "conflict");
+        show(answer.error ?? "Not saved", "conflict");
       } else {
         revision = answer.revision;
         if (pending == null) forgetLocally();

@@ -144,3 +144,14 @@ def editor_metres
   ["2/4", "3/4", "4/4", "5/4", "6/4", "7/4", "2/2", "3/2", "3/8", "5/8", "6/8", "7/8", "9/8", "12/8"]
   + ["2+3/8", "3+2/8", "2+2+3/8", "3+3+2/8", "13/8", "15/16"]
 end
+
+# The keys the menus offer, from seven flats to seven sharps: [fifths, its
+# name, major and minor], e.g. [-3, "E♭ major / C minor"]. The Start page and
+# the editor list the same keys.
+def editor_keys
+  majors = ["C♭", "G♭", "D♭", "A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯"]
+  minors = ["A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯", "G♯", "D♯", "A♯"]
+  range(-7, 8).map do |fifths|
+    [fifths, "#{majors[fifths + 7]} major / #{minors[fifths + 7]} minor"]
+  end
+end

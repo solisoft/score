@@ -444,8 +444,8 @@
         <label class="tool-field">Key
           <select data-field="staff-key">
             <option value="">The score's</option>
-            <% for fifths in range(-7, 8) %>
-              <option value="<%= fifths %>"><%= ["C♭", "G♭", "D♭", "A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯"][fifths + 7] %> major / <%= ["A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯", "G♯", "D♯", "A♯"][fifths + 7] %> minor</option>
+            <% for key_choice in editor_keys() %>
+              <option value="<%= key_choice[0] %>"><%= key_choice[1] %></option>
             <% end %>
           </select>
         </label>
@@ -457,8 +457,8 @@
         <label class="tool-field">Key
           <select data-field="change-key">
             <option value="">As before</option>
-            <% for fifths in range(-7, 8) %>
-              <option value="<%= fifths %>"><%= ["C♭", "G♭", "D♭", "A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯"][fifths + 7] %> major / <%= ["A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯", "G♯", "D♯", "A♯"][fifths + 7] %> minor</option>
+            <% for key_choice in editor_keys() %>
+              <option value="<%= key_choice[0] %>"><%= key_choice[1] %></option>
             <% end %>
           </select>
         </label>
@@ -527,8 +527,8 @@
         <label class="tool-field">Composer <input type="text" data-field="composer"></label>
         <label class="tool-field">Key
           <select data-field="key">
-            <% for fifths in range(-7, 8) %>
-              <option value="<%= fifths %>"><%= ["C♭", "G♭", "D♭", "A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯"][fifths + 7] %> major / <%= ["A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯", "G♯", "D♯", "A♯"][fifths + 7] %> minor</option>
+            <% for key_choice in editor_keys() %>
+              <option value="<%= key_choice[0] %>"><%= key_choice[1] %></option>
             <% end %>
           </select>
         </label>
@@ -606,8 +606,8 @@
       <label class="tool-field">Composer <input type="text" id="new-composer" name="composer"></label>
       <label class="tool-field">Key
         <select id="new-key" name="key">
-          <% for fifths in range(-7, 8) %>
-            <option value="<%= fifths %>"<%= fifths == 0 ? " selected" : "" %>><%= ["C♭", "G♭", "D♭", "A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯"][fifths + 7] %> major / <%= ["A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯", "G♯", "D♯", "A♯"][fifths + 7] %> minor</option>
+          <% for key_choice in editor_keys() %>
+            <option value="<%= key_choice[0] %>"<%= key_choice[0] == 0 ? " selected" : "" %>><%= key_choice[1] %></option>
           <% end %>
         </select>
       </label>

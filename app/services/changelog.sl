@@ -13,6 +13,17 @@ class Changelog
       {"date": "2026-10-23", "entries": [
         {
           "area": "site",
+          "title": "Jazz chord symbols transpose, and plainer messages",
+          "text": "Chord symbols such as C7b9, Cm7b5, C(add9), C7#11, C6/9 or C7(b9,#11)/E are now read as chord "
+          + "symbols, and move with the score when you transpose it: the root and the bass change, the rest "
+          + "stays. The Start page offers minor keys, as the editor does. The account page says the AI key "
+          + "serves the editor's assistant as well as photos, and the messages the editor shows when a change "
+          + "cannot be made, a score cannot be saved or the AI cannot answer are written in plain words.",
+          "link": "app",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "Your library, its history and its previews open faster",
           "text": "Your scores now open with a handful of database reads however many you have, without loading "
           + "every score's full text just to show its title, and the History page lists versions the same way. "
@@ -33,6 +44,11 @@ class Changelog
           + "↓, move with the arrow keys, Home and End, and close with Escape. In File, the owner of a score "
           + "now sees Share…, and someone it is shared with copies a link that opens it for them.",
           "link": "playground"
+        },
+        {
+          "area": "site",
+          "link": "app",
+          "app": true
         },
         {
           "area": "site",

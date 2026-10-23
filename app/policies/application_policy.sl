@@ -62,7 +62,11 @@ end
 # exists, so a forgotten policy fails closed rather than open.
 def policy_for(record)
   policy_class = const_get(record.class + "Policy")
-  forbidden("No policy class '" + record.class + "Policy'. Add app/policies/<model>_policy.sl") if policy_class.nil?
+  if policy_class.nil?
+    # The developer's detail goes to the logs; the person reads a sentence.
+    Logger.error("No policy class #{record.class}Policy: add app/policies/<model>_policy.sl")
+    forbidden("You may not do that.")
+  end
   policy_class.new({"user": current_user(), "record": record})
 end
 
@@ -72,8 +76,25 @@ def authorize(record, action = null)
   act = action ?? current_action()
   act = "show" if act.blank?
   policy = policy_for(record)
-  forbidden("Not authorized to " + act + " this " + record.class) if !policy.send(act + "?")
+  forbidden(policy_refusal_words(act, record)) unless policy.send(act + "?")
   record
+end
+
+# What a refused `action` on `record` says, in plain words: "You may not
+# change this score." — the action as a verb, the model as a noun.
+def policy_refusal_words(action, record)
+  verbs = {
+    "show": "open",
+    "index": "see",
+    "new": "create",
+    "create": "create",
+    "edit": "change",
+    "update": "change",
+    "destroy": "delete",
+    "share": "share"
+  }
+  verb = verbs[action] ?? "do that to"
+  "You may not #{verb} this #{record.class.downcase}."
 end
 
 # The signed-in user for the current request, or nil. Populated by the

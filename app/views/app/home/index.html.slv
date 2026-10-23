@@ -37,8 +37,8 @@
           <label class="field">Composer <input type="text" id="new-composer" name="composer"></label>
           <label class="field">Key
             <select id="new-key" name="key">
-              <% for fifths in range(-7, 8) %>
-                <option value="<%= fifths %>"<%= fifths == 0 ? " selected" : "" %>><%= ["C♭", "G♭", "D♭", "A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯"][fifths + 7] %> major</option>
+              <% for key_choice in editor_keys() %>
+                <option value="<%= key_choice[0] %>"<%= key_choice[0] == 0 ? " selected" : "" %>><%= key_choice[1] %></option>
               <% end %>
             </select>
           </label>

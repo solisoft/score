@@ -1230,3 +1230,17 @@ test("reading: what the score tools do not write is engraved and named, not lost
     assert.ok(JSON.parse(editor_view(src, 900, 7, -1, -1)).items.length > 0);
   }
 });
+
+test("the editor's refusals in plain words (#372): the engraver's reason without its internals, tuplets named", () => {
+  assert.equal(
+    M.plainRefusal("score: \\shiver is not a command this reads (at character 7)"),
+    "That change would make a score the page cannot draw, so it was not made: \\shiver is not a command this reads.",
+  );
+  assert.equal(M.plainRefusal(""), "That change would make a score the page cannot draw, so it was not made.");
+  assert.equal(M.plainRefusal(undefined), "That change would make a score the page cannot draw, so it was not made.");
+  assert.doesNotMatch(M.plainRefusal("score: bar 3 is too long (at character 12)"), /engraver|score:|character/);
+  assert.match(M.plainRefusal("score: bar 3 is too long (at character 12)"), /bar 3 is too long/);
+  const s = M.fromParsed(JSON.parse(score_json(String.raw`{ \tuplet 3/2 { c'8 d' e' } f'4 g'2 }`))).score;
+  assert.throws(() => M.copy(s, 0, 0, 1), { message: "Triplets and other tuplets cannot be copied yet: leave them out of the selection." });
+  assert.throws(() => M.clipFromText(String.raw`\tuplet 3/2 { c'8 d' e' }`, score_json), { message: "The clipboard holds tuplets (triplets and the like), which cannot be pasted yet." });
+});

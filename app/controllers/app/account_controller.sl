@@ -1,5 +1,5 @@
 # The signed-in person's account: who they are, a new password, two-step
-# sign-in, an AI key for reading photos, leaving. Behind `require_login`.
+# sign-in, an AI key for photos and the assistant, leaving. Behind `require_login`.
 class AppAccountController < AppBaseController
   # GET /app/account
   def show

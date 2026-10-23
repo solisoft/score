@@ -26,9 +26,11 @@ describe("HomeController") do
       assert_not(body.contains("html-midi-player"))
     end
 
-    test("carries its share tags") do
+    test("names the site once in its title, and carries its share tags") do
       body = res_body(get("/"))
-      assert_contains(body, "<meta property=\"og:title\"")
+      assert_contains(body, "<title>LilyPond engraving, native · EUI Score</title>")
+      assert_eq(body.split("<title>")[1].split("</title>")[0].split("EUI Score").length - 1, 1)
+      assert_contains(body, "<meta property=\"og:title\" content=\"LilyPond engraving, native · EUI Score\">")
       assert_contains(body, "og.png")
     end
   end

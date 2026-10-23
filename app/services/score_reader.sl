@@ -43,7 +43,7 @@ class ScoreReader
     second = ScoreReader.ask(picture, settings, first["source"], problem)
     return second unless second["error"].nil?
 
-    unreadable = {"error": "The picture could not be read as music the engraver takes."}
+    unreadable = {"error": "The picture could not be read as a score. Try a sharper photo."}
     return unreadable unless AiClient.problem(second["source"]).nil?
 
     second

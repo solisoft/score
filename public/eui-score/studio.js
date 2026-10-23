@@ -366,7 +366,7 @@ export function startStudio(root, options = {}) {
       JSON.parse(editor_view_lit(st.text, 600, 7, "{}"));
     } catch (error) {
       restore(before);
-      return say(`The engraver refuses that: ${error.message ?? error}`, true);
+      return say(M.plainRefusal(error.message ?? error), true);
     }
     st.past.push(before);
     if (st.past.length > 300) st.past.shift();

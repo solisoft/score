@@ -45,9 +45,9 @@
     <p class="muted">Not available on this server yet.</p>
   <% end %>
 
-  <h2 id="ai">AI for reading photos</h2>
+  <h2 id="ai">AI for photos and the assistant</h2>
   <% if user.own_ai?() %>
-    <p>Photos of scores are read with <strong><%= user.ai_provider_name() %></strong>, model
+    <p>Photos of scores are read, and the editor's assistant answers, with <strong><%= user.ai_provider_name() %></strong>, model
       <code><%= user.ai_model %></code>, with your key ending in <code>…<%= user.ai_key_hint %></code>.</p>
     <form action="<%= app_account_ai_remove_path() %>" method="POST">
       <%- csrf_field() %>
@@ -55,9 +55,9 @@
     </form>
     <p class="muted">Or use another one:</p>
   <% else %>
-    <p class="muted">Photos of scores are read by an AI model. Bring a key of your own from one of these providers
-      to read them with the model you choose: the site keeps it encrypted, uses it only to read your photos, and
-      never shows it again.</p>
+    <p class="muted">An AI model reads photos of scores and answers the editor's assistant. Bring a key of your own
+      from one of these providers to use the model you choose: the site keeps it encrypted, uses it only for your
+      photos and the assistant, and never shows it again.</p>
   <% end %>
   <% if locals["ai_error"].present? %>
     <p class="form-error" role="alert"><%= locals["ai_error"] %></p>

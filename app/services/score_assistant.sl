@@ -61,7 +61,7 @@ class ScoreAssistant
     second = ScoreAssistant.parsed(AiClient.ask(settings, again))
     return second unless second["error"].nil?
 
-    unengraved = {"error": "The AI's score could not be engraved. Try again, or ask differently."}
+    unengraved = {"error": "The AI answered with a score that cannot be drawn. Try again, or ask differently."}
     return unengraved unless AiClient.problem(second["source"]).nil?
 
     second

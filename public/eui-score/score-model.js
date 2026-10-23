@@ -413,7 +413,22 @@ export function transpose(score, { steps, semitones, s = null, a = 0, b = Infini
   }
 }
 
-/** A chord symbol's root and bass moved: "F#m7/C#" up a major second is "G#m7/D#". */
+// A chord symbol: a root, a quality, a sixth to a thirteenth (or 6/9), then
+// any alterations and additions, bare or in brackets, and a bass. C, Am7,
+// Cmaj7, C7b9, Cm7b5, C7#11, C(add9), Cm(maj7), C7(b9,#11), Csus4, C7sus4,
+// Cdim7, Cø7, C6/9, C/E, Bb13/Ab. A plain word ("Do", "Bad") is not one.
+const CHORD_STEP = String.raw`(?:sus[24]?|add\d{1,2}|maj\d{1,2}|omit\d|alt|[#♯b♭+-]\d{1,2})`;
+const CHORD_BRACKETED = String.raw`\((?:${CHORD_STEP}|\d{1,2})(?:[,\s]+(?:${CHORD_STEP}|\d{1,2}))*\)`;
+const CHORD_SYMBOL = new RegExp(
+  String.raw`^[A-G][#b♯♭]?(?:maj|min|m|M|dim|aug|sus|add|°|ø|Δ|\+|-)?(?:6\/9|\d{1,2})?(?:${CHORD_STEP}|${CHORD_BRACKETED})*(?:\/[A-G][#b♯♭]?)?$`,
+);
+
+/** Whether `text` reads as a chord symbol (see CHORD_SYMBOL). */
+export function isChordSymbol(text) {
+  return CHORD_SYMBOL.test(String(text).trim());
+}
+
+/** A chord symbol's root and bass moved: "F#m7/C#" up a major second is "G#m7/D#"; "C7b9" keeps its "7b9". */
 export function transposeChord(text, steps, semitones) {
   const letter = (name, sign) => {
     const p = transposePitch({ d: 7 + "CDEFGAB".indexOf(name), alter: { "#": 1, "♯": 1, b: -1, "♭": -1 }[sign] ?? 0 }, steps, semitones);
@@ -1039,13 +1054,27 @@ export function removeTuplet(score, s, i) {
   return eventAt(staff, t);
 }
 
+/**
+ * What the editor says when the engraver cannot draw an edit: in plain words,
+ * with the engraver's reason once its internals (the "score:" prefix, the
+ * character it stopped at) are taken out.
+ */
+export function plainRefusal(message) {
+  const reason = String(message ?? "")
+    .replace(/^\s*score:\s*/i, "")
+    .replace(/\s*\(at character \d+\)\s*$/i, "")
+    .trim();
+  const said = "That change would make a score the page cannot draw, so it was not made";
+  return reason ? `${said}: ${reason}.` : `${said}.`;
+}
+
 // ---- Ranges ---------------------------------------------------------------------
 
 /** Events `a`…`b` of staff `s`, for a clipboard: content and duration, and the ticks they span. */
 export function copy(score, s, a, b) {
   const staff = score.staves[s];
   const events = staff.events.slice(Math.min(a, b), Math.max(a, b) + 1);
-  if (events.some((ev) => ev.tuplet)) throw new Error("tuplets cannot be copied yet");
+  if (events.some((ev) => ev.tuplet)) throw new Error("Triplets and other tuplets cannot be copied yet: leave them out of the selection.");
   return events.map((ev) => ({ content: { ...structuredClone(ev), id: undefined }, ticks: ticksOf(ev) }));
 }
 
@@ -1065,7 +1094,7 @@ export function clipFromText(text, parse) {
   const parsed = JSON.parse(parse(source));
   const lane = parsed.staves[0];
   if (!lane) throw new Error("the clipboard holds no notes");
-  if (lane.events.some((ev) => ev.tuplet)) throw new Error("tuplets cannot be pasted yet");
+  if (lane.events.some((ev) => ev.tuplet)) throw new Error("The clipboard holds tuplets (triplets and the like), which cannot be pasted yet.");
   const length = lane.events.reduce((sum, ev) => sum + (ev.ticks ?? 0), 0);
   const { score } = fromParsed(parsed);
   if (!score || !length) throw new Error("the clipboard holds no notes");
@@ -2986,7 +3015,7 @@ export function fromParsed(parsed) {
         }
         const texts = ev.texts.map(([text, dir, italic, bold]) => ({ text, dir, ...(italic ? { italic: true } : {}), ...(bold ? { bold: true } : {}) }));
         // A short word above a note that reads as a chord is its chord symbol.
-        const chordAt = texts.findIndex((w) => w.dir < 0 && !w.bold && /^[A-G][#b♯♭]?(m|maj|min|dim|aug|sus|add|°|ø|\+)?[0-9]*(\/[A-G][#b♯♭]?)?$/.test(w.text));
+        const chordAt = texts.findIndex((w) => w.dir < 0 && !w.bold && isChordSymbol(w.text));
         const chord = chordAt >= 0 ? texts.splice(chordAt, 1)[0].text : ev.chord_name || "";
         // An open or a stopped hi-hat's sign comes with its drum.
         const scripts = drums ? ev.scripts.filter(([name]) => !["open", "stopped"].includes(name)) : ev.scripts;

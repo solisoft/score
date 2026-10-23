@@ -136,7 +136,7 @@ describe("AiClient") do
       end
       assert_eq(
         AiClient.answer(provider_said(401, {}), server)["error"],
-        "Anthropic (Claude) refused the request (401)."
+        "Anthropic (Claude) could not answer this time. Try again in a moment."
       )
       assert_contains(AiClient.answer(
         {"status": 200, "body": "not json"},
@@ -160,22 +160,34 @@ describe("AiClient") do
       )
     end
 
-    test("names a refused key of one's own, and passes on the provider's words") do
+    test("names a refused key or model of one's own, and keeps the provider's words out of the message") do
       deepseek = own_settings("deepseek", "deepseek-chat")
       assert_eq(
         AiClient.answer(provider_said(401, {}), deepseek)["error"],
         "DeepSeek refused your API key. Check it on your account page."
       )
+      Logger.set_capture(true)
       no_images = provider_said(400, {"error": {"message": "This model does not support image input"}})
-      assert_eq(
-        AiClient.answer(no_images, deepseek)["error"],
-        "DeepSeek refused the request (400): This model does not support image input"
-      )
-      plain = provider_said(404, {"error": "no such model"})
+      said = AiClient.answer(no_images, deepseek)["error"]
+      assert_eq(said, "DeepSeek could not answer with the model you chose. Try another one on your account page.")
+      assert_not(said.contains("support image input"), "the provider's words stay out of the message")
+      logged = Logger.entries().join("\n")
+      Logger.set_capture(false)
+      assert_contains(logged, "This model does not support image input")
+      assert_contains(logged, "deepseek")
+      plain = provider_said(404, [{"error": "no such model"}])
       assert_eq(
         AiClient.answer(plain, own_settings("openrouter", "x"))["error"],
-        "OpenRouter (many models) refused the request (404): no such model"
+        "OpenRouter (many models) could not answer with the model you chose. Try another one on your account page."
       )
+      teapot = provider_said(418, {"error": "teapot"})
+      assert_eq(
+        AiClient.answer(teapot, own_settings("openrouter", "x"))["error"],
+        "OpenRouter (many models) could not answer this time. Try again in a moment."
+      )
+      assert_eq(AiClient.provider_words({"error": {"message": "x" * 400}}).length, 300)
+      assert_eq(AiClient.provider_words({}), "")
+      assert_eq(AiClient.provider_words(nil), "")
     end
   end
 

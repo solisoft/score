@@ -191,7 +191,7 @@ class Score < Model
 
     if source.blank?
       return {"status": 422, "body": {
-        "error": "an empty score is not saved",
+        "error": "Not saved: the score is empty.",
         "revision": @revision
       }}
     end
@@ -221,10 +221,10 @@ class Score < Model
   # above (source and title lengths), read before the conditional write,
   # which does not run them.
   static def refusal_of(source)
-    return "source is too long (1,000,000 characters at most)" if source.length > 1000000
+    return "Not saved: the score is too long to keep (a million characters at most)." if source.length > 1000000
 
     title = Score.title_in(source) ?? SCORE_UNTITLED
-    return "title is too long (200 characters at most)" if title.length > 200
+    return "Not saved: the title is too long (200 characters at most)." if title.length > 200
 
     nil
   end

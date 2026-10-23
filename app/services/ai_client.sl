@@ -184,20 +184,38 @@ class AiClient
     {"text": text}
   end
 
-  # Why a request was refused, in a sentence: a key of one's own is named,
-  # and the provider's own words are passed on (a model that does not read
-  # images says so there).
+  # Why a request was refused, in a plain sentence: what the person can do
+  # about it (their key, their model), or to try again. The provider's own
+  # words go to the logs only.
   static def refused(who, status, body, settings)
-    if [401, 403].includes?(status) && settings["own"]
-      return "#{who} refused your API key. Check it on your account page."
+    Logger.warn(
+      "AI provider refused a request",
+      {
+        "provider": settings["provider"],
+        "model": settings["model"],
+        "status": status,
+        "said": AiClient.provider_words(body)
+      }
+    )
+    own = settings["own"]
+    return "#{who} refused your API key. Check it on your account page." if [401, 403].includes?(status) && own
+    if own && [400, 404, 413, 422].includes?(status)
+      return "#{who} could not answer with the model you chose. Try another one on your account page."
     end
+
+    "#{who} could not answer this time. Try again in a moment."
+  end
+
+  # The provider's own words in a refusal, for the logs: at most 300
+  # characters, "" when it gave none.
+  static def provider_words(body)
 
     # Gemini's compatible endpoint wraps its error in a list.
     body = body[0] if body.is_a?("array") && body.length > 0
-    return "#{who} refused the request (#{status})." unless body.is_a?("hash") && !body["error"].nil?
+    return "" unless body.is_a?("hash") && !body["error"].nil?
 
     said = body["error"].is_a?("string") ? body["error"] : body["error"]["message"].to_s
-    "#{who} refused the request (#{status}): #{said.substring(0, 300)}"
+    said.substring(0, 300)
   end
 
   # The text of an Anthropic answer; nil when the model refused.

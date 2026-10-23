@@ -168,6 +168,12 @@ describe("AppScoresController") do
     assert_contains(page, "data-field=\"pickup\"")
     assert_contains(page, "name=\"pickup\"")
     assert_contains(page, "<option value=\"4.\">A dotted quarter</option>")
+    # The editor and the Start page offer the same keys, minor ones too.
+    assert_contains(page, "<option value=\"-3\">E♭ major / C minor</option>")
+    start = res_body(get("/app"))
+    assert_contains(start, "<option value=\"-3\">E♭ major / C minor</option>")
+    assert_contains(start, "<option value=\"0\" selected>C major / A minor</option>")
+    assert_not(start.contains(">E♭ major</option>"), "no key without its minor")
   end
 
   test("renames, copies, trashes, restores, then deletes for good") do

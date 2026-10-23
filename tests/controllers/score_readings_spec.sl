@@ -145,7 +145,10 @@ describe("An AI key of one's own, on the account page") do
   test("offers the providers, and keeps a key encrypted, shown by its end") do
     user = reading_user()
     page = res_body(get("/app/account"))
-    assert_contains(page, "AI for reading photos")
+    # The key serves photos and the editor's assistant: the page says both.
+    assert_contains(page, "<h2 id=\"ai\">AI for photos and the assistant</h2>")
+    assert_contains(page, "the editor's assistant")
+    assert_not(page.contains("AI for reading photos"))
     providers = ["Anthropic (Claude)", "OpenAI (GPT)", "Google (Gemini)", "Mistral", "DeepSeek", "Moonshot (Kimi)"]
     (providers + ["OpenRouter"]).each do |name|
       assert_contains(page, name)

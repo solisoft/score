@@ -115,6 +115,20 @@ describe("editor_pickups") do
   end
 end
 
+describe("editor_keys") do
+  test("names every key from seven flats to seven sharps, major and minor") do
+    keys = editor_keys()
+    assert_eq(keys.length, 15)
+    assert_eq(keys[0], [-7, "C♭ major / A♭ minor"])
+    assert_eq(keys[7], [0, "C major / A minor"])
+    assert_eq(keys[10], [3, "A major / F♯ minor"])
+    assert_eq(keys[14], [7, "C♯ major / A♯ minor"])
+    assert(keys.all?(&{ |key_choice|
+      key_choice[1].contains(" minor")
+    }))
+  end
+end
+
 describe("score_snippet") do
   test("names the snippet after its file under syntax/") do
     figures = {"notes": ScoreSvg.figure("{ c'4 }", 600, 7)}

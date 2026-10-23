@@ -2,7 +2,7 @@
 class HomeController < Controller
   # GET / — what eui-score is, one engraved piece, the gallery's families
   def index
-    @title = "EUI Score — LilyPond engraving, native"
+    @title = "LilyPond engraving, native"
     @description = "eui-score engraves LilyPond into vector paths, plays it as MIDI and prints it as PDF."
     @hero = ScoreSvg.figure(ScoreLibrary.source_named("syntax/home"), 520, 8)
     @hello = ScoreSvg.figure(ScoreLibrary.source_named("syntax/hello"), 640, 9)
