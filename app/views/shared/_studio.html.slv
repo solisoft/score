@@ -532,6 +532,7 @@
             <% end %>
           </select>
         </label>
+        <label class="tool-check"><input type="checkbox" data-field="even-pages"> Spread the lines evenly over the pages</label>
     <p class="muted studio-properties-note">Paper and staff size are the PDF's. Each staff's instrument, clef and name: select a note of it, then the toolbox's
       <strong>This staff</strong>.</p>
   </dialog>

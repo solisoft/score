@@ -1335,6 +1335,8 @@ export function startStudio(root, options = {}) {
     set("paper-size", paper.replace(/landscape$/, ""));
     set("paper-orientation", paper.endsWith("landscape") ? "landscape" : "portrait");
     set("staff-size", String(st.score.paper?.staffSize ?? 20));
+    const even = root.querySelector('[data-field="even-pages"]');
+    if (even) even.checked = st.score.paper?.evenPages === true;
     set("staff-name", staff.name);
     set("staff-short", staff.short);
     set("staff-clef", staff.clef);
@@ -1409,6 +1411,7 @@ export function startStudio(root, options = {}) {
           break;
         }
         case "staff-size": M.setPaper(score, { size: score.paper?.size ?? "a4", staffSize: Number(value) }); break;
+        case "even-pages": M.setEvenPages(score, el.checked); break;
         case "staff-name": staff.name = value; break;
         case "staff-short": staff.short = value; break;
         case "staff-clef": staff.clef = value; break;

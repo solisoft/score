@@ -13,9 +13,10 @@ class Changelog
       {"date": "2026-10-23", "entries": [
         {
           "area": "engine",
-          "title": "Pages cut evenly, and no lone line on the last",
-          "text": "The PDF's pages are cut over the whole score: as few pages as before, each about as full as the "
-          + "others, where a line too many used to sit alone on the last page."
+          "title": "Pages cut evenly, when you ask for it",
+          "text": "Tick “Spread the lines evenly over the pages” in the score's properties (or write page-breaking "
+          + "= #ly:optimal-breaking in \\paper): as few pages, each about as full, no line left alone on the last.",
+          "link": "playground"
         },
         {
           "area": "site",

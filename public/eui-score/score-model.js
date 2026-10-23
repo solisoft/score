@@ -2087,7 +2087,9 @@ export function setInstrument(score, s, k) {
 //
 // What \\paper and #(set-global-staff-size …) say, kept as read and written
 // back: `score.paper` {size, staffSize, left, right, top, bottom, indent} (mm,
-// points), each null for LilyPond's default; `score.breaks` bar → "line" or
+// points), each null for LilyPond's default, and `evenPages`: true to spread
+// the lines evenly over the pages, false to fill each in turn, null for the
+// default (filled); `score.breaks` bar → "line" or
 // "page", the break after that bar.
 
 export const PAPER_SIZES = ["a4", "letter", "a3", "a5", "legal", "tabloid"];
@@ -2096,6 +2098,7 @@ const MARGINS = [["left", "left-margin"], ["right", "right-margin"], ["top", "to
 function paperFrom(p) {
   const out = { size: p?.size ?? null, staffSize: p?.staff_size ?? null };
   for (const [field] of MARGINS) out[field] = p?.[field] ?? null;
+  out.evenPages = p?.even_pages ?? null;
   return out;
 }
 
@@ -2106,6 +2109,11 @@ export function setPaper(score, { size, staffSize }) {
   const pt = staffSize == null || staffSize === "" ? 20 : Number(staffSize);
   if (!(pt >= 11 && pt <= 26)) throw new Error("a staff size is 11 to 26 points");
   score.paper = { ...(score.paper ?? paperFrom(null)), size: name === "a4" ? null : name, staffSize: pt === 20 ? null : pt };
+}
+
+/** Whether the PDF spreads the lines evenly over its pages (true) or fills each in turn (false, the default). */
+export function setEvenPages(score, even) {
+  score.paper = { ...(score.paper ?? paperFrom(null)), evenPages: even ? true : null };
 }
 
 /** The break after bar `bar`: "line", "page", or none (null) — the line goes on. */
@@ -2125,6 +2133,7 @@ function pageText(score) {
   const inside = [];
   if (p.size && p.size !== "a4") inside.push(`#(set-paper-size ${quote(p.size)})`);
   for (const [field, name] of MARGINS) if (p[field] != null) inside.push(`${name} = ${p[field]}\\mm`);
+  if (p.evenPages != null) inside.push(`page-breaking = #ly:${p.evenPages ? "optimal" : "minimal"}-breaking`);
   if (inside.length) lines.push(`\\paper { ${inside.join(" ")} }`);
   return lines.length ? lines.join("\n") + "\n" : "";
 }

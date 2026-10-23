@@ -1229,3 +1229,27 @@ test("every gallery piece reads into the model, or says what it uses", () => {
   }
   assert.ok(read > 20, `${read} pieces read`);
 });
+
+test("page: the lines spread evenly over the pages only when asked, and the choice is kept", () => {
+  const s = M.newScore();
+  M.ensureLength(s, M.barStart(s, 15));
+  for (let b = 0; b < 14; b++) M.setBreak(s, b, "line");
+  const pagesOf = (score) => {
+    const text = Buffer.from(pdf(M.toLilyPond(score).source, "t")).toString("latin1");
+    return (text.match(/\/Type \/Page\b/g) ?? []).length;
+  };
+  assert.doesNotMatch(M.toLilyPond(s).source, /page-breaking/);
+  const filled = pagesOf(s);
+  M.setEvenPages(s, true);
+  const { source } = M.toLilyPond(s);
+  assert.match(source, /\\paper \{ page-breaking = #ly:optimal-breaking \}/);
+  const read = M.fromParsed(JSON.parse(score_json(source))).score;
+  assert.equal(read.paper.evenPages, true, "read back");
+  assert.equal(pagesOf(read), filled, "as few pages as before");
+  M.setEvenPages(read, false);
+  assert.doesNotMatch(M.toLilyPond(read).source, /page-breaking/, "the default again");
+  // A source asking for pages filled in turn keeps saying so.
+  const minimal = M.fromParsed(JSON.parse(score_json("\\paper { page-breaking = #ly:minimal-breaking }\n{ c'1 }"))).score;
+  assert.equal(minimal.paper.evenPages, false);
+  assert.match(M.toLilyPond(minimal).source, /page-breaking = #ly:minimal-breaking/);
+});

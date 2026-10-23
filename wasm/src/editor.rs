@@ -781,6 +781,6 @@ pub fn score(src: &str) -> Result<Value, String> {
     }
     // The page it asks for: \paper's size and margins (mm), the staff size (pt).
     let p = &parsed.paper;
-    let paper = json!({ "size": p.size, "staff_size": p.staff_size, "left": p.left, "right": p.right, "top": p.top, "bottom": p.bottom, "indent": p.indent });
+    let paper = json!({ "size": p.size, "staff_size": p.staff_size, "left": p.left, "right": p.right, "top": p.top, "bottom": p.bottom, "indent": p.indent, "even_pages": p.even_pages });
     Ok(json!({ "header": header, "paper": paper, "groups": groups, "staves": staves }))
 }
