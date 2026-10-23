@@ -13,6 +13,17 @@ class Changelog
       {"date": "2026-10-23", "entries": [
         {
           "area": "site",
+          "title": "Open a MIDI file as a score",
+          "text": "Import on the start screen and File › Open a file now take MIDI files (.mid). Each track "
+          + "becomes a staff with its instrument, channel 10 becomes a drum kit, and the file's tempo, metre "
+          + "and key are kept. The notes are fitted to a grid (in the editor, the Quantize setting) so they "
+          + "read as written music. What a score cannot hold, such as pitch bends, the sustain pedal or a "
+          + "change of tempo, is listed before the score is created.",
+          "link": "app",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "Saved MIDI files play the repeats",
           "text": "File › Save as MIDI now plays the music the way Play does: every repeat played twice, each "
           + "ending in its turn, and D.S., D.C. and the coda followed, instead of each bar once in the order it "

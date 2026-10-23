@@ -23,6 +23,9 @@ const { editor_view_lit, score_json, source_spans } = engine;
 /** The MusicXML reader and writer, loaded the first time a file needs it. */
 const musicXml = () => import(`./musicxml.js${V}`);
 const isMusicXmlName = (name) => /\.(musicxml|mxl|xml)$/i.test(name ?? "");
+/** The MIDI file reader, loaded the first time a .mid is opened. */
+const midiImport = () => import(`./midi-import.js${V}`);
+const isMidiName = (name) => /\.(mid|midi|smf|kar)$/i.test(name ?? "");
 
 const COLOURS = { selection: "#b4373a", head: "#e0662a", cursor: "#2563c9", playing: "#0f9d47" };
 const DRAFT = "eui-score-studio-draft";
@@ -2173,6 +2176,22 @@ export function startStudio(root, options = {}) {
     if (el.matches('[data-act="open"]') && el.files?.[0]) {
       const file = el.files[0];
       el.value = "";
+      // What another program wrote, read as LilyPond; what it holds that the
+      // editor does not write is named, and where the file becomes a score of
+      // its own (the app), asked about first.
+      const opened = ({ source, warnings }) => {
+        const left = warnings.length ? `Left out: ${warnings.join("; ")}.` : "";
+        if (left && options.onOpen && !confirm(`${file.name}: ${left}\n\nOpen it as a new score anyway?`)) return say(`${file.name} not opened. ${left}`, true);
+        open(source, `${file.name} opened.${left ? ` ${left}` : ""}`);
+      };
+      const failed = (error) => say(error.message ?? String(error), true);
+      if (isMidiName(file.name)) {
+        // A MIDI file: its tracks as staves, its notes fitted to the Quantize grid.
+        const grid = quantizeBox?.value ?? "sixteenth";
+        const title = file.name.replace(/\.[^.]+$/, "");
+        Promise.all([midiImport(), file.arrayBuffer()]).then(([I, bytes]) => opened(I.fromMidi(new Uint8Array(bytes), { title, grid }))).catch(failed);
+        return;
+      }
       if (!isMusicXmlName(file.name)) {
         file.text().then((text) => open(text, `${file.name} opened.`));
         return;
@@ -2180,8 +2199,8 @@ export function startStudio(root, options = {}) {
       // MusicXML, from MuseScore, Sibelius, Finale or Dorico: read as LilyPond.
       musicXml()
         .then(async (X) => X.fromMusicXML(await X.musicXmlOf(file)))
-        .then(({ source, warnings }) => open(source, `${file.name} opened.${warnings.length ? ` Left out: ${warnings.join("; ")}.` : ""}`))
-        .catch((error) => say(error.message ?? String(error), true));
+        .then(opened)
+        .catch(failed);
       return;
     }
     if (el.matches("select[data-field], input[type=number][data-field], input[type=checkbox][data-field]")) onField(event);

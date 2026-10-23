@@ -18,6 +18,7 @@ class ScoreAssets
       "studio.js",
       "score-model.js",
       "musicxml.js",
+      "midi-import.js",
       "piano-roll.js",
       "player.js",
       "vendor/README.md",

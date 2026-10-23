@@ -179,6 +179,48 @@ const OPEN_FIRST_EXAMPLE = """
 })()
 """
 
+# A MIDI file, format 1, built byte by byte: a tempo track (90 a quarter,
+# 3/4, named "Little March"), then a flute's track — C D E, then F held a
+# bar, a pitch bend along the way — and a drum track on channel 10.
+const MIDI_MARCH = """
+(() => {
+  const text = (s) => [...s].map((c) => c.charCodeAt(0));
+  const u32 = (n) => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
+  const vl = (n) => { const out = [n & 127]; while ((n >>= 7)) out.unshift((n & 127) | 128); return out; };
+  const track = (events) => {
+    const body = [];
+    let now = 0;
+    for (const [tick, ...data] of events.sort((a, b) => a[0] - b[0])) {
+      body.push(...vl(tick - now), ...data);
+      now = tick;
+    }
+    body.push(0, 0xff, 0x2f, 0);
+    return [...text('MTrk'), ...u32(body.length), ...body];
+  };
+  const q = 480;
+  const note = (ch, key, at, len) => [[at * q, 0x90 | ch, key, 90], [(at + len) * q - 1, 0x80 | ch, key, 0]];
+  const us = Math.round(60e6 / 90);
+  const conductor = track([
+    [0, 0xff, 0x03, 12, ...text('Little March')],
+    [0, 0xff, 0x51, 3, us >> 16, (us >> 8) & 255, us & 255],
+    [0, 0xff, 0x58, 4, 3, 2, 24, 8],
+  ]);
+  const flute = track([
+    [0, 0xc0, 73], [q, 0xe0, 0, 90],
+    ...note(0, 72, 0, 1), ...note(0, 74, 1, 1), ...note(0, 76, 2, 1), ...note(0, 77, 3, 3),
+  ]);
+  const drums = track([...note(9, 36, 0, 1), ...note(9, 38, 1, 1), ...note(9, 42, 2, 1)]);
+  return new Uint8Array([...text('MThd'), ...u32(6), 0, 1, 0, 3, q >> 8, q & 255, ...conductor, ...flute, ...drums]);
+})()
+"""
+
+# Chooses a file of bytes (a JS expression's Uint8Array) for the start screen's Import.
+def import_bytes_in_browser(name, bytes_js)
+  evaluate("(() => { const input = document.querySelector('[data-import]'); const files = new DataTransfer();"
+  + " files.items.add(new File([#{bytes_js.trim}], #{JSON.stringify(name)})); input.files = files.files;"
+  + " input.dispatchEvent(new Event('change', { bubbles: true })); })()")
+end
+
 def roll_keys(key, shift)
   evaluate("document.querySelector('.studio-roll').dispatchEvent(new KeyboardEvent('keydown',"
   + " { key: '#{key}', ctrlKey: true, shiftKey: #{shift}, bubbles: true }))")
@@ -312,6 +354,34 @@ describe("The app, in a browser") do
     assert_contains(editor_source(), "e''2")
     assert_contains(editor_source(), "c''2")
     assert_not(editor_source().includes?("a'2"))
+  end
+
+  test("import a MIDI file: its tracks become staves, what it leaves out is named first") do
+    sign_up_in_browser(journey_email())
+    import_bytes_in_browser("march.mid", MIDI_MARCH)
+    wait_for_text("Left out of march.mid: pitch bends.")
+    assert_page_path("/app")
+    click_button("Create the score anyway")
+    wait_for("[data-save-state]")
+    assert_match(page_path(), "^/app/scores/")
+    assert_text("Little March")
+    source = editor_source()
+    assert_contains(source, "\\tempo 4 = 90")
+    assert_contains(source, "\\time 3/4")
+    assert_contains(source, "midiInstrument = \"flute\"")
+    assert_contains(source, "c''4 d''4 e''4")
+    assert_contains(source, "\\new DrumStaff")
+    assert_contains(source, "bd4 sn4 hh4")
+    assert_no_page_errors()
+  end
+
+  test("import a .mid file that is not MIDI: refused with its reason, nothing created") do
+    email = journey_email()
+    sign_up_in_browser(email)
+    import_in_browser("song.mid", "\\relative c' { c4 d e f }")
+    wait_for_text("This is not a MIDI file that can be read: it does not start as one (MThd).")
+    assert_page_path("/app")
+    assert_eq(Score.where({"user_id": User.find_by("email", email)._key}).count, 0)
   end
 
   test("the MIDI view: a section of two tracks copied, then put in as new bars") do
