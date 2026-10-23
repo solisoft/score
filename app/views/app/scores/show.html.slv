@@ -1,7 +1,8 @@
 <%- partial("shared/studio", {"examples": examples, "figure": figure, "source": source, "app": true}) %>
 
 <%# File › New, Open a file, Open an example and Open a photo make a new
-    score in the library and open it: the score open here stays as it is. %>
+    score in the library and open it: the score open here stays as it is.
+    The conflict dialog's "Save mine as a copy" posts it too. %>
 <form action="<%= app_scores_path() %>" method="POST" data-open-form hidden>
   <%- csrf_field() %>
   <input type="hidden" name="source" data-open-source>
@@ -32,11 +33,30 @@
   </form>
 </dialog>
 
+<%# A save refused because the score was saved elsewhere since: what to do
+    with the text typed here. Until one is chosen nothing is sent, the text
+    stays kept in this browser and leaving the page asks first. %>
+<dialog class="studio-keys studio-conflict" data-conflict aria-labelledby="studio-conflict-title">
+  <div class="studio-keys-head">
+    <h2 id="studio-conflict-title">Changed elsewhere</h2>
+    <button type="button" class="studio-menu" data-conflict-close aria-label="Close">×</button>
+  </div>
+  <p class="studio-parts-note">This score was saved from another window, or by someone else, since you opened it. Your changes are not lost: they are kept here and in the score's history.</p>
+  <div class="studio-conflict-actions">
+    <button type="button" class="tool tool-wide tool-primary" data-conflict-mine>Keep mine <small>replace what was saved elsewhere</small></button>
+    <button type="button" class="tool tool-wide" data-conflict-theirs>Load theirs <small>drop my changes here</small></button>
+    <button type="button" class="tool tool-wide" data-conflict-copy>Save mine as a copy <small>a new score, this one left as saved elsewhere</small></button>
+  </div>
+</dialog>
+
 <%# The score saves itself: 1.5 s after the last change, a PUT of its source
     over the revision it was opened at. The header says where it stands.
     A 409 — saved from another window since — is never overwritten: the
     server keeps the text refused here as a version, and this page offers
-    the score as it now stands.
+    the score as it now stands: keep mine, load theirs, or save mine as a
+    copy (the dialog above).
+    Signed out (401) or no longer allowed (403), saving stops until the page
+    is reloaded, and says so; the text stays kept here.
     Offline, each change is also kept in this browser (localStorage, with
     the revision it was typed over) until a save goes through: a page
     closed before then gives it back the next time it opens, and sends it. %>
@@ -72,8 +92,78 @@
     saveState.dataset.kind = kind;
   };
 
+  // Signed out (401, or the sign-in page instead of JSON) or no longer
+  // allowed to change the score (403): nothing more is sent until the page
+  // is reloaded; the text stays kept in this browser, and is sent from there.
+  let stopped = false;
+  const stop = (forbidden) => {
+    stopped = true;
+    clearTimeout(timer);
+    if (forbidden) {
+      show("Not saved: you may no longer change this score (your changes are kept here)", "conflict");
+      return;
+    }
+    saveState.textContent = "Signed out: ";
+    const signIn = document.createElement("a");
+    signIn.href = `/login?return_to=${encodeURIComponent(location.pathname)}`;
+    signIn.textContent = "sign in again";
+    signIn.dataset.signIn = "";
+    // The text is kept here: leaving for the sign-in page loses nothing.
+    signIn.addEventListener("click", () => (stopped = "leaving"));
+    saveState.append(signIn, " to save (your changes are kept here)");
+    saveState.dataset.kind = "signed-out";
+  };
+
+  // The conflict dialog: the save was refused because the score was saved
+  // elsewhere since. `theirs` is the score as it now stands.
+  const conflictBox = document.querySelector("[data-conflict]");
+  let theirs = null;
+  const openConflict = () => {
+    show("Changed elsewhere: choose what to keep", "conflict");
+    if (!conflictBox.open) conflictBox.showModal();
+  };
+  const resolve = () => {
+    conflict = false;
+    theirs = null;
+    conflictBox.close();
+  };
+  conflictBox.querySelector("[data-conflict-close]").addEventListener("click", () => conflictBox.close());
+  saveState.addEventListener("click", () => conflict && openConflict());
+  conflictBox.querySelector("[data-conflict-mine]").addEventListener("click", () => {
+    revision = theirs.revision;
+    resolve();
+    pending = studio.source();
+    keepLocally(pending);
+    save();
+  });
+  conflictBox.querySelector("[data-conflict-theirs]").addEventListener("click", () => {
+    const answer = theirs;
+    resolve();
+    revision = answer.revision;
+    applyingRemote = true;
+    try {
+      studio.load(answer.source, "The score as it was saved elsewhere. Your changes are in its history.");
+    } finally {
+      applyingRemote = false;
+    }
+    pending = null;
+    forgetLocally();
+    titleBox.textContent = answer.title;
+    show("Saved", "ok");
+  });
+  conflictBox.querySelector("[data-conflict-copy]").addEventListener("click", () => {
+    const form = document.querySelector("[data-open-form]");
+    form.querySelector("[data-open-source]").value = studio.source();
+    resolve();
+    pending = null;
+    stopped = "leaving";
+    forgetLocally();
+    show("Saving a copy…", "busy");
+    form.submit();
+  });
+
   async function save() {
-    if (saving || conflict || pending == null) return;
+    if (saving || conflict || stopped || pending == null) return;
     const text = pending;
     pending = null;
     saving = true;
@@ -84,18 +174,21 @@
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ source: text, revision, origin }),
       });
+      const json = (response.headers.get("Content-Type") || "").includes("application/json");
+      // A sign-in page reached through a redirect answers 200 in HTML.
+      if (response.status === 401 || response.status === 403 || response.redirected || (response.ok && !json)) {
+        pending ??= text;
+        keepLocally(pending);
+        stop(response.status === 403);
+        return;
+      }
       const answer = await response.json();
       if (response.status === 409) {
         conflict = true;
-        show("Changed in another window", "conflict");
-        if (confirm("This score was saved from another window since you opened it. Open that version here? What you typed is kept in the score's history.")) {
-          revision = answer.revision;
-          conflict = false;
-          studio.load(answer.source, "The score as it was saved elsewhere.");
-          pending = null;
-          forgetLocally();
-          show("Saved", "ok");
-        }
+        theirs = answer;
+        pending ??= text;
+        keepLocally(studio.source());
+        openConflict();
       } else if (!response.ok) {
         show(answer.error ? `Not saved: ${answer.error}` : "Not saved", "conflict");
       } else {
@@ -112,7 +205,7 @@
       setTimeout(save, 5000);
     } finally {
       saving = false;
-      if (pending != null && !conflict) schedule();
+      if (pending != null && !conflict && !stopped) schedule();
     }
   }
 
@@ -127,9 +220,11 @@
     source: root.querySelector("[data-source]").value,
     greeting: "Click a note to select it, or press N and type A–G to write. Your changes save themselves.",
     onChange(text) {
-      if (conflict || applyingRemote) return;
-      pending = text;
+      if (applyingRemote) return;
+      // Whatever happens to the saves, what is typed is kept here.
       keepLocally(text);
+      pending = text;
+      if (conflict || stopped) return;
       show("Unsaved changes", "dirty");
       schedule();
     },
@@ -243,7 +338,8 @@
     });
   }
   window.addEventListener("beforeunload", (event) => {
-    if (pending != null || saving) event.preventDefault();
+    if (stopped === "leaving") return;
+    if (pending != null || saving || conflict) event.preventDefault();
   });
   document.querySelector("[data-keep-version]").addEventListener("click", async (event) => {
     await save();

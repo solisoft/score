@@ -154,7 +154,7 @@ describe("AppScoreSuggestionsController") do
   end
 
   test("sends a guest to sign in") do
-    assert_eq(res_status(post("/app/scores/x/suggestions", {"action": "chords"})), 302)
+    assert_eq(res_status(post("/app/scores/x/suggestions", {"action": "chords"})), 401)
     assert_eq(res_status(get("/app/suggestions/x")), 302)
   end
 end

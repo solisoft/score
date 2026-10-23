@@ -27,6 +27,12 @@ def write_notes(steps)
   end
 end
 
+# One more note at the cursor, the editor already in note input mode (its
+# greeting, which `write_notes` waits for, is gone by then).
+def write_more(step)
+  click(".studio-toolbox [data-act='letter'][data-step='#{step}']")
+end
+
 # Waits for the editor's save to go through.
 def wait_saved
   sleep(2)
@@ -393,6 +399,69 @@ describe("The app, in a browser") do
     fill_in("#code", Crypto.totp_generate(secret, DateTime.utc.to_unix + 30, 30))
     click("form.auth-form button[type=submit]")
     assert_page_path("/app")
+    assert_no_page_errors()
+  end
+
+  test("a save refused because the score changed elsewhere: keep mine, or save it as a copy") do
+    email = journey_email()
+    sign_up_in_browser(email)
+    click_button("Create the score")
+    wait_for("[data-save-state]")
+    score_path = page_path()
+    write_notes([2])
+    wait_saved()
+    # Saved from another window meanwhile.
+    score = Score.find(score_path.replace("/app/scores/", ""))
+    score.save_from_editor(score.source + "\n% theirs", score.revision)
+
+    write_more(4)
+    wait_for("[data-conflict][open]")
+    assert_text("Changed elsewhere")
+    assert_text("Keep mine")
+    assert_text("Load theirs")
+    assert_text("Save mine as a copy")
+    click("[data-conflict-mine]")
+    wait_saved()
+    assert_eq(Score.find(score._key).source, editor_source())
+    assert_not(Score.find(score._key).source.contains("% theirs"))
+    assert_eq(ScoreVersion.history(score).filter(&{ |version|
+      version.reason == "conflict"
+    }).length, 1)
+
+    score = Score.find(score._key)
+    score.save_from_editor(score.source + "\n% theirs again", score.revision)
+    write_more(5)
+    wait_for("[data-conflict][open]")
+    click("[data-conflict-copy]")
+    wait_for_text("Your changes save themselves")
+    assert_ne(page_path(), score_path)
+    assert_eq(Score.where({"user_id": User.find_by("email", email)._key}).count, 2)
+    assert_no_page_errors()
+  end
+
+  test("signed out while editing: the editor says so, keeps the text, and stops trying") do
+    sign_up_in_browser(journey_email())
+    click_button("Create the score")
+    wait_for("[data-save-state]")
+    score_path = page_path()
+    write_notes([2])
+    wait_saved()
+    # Signed out from another tab: the account page's own sign-out form.
+    evaluate("fetch('/app/account').then((r) => r.text()).then((page) => { const form = new DOMParser()"
+    + ".parseFromString(page, 'text/html').querySelector('form[action=\"/logout\"]');"
+    + " return fetch('/logout', { method: 'POST', body: new URLSearchParams(new FormData(form)) }); })")
+    sleep(1)
+    write_more(4)
+    wait_for("[data-save-state] [data-sign-in]")
+    assert_text("Signed out: sign in again to save (your changes are kept here)")
+    kept = evaluate("localStorage.getItem('eui-score-pending:' + location.pathname.split('/').pop())")
+    assert_eq(JSON.parse(kept)["text"], editor_source())
+    stored_source = Score.find(score_path.replace("/app/scores/", "")).source
+    assert_ne(stored_source, editor_source())
+    # No retry: the page stays signed out, and still says so.
+    sleep(2)
+    assert_text("Signed out: sign in again")
+    assert_eq(Score.find(score_path.replace("/app/scores/", "")).source, stored_source)
     assert_no_page_errors()
   end
 end

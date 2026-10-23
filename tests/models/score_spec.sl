@@ -201,6 +201,71 @@ describe("Score") do
     end
   end
 
+  describe("the editor's save") do
+    test("of two saves over the same revision, one is written and the other is a conflict, kept") do
+      owner = score_owner()
+      score = Score.start(owner, Score.blank_source("Duet"))
+      base = score.revision
+      first_tab = Score.find(score._key)
+      second_tab = Score.find(score._key)
+      first = first_tab.save_from_editor("\\header { title = \"Duet\" }\n{ c'1 }", base)
+      second = second_tab.save_from_editor("\\header { title = \"Duet\" }\n{ d'1 }", base)
+      assert_eq(first["status"], 200)
+      assert_eq(first["body"]["revision"], base + 1)
+      assert_eq(second["status"], 409)
+      assert_eq(second["body"]["revision"], base + 1)
+      assert_contains(second["body"]["source"], "c'1")
+      stored = Score.find(score._key)
+      assert_eq(stored.revision, base + 1)
+      assert_contains(stored.source, "c'1")
+      conflicts = ScoreVersion.history(score).filter do |version|
+        version.reason == "conflict"
+      end
+      assert_eq(conflicts.length, 1)
+      assert_contains(conflicts[0].source, "d'1")
+    end
+
+    test("sets what a save sets: the title from the source, the time, the next revision") do
+      owner = score_owner()
+      score = Score.start(owner, Score.blank_source("Before"))
+      saved = score.save_from_editor("\\header { title = \"After\" }\n{ e'1 }", score.revision)
+      stored = Score.find(score._key)
+      assert_eq(saved["status"], 200)
+      assert_eq(stored.title, "After")
+      assert_eq(saved["body"]["title"], "After")
+      assert_eq(stored.updated_at, saved["body"]["updated_at"])
+      assert_eq(stored.visibility, "private")
+      assert_eq(stored.share_token, score.share_token)
+      assert_eq(stored.created_at, score.created_at)
+    end
+
+    test("refuses a source or a title too long, and writes nothing") do
+      owner = score_owner()
+      score = Score.start(owner, Score.blank_source("Long"))
+      base = score.revision
+      too_long = score.save_from_editor("{ c'1 }" + "x" * 1000000, base)
+      assert_eq(too_long["status"], 422)
+      assert_contains(too_long["body"]["error"], "source is too long")
+      titled = score.save_from_editor("\\header { title = \"#{"t" * 201}\" }\n{ c'1 }", base)
+      assert_eq(titled["status"], 422)
+      assert_contains(titled["body"]["error"], "title is too long")
+      assert_eq(score.save_from_editor("  ", base)["status"], 422)
+      stored = Score.find(score._key)
+      assert_eq(stored.revision, base)
+      assert_contains(stored.source, "r1")
+      assert_eq(stored.title, "Long")
+    end
+
+    test("a title at the limit is saved") do
+      owner = score_owner()
+      score = Score.start(owner, Score.blank_source("Short"))
+      title = "t" * 200
+      saved = score.save_from_editor("\\header { title = \"#{title}\" }\n{ c'1 }", score.revision)
+      assert_eq(saved["status"], 200)
+      assert_eq(Score.find(score._key).title, title)
+    end
+  end
+
   test("goes with its owner's account, trash and all") do
     owner = score_owner()
     Score.start(owner, Score.blank_source("One"))

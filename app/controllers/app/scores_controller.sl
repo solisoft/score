@@ -68,9 +68,12 @@ class AppScoresController < AppBaseController
 
   # PUT /app/scores/:id — the editor's autosave, JSON {source, revision}:
   # 200 {revision, title}, or 409 with the score as it now stands when it
-  # was changed elsewhere since `revision` (see Score#save_from_editor)
+  # was changed elsewhere since `revision` (see Score#save_from_editor);
+  # 403 JSON for someone who may not (or no longer) change it
   def update
-    score = @_score("update")
+    score = Score.find(params["id"])
+    return @_not_writable unless score.writable_by?(current_user())
+
     body = req["json"] ?? params
     saved = score.save_from_editor(body["source"].to_s, body["revision"].to_s.to_i)
     ScoreRoom.tell_saved(score, body["origin"]) if saved["status"] == 200
@@ -79,7 +82,9 @@ class AppScoresController < AppBaseController
 
   # POST /app/scores/:id/versions — keep the score as it stands, from the editor
   def keep_version
-    score = @_score("update")
+    score = Score.find(params["id"])
+    return @_not_writable unless score.writable_by?(current_user())
+
     version = ScoreVersion.keep(score, score.source, "manual")
     render_json(
       {"version": version._key, "created_at": version.created_at},
@@ -261,6 +266,12 @@ class AppScoresController < AppBaseController
     return "Answered by Claude. #{left}" unless settings["own"]
 
     "Answered by #{AiClient.provider_name(settings["provider"])}, #{settings["model"]}, with your key. #{left}"
+  end
+
+  # The editor's JSON calls on a score this person may not (or no longer)
+  # change: an answer the editor can read, not the 403 page.
+  def _not_writable
+    render_json({"error": "you may no longer change this score"}, 403)
   end
 
   # The score of the route, if the signed-in person may `action` it (403

@@ -27,7 +27,15 @@ describe("AppScoresController") do
 
   test("sends a guest to sign in") do
     assert_eq(res_location(get("/app/scores")), "/login?return_to=%2Fapp%2Fscores")
-    assert_eq(res_status(post("/app/scores", {})), 302)
+    # A browser's form post (urlencoded, wanting HTML); the test client's hash
+    # body is sent as JSON, which is the editor's kind of call (401 JSON).
+    set_header("Content-Type", "application/x-www-form-urlencoded")
+    set_header("Accept", "text/html")
+    form_post = post("/app/scores", "source=")
+    clear_headers()
+    assert_eq(res_status(form_post), 302)
+    assert_eq(res_location(form_post), "/login?return_to=%2Fapp%2Fscores")
+    assert_eq(res_status(post("/app/scores", {})), 401)
   end
 
   describe("the start screen") do
@@ -208,12 +216,89 @@ describe("AppScoresController") do
       assert_contains(Score.find(score._key).source, "c'1")
     end
 
+    test("of two saves over the same revision, one answers 200, the other 409, its text kept") do
+      owner = library_user()
+      score = Score.start(owner, Score.blank_source("Canon"))
+      library_sign_in(owner)
+      answers = ["e'1", "f'1"].map do |notes|
+        res_status(put(
+          "/app/scores/#{score._key}",
+          {"source": "\\header { title = \"Canon\" }\n{ #{notes} }", "revision": score.revision}
+        ))
+      end
+      assert_eq(answers, [200, 409])
+      stored = Score.find(score._key)
+      assert_eq(stored.revision, score.revision + 1)
+      assert_contains(stored.source, "e'1")
+      conflicts = ScoreVersion.history(score).filter do |version|
+        version.reason == "conflict"
+      end
+      assert_eq(conflicts.length, 1)
+      assert_contains(conflicts[0].source, "f'1")
+    end
+
+    test("a signed-out save that wants JSON is answered 401 JSON, and writes nothing") do
+      owner = library_user()
+      score = Score.start(owner, Score.blank_source("Nocturne"))
+      set_header("Accept", "application/json")
+      set_header("Content-Type", "application/json")
+      answer = put("/app/scores/#{score._key}", {
+        "source": "{ g'1 }",
+        "revision": score.revision
+      }.to_json)
+      clear_headers()
+      assert_eq(res_status(answer), 401)
+      assert_eq(res_json(answer)["error"], "signed out")
+      stored = Score.find(score._key)
+      assert_eq(stored.revision, score.revision)
+      assert_contains(stored.source, "r1")
+      assert_eq(ScoreVersion.history(score).length, 0)
+    end
+
+    test("the editor's other JSON calls get 401 JSON too, and a page still goes to sign in") do
+      owner = library_user()
+      score = Score.start(owner, Score.blank_source("Etude"))
+      set_header("Accept", "application/json")
+      kept = post("/app/scores/#{score._key}/versions", {})
+      clear_headers()
+      assert_eq(res_status(kept), 401)
+      assert_eq(res_json(kept)["error"], "signed out")
+      assert_eq(ScoreVersion.history(score).length, 0)
+      page = get("/app/scores/#{score._key}")
+      assert_eq(res_status(page), 302)
+      assert_eq(res_location(page), "/login?return_to=%2Fapp%2Fscores%2F#{score._key}")
+    end
+
+    test("a save on a score this person may no longer change is answered 403 JSON") do
+      owner = library_user()
+      score = Score.start(owner, Score.blank_source("Fugue"))
+      library_sign_in(library_user())
+      set_header("Accept", "application/json")
+      refused = put(
+        "/app/scores/#{score._key}",
+        {"source": "{ a'1 }", "revision": score.revision}
+      )
+      kept = post("/app/scores/#{score._key}/versions", {})
+      clear_headers()
+      assert_eq(res_status(refused), 403)
+      assert_eq(res_json(refused)["error"], "you may no longer change this score")
+      assert_eq(res_status(kept), 403)
+      assert_eq(res_json(kept)["error"], "you may no longer change this score")
+      assert_eq(Score.find(score._key).revision, score.revision)
+      assert_eq(ScoreVersion.history(score).length, 0)
+    end
+
     test("the editor page opens with what the save needs") do
       owner = library_user()
       score = Score.start(owner, Score.blank_source("Habanera"))
       library_sign_in(owner)
       page = res_body(get("/app/scores/#{score._key}"))
       assert_contains(page, "data-save-state")
+      # A refused save's three ways out, the copy posted as a new score.
+      assert_contains(page, "data-conflict-mine")
+      assert_contains(page, "data-conflict-theirs")
+      assert_contains(page, "data-conflict-copy")
+      assert_contains(page, "action=\"/app/scores\" method=\"POST\" data-open-form")
       assert_contains(page, "let revision = #{score.revision};")
       assert_contains(page, "shareUrl: \"/app/scores/#{score._key}/share\"")
       assert_contains(page, "data-act=\"properties\"")

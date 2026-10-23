@@ -2593,9 +2593,22 @@
     background: #fdf7ea;
     color: #5d4a22;
   }
-  .app-save[data-kind="offline"], .app-save[data-kind="conflict"] {
+  .app-save[data-kind="offline"], .app-save[data-kind="conflict"], .app-save[data-kind="signed-out"] {
     background: #fbecea;
     color: var(--accent-ink);
+  }
+  .app-save[data-kind="conflict"] {
+    cursor: pointer;
+  }
+  /* "Signed out: sign in again to save…" — a sentence with a link, so it
+     may wrap rather than be cut. */
+  .app-save[data-kind="signed-out"] {
+    white-space: normal;
+    line-height: 1.35;
+  }
+  .app-save a {
+    color: inherit;
+    font-weight: 600;
   }
   .app-room {
     font-size: 13px;
@@ -3378,6 +3391,24 @@
   }
   .studio-new-actions {
     margin-top: 12px;
+  }
+  .studio-conflict-actions {
+    display: grid;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .studio-conflict-actions .tool {
+    display: grid;
+    gap: 2px;
+    justify-items: start;
+    text-align: left;
+    padding: 9px 12px;
+    height: auto;
+  }
+  .studio-conflict-actions small {
+    font-size: 12px;
+    opacity: .75;
+    font-weight: 400;
   }
   .tool-primary {
     background: #2563c9;

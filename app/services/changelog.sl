@@ -13,6 +13,16 @@ class Changelog
       {"date": "2026-10-23", "entries": [
         {
           "area": "site",
+          "title": "Saving never loses what you typed",
+          "text": "When two windows save the same score at once, only one of them is written and the other "
+          + "asks you what to do: keep yours, load theirs, or save yours as a copy. Until you choose, your "
+          + "changes stay kept in the browser. Signed out while editing, the editor says so, with a link to "
+          + "sign in again, instead of trying to save over and over.",
+          "link": "app",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "Nothing left behind: the trash, a deleted account, signing out",
           "text": "A score deleted for good, by you or when the trash empties after 30 days, now takes its history, "
           + "its shares and the AI's suggestions with it, every night, even if you never open your library. "

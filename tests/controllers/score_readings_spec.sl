@@ -127,7 +127,7 @@ describe("AppScoreReadingsController") do
   end
 
   test("sends a guest to sign in") do
-    assert_eq(res_status(send_picture(SMALL_PNG)), 302)
+    assert_eq(res_status(send_picture(SMALL_PNG)), 401)
     assert_eq(ScoreReading.where({
       "state": "reading",
       "user_id": nil
@@ -220,6 +220,6 @@ describe("An AI key of one's own, on the account page") do
         "model": "gpt-5",
         "key": "sk-123456789"
       }
-    )), 302)
+    )), 401)
   end
 end

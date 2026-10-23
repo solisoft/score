@@ -151,8 +151,8 @@ describe("Two-step sign-in") do
     end
 
     test("a guest cannot reach any of it") do
-      assert_eq(res_status(post("/app/account/two-step", {})), 302)
-      assert_eq(res_status(post("/app/account/two-step/confirm", {"code": "123456"})), 302)
+      assert_eq(res_status(post("/app/account/two-step", {})), 401)
+      assert_eq(res_status(post("/app/account/two-step/confirm", {"code": "123456"})), 401)
     end
   end
 end

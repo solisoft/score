@@ -169,17 +169,12 @@ class Score < Model
   # when the score has moved on since — saved from another window — with
   # the refused text kept as a "conflict" version and the score as it now
   # stands in the answer, so the editor can show it and nothing is lost.
+  # The write itself matches only while the score is still at
+  # `base_revision` (`_write_over`): of two saves over the same revision,
+  # one wins and the other is that 409.
   # Answers {"status", "body"}.
   def save_from_editor(source, base_revision)
-    if base_revision != @revision
-      ScoreVersion.keep(this, source, "conflict") unless source.blank?
-      return {"status": 409, "body": {
-        "error": "changed elsewhere",
-        "revision": @revision,
-        "source": @source,
-        "title": @title
-      }}
-    end
+    return @_conflict(source) if base_revision != @revision
 
     if source.blank?
       return {"status": 422, "body": {
@@ -188,13 +183,18 @@ class Score < Model
       }}
     end
 
-    ScoreVersion.keep_if_due(this)
-    @source = source
-    unless @save
+    refusal = Score.refusal_of(source)
+    unless refusal.nil?
       return {"status": 422, "body": {
-        "error": @_errors[0]["message"],
+        "error": refusal,
         "revision": base_revision
       }}
+    end
+
+    ScoreVersion.keep_if_due(this)
+    unless @_write_over(source, base_revision)
+      @reload
+      return @_conflict(source)
     end
 
     {"status": 200, "body": {
@@ -202,6 +202,18 @@ class Score < Model
       "title": @title,
       "updated_at": @updated_at
     }}
+  end
+
+  # Why the editor's `source` may not be saved, or nil: the validations
+  # above (source and title lengths), read before the conditional write,
+  # which does not run them.
+  static def refusal_of(source)
+    return "source is too long (1,000,000 characters at most)" if source.length > 1000000
+
+    title = Score.title_in(source) ?? SCORE_UNTITLED
+    return "title is too long (200 characters at most)" if title.length > 200
+
+    nil
   end
 
   # Back to `version`: the score as it stands is kept first.
@@ -285,5 +297,57 @@ class Score < Model
       "source": Score.with_title(@source, "#{this.title} (copy)"),
       "title": "#{this.title} (copy)"
     })
+  end
+
+  private
+
+  # `source` written over `base_revision` in one statement, which matches
+  # only while the score is still at that revision: false when another save
+  # got there first. It sets what `stamp` would, to the same values.
+  def _write_over(source, base_revision)
+    title = Score.title_in(source) ?? @title ?? SCORE_UNTITLED
+    now = DateTime.utc.to_unix
+    next_revision = base_revision + 1
+    visibility = @visibility ?? "private"
+    share_token = @share_token ?? Score.new_token
+    created_at = @created_at ?? now
+    score_key = @_key
+    written = @sdbql{
+      FOR s IN scores
+      FILTER s._key == #{score_key} AND s.revision == #{base_revision}
+      UPDATE s WITH {
+        source: #{source},
+        title: #{title},
+        updated_at: #{now},
+        created_at: #{created_at},
+        revision: #{next_revision},
+        visibility: #{visibility},
+        share_token: #{share_token}
+      } IN scores
+      RETURN NEW
+    }
+    raise("The save could not be written: #{written}") if type(written) == "string"
+    return false if written.length == 0
+
+    @source = source
+    @title = title
+    @updated_at = now
+    @created_at = created_at
+    @revision = next_revision
+    @visibility = visibility
+    @share_token = share_token
+    true
+  end
+
+  # The 409: `source` kept as a "conflict" version, and the score as it
+  # stands in the answer.
+  def _conflict(source)
+    ScoreVersion.keep(this, source, "conflict") unless source.blank?
+    {"status": 409, "body": {
+      "error": "changed elsewhere",
+      "revision": @revision,
+      "source": @source,
+      "title": @title
+    }}
   end
 end
