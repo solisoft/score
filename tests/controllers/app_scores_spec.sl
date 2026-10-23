@@ -223,6 +223,10 @@ describe("AppScoresController") do
       # File › Open a photo…, read on the account's AI.
       assert_contains(page, "Open a photo… <kbd>read by AI</kbd>")
       assert_contains(page, "data-photo-open")
+      # View › MIDI view, and its button.
+      assert_contains(page, "data-act=\"midi-view\" data-midi-label")
+      assert_contains(page, "data-midi-button")
+      assert_contains(page, "data-act=\"insert-copied\"")
     end
 
     test("keeps a version on request, lists it, shows it, and restores it") do

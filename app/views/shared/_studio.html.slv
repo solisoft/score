@@ -17,7 +17,7 @@
           <div class="studio-dropdown-items" role="menu">
             <button type="button" role="menuitem" data-act="new">New… <kbd>from a template</kbd></button>
             <label role="menuitem" class="studio-dropdown-file">Open a file… <kbd>.ly, MusicXML</kbd><input type="file" accept=".ly,.ily,.txt,.musicxml,.mxl,.xml,text/plain" data-act="open" hidden></label>
-            <% if locals["photos"] %>
+            <% if locals["app"] %>
               <label role="menuitem" class="studio-dropdown-file">Open a photo… <kbd>read by AI</kbd><input type="file" accept="image/*" data-photo-open hidden></label>
             <% end %>
             <label class="studio-dropdown-select">Open an example
@@ -51,6 +51,11 @@
             <button type="button" role="menuitem" data-act="mode-select">Select notes <kbd>Esc</kbd></button>
             <button type="button" role="menuitem" data-act="mode-input">Write notes <kbd>N</kbd></button>
             <hr>
+            <button type="button" role="menuitem" data-act="copy">Copy <kbd>Ctrl+C</kbd></button>
+            <button type="button" role="menuitem" data-act="cut">Cut <kbd>Ctrl+X</kbd></button>
+            <button type="button" role="menuitem" data-act="paste">Paste over the selection <kbd>Ctrl+V</kbd></button>
+            <button type="button" role="menuitem" data-act="insert-copied">Insert the copied bars before the selection <kbd>Ctrl+Shift+V</kbd></button>
+            <hr>
             <button type="button" role="menuitem" data-act="insert-bar">Insert a bar before the selection <kbd>Insert</kbd></button>
             <button type="button" role="menuitem" data-act="add-bar">Add a bar at the end <kbd>]</kbd></button>
             <button type="button" role="menuitem" data-act="delete-bars">Delete the selected bars <kbd>Ctrl+Del</kbd></button>
@@ -68,6 +73,9 @@
             <button type="button" role="menuitem" data-act="zoom-in">Larger <kbd>+</kbd></button>
             <button type="button" role="menuitem" data-act="zoom-out">Smaller <kbd>−</kbd></button>
             <button type="button" role="menuitem" data-act="tools">Show or hide the tools</button>
+            <% if locals["app"] %>
+              <button type="button" role="menuitem" data-act="midi-view" data-midi-label>MIDI view <kbd>tracks, piano roll</kbd></button>
+            <% end %>
             <button type="button" role="menuitem" data-act="written" data-written-label>Written pitch <kbd>clarinets, horns, saxes</kbd></button>
             <button type="button" role="menuitem" data-act="keys">Keyboard shortcuts <kbd>?</kbd></button>
           </div>
@@ -98,7 +106,7 @@
             <button type="button" role="menuitem" data-act="stop">Stop, back to the start</button>
           </div>
         </details>
-        <% if locals["photos"] %>
+        <% if locals["app"] %>
           <details class="studio-dropdown">
             <summary class="studio-menu">AI</summary>
             <div class="studio-dropdown-items" role="menu">
@@ -113,6 +121,9 @@
       <div class="studio-menu-group">
         <button type="button" class="studio-menu" data-act="undo" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
         <button type="button" class="studio-menu" data-act="redo" title="Redo (Ctrl+Y)" aria-label="Redo">↷</button>
+        <% if locals["app"] %>
+          <button type="button" class="studio-menu" data-act="midi-view" data-midi-button title="Switch between the score and the MIDI view" aria-pressed="false">MIDI</button>
+        <% end %>
         <button type="button" class="studio-menu studio-play" data-act="play" title="Play from the selection, or from the start; pause (Space)">▶ Play</button>
         <button type="button" class="studio-menu" data-act="stop" title="Stop, back to the start" hidden>■ Stop</button>
         <span class="studio-zoom">

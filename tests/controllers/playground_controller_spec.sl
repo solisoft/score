@@ -9,6 +9,8 @@ describe("PlaygroundController") do
       assert_contains(body, "class=\"studio-toolbox\"")
       assert_not(body.includes?("data-photo-open"), "no photos without an account")
       assert_not(body.includes?("data-ai-ask"), "no AI assistant without an account")
+      assert_not(body.includes?("data-act=\"midi-view\""), "the MIDI view is the app's")
+      assert_contains(body, "data-act=\"insert-copied\"")
       assert_contains(body, "data-act=\"tuplet\" data-n=\"3\"")
       assert_contains(body, "data-act=\"lyrics\"")
       assert_contains(body, "data-act=\"chord\"")

@@ -82,6 +82,49 @@ def import_in_browser(name, text)
   + " input.dispatchEvent(new Event('change', { bubbles: true })); })()")
 end
 
+# Two staves, four bars, imported as a person does.
+const DUET = "\\score { \\new PianoStaff << \\new Staff { c'4 d' e' f' | g'1 | a'2 g' | c''1 }"
++ " \\new Staff { \\clef bass c1 | g,1 | f,2 g, | c1 } >> }"
+
+# A press and a release on the MIDI view, from bar `a` of track `l0` to bar
+# `b` of track `l1`: pointer events, as a mouse sends them.
+const ROLL_DRAG = """
+(a, l0, b, l1) => {
+  const svg = document.querySelector('.studio-roll-scroll svg');
+  const box = svg.getBoundingClientRect();
+  const tracks = [...svg.querySelectorAll('.roll-track')].map((r) => r.getBBox());
+  const bars = [...svg.querySelectorAll('.roll-ruler')].map((r) => r.getBBox());
+  const at = (bar, lane) => [box.left + bars[bar].x + 8, box.top + tracks[lane].y + 6];
+  const [x1, y1] = at(a, l0);
+  const [x2, y2] = at(b, l1);
+  const host = document.querySelector('.studio-roll');
+  const press = (type, x, y, el) =>
+    el.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX: x, clientY: y, pointerId: 1 }));
+  press('pointerdown', x1, y1, document.elementFromPoint(x1, y1));
+  press('pointermove', x2, y2, host);
+  press('pointerup', x2, y2, host);
+}
+"""
+
+def roll_drag(a, l0, b, l1)
+  evaluate("(#{ROLL_DRAG.trim})(#{a}, #{l0}, #{b}, #{l1})")
+end
+
+# The note first drawn on the MIDI view, pressed.
+const ROLL_PICK = """
+(() => {
+  const note = document.querySelector('.roll-note');
+  const b = note.getBoundingClientRect();
+  const at = { bubbles: true, clientX: b.left + 2, clientY: b.top + 2, pointerId: 1 };
+  note.dispatchEvent(new PointerEvent('pointerdown', at));
+})()
+"""
+
+def roll_keys(key, shift)
+  evaluate("document.querySelector('.studio-roll').dispatchEvent(new KeyboardEvent('keydown',"
+  + " { key: '#{key}', ctrlKey: true, shiftKey: #{shift}, bubbles: true }))")
+end
+
 describe("The app, in a browser") do
   before_each() do
     logout()
@@ -186,6 +229,39 @@ describe("The app, in a browser") do
     assert_contains(editor_source(), "e''2")
     assert_contains(editor_source(), "c''2")
     assert_not(editor_source().includes?("a'2"))
+  end
+
+  test("the MIDI view: a section of two tracks copied, then put in as new bars") do
+    sign_up_in_browser(journey_email())
+    import_in_browser("duet.ly", DUET)
+    wait_for("[data-save-state]")
+    wait_editor()
+    click("[data-midi-button]")
+    wait_for(".studio-roll-scroll svg.roll-tracks")
+    assert_eq(evaluate("document.querySelectorAll('.roll-track').length"), 2)
+    roll_drag(0, 0, 1, 1)
+    wait_for_text("Bars 1–2, 2 tracks")
+    roll_keys("c", false)
+    wait_for_text("2 bars of 2 tracks copied")
+    roll_drag(2, 0, 2, 0)
+    roll_keys("V", true)
+    wait_for_text("2 bars put in as bars 3–4")
+    wait_saved()
+    assert_contains(editor_source(), "c'4 d'4 e'4 f'4 | g'1 | c'4 d'4 e'4 f'4 | g'1 |")
+    assert_contains(editor_source(), "c1 | g,1 | c1 | g,1 |")
+    assert_contains(
+      evaluate("document.querySelector('.studio-roll-scroll svg').getAttribute('aria-label')"),
+      "6 bars"
+    )
+    # The keyboard layout, and a note picked there is the editor's selection.
+    click("[data-layout='keys']")
+    wait_for(".studio-roll-scroll svg.roll-keys")
+    evaluate(ROLL_PICK.trim)
+    wait_for(".roll-note-chosen")
+    # Back to the score: the engraving, with the bars put in.
+    click("[data-midi-button]")
+    wait_for(".studio-sheet:not([hidden]) svg")
+    assert_no_page_errors()
   end
 
   test("import a file that is not MusicXML: refused, nothing created") do

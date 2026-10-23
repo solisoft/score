@@ -1,4 +1,4 @@
-<%- partial("shared/studio", {"examples": examples, "figure": figure, "source": source, "photos": true}) %>
+<%- partial("shared/studio", {"examples": examples, "figure": figure, "source": source, "app": true}) %>
 
 <%# The AI assistant (AI menu): what to ask, then the explanation beside the
     proposed score, to apply or discard. %>

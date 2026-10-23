@@ -997,6 +997,55 @@ export function paste(score, s, t, clip) {
   return last;
 }
 
+// A section is bars a…b of several lanes at once: what the MIDI view copies.
+// Each part keeps its place among the lanes copied, counted from the first.
+
+/** Bars `a`…`b` of `lanes`, for a clipboard: `{ bars, parts: [{ offset, pieces }] }`. */
+export function copySection(score, lanes, a, b) {
+  const [from, to] = [Math.min(a, b), Math.max(a, b)];
+  if (!lanes.length) throw new Error("choose a staff to copy");
+  const t0 = barStart(score, from);
+  const t1 = barStart(score, to + 1);
+  const first = Math.min(...lanes);
+  const parts = [...lanes].sort((x, y) => x - y).map((s) => {
+    const staff = score.staves[s];
+    const at = starts(staff);
+    const inside = staff.events.map((_, i) => i).filter((i) => at[i] >= t0 && at[i] < t1);
+    return { offset: s - first, pieces: inside.length ? copy(score, s, inside[0], inside[inside.length - 1]) : [] };
+  });
+  return { bars: to - from + 1, parts };
+}
+
+/**
+ * A section written over the bars from `bar` on, each part on lane
+ * `lane + offset`: answers how many parts found no lane there.
+ */
+export function pasteSection(score, lane, bar, section) {
+  const t = barStart(score, bar);
+  let skipped = 0;
+  for (const part of section.parts) {
+    const s = lane + part.offset;
+    if (!score.staves[s]) {
+      skipped++;
+      continue;
+    }
+    paste(score, s, t, part.pieces);
+  }
+  return skipped;
+}
+
+/** A section put in before bar `bar`, as new bars: answers how many parts found no lane. */
+export function insertSection(score, lane, bar, section) {
+  insertBars(score, bar, section.bars);
+  return pasteSection(score, lane, bar, section);
+}
+
+/** A section as LilyPond, for another program: a staff per part. */
+export function sectionText(section) {
+  const staves = section.parts.map((part) => `\\new Staff { ${clipText(part.pieces)} }`);
+  return staves.length === 1 ? staves[0] : `<< ${staves.join(" ")} >>`;
+}
+
 // ---- The score's settings --------------------------------------------------------------
 
 /** The score's key; a staff written in a key of its own (a horn in E♭) moves with it. */

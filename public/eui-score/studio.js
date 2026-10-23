@@ -17,6 +17,7 @@ const V = new URL(import.meta.url).search;
 const { loaded, toMidi, toPdf, download, engine } = await import(`./eui-score.js${V}`);
 const M = await import(`./score-model.js${V}`);
 const P = await import(`./player.js${V}`);
+const R = await import(`./piano-roll.js${V}`);
 const { editor_view_lit, score_json, source_spans } = engine;
 
 /** The MusicXML reader and writer, loaded the first time a file needs it. */
@@ -91,6 +92,13 @@ export function startStudio(root, options = {}) {
   palette.addEventListener("pointerdown", (event) => event.stopPropagation());
   sheet.appendChild(palette);
 
+  // The MIDI view, in place of the engraving when it is on: its layout's
+  // switch, and the roll, which scrolls sideways.
+  const rollHost = Object.assign(document.createElement("div"), { className: "studio-roll", hidden: true, tabIndex: 0 });
+  rollHost.innerHTML = `<div class="studio-roll-bar"><span class="studio-roll-layouts" role="group" aria-label="MIDI view layout"><button type="button" class="studio-menu" data-act="roll-layout" data-layout="tracks" aria-pressed="true">Tracks</button><button type="button" class="studio-menu" data-act="roll-layout" data-layout="keys" aria-pressed="false">Keyboard</button></span><span class="studio-roll-hint">Click a note to select it. Drag across bars and tracks to select a section: copy it, paste it over other bars, or insert it as new bars.</span></div><div class="studio-roll-scroll" data-roll-scroll></div>`;
+  sheet.after(rollHost);
+  const rollScroll = rollHost.querySelector("[data-roll-scroll]");
+
   // The playhead: a band over the column being played, every staff of it.
   const playhead = document.createElement("div");
   playhead.className = "studio-playhead";
@@ -112,6 +120,9 @@ export function startStudio(root, options = {}) {
     playing: null,
     drag: null,
     written: false, // transposing instruments shown as written, for reading only
+    mode: "score", // or "midi": the MIDI view in place of the engraving
+    rollLayout: "tracks", // the MIDI view's: a strip per track, or "keys", one keyboard
+    rollDrag: null,
   };
   // For a console or a test: the studio's state, on its element.
   root.studio = st;
@@ -646,6 +657,21 @@ export function startStudio(root, options = {}) {
     switch (name) {
       case "new": return newDialog.showModal();
       case "properties": return root.querySelector("[data-properties]").showModal();
+      case "midi-view": {
+        if (!st.score) return say("The MIDI view needs the score tools: this piece is edited in its text.", true);
+        st.mode = st.mode === "midi" ? "score" : "midi";
+        const label = root.querySelector("[data-midi-label]");
+        if (label) label.firstChild.textContent = st.mode === "midi" ? "Score view " : "MIDI view ";
+        root.querySelector("[data-midi-button]")?.setAttribute("aria-pressed", String(st.mode === "midi"));
+        say(st.mode === "midi" ? "MIDI view: drag across bars and tracks to select a section." : "Score view.");
+        return draw();
+      }
+      case "roll-layout":
+        st.rollLayout = data.layout === "keys" ? "keys" : "tracks";
+        // A section on some tracks covers them all on one keyboard: the selection follows what is shown.
+        if (st.rollLayout === "keys" && st.sel?.lanes) st.sel = null;
+        return draw();
+      case "insert-copied": return insertCopied();
       case "written": {
         if (!st.score) return say("Written pitch needs the score tools: this piece is edited in its text.", true);
         st.written = !st.written;
@@ -990,7 +1016,11 @@ export function startStudio(root, options = {}) {
   // LilyPond, for another page or program; what another program copied is
   // pasted when it reads as music. The same text back is this page's own
   // clip, which keeps what the text cannot say.
+  //
+  // Selected bars are copied as a section — every track the selection
+  // covers, bar for bar — which pastes over bars or goes in as new ones.
   function copy(cut) {
+    if (st.sel?.bars && st.score) return copySection(cut);
     const r = range();
     if (!r) return say("Select what to copy", true);
     try {
@@ -1004,6 +1034,66 @@ export function startStudio(root, options = {}) {
     if (cut) edit((score) => {
       for (let i = r.b; i >= r.a; i--) M.remove(score, r.s, i);
     });
+  }
+
+  function copySection(cut) {
+    const [a, b] = st.sel.bars;
+    const lanes = st.sel.lanes ?? [st.sel.staff];
+    let section;
+    try {
+      section = M.copySection(st.score, lanes, a, b);
+    } catch (error) {
+      return say(error.message, true);
+    }
+    st.clip = { section };
+    st.clipText = M.sectionText(section);
+    navigator.clipboard?.writeText(st.clipText).catch(() => {});
+    const what = `${section.bars === 1 ? "1 bar" : `${section.bars} bars`} of ${lanes.length === 1 ? "1 track" : `${lanes.length} tracks`}`;
+    if (!cut) return say(`${what} copied`);
+    edit((score) => {
+      const [t0, t1] = [M.barStart(score, a), M.barStart(score, b + 1)];
+      for (const s of lanes) {
+        const at = M.starts(score.staves[s]);
+        for (let i = at.length - 1; i >= 0; i--) if (at[i] >= t0 && at[i] < t1 && !score.staves[s].events[i].rest) M.remove(score, s, i);
+      }
+    });
+    say(`${what} cut`);
+  }
+
+  /** Where a section goes: the selected bar of the selected track (or the cursor's). */
+  function sectionPlace() {
+    if (st.input.on) return { lane: st.input.staff, bar: M.barAt(st.score, st.input.t) };
+    if (!st.sel) return null;
+    return { lane: st.sel.lanes?.[0] ?? st.sel.staff, bar: selectedBars()[0] };
+  }
+
+  function sectionSaid(skipped) {
+    return skipped ? ` (${skipped === 1 ? "one track" : `${skipped} tracks`} had no staff below to go to)` : "";
+  }
+
+  /** The copied bars put in before the selected bar, as new bars: nothing written over. */
+  async function insertCopied() {
+    if (!st.score) return say("Inserting bars needs the score tools: this piece is edited in its text.", true);
+    const place = sectionPlace();
+    if (!place) return say("Select the bar to put the copied bars before", true);
+    const clip = await clipboard().catch(() => null);
+    if (!clip?.section) return say("Copy bars first: select them (drag across them), then Ctrl+C", true);
+    let skipped = 0;
+    edit((score) => {
+      skipped = M.insertSection(score, place.lane, place.bar, clip.section);
+      selectSectionQuietly(score, place.bar, place.bar + clip.section.bars - 1, place.lane, clip.section);
+    });
+    const n = clip.section.bars;
+    say(`${n === 1 ? "1 bar" : `${n} bars`} put in as bar${n === 1 ? "" : "s"} ${place.bar + 1}${n === 1 ? "" : `–${place.bar + n}`}${sectionSaid(skipped)}`);
+  }
+
+  /** After a paste or an insert: the bars written selected, on the tracks they went to. */
+  function selectSectionQuietly(score, a, b, lane, section) {
+    const lanes = section.parts.map((part) => lane + part.offset).filter((s) => score.staves[s]);
+    if (!lanes.length) return;
+    const at = M.starts(score.staves[lanes[0]]);
+    const last = Math.max(...at.filter((t) => t < M.barStart(score, b + 1)));
+    st.sel = { staff: lanes[0], t0: M.barStart(score, a), t1: last, head: -1, bars: [a, b], lanes };
   }
 
   /** What to paste: the system clipboard's music, else this page's clip; null when there is none. */
@@ -1027,6 +1117,16 @@ export function startStudio(root, options = {}) {
       return say(`The clipboard's text is not music this reads: ${error.message ?? error}`, true);
     }
     if (!clip) return say("Nothing copied yet", true);
+    if (clip.section) {
+      if (!st.score) return say("Pasting bars needs the score tools", true);
+      const place = sectionPlace();
+      let skipped = 0;
+      edit((score) => {
+        skipped = M.pasteSection(score, place.lane, place.bar, clip.section);
+        selectSectionQuietly(score, place.bar, place.bar + clip.section.bars - 1, place.lane, clip.section);
+      });
+      return say(`Pasted over bar${clip.section.bars === 1 ? "" : "s"} ${place.bar + 1}${clip.section.bars === 1 ? "" : `–${place.bar + clip.section.bars}`}${sectionSaid(skipped)}`);
+    }
     edit((score) => {
       M.paste(score, s, t, clip);
       const end = t + clip.reduce((sum, p) => sum + p.ticks, 0);
@@ -1222,9 +1322,96 @@ export function startStudio(root, options = {}) {
     if (wordsBox) placeWords();
     placeOverlay();
     placePlayhead();
+    drawRoll();
     showState();
     if (!st.playing) showInText(false);
   }
+
+  // ---- The MIDI view --------------------------------------------------------------
+
+  /** The roll, drawn when the MIDI view is on: the notes being played lit, the cursor at the first of them. */
+  function drawRoll() {
+    const on = st.mode === "midi" && Boolean(st.score);
+    sheet.hidden = on;
+    rollHost.hidden = !on;
+    if (!on) return;
+    const lit = new Set();
+    let cursor = null;
+    for (const k of st.playing?.now ?? []) {
+      const it = st.items[k];
+      if (!it) continue;
+      lit.add(`${it.staff}:${it.index}`);
+      const t = M.starts(st.score.staves[it.staff])[it.index];
+      cursor = cursor == null ? t : Math.min(cursor, t);
+    }
+    const left = rollScroll.scrollLeft;
+    rollScroll.innerHTML = R.drawRoll(st.score, { layout: st.rollLayout, zoom: st.zoom, sel: st.sel, lit, cursor });
+    rollScroll.scrollLeft = left;
+    for (const button of rollHost.querySelectorAll("[data-layout]")) button.setAttribute("aria-pressed", String(button.dataset.layout === st.rollLayout));
+  }
+
+  /** The roll's point under the pointer, and what is there: `{ bar, lane, note }`. */
+  function rollPoint(event) {
+    const svg = rollScroll.querySelector("svg");
+    if (!svg) return null;
+    const box = svg.getBoundingClientRect();
+    const geo = R.rollLayout(st.score, { layout: st.rollLayout, zoom: st.zoom });
+    return R.rollHit(st.score, geo, event.clientX - box.left, event.clientY - box.top, event.target.closest("[data-lane]"));
+  }
+
+  /**
+   * Bars `a`…`b` of the lanes from `l0` to `l1` selected, all their notes: a
+   * section. Without lanes (the keyboard layout), every lane.
+   */
+  function selectSection(a, b, l0, l1) {
+    const all = st.score.staves.map((_, s) => s);
+    const lanes = l0 == null || l1 == null ? all : all.filter((s) => s >= Math.min(l0, l1) && s <= Math.max(l0, l1));
+    const [from, to] = [Math.min(a, b), Math.max(a, b)];
+    const staff = st.score.staves[lanes[0]];
+    const at = M.starts(staff);
+    const last = Math.max(...at.filter((t) => t < M.barStart(st.score, to + 1)));
+    st.sel = { staff: lanes[0], t0: M.barStart(st.score, from), t1: last, head: -1, bars: [from, to], lanes };
+    draw();
+  }
+
+  /** The selection, said: its bars and its tracks. */
+  function sayRange() {
+    if (!st.sel?.bars) return;
+    const [a, b] = st.sel.bars;
+    const n = st.sel.lanes?.length ?? 1;
+    say(`${a === b ? `Bar ${a + 1}` : `Bars ${a + 1}–${b + 1}`}, ${n === 1 ? "one track" : `${n} tracks`}: Ctrl+C copies them.`);
+  }
+
+  rollHost.addEventListener("pointerdown", (event) => {
+    if (event.target.closest(".studio-roll-bar") || !st.score) return;
+    rollHost.focus({ preventScroll: true });
+    const p = rollPoint(event);
+    if (!p) return;
+    if (p.note) return select(p.note.lane, p.note.index, -1, event.shiftKey);
+    if (p.bar == null) return;
+    const keep = event.shiftKey && st.sel?.bars;
+    st.rollDrag = { a: keep ? st.sel.bars[0] : p.bar, lane: keep ? (st.sel.lanes?.[0] ?? p.lane) : p.lane, bar: p.bar, to: p.lane };
+    selectSection(st.rollDrag.a, p.bar, st.rollDrag.lane, p.lane);
+    rollHost.setPointerCapture?.(event.pointerId);
+  });
+
+  rollHost.addEventListener("pointermove", (event) => {
+    if (!st.rollDrag) return;
+    const p = rollPoint(event);
+    if (!p || p.bar == null) return;
+    const lane = p.lane ?? st.rollDrag.to;
+    if (p.bar === st.rollDrag.bar && lane === st.rollDrag.to) return;
+    Object.assign(st.rollDrag, { bar: p.bar, to: lane });
+    selectSection(st.rollDrag.a, p.bar, st.rollDrag.lane, lane);
+  });
+
+  const endRollDrag = () => {
+    if (!st.rollDrag) return;
+    st.rollDrag = null;
+    sayRange();
+  };
+  rollHost.addEventListener("pointerup", endRollDrag);
+  rollHost.addEventListener("pointercancel", endRollDrag);
 
   /** The bars of a second voice the cursor or the selection is in: written even while they are rests. */
   function openBars() {
@@ -1716,6 +1903,7 @@ export function startStudio(root, options = {}) {
     if (mod && key.toLowerCase() === "y") return run("redo");
     if (mod && key.toLowerCase() === "c") return run("copy");
     if (mod && key.toLowerCase() === "x") return run("cut");
+    if (mod && event.shiftKey && key.toLowerCase() === "v") return run("insert-copied");
     if (mod && key.toLowerCase() === "v") return run("paste");
     if (mod && key.toLowerCase() === "l") return run("lyrics");
     if (mod && key.toLowerCase() === "k") return run("chord");
