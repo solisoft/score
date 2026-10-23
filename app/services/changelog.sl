@@ -47,11 +47,6 @@ class Changelog
         },
         {
           "area": "site",
-          "link": "app",
-          "app": true
-        },
-        {
-          "area": "site",
           "title": "Sharing says when the invitation email did not leave",
           "text": "When you share a score with someone and the invitation email cannot be sent, the notice now "
           + "says so and asks you to send them the link yourself, instead of saying only that they may now "
