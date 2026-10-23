@@ -687,6 +687,15 @@ pub fn score(src: &str) -> Result<Value, String> {
             if !ev.fingers.is_empty() {
                 unsupported.push("fingerings");
             }
+            // Engraved and played as written; the score tools write none of them.
+            if ev.cue {
+                unsupported.push("cue notes");
+            } else if ev.size != 0 {
+                unsupported.push("notes set smaller");
+            }
+            if ev.texts.iter().any(|w| w.runs.iter().any(|r| r.text.starts_with(eui_score::frets::FRET))) {
+                unsupported.push("a chord diagram");
+            }
             if ev.phrase_on || ev.phrase_off {
                 unsupported.push("phrasing slurs");
             }

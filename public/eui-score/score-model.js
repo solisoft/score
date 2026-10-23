@@ -2426,7 +2426,8 @@ export function fromParsed(parsed) {
   let first = true;
   for (const staff of parsed.staves) {
     const drums = staff.kind === "Drums";
-    if (staff.kind !== "Notes" && !drums) unsupported.add(staff.kind === "Tab" ? "tablature" : "chord-name staves");
+    const kinds = { Tab: "tablature", ChordNames: "chord-name staves", Figures: "a figured bass", FretBoards: "guitar chord diagrams", Ossia: "an ossia" };
+    if (staff.kind !== "Notes" && !drums) unsupported.add(kinds[staff.kind] ?? "a staff of another kind");
     const out = { name: staff.name ?? "", short: staff.short ?? "", instrument: drums ? "" : staff.instrument ?? "", clef: drums ? "percussion" : "treble", events: [] };
     if (drums) out.drums = true;
     // A second voice, `<< { … } \\ { … } >>`: its own lane, rests where it is silent.

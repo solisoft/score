@@ -21,15 +21,23 @@ pub fn description(parsed: &Parsed, bars: usize) -> String {
         let kind = match staff.kind {
             StaffKind::Notes => "",
             StaffKind::ChordNames => " (chord names)",
+            StaffKind::Figures => " (figured bass)",
+            StaffKind::FretBoards => " (guitar chords)",
+            StaffKind::Ossia => " (ossia)",
             StaffKind::Drums => " (drums)",
             StaffKind::Tab => " (tablature)",
         };
         let fifths = staff.events.iter().find(|e| e.k == Kind::Key).map_or(0, |e| e.fifths);
         let time = staff.events.iter().find(|e| e.k == Kind::Time).map(|e| format!(", {}/{}", e.time.0, e.time.1)).unwrap_or_default();
-        let notes = staff.events.iter().filter(|e| e.k == Kind::Note).count();
+        let notes = staff.events.iter().filter(|e| e.k == Kind::Note && !e.cue).count();
         let rests = staff.events.iter().filter(|e| e.k == Kind::Rest && !e.spacer).count();
-        if staff.kind == StaffKind::ChordNames {
+        if matches!(staff.kind, StaffKind::ChordNames | StaffKind::FretBoards) {
             parts.push(format!("{name}{kind}: {notes} {}.", plural(notes, "chord", "chords")));
+            continue;
+        }
+        if staff.kind == StaffKind::Figures {
+            let figures = staff.events.iter().filter(|e| !e.figures.is_empty()).count();
+            parts.push(format!("{name}{kind}: {figures} {}.", plural(figures, "figure", "figures")));
             continue;
         }
         parts.push(format!(

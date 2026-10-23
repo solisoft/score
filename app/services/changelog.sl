@@ -13,6 +13,27 @@ class Changelog
       {"date": "2026-10-23", "entries": [
         {
           "area": "engine",
+          "title": "Cue notes and an ossia",
+          "text": "\\cueDuring shows, small and silent over a player's rests, what another part plays meanwhile; an "
+          + "ossia stands on a staff over the bars it rewrites. \\tiny and \\small set notes smaller.",
+          "sample": "cues-and-ossia"
+        },
+        {
+          "area": "engine",
+          "title": "Guitar chord diagrams",
+          "text": "\\new FretBoards draws each chord's shape on the guitar, found as a guitarist plays it, and "
+          + "\\fret-diagram draws one written by hand over its note.",
+          "sample": "chord-diagrams"
+        },
+        {
+          "area": "engine",
+          "title": "Figured bass",
+          "text": "\\new FiguredBass \\figuremode { <6 4> <7 5-> }: the figures stacked under the bass, each on "
+          + "its note, with their sharps, flats and naturals.",
+          "sample": "figured-bass"
+        },
+        {
+          "area": "engine",
           "title": "Pages cut evenly, when you ask for it",
           "text": "Tick “Spread the lines evenly over the pages” in the score's properties (or write page-breaking "
           + "= #ly:optimal-breaking in \\paper): as few pages, each about as full, no line left alone on the last.",
