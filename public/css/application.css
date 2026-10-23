@@ -2340,6 +2340,19 @@
     font-weight: 600;
     overflow-wrap: anywhere;
   }
+  .account-confirmed {
+    color: #2c5427;
+  }
+  .account-unconfirmed {
+    color: var(--accent);
+  }
+  .account-resend, .auth-resend {
+    display: inline-block;
+    margin: 6px 0 0;
+  }
+  .account-resend {
+    margin-left: 10px;
+  }
   .app-flash {
     margin: 16px auto 0;
     max-width: 1120px;
