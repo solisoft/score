@@ -2100,13 +2100,16 @@ export function startStudio(root, options = {}) {
     // Inside the click, before anything waits: a browser starts sound only
     // from a gesture, and a gesture does not outlive a download.
     P.unlock();
-    // Recorded into, the score plays on past its end (M.forRecording).
-    const played = st.score && st.recording ? M.forRecording(st.score, st.recording.lane) : st.score;
+    // Looped: the selected bars over and over — asked for in Playback, or a
+    // section selected in the MIDI view, recorded into or not. Recorded into
+    // or looped, the score plays on past its last note (M.padded).
+    const looping = playOption("loop")?.checked || sectionLoops();
+    const played = st.score && (st.recording || looping) ? M.padded(st.score) : st.score;
     const passes = played ? M.playback(played) : [];
-    // From the selection's bar (its first pass), or from the start; looped,
-    // the selected bars over and over.
-    const loop = playOption("loop")?.checked && st.score && !st.recording ? loopOf(passes) : null;
-    if (playOption("loop")?.checked && !loop) say("Select the bars to loop: playing from the start.");
+    // From the selection's bar (its first pass), or from the start.
+    const loop = looping && st.score ? loopOf(passes) : null;
+    if (looping && !loop) say("Select the bars to loop: playing from the start.");
+    if (st.recording) st.recording.loop = loop ? selectedBars() : null;
     const from = changeBar();
     const at = loop ? loop.start : from == null ? 0 : (passes.find((p) => p.bar === from)?.start ?? 0);
     let bytes;
@@ -2135,7 +2138,12 @@ export function startStudio(root, options = {}) {
     if (!state.handle || st.playing !== state) return;
     state.handle.rate = rate();
     applyMix();
-    say(loop ? "Looping the selected bars — Space to pause" : "Playing — Space to pause");
+    // The padding staff's note, silent.
+    if (played !== st.score) {
+      state.padChannel = M.channels(played).at(-1).channel;
+      P.mute(state.padChannel, true);
+    }
+    if (!st.recording) say(loop ? "Looping the selected bars — Space to pause" : "Playing — Space to pause");
     showState();
     state.timer = setInterval(showProgress, 200);
     state.ticker = setInterval(tick, 25);
@@ -2145,6 +2153,11 @@ export function startStudio(root, options = {}) {
       state.frame = requestAnimationFrame(follow);
     };
     follow();
+  }
+
+  /** Whether the selection loops by itself: a section selected in the MIDI view. */
+  function sectionLoops() {
+    return st.mode === "midi" && Boolean(st.sel?.bars);
   }
 
   /** The selected bars as a loop: from their first pass to the end of that pass through the last; null with none selected. */
@@ -2218,6 +2231,7 @@ export function startStudio(root, options = {}) {
       cancelAnimationFrame(playing.frame);
       if (playing.handle) playing.handle.stop();
       else P.stop(); // still loading: it must not start after all
+      if (playing.padChannel != null) P.mute(playing.padChannel, false);
     }
     progress.hidden = true;
     playhead.hidden = true;
@@ -2511,7 +2525,12 @@ export function startStudio(root, options = {}) {
       button.setAttribute("aria-pressed", "true");
     }
     await togglePlay();
-    if (st.recording && st.playing) say(`Recording into ${laneName(lane)} from bar ${st.recording.bar + 1}: play after the count-in; R stops.`);
+    if (st.recording && st.playing) {
+      const loop = st.recording.loop;
+      say(loop
+        ? `Recording into ${laneName(lane)}, bars ${loop[0] + 1}–${loop[1] + 1} in a loop: each pass adds its notes; R stops.`
+        : `Recording into ${laneName(lane)} from bar ${st.recording.bar + 1}: play after the count-in; R stops.`);
+    }
   }
 
   function laneName(s) {
@@ -2540,8 +2559,9 @@ export function startStudio(root, options = {}) {
     st.recording.down.delete(key);
     const { t: t0, velocity } = down;
     const t1 = recordingNow() ?? t0;
-    // A repeat played again goes back: the note lasts until its bar's end at most.
-    st.recording.played.push({ key, t0, t1: t1 > t0 ? t1 : M.barStart(st.score, M.barAt(st.score, t0) + 1), velocity });
+    // The music went back meanwhile — a repeat, the loop: the note lasts to its bar's end, or the loop's.
+    const back = st.recording.loop ? M.barStart(st.score, st.recording.loop[1] + 1) : M.barStart(st.score, M.barAt(st.score, t0) + 1);
+    st.recording.played.push({ key, t0, t1: t1 > t0 ? t1 : back, velocity });
   }
 
   /** The music stopped: the keys played written into the staff, from the bar recording began to the end of the last note's. */
@@ -2564,13 +2584,15 @@ export function startStudio(root, options = {}) {
       return draw();
     }
     const grid = M.RECORDING_GRIDS[quantizeBox?.value] ?? M.RECORDING_GRIDS.sixteenth;
-    const from = M.barStart(st.score, rec.bar);
-    const lastBar = M.barAt(st.score, Math.max(from, Math.max(...rec.played.map((n) => n.t1)) - 1));
+    // Looped, every pass is kept (each played over the others) and the loop's bars written whole.
+    const first = rec.loop ? rec.loop[0] : rec.bar;
+    const from = M.barStart(st.score, first);
+    const lastBar = rec.loop ? rec.loop[1] : M.barAt(st.score, Math.max(from, Math.max(...rec.played.map((n) => n.t1)) - 1));
     let written = 0;
     edit((score) => {
       written = M.writeRecording(score, rec.lane, from, M.barStart(score, lastBar + 1), rec.played, grid, { dynamics: Boolean(dynamicsBox?.checked) });
     });
-    const bars = lastBar === rec.bar ? `bar ${rec.bar + 1}` : `bars ${rec.bar + 1}–${lastBar + 1}`;
+    const bars = lastBar === first ? `bar ${first + 1}` : `bars ${first + 1}–${lastBar + 1}`;
     say(`Recorded ${written === 1 ? "1 note" : `${written} notes`} into ${laneName(rec.lane)}, ${bars}, fitted to ${quantizeBox?.selectedOptions[0]?.textContent ?? "sixteenths"}. Ctrl+Z takes it back.`);
   }
 

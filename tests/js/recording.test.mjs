@@ -82,8 +82,6 @@ test("on a drum staff, each key is its drum; keys no drum answers to are left ou
   assert.deepEqual(hits, ["bd+hh", "sn"]);
   assert.ok(drums.staves[0].events.every((ev) => !ev.tie), "drums are not tied");
   engraves(drums);
-  // While it is recorded, the kit plays on past the end too.
-  assert.equal(M.forRecording(drums, 0).staves[0].events.filter((ev) => !ev.rest)[2].pitches[0].drum, "bd");
 });
 
 test("a triplet grid writes as triplets the beats played off the beat, and the others plain", () => {
@@ -135,16 +133,21 @@ test("the time played is the bar of the pass then sounding: a repeat gives its b
   assert.equal(M.tickAtPlayed(score, [], 1), 0);
 });
 
-test("while recording, the score plays on past its end, an empty one too", () => {
-  const empty = read("{ \\time 4/4 r1 | r1 }");
-  const played = M.forRecording(empty, 0);
+test("recorded into or looped, the score plays on past its end, an empty one too", () => {
+  const empty = read("\\score { \\new PianoStaff << \\new Staff { \\time 4/4 r1 | r1 } \\new Staff { \\clef bass r1 | r1 } >> }");
+  const played = M.padded(empty);
   assert.equal(M.barsOf(played), 2 + M.RECORDING_MORE_BARS);
   assert.equal(M.barsOf(empty), 2, "the score itself unchanged");
-  const notes = played.staves[0].events.filter((ev) => !ev.rest);
-  assert.equal(notes.length, 1, "one note, at the very end");
-  const at = M.starts(played.staves[0]);
-  const i = played.staves[0].events.findIndex((ev) => !ev.rest);
-  assert.equal(at[i] + M.ticksOf(played.staves[0].events[i]), M.barStart(played, M.barsOf(played)));
+  assert.equal(played.staves.length, 3, "a staff of its own");
+  assert.ok(played.staves.slice(0, 2).every((staff) => staff.events.every((ev) => ev.rest)), "the score's staves untouched");
+  const pad = played.staves[2];
+  const i = pad.events.findIndex((ev) => !ev.rest);
+  assert.equal(pad.events.filter((ev) => !ev.rest).length, 1, "one note, at the very end");
+  assert.equal(M.starts(pad)[i] + M.ticksOf(pad.events[i]), M.barStart(played, M.barsOf(played)));
+  // Its channel is the last: the others keep theirs.
+  assert.deepEqual(M.channels(played).slice(0, 2), M.channels(empty));
   assert.ok(M.playback(played).at(-1).end > M.playback(empty).at(-1).end);
   engraves(played);
+  const drums = read("\\new DrumStaff \\drummode { \\time 4/4 bd4 sn bd sn }");
+  assert.deepEqual(M.channels(M.padded(drums)).map((c) => c.channel), [9, 1], "the kit keeps the tenth; the padding staff takes the next");
 });

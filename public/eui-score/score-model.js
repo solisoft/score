@@ -1022,22 +1022,23 @@ function tripletBeat(grid) {
   return Math.round(WHOLE / grid) % 3 === 0 ? 3 * grid : 0;
 }
 
-/** How far past its end a recording may go on: the bars played after the last one. */
+/** How far past its end the music goes on while recording or looping: the bars played after the last one. */
 export const RECORDING_MORE_BARS = 32;
 
 /**
- * The score as it plays while lane `s` is recorded: RECORDING_MORE_BARS more
- * bars, so the music (and its metronome) goes on past the end, and does at
- * all in an empty score — a short note at their very end, in the lane being
- * recorded, which is muted, makes them last.
+ * The score as it plays while recorded into or looped: RECORDING_MORE_BARS
+ * more bars, so the music (and its metronome) goes on past the last note, an
+ * empty score's too. A staff of its own, last, holds one short note at their
+ * very end, which makes them last: its channel (the last of `channels`) is
+ * the player's to mute.
  */
-export function forRecording(score, s) {
+export function padded(score) {
   const out = structuredClone(score);
   const end = barsOf(out);
   insertBars(out, end, RECORDING_MORE_BARS);
-  const last = barStart(out, end + RECORDING_MORE_BARS);
-  const pitch = isDrums(out, s) ? drumPitch("bd") : { d: 28, alter: 0 };
-  write(out, s, last - WHOLE / 16, WHOLE / 16, { rest: false, pitches: [pitch] });
+  const total = barStart(out, end + RECORDING_MORE_BARS);
+  out.staves.push({ name: "", short: "", instrument: "", clef: "treble", events: rests(out, 0, total) });
+  write(out, out.staves.length - 1, total - WHOLE / 16, WHOLE / 16, { rest: false, pitches: [{ d: 28, alter: 0 }] });
   return out;
 }
 
