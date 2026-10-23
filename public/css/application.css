@@ -2760,6 +2760,18 @@
     margin: 0;
     color: var(--ink-soft);
   }
+  .changelog-sample {
+    margin: 12px 0 0;
+  }
+  .changelog-sample eui-score {
+    display: block;
+    min-height: 60px;
+    color: var(--ink);
+    overflow-x: auto;
+  }
+  .changelog-sample .score-source {
+    margin-top: 8px;
+  }
   .changelog-try {
     display: inline-block;
     margin-top: 8px;

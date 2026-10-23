@@ -93,6 +93,39 @@ describe("PagesController") do
       assert_contains(res_body(get("/changelog")), "href=\"/playground\">Try it")
     end
 
+    test("draws a sample score under an engraver change that names one, in the browser's engraver") do
+      response = get("/changelog")
+      body = res_body(response)
+      entries = assigns()["days"].map do |day|
+        day["entries"]
+      end.flatten
+      four_voices = entries.filter do |entry|
+        entry["title"].starts_with?("Four voices on a staff")
+      end[0]
+      assert_contains(four_voices["sample"], "\\voiceFour")
+      assert_contains(body, "<eui-score staff-space=\"6\"><script type=\"text/x-lilypond\">\\new PianoStaff")
+      assert_contains(body, "<script type=\"module\" src=\"/eui-score/eui-score.js")
+      named = Changelog.days.map do |day|
+        day["entries"]
+      end.flatten.filter do |entry|
+        !entry["sample"].nil?
+      end
+      assert_eq(body.split("<eui-score ").length - 1, named.length)
+      # An entry with no sample draws none.
+      linked = entries.filter do |entry|
+        entry["title"] == "The score and its text, linked"
+      end[0]
+      assert_null(linked["sample"])
+    end
+
+    test("reads a sample only by a plain name of scores/changelog/") do
+      assert_contains(Changelog.sample("verses"), "\\addlyrics")
+      assert_null(Changelog.sample("no-such-sample"))
+      assert_null(Changelog.sample("../syntax/home"))
+      assert_null(Changelog.sample(""))
+      assert_null(Changelog.sample(nil))
+    end
+
     test("is in the site's navigation") do
       assert_contains(res_body(get("/guide")), "href=\"/changelog\"")
     end

@@ -2,7 +2,8 @@
 # engraver (eui-score) that draws every score. One entry is one change a
 # reader can see; `area` is "site" or "engine", `link` the name of a page
 # of the site that shows it (see PagesController#changelog); "app": true
-# for what is shown only once the app (/app) is open on the server.
+# for what is shown only once the app (/app) is open on the server;
+# `sample` names a score of scores/changelog/ that shows it.
 #
 # Add an entry at the top of its day when a change ships; a new day goes
 # first.
@@ -10,6 +11,12 @@ class Changelog
   static def days
     [
       {"date": "2026-10-23", "entries": [
+        {
+          "area": "site",
+          "title": "Each engraver change shows a score",
+          "text": "Here, under a change to the engraver, a short score drawn by today's engraver shows it, with "
+          + "its LilyPond to read or copy."
+        },
         {
           "area": "site",
           "title": "The score and its text, linked",
@@ -26,12 +33,14 @@ class Changelog
         {
           "area": "engine",
           "title": "Four voices on a staff, and notes that cross to the other staff",
+          "sample": "four-voices",
           "text": "A chorale on one staff, soprano to bass, each voice with its stems; and a piano's notes sent "
           + "with \\change Staff to the other hand's staff, drawn there and played in their own."
         },
         {
           "area": "engine",
           "title": "64ths, 128ths, a tuplet in a tuplet, metres added up, modes",
+          "sample": "values-and-metres",
           "text": "Notes down to the 128th, a triplet inside a quintuplet with both brackets, \\time 2+3/8 and "
           + "13/8, and \\key d \\dorian with the signature of its notes."
         },
@@ -67,6 +76,7 @@ class Changelog
         {
           "area": "engine",
           "title": "A flat or a sharp in a staff's name",
+          "sample": "flat-in-a-name",
           "text": "\"Clarinet in B♭\" prints its flat: the score's words have ♭, ♯ and ♮, drawn like the "
           + "accidentals on the staff."
         },
@@ -104,6 +114,7 @@ class Changelog
         {
           "area": "engine",
           "title": "Several verses of lyrics on a staff",
+          "sample": "verses",
           "text": "A song's second and third verses are each set on the same notes, a line under the one before, "
           + "as LilyPond sets them."
         },
@@ -116,12 +127,14 @@ class Changelog
         {
           "area": "engine",
           "title": "A note too long for its bar is cut into tied notes",
+          "sample": "tied-over",
           "text": "A half note written where only a quarter is left is no longer refused: it is cut at the bar "
           + "line into two tied notes, as LilyPond cuts it. In the browser for now; the server follows."
         },
         {
           "area": "engine",
           "title": "The sustain pedal, D.S., D.C. and Fine",
+          "sample": "pedal-and-jumps",
           "text": "Ped. and its release mark are drawn under the staff and held. D.S. al Coda, D.C. al Fine and "
           + "Fine are written as LilyPond 2.24 writes them and set against their bar line."
         },
@@ -178,11 +191,13 @@ class Changelog
         {
           "area": "engine",
           "title": "A dotted eighth's dot can be seen",
+          "sample": "dotted-eighth",
           "text": "The dot stood against the flag and nearly vanished; it now stands past it."
         },
         {
           "area": "engine",
           "title": "A tempo mark stands clear of grace notes",
+          "sample": "tempo-over-grace",
           "text": "A tempo mark, and anything else over the staff, rises over the grace notes under it instead of "
           + "running through them."
         },
@@ -208,6 +223,7 @@ class Changelog
         {
           "area": "engine",
           "title": "Endings, rests and dynamics keep their distance",
+          "sample": "endings",
           "text": "An ending's number clears the high notes under it, a rest shared by two voices clears the "
           + "other voice, a volta bracket stands over the lyrics, and neighbouring dynamics stand apart."
         },
@@ -250,6 +266,7 @@ class Changelog
       {"date": "2026-10-18", "entries": [{
         "area": "engine",
         "title": "eui 0.11: LilyPond as people write it",
+        "sample": "lilypond-as-written",
         "text": "Variables, voices, lyrics, \\transpose, \\partial, grace notes, more clefs, chord names, drum "
         + "staves and tablature are read and drawn as LilyPond draws them.",
         "link": "limits"
@@ -268,6 +285,14 @@ class Changelog
     days.filter do |day|
       day["entries"].length > 0
     end
+  end
+
+  # The LilyPond of a sample, scores/changelog/<name>.ly, or nil.
+  static def sample(name)
+    return nil if name.blank? || !Regex.matches("^[a-z0-9-]+$", name)
+
+    path = "scores/changelog/#{name}.ly"
+    File.exists(path) ? File.read(path) : nil
   end
 
   # The label a reader sees for an entry's area.

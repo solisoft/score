@@ -22,6 +22,18 @@
               <span class="change-tag change-tag-<%= entry["area"] %>"><%= entry["label"] %></span>
               <h3><%= entry["title"] %></h3>
               <p><%= entry["text"] %></p>
+              <% unless entry["sample"].nil? %>
+                <figure class="changelog-sample">
+                  <eui-score staff-space="6"><script type="text/x-lilypond"><%- entry["sample"] %></script></eui-score>
+                  <details class="score-source">
+                    <summary>LilyPond source</summary>
+                    <div class="score-code">
+                      <button type="button" class="score-copy" data-score-copy>Copy</button>
+                      <pre><code><%- score_highlight(entry["sample"]) %></code></pre>
+                    </div>
+                  </details>
+                </figure>
+              <% end %>
               <% unless entry["href"].nil? %>
                 <a class="changelog-try" href="<%= entry["href"] %>">Try it →</a>
               <% end %>
@@ -32,3 +44,4 @@
     <% end %>
   </div>
 </div>
+<script type="module" src="<%= public_path("eui-score/eui-score.js") %>"></script>

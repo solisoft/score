@@ -28,6 +28,10 @@ pub fn description(parsed: &Parsed, bars: usize) -> String {
         let time = staff.events.iter().find(|e| e.k == Kind::Time).map(|e| format!(", {}/{}", e.time.0, e.time.1)).unwrap_or_default();
         let notes = staff.events.iter().filter(|e| e.k == Kind::Note).count();
         let rests = staff.events.iter().filter(|e| e.k == Kind::Rest && !e.spacer).count();
+        if staff.kind == StaffKind::ChordNames {
+            parts.push(format!("{name}{kind}: {notes} {}.", plural(notes, "chord", "chords")));
+            continue;
+        }
         parts.push(format!(
             "{name}{kind}: {}{time}, {notes} {}, {rests} {}.",
             key(fifths),
@@ -91,5 +95,11 @@ mod tests {
     fn a_spacer_is_not_a_rest() {
         let parsed = eui_score::parse::parse("{ << { c''2 d'' } \\\\ { s2 g'2 } >> }").unwrap();
         assert!(description(&parsed, 1).ends_with("3 notes, 0 rests."), "{}", description(&parsed, 1));
+    }
+
+    #[test]
+    fn chord_names_are_chords() {
+        let parsed = eui_score::parse::parse("<< \\new ChordNames \\chordmode { c1 g1 } \\new Staff { c'1 | d'1 } >>").unwrap();
+        assert!(description(&parsed, 2).contains("Staff 1 (chord names): 2 chords. Staff 2:"), "{}", description(&parsed, 2));
     }
 }

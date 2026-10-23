@@ -414,6 +414,9 @@
   .changelog-entry { background: var(--sheet); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; }
   .changelog-entry h3 { font-size: 18px; margin: 8px 0 4px; color: var(--ink); }
   .changelog-entry p { margin: 0; color: var(--ink-soft); }
+  .changelog-sample { margin: 12px 0 0; }
+  .changelog-sample eui-score { display: block; min-height: 60px; color: var(--ink); overflow-x: auto; }
+  .changelog-sample .score-source { margin-top: 8px; }
   .changelog-try { display: inline-block; margin-top: 8px; font-size: 14px; font-weight: 600; color: var(--accent); }
   .change-tag { display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; }
   .change-tag-site { background: var(--accent-soft); color: var(--accent-ink); }

@@ -51,7 +51,11 @@ class PagesController < Controller
     }
     @days = Changelog.shown(AppSetup.ready?).map do |day|
       entries = day["entries"].map do |entry|
-        entry.merge({"label": Changelog.area_label(entry["area"]), "href": pages[entry["link"].to_s]})
+        entry.merge({
+          "label": Changelog.area_label(entry["area"]),
+          "href": pages[entry["link"].to_s],
+          "sample": Changelog.sample(entry["sample"])
+        })
       end
       day.merge({"entries": entries, "heading": DateTime.parse(day["date"]).format("%A, %B %-d, %Y")})
     end
