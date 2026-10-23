@@ -88,8 +88,10 @@
   .site-nav a { color: var(--ink-soft); font-size: 15px; font-weight: 500; padding: 8px 12px; border-radius: 999px; white-space: nowrap; }
   .site-nav a:hover { background: var(--paper-deep); text-decoration: none; color: var(--ink); }
   .site-nav a[aria-current="page"] { color: var(--accent); background: var(--accent-soft); }
-  .site-nav .nav-cta { background: var(--ink); color: var(--paper); margin-left: 6px; }
-  .site-nav .nav-cta:hover { background: var(--accent); color: #fff; }
+  /* The call to action sits after the nav, not in it, so a narrow screen can
+     keep it beside the brand while the links wrap below (see max-width 899px). */
+  .nav-cta { flex: none; background: var(--ink); color: var(--paper); font-size: 15px; font-weight: 500; padding: 8px 12px; border-radius: 999px; white-space: nowrap; margin-left: -14px; }
+  .nav-cta:hover { background: var(--accent); color: #fff; text-decoration: none; }
 
   .site-footer { border-top: 1px solid var(--line); margin-top: 96px; padding: 40px 0 56px; color: var(--muted); font-size: 14px; }
   .site-footer .wrap { display: flex; flex-wrap: wrap; gap: 16px 40px; justify-content: space-between; }
@@ -373,7 +375,12 @@
   .app-save { font-size: 13px; padding: 3px 9px; border-radius: 999px; white-space: nowrap; background: var(--paper-deep); color: var(--muted); }
   .app-save[data-kind="ok"] { background: #eef6ec; color: #2c5427; }
   .app-save[data-kind="dirty"], .app-save[data-kind="busy"] { background: #fdf7ea; color: #5d4a22; }
-  .app-save[data-kind="offline"], .app-save[data-kind="conflict"] { background: #fbecea; color: var(--accent-ink); }
+  .app-save[data-kind="offline"], .app-save[data-kind="conflict"], .app-save[data-kind="signed-out"] { background: #fbecea; color: var(--accent-ink); }
+  .app-save[data-kind="conflict"] { cursor: pointer; }
+  /* "Signed out: sign in again to save…" — a sentence with a link, so it
+     may wrap rather than be cut. */
+  .app-save[data-kind="signed-out"] { white-space: normal; line-height: 1.35; }
+  .app-save a { color: inherit; font-weight: 600; }
   .app-room { font-size: 13px; padding: 3px 9px; border-radius: 999px; background: #eaf0fb; color: #23468a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
   .app-doc-action { font: 500 13px/1 var(--font-sans); color: var(--ink-soft); background: none; border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; cursor: pointer; white-space: nowrap; }
   .app-doc-action:hover { border-color: var(--ink); color: var(--ink); text-decoration: none; }
@@ -550,6 +557,9 @@
   .studio-template:has(input:focus-visible) { outline: 2px solid #2563c9; outline-offset: 2px; }
   .studio-template input { position: absolute; opacity: 0; pointer-events: none; }
   .studio-new-actions { margin-top: 12px; }
+  .studio-conflict-actions { display: grid; gap: 8px; margin-top: 14px; }
+  .studio-conflict-actions .tool { display: grid; gap: 2px; justify-items: start; text-align: left; padding: 9px 12px; height: auto; }
+  .studio-conflict-actions small { font-size: 12px; opacity: .75; font-weight: 400; }
   .tool-primary { background: #2563c9; border-color: #2563c9; color: #fff; }
 
   .studio-canvas { min-width: 0; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
@@ -655,7 +665,15 @@
   /* Phone and tablet: the score first, the tools in a sheet over the lower
      half of the screen, opened from the menu bar — a note stays in sight
      while its tools are used. The site's header scrolls away. */
+  /* Below 900px the header's one row no longer holds every link: the brand
+     and the call to action share the first row, the links wrap onto the
+     rows below — none hidden off the edge. */
   @media (max-width: 899px) {
+    .site-header .wrap { flex-wrap: wrap; height: auto; gap: 4px 12px; padding-top: 10px; padding-bottom: 6px; }
+    .site-header .nav-cta { order: 1; margin-left: auto; }
+    .site-nav { order: 2; flex: 1 0 100%; flex-wrap: wrap; overflow: visible; margin-left: -12px; row-gap: 2px; }
+    /* The taller header still clears a heading jumped to from a link. */
+    html { scroll-padding-top: 140px; }
     body:has(.studio) .site-header { position: static; }
     .studio-menubar { top: 0; padding: 6px 10px; gap: 2px 10px; }
     /* Two rows: Tools and the menus, then Undo, MIDI, Play, Rec and the
@@ -707,10 +725,15 @@
     .refusal h3 { grid-row: span 2; }
   }
 
+  /* From 900px the header is one row again: just past it, the links draw in
+     so the last of them is not tucked under the call to action. */
+  @media (min-width: 900px) and (max-width: 979px) {
+    .site-nav a { padding: 8px 7px; }
+  }
+
   @media (max-width: 640px) {
-    .site-header .wrap { flex-wrap: wrap; height: auto; gap: 4px 12px; padding-top: 10px; padding-bottom: 6px; }
-    .site-nav { margin-left: -12px; width: calc(100% + 24px); padding: 0 12px; }
-    .site-nav a { padding: 6px 10px; font-size: 14px; }
+    .site-nav { margin-left: -10px; }
+    .site-nav a, .site-header .nav-cta { padding: 6px 10px; font-size: 14px; }
     .score-sheet { padding: 14px; }
     .example-nav { grid-template-columns: 1fr; }
     .example-nav .next { grid-column: 1; }

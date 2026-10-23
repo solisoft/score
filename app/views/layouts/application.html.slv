@@ -52,11 +52,14 @@
                 <% end %>
                 <% if app_open?() %>
                     <a href="<%= playground_path() %>"<%- current_path == playground_path() ? " aria-current=\"page\"" : "" %>>Playground</a>
-                    <a class="nav-cta" href="<%= app_home_path() %>">Open the app</a>
-                <% else %>
-                    <a class="nav-cta" href="<%= playground_path() %>">Playground</a>
                 <% end %>
             </nav>
+            <%# Outside the links' row: on a phone it stays beside the brand while the links wrap below. %>
+            <% if app_open?() %>
+                <a class="nav-cta" href="<%= app_home_path() %>">Open the app</a>
+            <% else %>
+                <a class="nav-cta" href="<%= playground_path() %>">Playground</a>
+            <% end %>
         </div>
     </header>
 

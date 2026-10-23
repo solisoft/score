@@ -162,4 +162,22 @@ describe("PagesController") do
       assert_contains(res_body(get("/changelog")), "href=\"/app\">Try it")
     end
   end
+
+  describe("the site's header") do
+    # On a phone the links wrap below the brand and "Open the app" stays
+    # beside it: that needs the button after the nav, not among its links.
+    test("puts Open the app after the links, and every link in the nav") do
+      body = res_body(get("/guide"))
+      nav_start = body.index_of("<nav class=\"site-nav\"")
+      nav_end = body.index_of("</nav>")
+      cta_at = body.index_of("<a class=\"nav-cta\" href=\"/app\">Open the app</a>")
+      assert_gt(nav_start, -1, "the site's nav")
+      assert_gt(cta_at, nav_end, "the button after the nav")
+      links = body.substring(nav_start, nav_end)
+      ["/guide", "/syntax", "/examples", "/embed", "/limits", "/changelog", "/playground"].each do |path|
+        assert_contains(links, "href=\"#{path}\"")
+      end
+      assert_not(links.includes?("nav-cta"), "no button among the links")
+    end
+  end
 end

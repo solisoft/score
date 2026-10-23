@@ -13,6 +13,14 @@ class Changelog
       {"date": "2026-10-23", "entries": [
         {
           "area": "site",
+          "title": "The site's menu fits on a phone",
+          "text": "On a narrow screen the site's navigation stopped at Limits: Changelog, Playground and the "
+          + "Open the app button were off the edge, with nothing to say the bar scrolled. Now the button stays "
+          + "at the top, beside the name, and the links wrap onto a second row below it, all in sight.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
           "title": "Saving never loses what you typed",
           "text": "When two windows save the same score at once, only one of them is written and the other "
           + "asks you what to do: keep yours, load theirs, or save yours as a copy. Until you choose, your "
