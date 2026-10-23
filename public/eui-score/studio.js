@@ -516,7 +516,7 @@ export function startStudio(root, options = {}) {
     const sound = st.score.staves[M.upperOf(st.score, t.s)]?.instrument;
     const drums = M.isDrums(st.score, t.s);
     const keys = heads.map((p) => (drums ? M.drumKey(p.drum) : M.midiKey(p.d, p.alter)));
-    if (!P.preview(keys, M.programOf(sound), { drums }) && !P.isReady()) {
+    if (!P.preview(keys, M.programOf(sound), { drums, channel: laneChannel(t.s) }) && !P.isReady()) {
       say("Loading the sounds, to hear the notes… (38 MB, once)");
       P.prepare().then(() => say("The notes sound as you write them; Hear the notes turns it off.")).catch(() => {});
     }
@@ -2105,6 +2105,9 @@ export function startStudio(root, options = {}) {
     // or looped, the score plays on past its last note (M.padded).
     const looping = playOption("loop")?.checked || sectionLoops();
     const played = st.score && (st.recording || looping) ? M.padded(st.score) : st.score;
+    // The staff recorded into is silent: in this browser it is muted, and a
+    // MIDI device (Sound to) is not sent its old notes at all.
+    if (st.recording) M.write(played, st.recording.lane, 0, M.barStart(played, M.barsOf(played)), { rest: true });
     const passes = played ? M.playback(played) : [];
     // From the selection's bar (its first pass), or from the start.
     const loop = looping && st.score ? loopOf(passes) : null;
@@ -2518,7 +2521,7 @@ export function startStudio(root, options = {}) {
     const sound = st.score.staves[M.upperOf(st.score, lane)]?.instrument;
     const muted = !st.mix.mute.has(lane);
     st.mix.mute.add(lane);
-    st.recording = { lane, bar: changeBar() ?? 0, program: M.programOf(sound), drums: M.isDrums(st.score, lane), down: new Map(), played: [], muted };
+    st.recording = { lane, bar: changeBar() ?? 0, program: M.programOf(sound), drums: M.isDrums(st.score, lane), channel: laneChannel(lane), down: new Map(), played: [], muted };
     P.listen(port, recordKey, releaseKey);
     for (const button of recordButtons()) {
       button.textContent = "■ Stop rec";
@@ -2531,6 +2534,11 @@ export function startStudio(root, options = {}) {
         ? `Recording into ${laneName(lane)}, bars ${loop[0] + 1}–${loop[1] + 1} in a loop: each pass adds its notes; R stops.`
         : `Recording into ${laneName(lane)} from bar ${st.recording.bar + 1}: play after the count-in; R stops.`);
     }
+  }
+
+  /** Lane `s`'s MIDI channel, as the music is sent: its staff's. */
+  function laneChannel(s) {
+    return M.channels(st.score).find((c) => c.lane === M.upperOf(st.score, s))?.channel ?? 0;
   }
 
   function laneName(s) {
@@ -2546,14 +2554,14 @@ export function startStudio(root, options = {}) {
 
   function recordKey(key, held, velocity = 100) {
     if (!st.recording) return;
-    P.hold(key, true, st.recording.program, { drums: st.recording.drums, velocity });
+    P.hold(key, true, st.recording.program, { drums: st.recording.drums, velocity, channel: st.recording.channel });
     const t = recordingNow();
     if (t != null) st.recording.down.set(key, { t, velocity });
   }
 
   function releaseKey(key) {
     if (!st.recording) return;
-    P.hold(key, false, 0, { drums: st.recording.drums });
+    P.hold(key, false, 0, { drums: st.recording.drums, channel: st.recording.channel });
     const down = st.recording.down.get(key);
     if (!down) return;
     st.recording.down.delete(key);
@@ -2576,7 +2584,7 @@ export function startStudio(root, options = {}) {
       button.setAttribute("aria-pressed", "false");
     }
     for (const [key, { t: t0, velocity }] of rec.down) {
-      P.hold(key, false, 0, { drums: rec.drums });
+      P.hold(key, false, 0, { drums: rec.drums, channel: rec.channel });
       rec.played.push({ key, t0, t1: Math.max(reached ?? t0, t0 + 1), velocity });
     }
     if (!rec.played.length) {

@@ -293,6 +293,13 @@ export function listen(id, onKey, onRelease = null) {
   return input;
 }
 
+/** A note on or off, straight to the MIDI device chosen in Sound to. */
+function sendNote(channel, key, on, velocity = 90) {
+  try {
+    output.send(on ? [0x90 | channel, key, velocity] : [0x80 | channel, key, 0]);
+  } catch (error) {}
+}
+
 /** Plays to MIDI output `id` from the next Play on, or to this browser with null. */
 export function setOutput(id) {
   output = id && access ? access.outputs.get(id) ?? null : null;
@@ -308,7 +315,15 @@ const PREVIEW = 15;
  * the note just written or selected. Before the sounds have loaded, it
  * starts loading them and stays silent: the next note is heard.
  */
-export function preview(keys, program = 0, { drums = false } = {}) {
+export function preview(keys, program = 0, { drums = false, channel = 0 } = {}) {
+  // To the MIDI device chosen in Sound to, on the staff's channel.
+  if (output) {
+    for (const key of keys) sendNote(drums ? 9 : channel, key, true, 90);
+    setTimeout(() => {
+      for (const key of keys) sendNote(drums ? 9 : channel, key, false);
+    }, 450);
+    return true;
+  }
   if (!engine?.done) {
     prepare().catch(() => {});
     return false;
@@ -331,7 +346,11 @@ export function preview(keys, program = 0, { drums = false } = {}) {
  * it is held — a key played while recording, as hard as it was struck — and
  * stops it with `on` false. Silent until the sounds have loaded.
  */
-export function hold(key, on, program = 0, { drums = false, velocity = 100 } = {}) {
+export function hold(key, on, program = 0, { drums = false, velocity = 100, channel = 0 } = {}) {
+  if (output) {
+    sendNote(drums ? 9 : channel, key, on, velocity);
+    return true;
+  }
   if (!engine?.done) return false;
   engine.promise.then(({ ctx, synth }) => {
     ctx.resume().catch(() => {});
