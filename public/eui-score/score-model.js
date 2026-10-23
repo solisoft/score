@@ -1294,6 +1294,8 @@ export function deleteBars(score, a, b) {
   // The changes and clefs inside the bars go; those after them move back.
   const shift = (list) => (list ?? []).filter((c) => c.bar < a || c.bar > b).map((c) => (c.bar > b ? { ...c, bar: c.bar - count } : c));
   score.changes = shift(score.changes);
+  // A break after a bar that goes, goes; those after the bars move back.
+  score.breaks = Object.fromEntries(Object.entries(score.breaks ?? {}).filter(([bar]) => Number(bar) < a || Number(bar) > b).map(([bar, kind]) => [Number(bar) > b ? Number(bar) - count : Number(bar), kind]));
   score.staves.forEach((staff, s) => {
     if (staff.clefs) staff.clefs = shift(staff.clefs);
     if (staff.voice === 2 || b + 1 >= bars) return;
@@ -1441,7 +1443,8 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
       const shown = other && (sounding(other.events) || open.some((o) => o.staff === lower && o.bar === b));
       items.push(...bar.items, ...(shown ? other.items : []));
       const top = staffNumber(score, s) === 0;
-      return changesText(score, s, b) + (top ? markText(score, b) : "") + (shown ? `<< { ${bar.text} } \\\\ { ${other.text} } >>` : bar.text) + (top ? jumpText(score, b) : "");
+      const broken = top && b > 0 ? { line: "\\break ", page: "\\pageBreak " }[(score.breaks ?? {})[b - 1]] ?? "" : "";
+      return broken + changesText(score, s, b) + (top ? markText(score, b) : "") + (shown ? `<< { ${bar.text} } \\\\ { ${other.text} } >>` : bar.text) + (top ? jumpText(score, b) : "");
     });
     const music = unfold ? playedOut(score, s, bars) : withRepeats(bars, repeats);
     const lastRepeat = !unfold && repeats.find((r) => r.endings.length === 0 && r.to === bars.length - 1);
@@ -1489,7 +1492,7 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
   const groups = (score.groups ?? []).filter((g) => kinds[g.kind] && g.first <= g.last && g.last < staves.length);
   const group = kinds[score.group] ?? "";
   const body = staves.length > 1 || group ? `${group ? group + " " : ""}<<\n${indent(nest(0, staves.length - 1, groups))}\n>>` : staves[0];
-  return { source: (header ? `\\header { ${header} }\n` : "") + body + "\n", items };
+  return { source: pageText(score) + (header ? `\\header { ${header} }\n` : "") + body + "\n", items };
 }
 
 const clefText = (clef) => (CLEFS.includes(clef) ? (clef.includes("_") ? `"${clef}"` : clef) : "treble");
@@ -1794,6 +1797,8 @@ export function insertBars(score, at, count) {
     if (r.from >= at) r.from += count;
     if (r.to >= at) r.to += count;
   }
+  // A break stays after its bar: those from bar `at` on move along.
+  score.breaks = Object.fromEntries(Object.entries(score.breaks ?? {}).map(([bar, kind]) => [Number(bar) >= at ? Number(bar) + count : Number(bar), kind]));
 }
 
 // ---- Sharing ----------------------------------------------------------------------------------
@@ -2073,6 +2078,52 @@ export function setInstrument(score, s, k) {
   if (it.clef) staff.clef = it.clef;
 }
 
+// ---- The page: paper, staff size, line and page breaks --------------------------------------
+//
+// What \\paper and #(set-global-staff-size …) say, kept as read and written
+// back: `score.paper` {size, staffSize, left, right, top, bottom, indent} (mm,
+// points), each null for LilyPond's default; `score.breaks` bar → "line" or
+// "page", the break after that bar.
+
+export const PAPER_SIZES = ["a4", "letter", "a3", "a5", "legal", "tabloid"];
+const MARGINS = [["left", "left-margin"], ["right", "right-margin"], ["top", "top-margin"], ["bottom", "bottom-margin"], ["indent", "indent"]];
+
+function paperFrom(p) {
+  const out = { size: p?.size ?? null, staffSize: p?.staff_size ?? null };
+  for (const [field] of MARGINS) out[field] = p?.[field] ?? null;
+  return out;
+}
+
+/** The paper (A4 by default, "letter", "a3landscape"…) and the staff size, in points (20 by default). */
+export function setPaper(score, { size, staffSize }) {
+  const name = String(size ?? "a4").toLowerCase();
+  if (!PAPER_SIZES.includes(name.replace(/landscape$/, ""))) throw new Error(`no such paper: ${size}`);
+  const pt = staffSize == null || staffSize === "" ? 20 : Number(staffSize);
+  if (!(pt >= 11 && pt <= 26)) throw new Error("a staff size is 11 to 26 points");
+  score.paper = { ...(score.paper ?? paperFrom(null)), size: name === "a4" ? null : name, staffSize: pt === 20 ? null : pt };
+}
+
+/** The break after bar `bar`: "line", "page", or none (null) — the line goes on. */
+export function setBreak(score, bar, kind) {
+  if (!Number.isInteger(bar) || bar < 0 || bar >= barsOf(score) - 1) throw new Error("a break goes after a bar, before the last one ends");
+  if (kind != null && kind !== "line" && kind !== "page") throw new Error("a break is a line's or a page's");
+  score.breaks = { ...(score.breaks ?? {}) };
+  if (kind == null) delete score.breaks[bar];
+  else score.breaks[bar] = kind;
+}
+
+/** What goes before the music: the staff size, then \\paper. */
+function pageText(score) {
+  const p = score.paper ?? {};
+  const lines = [];
+  if (p.staffSize && p.staffSize !== 20) lines.push(`#(set-global-staff-size ${p.staffSize})`);
+  const inside = [];
+  if (p.size && p.size !== "a4") inside.push(`#(set-paper-size ${quote(p.size)})`);
+  for (const [field, name] of MARGINS) if (p[field] != null) inside.push(`${name} = ${p[field]}\\mm`);
+  if (inside.length) lines.push(`\\paper { ${inside.join(" ")} }`);
+  return lines.length ? lines.join("\n") + "\n" : "";
+}
+
 // ---- Transposing instruments and parts ------------------------------------------------------
 //
 // A score keeps its notes as they sound (concert pitch): that is what is
@@ -2324,6 +2375,8 @@ const CLEF_NAMES = { "G,-2,0": "treble", "G,-2,-1": "treble_8", "F,2,0": "bass",
 export function fromParsed(parsed) {
   const unsupported = new Set();
   const score = { header: { ...parsed.header }, key: 0, time: [4, 4], tempo: null, group: "none", groups: [], staves: [], repeats: [], changes: [] };
+  score.paper = paperFrom(parsed.paper);
+  score.breaks = {};
   // Where the first staff's repeat signs fall, in bars: the score's repeats.
   const signs = [];
   const kinds = { Brace: "brace", Bracket: "bracket", Choir: "choir" };
@@ -2355,6 +2408,11 @@ export function fromParsed(parsed) {
       // writes the score's changes, the others must change with it.
       const here = lengthOf(lane);
       const bar = isBarLine(score, here) ? barAt(score, here) : -1;
+      // A \\break or \\pageBreak: the first staff's say where lines and pages end.
+      if (k === "Break") {
+        if (first && bar > 0) score.breaks[bar - 1] = ev.page ? "page" : "line";
+        continue;
+      }
       if (k === "Clef" && drums) continue;
       if (k === "Clef") {
         const name = CLEF_NAMES[ev.clef.join(",")];

@@ -6,7 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
-import init, { editor_view, midi, score_json } from "../../public/eui-score/eui_score_web.js";
+import init, { editor_view, midi, pdf, score_json } from "../../public/eui-score/eui_score_web.js";
 import * as M from "../../public/eui-score/score-model.js";
 
 await init({ module_or_path: readFileSync(new URL("../../public/eui-score/eui_score_web_bg.wasm", import.meta.url)) });
@@ -326,6 +326,51 @@ test("a part: one staff, its second voice with it, its name on top, written as r
   assert.match(source, /\\transpose c d \{/);
   JSON.parse(editor_view(source, 900, 7, -1, -1));
   assert.equal(s.staves.length, 5, "the score itself is left whole");
+});
+
+test("the paper, the staff size and the breaks are written, read back, and are the PDF's", () => {
+  const s = M.fromTemplate("piano", { title: "Page", bars: 8 });
+  M.setPaper(s, { size: "letter", staffSize: 16 });
+  M.setBreak(s, 1, "line");
+  M.setBreak(s, 3, "page");
+  const { source } = engrave(s);
+  assert.match(source, /#\(set-global-staff-size 16\)/);
+  assert.match(source, /\\paper \{ #\(set-paper-size "letter"\) \}/);
+  assert.equal(source.match(/\\break /g).length, 1, "the first staff says where lines end");
+  assert.equal(source.match(/\\pageBreak /g).length, 1);
+  const back = reread(s);
+  assert.deepEqual(back.breaks, { 1: "line", 3: "page" });
+  assert.equal(back.paper.size, "letter");
+  assert.equal(back.paper.staffSize, 16);
+  assert.match(pdf(source, "Page"), /\/MediaBox \[0 0 612 792\]/, "US letter pages");
+  // Back to A4 at 20 pt: nothing is written for it.
+  M.setPaper(s, { size: "a4", staffSize: 20 });
+  assert.ok(!M.toLilyPond(s).source.includes("paper"));
+  assert.ok(!M.toLilyPond(s).source.includes("staff-size"));
+});
+
+test("a break stays after its bar when bars come and go, and goes with its bar", () => {
+  const s = M.newScore();
+  M.addBars(s, 4);
+  M.setBreak(s, 2, "line");
+  M.insertBars(s, 1, 2);
+  assert.deepEqual(s.breaks, { 4: "line" });
+  M.deleteBars(s, 0, 0);
+  assert.deepEqual(s.breaks, { 3: "line" });
+  M.deleteBars(s, 3, 3);
+  assert.deepEqual(s.breaks, {});
+  engrave(s);
+});
+
+test("refuses a break after the last bar, a paper or a staff size there is none of", () => {
+  const s = M.newScore();
+  assert.throws(() => M.setBreak(s, M.barsOf(s) - 1, "line"), /before the last one/);
+  assert.throws(() => M.setBreak(s, 0, "column"), /line's or a page's/);
+  assert.throws(() => M.setPaper(s, { size: "napkin" }), /no such paper/);
+  assert.throws(() => M.setPaper(s, { size: "a4", staffSize: 40 }), /11 to 26/);
+  M.setBreak(s, 0, "page");
+  M.setBreak(s, 0, null);
+  assert.deepEqual(s.breaks, {});
 });
 
 test("a tie needs a note after it; a slur on one note goes to the next, and comes off whole", () => {

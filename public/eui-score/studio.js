@@ -567,6 +567,17 @@ export function startStudio(root, options = {}) {
         return draw();
       }
       case "parts": return openParts();
+      case "break": {
+        let bar;
+        try {
+          bar = selectedBars()[1];
+        } catch (error) {
+          return say("Select a bar first: the line or the page ends after it.", true);
+        }
+        const kind = (st.score?.breaks ?? {})[bar] === data.kind ? null : data.kind;
+        if (edit((score) => M.setBreak(score, bar, kind))) say(kind ? `A new ${kind} after bar ${bar + 1}: the PDF is laid out so.` : `Bar ${bar + 1}: the line goes on.`);
+        return;
+      }
       case "undo": return undo();
       case "redo": return redo();
       case "play": return togglePlay();
@@ -1224,6 +1235,10 @@ export function startStudio(root, options = {}) {
     set("bpm", st.score.tempo?.bpm || "");
     set("tempo-text", st.score.tempo?.text || "");
     set("group", st.score.group);
+    const paper = st.score.paper?.size ?? "a4";
+    set("paper-size", paper.replace(/landscape$/, ""));
+    set("paper-orientation", paper.endsWith("landscape") ? "landscape" : "portrait");
+    set("staff-size", String(st.score.paper?.staffSize ?? 20));
     set("staff-name", staff.name);
     set("staff-short", staff.short);
     set("staff-clef", staff.clef);
@@ -1291,6 +1306,13 @@ export function startStudio(root, options = {}) {
         case "bpm": score.tempo = { ...(score.tempo ?? { text: "", base: 4 }), bpm: Number(value) || 0 }; break;
         case "tempo-text": score.tempo = { ...(score.tempo ?? { base: 4, bpm: 0 }), text: value }; break;
         case "group": score.group = value; break;
+        case "paper-size": case "paper-orientation": {
+          const size = root.querySelector('[data-field="paper-size"]').value;
+          const wide = root.querySelector('[data-field="paper-orientation"]').value === "landscape";
+          M.setPaper(score, { size: size + (wide ? "landscape" : ""), staffSize: score.paper?.staffSize ?? null });
+          break;
+        }
+        case "staff-size": M.setPaper(score, { size: score.paper?.size ?? "a4", staffSize: Number(value) }); break;
         case "staff-name": staff.name = value; break;
         case "staff-short": staff.short = value; break;
         case "staff-clef": staff.clef = value; break;

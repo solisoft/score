@@ -9,6 +9,20 @@
 class Changelog
   static def days
     [
+      {"date": "2026-10-23", "entries": [
+        {
+          "area": "engine",
+          "title": "The paper a score asks for",
+          "text": "\\paper's size and margins and the staff size are the PDF's: letter, A3, A5, landscape, 16 pt…"
+        },
+        {
+          "area": "site",
+          "title": "Paper, staff size, and lines and pages ended by hand",
+          "text": "Score properties set the paper and the staff size; Edit ends the line or the page after the "
+          + "selected bar.",
+          "link": "playground"
+        }
+      ]},
       {"date": "2026-10-22", "entries": [
         {
           "area": "site",

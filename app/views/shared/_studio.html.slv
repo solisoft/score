@@ -51,6 +51,9 @@
             <button type="button" role="menuitem" data-act="add-bar">Add a bar at the end <kbd>]</kbd></button>
             <button type="button" role="menuitem" data-act="delete-bars">Delete the selected bars <kbd>Ctrl+Del</kbd></button>
             <hr>
+            <button type="button" role="menuitem" data-act="break" data-kind="line">A new line after this bar <kbd>again to remove</kbd></button>
+            <button type="button" role="menuitem" data-act="break" data-kind="page">A new page after this bar <kbd>again to remove</kbd></button>
+            <hr>
             <button type="button" role="menuitem" data-act="transpose" data-scope="selection">Transpose the selection</button>
             <button type="button" role="menuitem" data-act="transpose" data-scope="score">Transpose the score</button>
           </div>
@@ -505,7 +508,25 @@
             <option value="brace">Brace (piano)</option><option value="choir">Choir</option>
           </select>
         </label>
-    <p class="muted studio-properties-note">Each staff's instrument, clef and name: select a note of it, then the toolbox's
+        <label class="tool-field">Paper
+          <select data-field="paper-size">
+            <option value="a4">A4</option><option value="letter">US Letter</option><option value="a3">A3</option>
+            <option value="a5">A5</option><option value="legal">US Legal</option><option value="tabloid">Tabloid</option>
+          </select>
+        </label>
+        <label class="tool-field">Orientation
+          <select data-field="paper-orientation">
+            <option value="portrait">Portrait</option><option value="landscape">Landscape</option>
+          </select>
+        </label>
+        <label class="tool-field">Staff size
+          <select data-field="staff-size">
+            <% for points in [14, 16, 17, 18, 20, 22, 24, 26] %>
+              <option value="<%= points %>"><%= points %> pt<%= points == 20 ? " (usual)" : "" %></option>
+            <% end %>
+          </select>
+        </label>
+    <p class="muted studio-properties-note">Paper and staff size are the PDF's. Each staff's instrument, clef and name: select a note of it, then the toolbox's
       <strong>This staff</strong>.</p>
   </dialog>
 

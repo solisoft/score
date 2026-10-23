@@ -605,6 +605,8 @@ pub fn score(src: &str) -> Result<Value, String> {
             let chord_name: String = ev.chord_name.iter().map(|r| r.text.as_str()).collect();
             events.push(json!({
                 "k": format!("{:?}", ev.k),
+                // A \break's kind: true for \pageBreak.
+                "page": ev.page,
                 "i": ev.i,
                 "ticks": ev.ticks,
                 "base": ev.base,
@@ -661,5 +663,8 @@ pub fn score(src: &str) -> Result<Value, String> {
             "events": events,
         }));
     }
-    Ok(json!({ "header": header, "groups": groups, "staves": staves }))
+    // The page it asks for: \paper's size and margins (mm), the staff size (pt).
+    let p = &parsed.paper;
+    let paper = json!({ "size": p.size, "staff_size": p.staff_size, "left": p.left, "right": p.right, "top": p.top, "bottom": p.bottom, "indent": p.indent });
+    Ok(json!({ "header": header, "paper": paper, "groups": groups, "staves": staves }))
 }
