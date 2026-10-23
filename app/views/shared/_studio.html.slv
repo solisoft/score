@@ -110,6 +110,8 @@
             <hr>
             <button type="button" role="menuitem" data-act="add-staff">A staff</button>
             <button type="button" role="menuitem" data-act="voice" data-voice="2">A second voice <kbd>Ctrl+Alt+2</kbd></button>
+            <button type="button" role="menuitem" data-act="voice" data-voice="3">A third voice <kbd>Ctrl+Alt+3</kbd></button>
+            <button type="button" role="menuitem" data-act="voice" data-voice="4">A fourth voice <kbd>Ctrl+Alt+4</kbd></button>
           </div>
         </details>
         <details class="studio-dropdown">
@@ -453,9 +455,13 @@
           <button type="button" class="tool tool-wide" data-act="voice" data-voice="2" title="Write and select in the second voice, stems down (Ctrl+Alt+2)">Voice 2</button>
         </div>
         <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="voice-remove" title="Take this staff's second voice away, its notes with it">Remove voice 2</button>
+          <button type="button" class="tool tool-wide" data-act="voice" data-voice="3" title="Write and select in the third voice, stems up (Ctrl+Alt+3)">Voice 3</button>
+          <button type="button" class="tool tool-wide" data-act="voice" data-voice="4" title="Write and select in the fourth voice, stems down (Ctrl+Alt+4)">Voice 4</button>
         </div>
-        <p class="tool-hint">Voice 2 writes under voice 1 on the same staff. A bar shows two voices where voice 2 has notes.</p>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="voice-remove" title="Take the voice the cursor is in away, its notes with it; from voice 1, the staff's last voice">Remove a voice</button>
+        </div>
+        <p class="tool-hint">Voices 1 and 3 have their stems up, 2 and 4 down, on one staff. A bar shows its voices where one past the first has notes.</p>
       </details>
 
       <details class="tool-section" data-section="this-staff" open>

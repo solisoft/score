@@ -25,6 +25,9 @@ const partwise = (parts, partList, head = "") =>
 <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
 <score-partwise version="4.0">${head}<part-list>${partList}</part-list>${parts}</score-partwise>`;
 
+/** Each lane's voice and events, as notes or rests with their lengths. */
+const shapeOf = (score) => score.staves.map((l) => [l.voice ?? 1, l.events.map((ev) => (ev.rest ? (ev.spacer ? "s" : "r") : M.spellPitch(ev.pitches[0].d, ev.pitches[0].alter)) + M.ticksOf(ev))]);
+
 const note = (step, octave, duration, type, extra = "") => `<note><pitch><step>${step}</step><octave>${octave}</octave></pitch><duration>${duration}</duration>${extra}<type>${type}</type></note>`;
 
 test("musicxml: every gallery score the editor reads comes back as itself", () => {
@@ -220,15 +223,54 @@ test("musicxml: grace notes, tuplets, articulations, chord symbols and a hairpin
 });
 
 test("musicxml: what the editor does not write is left out and named", () => {
-  const voices = [1, 2, 3].map((v) => `${note("C", 5, 4, "whole", `<voice>${v}</voice>`)}${v < 3 ? "<backup><duration>4</duration></backup>" : ""}`).join("");
+  const voices = [1, 2, 3, 4, 5].map((v) => `${note("C", 5, 4, "whole", `<voice>${v}</voice>`)}${v < 5 ? "<backup><duration>4</duration></backup>" : ""}`).join("");
   const xml = partwise(
     `<part id="P1"><measure number="1"><attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>${voices}</measure>
      <measure number="2">${note("C", 5, 4, "whole").replace("<octave>", "<alter>0.5</alter><octave>")}</measure></part>`,
     `<score-part id="P1"><part-name>Flute</part-name></score-part>`,
   );
   const { source, warnings } = X.fromMusicXML(xml);
-  assert.deepEqual(warnings, ["a third voice on a staff, left out", "quarter tones, rounded"]);
-  assert.equal(scoreOf(source).staves.length, 2, "the two voices kept");
+  assert.deepEqual(warnings, ["a fifth voice on a staff, left out", "quarter tones, rounded"]);
+  assert.equal(scoreOf(source).staves.length, 4, "the four voices kept");
+});
+
+test("musicxml: a third and a fourth voice are read, in their lanes, and written back as voices 3 and 4", () => {
+  // Voices 1 and 3 from the first bar, voice 2 from the second: each keeps its lane.
+  const bar1 = [note("E", 5, 4, "whole", "<voice>1</voice>"), "<backup><duration>4</duration></backup>", note("G", 4, 2, "half", "<voice>3</voice>"), note("A", 4, 2, "half", "<voice>3</voice>")].join("");
+  const bar2 = [note("F", 5, 4, "whole", "<voice>1</voice>"), "<backup><duration>4</duration></backup>", note("C", 5, 4, "whole", "<voice>2</voice>"), "<backup><duration>4</duration></backup>", note("B", 4, 4, "whole", "<voice>3</voice>"), "<backup><duration>4</duration></backup>", note("D", 4, 4, "whole", "<voice>4</voice>")].join("");
+  const xml = partwise(
+    `<part id="P1"><measure number="1"><attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>${bar1}</measure><measure number="2">${bar2}</measure></part>`,
+    `<score-part id="P1"><part-name>Organ</part-name></score-part>`,
+  );
+  const { source, warnings } = X.fromMusicXML(xml);
+  assert.deepEqual(warnings, []);
+  const score = scoreOf(source);
+  // Voice 3, met before voice 2, still goes to the third lane: its stems up.
+  assert.deepEqual(score.staves.map((l) => l.voice ?? 1), [1, 2, 3, 4]);
+  const pitches = (lane) => score.staves[lane].events.filter((ev) => !ev.rest).map((ev) => M.spellPitch(ev.pitches[0].d, ev.pitches[0].alter));
+  assert.deepEqual(pitches(0), ["e''", "f''"]);
+  assert.deepEqual(pitches(1), ["c''"]);
+  assert.deepEqual(pitches(2), ["g'", "a'", "b'"]);
+  assert.deepEqual(pitches(3), ["d'"]);
+  // Voices 1 and 3 alone: the empty second lane does not make voice 3 the second.
+  const two = X.fromMusicXML(partwise(
+    `<part id="P1"><measure number="1"><attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>${bar1}</measure></part>`,
+    `<score-part id="P1"><part-name>Organ</part-name></score-part>`,
+  ));
+  assert.match(two.source, /\\voiceThree g'2/);
+  const read = scoreOf(two.source);
+  assert.deepEqual(read.staves.map((l) => l.voice ?? 1), [1, 2, 3]);
+  assert.equal(read.staves[2].events.filter((ev) => !ev.rest).length, 2);
+  // Written by the editor, voice 2 rests there, and the score reads back the same.
+  const written = M.toLilyPond(read).source;
+  assert.match(written, /<< \{ e''1 \} \\\\ \{ r1 \} \\\\ \{ g'2 a'2 \} >>/);
+  assert.deepEqual(shapeOf(scoreOf(written)), shapeOf(read));
+  // Out: four voices of one staff, back as themselves.
+  const out = X.toMusicXML(score);
+  assert.deepEqual([...new Set([...out.matchAll(/<voice>(\d+)<\/voice>/g)].map((m) => m[1]))].sort(), ["1", "2", "3", "4"]);
+  const again = X.fromMusicXML(out);
+  assert.deepEqual(again.warnings, []);
+  assert.equal(M.toLilyPond(scoreOf(again.source)).source, M.toLilyPond(score).source);
 });
 
 test("musicxml: a file that is not a partwise score is refused, with what to do", () => {

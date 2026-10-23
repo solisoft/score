@@ -811,6 +811,9 @@ pub fn score(src: &str) -> Result<Value, String> {
             // `\\(` and `\\)`: a phrasing slur starts, ends.
             event["phrase_on"] = json!(ev.phrase_on);
             event["phrase_off"] = json!(ev.phrase_off);
+            // In `<< { … } \\ { … } >>`, the voice a note or rest is: 1 and 3
+            // stems up, 2 and 4 down (`\voiceOne` … `\voiceFour`); null outside.
+            event["voice"] = json!(ev.voice);
             // What the parse keeps as fifths alone: the key's mode, and a repeat's count.
             event["mode"] = json!((ev.k == Kind::Key).then(|| key_mode(src, &bytes, ev.at)));
             event["times"] = json!((ev.k == Kind::RepeatStart).then(|| repeat_times(src, &bytes, ev.at)).flatten());

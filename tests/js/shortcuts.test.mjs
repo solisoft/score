@@ -28,8 +28,8 @@ test("shortcuts: the keys the audit found missing are handled, and listed", () =
     [press("l"), "lyrics", "L / K, Ctrl+L / Ctrl+K"],
     [press("k"), "chord", "L / K, Ctrl+L / Ctrl+K"],
     [press("l", { ctrl: true }), "lyrics", "L / K, Ctrl+L / Ctrl+K"],
-    [press("¡", { ctrl: true, alt: true, code: "Digit1" }), "voice", "Ctrl+Alt+1 / 2"],
-    [press("™", { meta: true, alt: true, code: "Digit2" }), "voice", "Ctrl+Alt+1 / 2"],
+    [press("¡", { ctrl: true, alt: true, code: "Digit1" }), "voice", "Ctrl+Alt+1 – 4"],
+    [press("™", { meta: true, alt: true, code: "Digit2" }), "voice", "Ctrl+Alt+1 – 4"],
     [press("V", { ctrl: true, shift: true }), "insert-copied", "Ctrl+Shift+V"],
   ];
   for (const [event, act, keys] of cases) {
@@ -38,6 +38,12 @@ test("shortcuts: the keys the audit found missing are handled, and listed", () =
   }
   assert.deepEqual(resolveKey(press("1", { ctrl: true, alt: true, code: "Digit1" })), ["voice", { voice: "1" }]);
   assert.deepEqual(resolveKey(press("2", { ctrl: true, alt: true, code: "Numpad2" })), ["voice", { voice: "2" }]);
+  assert.deepEqual(resolveKey(press("3", { ctrl: true, alt: true, code: "Digit3" })), ["voice", { voice: "3" }]);
+  assert.deepEqual(resolveKey(press("4", { meta: true, alt: true, code: "Numpad4" })), ["voice", { voice: "4" }]);
+  assert.notEqual(resolveKey(press("5", { ctrl: true, alt: true, code: "Digit5" }))?.[0], "voice", "a staff holds four voices");
+  // The Add menu names voices 2 to 4 with their keys.
+  const markup = readFileSync(new URL("../../app/views/shared/_studio.html.slv", import.meta.url), "utf8");
+  for (const v of [2, 3, 4]) assert.match(markup, new RegExp(`data-act="voice" data-voice="${v}">[^<]+<kbd>Ctrl\\+Alt\\+${v}</kbd>`));
 });
 
 test("shortcuts: + and − are sharp and flat; with Ctrl or ⌘ they zoom", () => {

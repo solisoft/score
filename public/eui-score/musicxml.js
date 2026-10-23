@@ -7,7 +7,7 @@
 //   unzipMxl(bytes)     → text                   a compressed .mxl's score
 //
 // Nothing leaves the page. What a file holds that the editor does not
-// write (a third voice on a staff, quarter tones…) is left out, and each
+// write (a fifth voice on a staff, quarter tones…) is left out, and each
 // such thing is named once in `warnings`.
 
 const V = new URL(import.meta.url).search;
@@ -258,7 +258,7 @@ function readPart(part, info, first, warnings) {
   let staves = 1;
   // Per staff: its voices (MusicXML's voice ids, in the order they come), its lanes' music, its lyrics.
   const staffOf = (n) => {
-    while (lanes.length < n) lanes.push({ drums: false, voices: [], lanes: [[], []], pos: [0, 0], lyrics: new Map(), pending: [], sung: 0, tiedOver: false, measureFrom: 0 });
+    while (lanes.length < n) lanes.push({ drums: false, voices: [], lanes: [[], [], [], []], pos: [0, 0, 0, 0], lyrics: new Map(), pending: [], sung: 0, tiedOver: false, measureFrom: 0 });
     return lanes[n - 1];
   };
   const lanes = [];
@@ -275,7 +275,7 @@ function readPart(part, info, first, warnings) {
   let firstMeasure = true;
   const laneKey = (s, v) => `${s}:${v}`;
 
-  /** Lane `v` (0, 1) of staff `s`, filled to absolute time `at` (divisions) with rests or spacers. */
+  /** Lane `v` (0 to 3: voices 1 to 4) of staff `s`, filled to absolute time `at` (divisions) with rests or spacers. */
   function fill(staff, v, at) {
     const gap = at - staff.pos[v];
     if (gap <= 1e-9) return;
@@ -465,10 +465,11 @@ function readPart(part, info, first, warnings) {
     }
     measureStart += length;
     for (const st of lanes) {
-      fill(st, 0, measureStart);
-      if (st.voices.length > 1) fill(st, 1, measureStart);
-      st.lanes[0].push("|");
-      if (st.voices.length > 1) st.lanes[1].push("|");
+      // Each voice the staff has so far: one that comes later is filled from the start.
+      for (let v = 0; v < Math.max(1, st.voices.length); v++) {
+        fill(st, v, measureStart);
+        st.lanes[v].push("|");
+      }
     }
     const right = rightBar[0];
     for (const st of lanes) {
@@ -532,13 +533,17 @@ function readPart(part, info, first, warnings) {
       const voiceId = textIn(note, "voice") ?? "1";
       let v = staff.voices.indexOf(voiceId);
       if (v < 0) {
-        if (staff.voices.length >= 2) {
-          warnings.add("a third voice on a staff, left out");
+        // The first voice met is the first lane; another goes to the lane its
+        // number says (voice 3 or 7 to the third: stems up), else the first free one.
+        const free = [0, 1, 2, 3].filter((k) => staff.voices[k] == null);
+        const wanted = /^\d+$/.test(voiceId) ? (Number(voiceId) - 1) % 4 : -1;
+        v = staff.voices.length === 0 ? 0 : wanted >= 1 && free.includes(wanted) ? wanted : free[0] ?? -1;
+        if (v < 0) {
+          warnings.add("a fifth voice on a staff, left out");
           if (!isChord && !isGrace) cursor += numberIn(note, "duration") ?? 0;
           return;
         }
-        staff.voices.push(voiceId);
-        v = staff.voices.length - 1;
+        staff.voices[v] = voiceId;
       }
       const key = laneKey(s, v);
       const duration = numberIn(note, "duration") ?? 0;
@@ -749,7 +754,12 @@ function readPart(part, info, first, warnings) {
       return lane.filter(Boolean).join(" ");
     };
     const one = tidy(st.lanes[0]);
-    const music = st.voices.length > 1 ? `<< { ${one} } \\\\ { ${tidy(st.lanes[1])} } >>` : one;
+    // Voices 1 and 3 stems up, 2 and 4 down: `<< { } \\ { } \\ { } >>`. A lane
+    // with nothing drawn is not counted as a voice: past two, each says which it is.
+    const voices = [one, ...st.lanes.slice(1, st.voices.length).map(tidy)];
+    const silent = voices.some((m) => !m.split(" ").some((x) => x && x !== "|" && !/^s\d/.test(x) && !x.startsWith("\\")));
+    const say = voices.length > 2 && silent ? (k) => `\\voice${["One", "Two", "Three", "Four"][k]} ` : () => "";
+    const music = voices.length > 1 ? `<< ${voices.map((m, k) => `{ ${say(k)}${m} }`).join(" \\\\ ")} >>` : one;
     const named = lanes.length === 1 && (info.name || info.short || info.sound);
     const props = [];
     if (named && info.name) props.push(`instrumentName = ${quoted(info.name)}`);
@@ -925,9 +935,9 @@ export function toMusicXML(score) {
   for (const p of parts) {
     out.push(`<part id="${p.id}">`);
     // Each staff's lanes, its events with their start, by bar.
+    // Voices 1 to 4 of staff k are MusicXML's voices 4k+1 to 4k+4.
     const lanesOf = p.staves.map((s) => {
-      const lower = M.lowerOf(score, s);
-      return [s, ...(lower >= 0 ? [lower] : [])].map((lane) => {
+      return M.voiceLanes(score, s).map((lane) => {
         const at = M.starts(score.staves[lane]);
         // The beams written by hand: begin, continue and end on their notes.
         const marks = M.handBeams(score, score.staves[lane]);

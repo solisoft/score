@@ -1019,12 +1019,16 @@ export function startStudio(root, options = {}) {
       case "voice-remove": return edit((score) => {
         const s = staffOf();
         const upper = M.upperOf(score, s);
-        M.removeVoice(score, s);
-        // The lanes after the one taken away move up by one.
-        const moved = (lane) => (lane === upper + 1 ? upper : lane > upper + 1 ? lane - 1 : lane);
+        const had = M.voiceLanes(score, s).length;
+        // The voice the cursor is in, or the staff's last.
+        const voice = M.isLower(score, s) ? M.voiceOf(score, s) : had;
+        M.removeVoice(score, s, voice);
+        const has = M.voiceLanes(score, upper).length;
+        // A lane of the staff that went: its first voice; the lanes after the staff move up.
+        const moved = (lane) => (lane >= upper + had ? lane - (had - has) : lane >= upper + has ? upper : lane);
         if (st.sel) st.sel = { ...st.sel, staff: moved(st.sel.staff), head: -1 };
         st.input.staff = moved(st.input.staff);
-        say("Voice 2 taken away");
+        say(`Voice ${voice} taken away`);
       });
       case "remove-staff": return edit((score) => {
         M.removeStaff(score, staffOf());
@@ -1189,7 +1193,7 @@ export function startStudio(root, options = {}) {
 
   /** After a paste or an insert: the bars written selected, on the tracks they went to. */
   function selectSectionQuietly(score, a, b, lane, section) {
-    const lanes = section.parts.map((part) => lane + part.offset).filter((s) => score.staves[s]);
+    const lanes = M.sectionLanes(score, lane, section);
     if (!lanes.length) return;
     const at = M.starts(score.staves[lanes[0]]);
     const last = Math.max(...at.filter((t) => t < M.barStart(score, b + 1)));
@@ -1400,7 +1404,7 @@ export function startStudio(root, options = {}) {
 
   async function draw() {
     await loaded();
-    // Drawn: the text, with the second voice's bars opened where the page writes in them.
+    // Drawn: the text, with the other voices' bars opened where the page writes in them.
     let shown = st.text;
     if (st.score) {
       const { source, items } = M.toLilyPond(st.score, { open: openBars(), written: st.written });
@@ -1686,7 +1690,7 @@ export function startStudio(root, options = {}) {
   rollHost.addEventListener("pointerup", endRollDrag);
   rollHost.addEventListener("pointercancel", endRollDrag);
 
-  /** The bars of a second voice the cursor or the selection is in: written even while they are rests. */
+  /** The bars of another voice (2 to 4) the cursor or the selection is in: written even while they are rests. */
   function openBars() {
     const s = st.input.on ? st.input.staff : st.sel?.staff;
     if (s == null || !M.isLower(st.score, s)) return [];
@@ -1697,19 +1701,18 @@ export function startStudio(root, options = {}) {
     return out;
   }
 
-  /** The cursor or the selection moved to the other voice of its staff, at the same time; voice 2 made when needed. */
+  /** The cursor or the selection moved to voice `voice` (1 to 4) of its staff, at the same time; the voice made when needed. */
   function toVoice(voice) {
     if (!st.score) return;
     const s = staffOf();
     const upper = M.upperOf(st.score, s);
-    let lane = upper;
-    if (voice === 2) {
-      lane = M.lowerOf(st.score, upper);
-      if (lane < 0) {
-        // A voice of rests: nothing in the text changes, so no step to undo.
-        lane = M.addVoice(st.score, upper);
-        if (st.input.on && st.input.staff > upper) st.input.staff++;
-      }
+    let lane = M.laneOfVoice(st.score, upper, voice);
+    if (lane < 0) {
+      // Voices of rests (voice 3 brings voice 2): nothing in the text changes, so no step to undo.
+      const had = M.voiceLanes(st.score, upper).length;
+      lane = M.addVoice(st.score, upper, voice);
+      const added = M.voiceLanes(st.score, upper).length - had;
+      if (st.input.on && st.input.staff >= upper + had) st.input.staff += added;
     }
     if (st.input.on) {
       st.input.staff = lane;
@@ -1722,9 +1725,15 @@ export function startStudio(root, options = {}) {
     } else {
       st.sel = { staff: lane, t0: 0, t1: 0, head: -1 };
     }
-    say(voice === 2 ? "Voice 2: notes written now go under voice 1, stems down" : "Voice 1");
+    say(VOICE_SAID[voice] ?? "Voice 1");
     draw();
   }
+
+  const VOICE_SAID = {
+    2: "Voice 2: notes written now go under voice 1, stems down",
+    3: "Voice 3: notes written now go beside voice 1, stems up",
+    4: "Voice 4: notes written now go beside voice 2, stems down",
+  };
 
   function showState() {
     root.classList.toggle("studio-input", st.input.on);
@@ -1741,9 +1750,8 @@ export function startStudio(root, options = {}) {
     // The toolbox's toggles show their state; the menus' items of the same name do not.
     root.querySelector('.studio-toolbox [data-act="mode-input"]')?.classList.toggle("on", st.input.on);
     root.querySelector('.studio-toolbox [data-act="mode-select"]')?.classList.toggle("on", !st.input.on);
-    const second = st.score ? M.isLower(st.score, staffOf()) : false;
-    root.querySelector('.studio-toolbox [data-act="voice"][data-voice="1"]')?.classList.toggle("on", Boolean(st.score) && !second);
-    root.querySelector('.studio-toolbox [data-act="voice"][data-voice="2"]')?.classList.toggle("on", second);
+    const voiceNow = st.score ? M.voiceOf(st.score, staffOf()) : 0;
+    for (const button of root.querySelectorAll('.studio-toolbox [data-act="voice"]')) button.classList.toggle("on", Number(button.dataset.voice) === voiceNow);
     // A drum staff writes with drums, the others with letters.
     const onDrums = Boolean(st.score) && M.isDrums(st.score, staffOf());
     if (drumRow) drumRow.hidden = !onDrums;
@@ -1764,7 +1772,7 @@ export function startStudio(root, options = {}) {
     // What is selected, in words.
     const value = `${({ 1: "whole", 2: "half", 4: "quarter", 8: "eighth", 16: "16th", 32: "32nd" })[st.input.base]}${st.input.dots ? ", dotted" : ""}`;
     if (st.playing) showProgress();
-    else if (st.input.on) state.textContent = `Note input${M.isLower(st.score, st.input.staff) ? " · voice 2" : ""} · ${value} · A–G write, 0 rest, Esc to stop`;
+    else if (st.input.on) state.textContent = `Note input${M.isLower(st.score, st.input.staff) ? ` · voice ${M.voiceOf(st.score, st.input.staff)}` : ""} · ${value} · A–G write, 0 rest, Esc to stop`;
     else {
       const r = range();
       if (!r) state.textContent = st.score ? "Click a note to select it · N to write notes" : "Text only";
@@ -1772,7 +1780,7 @@ export function startStudio(root, options = {}) {
       else {
         const ev = r.staff.events[r.a];
         const len = ({ 1: "whole", 2: "half", 4: "quarter", 8: "eighth", 16: "16th", 32: "32nd" })[ev.base] + (ev.dots ? " dotted" : "") + (ev.tuplet ? ` (${ev.tuplet.n}-tuplet)` : "");
-        state.textContent = (M.isLower(st.score, r.s) ? "Voice 2 · " : "") + (ev.rest ? `Rest · ${len}` : `${ev.pitches.length > 1 ? "Chord" : "Note"} ${ev.pitches.map((p, k) => (k === st.sel.head ? `[${M.pitchName(p.d, p.alter)}]` : M.pitchName(p.d, p.alter))).join(" ")} · ${len}`);
+        state.textContent = (M.isLower(st.score, r.s) ? `Voice ${M.voiceOf(st.score, r.s)} · ` : "") + (ev.rest ? `Rest · ${len}` : `${ev.pitches.length > 1 ? "Chord" : "Note"} ${ev.pitches.map((p, k) => (k === st.sel.head ? `[${M.pitchName(p.d, p.alter)}]` : M.pitchName(p.d, p.alter))).join(" ")} · ${len}`);
       }
     }
   }

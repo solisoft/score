@@ -57,18 +57,18 @@ export function rollNotes(score) {
   return out;
 }
 
-/** The lanes as the tracks name them: the staff's name, its second voice marked. */
+/** The lanes as the tracks name them: the staff's name, its other voices marked. */
 export function laneNames(score) {
   return score.staves.map((_, s) => {
     const upper = score.staves[M.upperOf(score, s)];
     const name = upper.name || upper.instrument || `Staff ${M.staffNumber(score, s) + 1}`;
-    return M.isLower(score, s) ? `${name}, voice 2` : name;
+    return M.isLower(score, s) ? `${name}, voice ${M.voiceOf(score, s)}` : name;
   });
 }
 
-/** Lane `s`'s colour: its staff's, the same for both voices. */
+/** Lane `s`'s colour: a colour per lane, each voice of a staff its own. */
 export function laneColour(score, s) {
-  return ROLL_COLOURS[M.staffNumber(score, s) % ROLL_COLOURS.length];
+  return ROLL_COLOURS[s % ROLL_COLOURS.length];
 }
 
 /**
@@ -142,7 +142,9 @@ export function drawRoll(score, { layout = "tracks", zoom = 1, sel = null, lit =
       const odd = M.staffNumber(score, track.lane) % 2 === 1;
       parts.push(`<rect class="roll-track${odd ? " roll-track-odd" : ""}" x="0" y="${track.y}" width="${width}" height="${track.h}"/>`);
       parts.push(`<rect class="roll-swatch" x="8" y="${track.y + 8}" width="10" height="10" rx="3" fill="${laneColour(score, track.lane)}"/>`);
-      parts.push(`<text class="roll-track-name" x="24" y="${track.y + 17}">${escape(trim(names[track.lane], 15))}</text>`);
+      // A voice's track sits under its staff's: "Voice 3" says it, the staff's name above.
+      const label = M.isLower(score, track.lane) ? `Voice ${M.voiceOf(score, track.lane)}` : trim(names[track.lane], 15);
+      parts.push(`<text class="roll-track-name" x="24" y="${track.y + 17}">${escape(label)}<title>${escape(names[track.lane])}</title></text>`);
       parts.push(`<text class="roll-track-range" x="24" y="${track.y + 30}">${keyName(track.low + 2)}–${keyName(track.high - 2)}</text>`);
       parts.push(`<line class="roll-track-edge" x1="0" x2="${width}" y1="${track.y + track.h}" y2="${track.y + track.h}"/>`);
     }

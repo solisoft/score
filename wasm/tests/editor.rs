@@ -1,5 +1,17 @@
-use eui_score_web::editor::{apply, spans, view};
+use eui_score_web::editor::{apply, score, spans, view};
 use serde_json::json;
+
+#[test]
+fn each_note_of_voices_says_its_voice() {
+    let notes = |src: &str| -> Vec<Option<u64>> {
+        let parsed = score(src).unwrap();
+        parsed["staves"][0]["events"].as_array().unwrap().iter().filter(|ev| ev["k"] == "Note").map(|ev| ev["voice"].as_u64()).collect()
+    };
+    let four = notes("{ << { e''2 f'' } \\\\ { c''2 d'' } \\\\ { g'2 a' } \\\\ { c'2 f' } >> | c'1 }");
+    assert_eq!(four, vec![Some(1), Some(1), Some(2), Some(2), Some(3), Some(3), Some(4), Some(4), None]);
+    // \voiceThree beside voice 1: voice 3, its stems up, though it comes second.
+    assert_eq!(notes("{ << { \\voiceOne e''1 } \\\\ { \\voiceThree g'1 } >> }"), vec![Some(1), Some(3)]);
+}
 
 const TUNE: &str = "{ \\key g \\major \\time 3/4 g'4 a' b' | d''2 r4 | <g' b'>2. \\bar \"|.\" }";
 

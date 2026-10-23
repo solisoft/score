@@ -215,3 +215,52 @@ test("on a drum staff a hit moves to the drum of its new key; the range and tupl
   assert.throws(() => M.moveNote(read("{ r4 c'4 }"), 0, 0, { shift: 1 }), /no note there/);
   assert.throws(() => M.moveNote(read("{ \\tuplet 3/2 { c'8 d' e' } f'4 }"), 0, 0, { shift: 1 }), /tuplet/);
 });
+
+// One staff of four voices above a bass.
+const SATB = `\\new StaffGroup <<
+  \\new Staff { << { e''2 f'' } \\\\ { c''2 d'' } \\\\ { g'2 a' } \\\\ { c'2 f' } >> | g''1 }
+  \\new Staff { \\clef bass c1 | g,1 }
+>>`;
+
+test("each voice is a track of its own, named and coloured apart", () => {
+  const score = read(SATB);
+  assert.deepEqual(R.laneNames(score), ["Staff 1", "Staff 1, voice 2", "Staff 1, voice 3", "Staff 1, voice 4", "Staff 2"]);
+  const colours = score.staves.map((_, s) => R.laneColour(score, s));
+  assert.equal(new Set(colours).size, 5, "a colour per lane");
+  assert.equal(R.rollLayout(score).tracks.length, 5);
+  assert.deepEqual(R.rollNotes(score).filter((n) => n.lane === 2).map((n) => n.key), [67, 69], "voice 3's g' and a'");
+  const svg = R.drawRoll(score);
+  assert.match(svg, />Voice 4<title>Staff 1, voice 4<\/title>/);
+  assert.match(svg, new RegExp(`data-lane="3" data-index="0" data-key="60"[^>]*fill="${colours[3]}"`));
+});
+
+test("a section of voices goes to the same voices, made on a staff that lacks them", () => {
+  const score = read(SATB);
+  const section = M.copySection(score, [0, 1, 2, 3, 4], 0, 0);
+  assert.deepEqual(section.parts.map((p) => [p.offset, p.voice]), [[0, 1], [0, 2], [0, 3], [0, 4], [1, 1]]);
+  // Onto the bass staff: voice 1 and its new voices 2 to 4; the bass part finds no staff below.
+  const pasted = structuredClone(score);
+  assert.equal(M.pasteSection(pasted, 4, 1, section), 1);
+  assert.deepEqual(pasted.staves.map((l) => l.voice ?? 1), [1, 2, 3, 4, 1, 2, 3, 4]);
+  assert.deepEqual(M.sectionLanes(pasted, 4, section), [4, 5, 6, 7]);
+  for (let v = 0; v < 4; v++) assert.deepEqual(bar(pasted, 4 + v, 1), bar(score, v, 0), `voice ${v + 1}`);
+  assert.doesNotThrow(() => editor_view(M.toLilyPond(pasted).source, 900, 7, -1, -1));
+  // Voice 3 alone goes on the lane it is pasted on.
+  const alone = structuredClone(score);
+  assert.equal(M.pasteSection(alone, 4, 1, M.copySection(score, [2], 0, 0)), 0);
+  assert.deepEqual(bar(alone, 4, 1), bar(score, 2, 0));
+  assert.equal(alone.staves.length, 5);
+  // Inserted as new bars, every voice grows with the staff.
+  const inserted = structuredClone(score);
+  M.insertSection(inserted, 0, 1, M.copySection(score, [0, 1, 2, 3], 0, 0));
+  assert.ok(inserted.staves.every((l) => M.lengthOf(l) === M.lengthOf(inserted.staves[0])));
+  assert.deepEqual(bar(inserted, 3, 1), bar(score, 3, 0));
+  // A voice of rests the staff lacks is not made for nothing; voice 3 brings voice 2 with it.
+  const rests = read("\\new StaffGroup << \\new Staff { << { e''1 } \\\\ { r1 } \\\\ { g'1 } >> } \\new Staff { c'1 } >>");
+  const onto = structuredClone(rests);
+  M.pasteSection(onto, 3, 0, M.copySection(rests, [0, 1, 2], 0, 0));
+  assert.deepEqual(onto.staves.map((l) => l.voice ?? 1), [1, 2, 3, 1, 2, 3]);
+  const onlyRests = structuredClone(rests);
+  M.pasteSection(onlyRests, 3, 0, M.copySection(rests, [0, 1], 0, 0));
+  assert.deepEqual(onlyRests.staves.map((l) => l.voice ?? 1), [1, 2, 3, 1], "voice 2 of rests not made");
+});

@@ -91,7 +91,7 @@ export const SHORTCUTS = [
     does: "lyrics / chord symbol",
     match: (k) => (k.altKey ? null : { l: ["lyrics"], k: ["chord"] }[lower(k)] ?? null),
   },
-  { keys: "Ctrl+Alt+1 / 2", does: "voice 1 / voice 2", match: (k) => (k.mod && k.altKey && ["Digit1", "Digit2", "Numpad1", "Numpad2"].includes(k.code) ? ["voice", { voice: k.code.slice(-1) }] : null) },
+  { keys: "Ctrl+Alt+1 – 4", does: "voice 1, 2, 3 or 4", match: (k) => (k.mod && k.altKey && /^(Digit|Numpad)[1-4]$/.test(k.code) ? ["voice", { voice: k.code.slice(-1) }] : null) },
   { keys: "Ctrl+3, 5, 6, 7", does: "tuplets", match: (k) => (k.mod && !k.altKey && ["3", "5", "6", "7"].includes(k.key) ? ["tuplet", { n: k.key }] : null) },
   { keys: "]", does: "a bar at the end", match: (k) => (!k.mod && k.key === "]" ? ["add-bar"] : null) },
   { keys: "Insert", does: "a bar before the selection", match: (k) => (!k.mod && k.key === "Insert" ? ["insert-bar"] : null) },

@@ -68,7 +68,7 @@ def sign_up_in_browser(email)
   wait_for_text("Your scores")
 end
 
-# Two bars for a violin and a third voice the editor does not write, as MusicXML.
+# A bar for a violin in three voices, the third a quarter tone sharp, which the editor rounds, as MusicXML.
 const VIOLIN_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <score-partwise version="4.0"><work><work-title>Imported</work-title></work>
 <part-list><score-part id="P1"><part-name>Violin</part-name></score-part></part-list>
@@ -78,7 +78,8 @@ const VIOLIN_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <backup><duration>2</duration></backup>
 <note><pitch><step>C</step><octave>5</octave></pitch><duration>2</duration><voice>2</voice><type>half</type></note>
 <backup><duration>2</duration></backup>
-<note><pitch><step>A</step><octave>4</octave></pitch><duration>2</duration><voice>3</voice><type>half</type></note>
+<note><pitch><step>A</step><alter>0.5</alter><octave>4</octave></pitch>
+<duration>2</duration><voice>3</voice><type>half</type></note>
 </measure></part></score-partwise>"""
 
 # Chooses a file for the start screen's Import, as a person does.
@@ -345,7 +346,7 @@ describe("The app, in a browser") do
   test("import a MusicXML file: what it leaves out is named first, then the score is created") do
     sign_up_in_browser(journey_email())
     import_in_browser("imported.musicxml", VIOLIN_XML)
-    wait_for_text("Left out of imported.musicxml: a third voice on a staff, left out.")
+    wait_for_text("Left out of imported.musicxml: quarter tones, rounded.")
     assert_page_path("/app")
     click_button("Create the score anyway")
     wait_for("[data-save-state]")
@@ -353,6 +354,8 @@ describe("The app, in a browser") do
     assert_text("Imported")
     assert_contains(editor_source(), "e''2")
     assert_contains(editor_source(), "c''2")
+    # The third voice is kept, the quarter tone rounded up to a sharp.
+    assert_contains(editor_source(), "ais'2")
     assert_not(editor_source().includes?("a'2"))
   end
 

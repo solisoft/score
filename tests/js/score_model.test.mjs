@@ -21,9 +21,9 @@ function engrave(score) {
   } catch (e) {
     throw new Error(`${e.message ?? e}\n${source}`);
   }
-  // Every event of a staff's first voice is an item; a second voice's, in the bars it is written in.
-  const upper = score.staves.reduce((n, st) => n + (st.voice === 2 ? 0 : st.events.length), 0);
-  assert.equal(items.filter((it) => score.staves[it.staff].voice !== 2).length, upper, "one item per event");
+  // Every event of a staff's first voice is an item; another voice's, in the bars it is written in.
+  const upper = score.staves.reduce((n, st) => n + (st.voice ? 0 : st.events.length), 0);
+  assert.equal(items.filter((it) => !score.staves[it.staff].voice).length, upper, "one item per event");
   assert.ok(items.every((it) => score.staves[it.staff].events[it.index]), "every item is an event");
   assert.equal(new Set(items.map((it) => `${it.staff}:${it.index}`)).size, items.length, "no event twice");
   assert.equal(view.items.length, items.length, `the engraver sees every item\n${source}`);
@@ -454,10 +454,95 @@ test("a tuplet inside a tuplet is engraved, and left to the text", () => {
   assert.ok(read.unsupported.includes("a tuplet inside a tuplet"));
 });
 
-test("four voices on a staff, and notes sent to the other staff, are engraved and left to the text", () => {
-  const voices = "{ << { e''4 f'' g''2 } \\\\ { c''4 d'' e''2 } \\\\ { g'4 a' b'2 } \\\\ { c'4 f' g'2 } >> }";
-  JSON.parse(editor_view(voices, 900, 7, -1, -1));
-  assert.ok(M.fromParsed(JSON.parse(score_json(voices))).unsupported.includes("three voices on a staff"));
+test("four voices on a staff are four lanes, read and written as they were", () => {
+  const voices = "{ << { e''4 f''4 g''2 } \\\\ { c''4 d''4 e''2 } \\\\ { g'4 a'4 b'2 } \\\\ { c'4 f'4 g'2 } >> | c''1 }";
+  const back = M.fromParsed(JSON.parse(score_json(voices)));
+  assert.ok(back.score, back.unsupported?.join());
+  const s = back.score;
+  assert.deepEqual(s.staves.map((l) => l.voice ?? 1), [1, 2, 3, 4]);
+  assert.deepEqual(M.staffLanes(s), [0]);
+  assert.deepEqual(M.voiceLanes(s, 2), [0, 1, 2, 3]);
+  assert.equal(M.upperOf(s, 3), 0);
+  assert.equal(M.voiceOf(s, 2), 3);
+  assert.equal(M.laneOfVoice(s, 0, 4), 3);
+  assert.equal(M.laneOfVoice(s, 0, 5), -1);
+  assert.deepEqual(shape(s)[2], [["g'", M.WHOLE / 4, false], ["a'", M.WHOLE / 4, false], ["b'", M.WHOLE / 2, false], ["r", M.WHOLE, false]], "voice 3 rests where it is silent");
+  assert.ok(s.staves.every((l) => M.lengthOf(l) === M.lengthOf(s.staves[0])), "the voices last as long");
+  const { source } = engrave(s);
+  assert.match(source, /<< \{ e''4 f''4 g''2 \} \\\\ \{ c''4 d''4 e''2 \} \\\\ \{ g'4 a'4 b'2 \} \\\\ \{ c'4 f'4 g'2 \} >> \| c''1/);
+  assert.deepEqual(shape(reread(s)), shape(s), "read back as itself");
+  assert.equal(M.toLilyPond(reread(s)).source, source, "and written again the same");
+});
+
+test("three voices: an edit in voice 3, written and read back; voice 2 kept as rests where only voice 3 sounds", () => {
+  const s = reread(M.newScore());
+  const third = M.addVoice(s, 0, 3);
+  assert.equal(third, 2, "voice 3 after voice 2, made with it");
+  assert.deepEqual(s.staves.map((l) => l.voice ?? 1), [1, 2, 3]);
+  assert.equal(M.addVoice(s, 2, 3), 2, "a voice there already is answered");
+  assert.throws(() => M.addVoice(s, 0, 5), /4 voices at most/);
+  assert.doesNotMatch(engrave(s).source, /\\\\/, "voices of rests are not written");
+  M.write(s, third, 0, M.notated(2), { rest: false, pitches: [{ d: 30, alter: 0 }] });
+  const { source } = engrave(s);
+  assert.match(source, /<< \{ r1 \} \\\\ \{ r1 \} \\\\ \{ [a-g]+'*2 r2 \} >> \| r1/, "voice 2 written in rests, so voice 3 is the third");
+  const back = reread(s);
+  assert.deepEqual(back.staves.map((l) => l.voice ?? 1), [1, 2, 3]);
+  assert.deepEqual(shape(back), shape(s));
+  // The edit read back in voice 3, then a second one there.
+  M.write(back, 2, M.notated(2), M.notated(4), { rest: false, pitches: [{ d: 31, alter: 1 }] });
+  assert.deepEqual(shape(reread(back))[2], shape(back)[2]);
+  // The page writes in an empty bar of voice 3: voice 2 comes with it.
+  assert.match(M.toLilyPond(s, { open: [{ staff: 2, bar: 1 }] }).source, /\| << \{ r1 \} \\\\ \{ r1 \} \\\\ \{ r1 \} >> \|/);
+});
+
+test("a bar where voice 2 is drawn as nothing names its voices, so voice 3 stays the third", () => {
+  const src = "{ << { e''1 | f''1 } \\\\ { s2 c''2 | s1 } \\\\ { g'1 | a'1 } >> }";
+  const s = M.fromParsed(JSON.parse(score_json(src))).score;
+  assert.deepEqual(s.staves.map((l) => l.voice ?? 1), [1, 2, 3]);
+  // A spacer is numbered and not drawn: the engraver's items are the notes alone.
+  const { source, items } = M.toLilyPond(s);
+  assert.equal(JSON.parse(editor_view(source, 900, 7, -1, -1)).items.length, items.filter((it) => !s.staves[it.staff].events[it.index].spacer).length);
+  assert.match(source, /<< \{ e''1 \} \\\\ \{ s2 c''2 \} \\\\ \{ g'1 \} >> \| << \{ \\voiceOne f''1 \} \\\\ \{ \\voiceTwo s1 \} \\\\ \{ \\voiceThree a'1 \} >>/);
+  assert.deepEqual(shape(reread(s)), shape(s));
+  assert.ok(reread(s).staves[2].events.some((ev) => !ev.rest && ev.pitches[0].d === s.staves[2].events[1].pitches[0].d), "a' in voice 3");
+});
+
+test("\\voiceThree beside voice 1 is voice 3; a fourth voice taken away, a middle one left as rests", () => {
+  const back = M.fromParsed(JSON.parse(score_json("{ << { \\voiceOne e''1 } \\\\ { \\voiceThree g'1 } >> }")));
+  assert.ok(back.score, back.unsupported?.join());
+  assert.deepEqual(back.score.staves.map((l) => l.voice ?? 1), [1, 2, 3]);
+  assert.ok(back.score.staves[1].events.every((ev) => ev.rest), "voice 2 silent");
+  const s = M.fromParsed(JSON.parse(score_json("{ << { e''1 } \\\\ { c''1 } \\\\ { g'1 } \\\\ { c'1 } >> }"))).score;
+  M.removeVoice(s, 1);
+  assert.deepEqual(s.staves.map((l) => l.voice ?? 1), [1, 2, 3, 4], "voice 2 taken away: its lane stays, for voices 3 and 4");
+  assert.ok(s.staves[1].events.every((ev) => ev.rest));
+  M.removeVoice(s, 0, 4);
+  assert.deepEqual(s.staves.map((l) => l.voice ?? 1), [1, 2, 3]);
+  assert.throws(() => M.removeVoice(s, 0, 4), /no voice 4/);
+  M.removeVoice(s, 2);
+  assert.deepEqual(s.staves.map((l) => l.voice ?? 1), [1], "the last voice gone, the voices of rests before it go too");
+  assert.throws(() => M.removeVoice(s, 0), /one voice/);
+  engrave(s);
+});
+
+test("a staff of four voices: its bars deleted, its part taken, the staff removed whole", () => {
+  const src = "\\new StaffGroup << \\new Staff { << { e''1 } \\\\ { c''1 } \\\\ { g'1 } \\\\ { c'1 } >> | << { f''1 } \\\\ { d''1 } \\\\ { a'1 } \\\\ { d'1 } >> } \\new Staff { \\clef bass c1 | d1 } >>";
+  const s = M.fromParsed(JSON.parse(score_json(src))).score;
+  assert.deepEqual(M.staffLanes(s), [0, 4]);
+  const cut = structuredClone(s);
+  M.deleteBars(cut, 0, 0);
+  assert.deepEqual(shape(cut).map((l) => l.map((e) => e[0])), [["f''"], ["d''"], ["a'"], ["d'"], ["d"]]);
+  assert.equal(cut.staves[4].clef, "bass");
+  engrave(cut);
+  const part = M.partOf(s, 2);
+  assert.equal(part.staves.length, 4);
+  assert.match(engrave(part).source, /\\\\ \{ c'1 \} >>/);
+  M.removeStaff(s, 3);
+  assert.equal(s.staves.length, 1);
+  assert.equal(s.staves[0].clef, "bass");
+});
+
+test("notes sent to the other staff are engraved and left to the text", () => {
   const crossing = '\\new PianoStaff << \\new Staff = "up" { c\'\'4 \\change Staff = "down" c\'4 e\'4 \\change Staff = "up" c\'\'4 } \\new Staff = "down" { \\clef bass s1 } >>';
   JSON.parse(editor_view(crossing, 900, 7, -1, -1));
   assert.ok(M.fromParsed(JSON.parse(score_json(crossing))).unsupported.includes("notes moved to another staff"));

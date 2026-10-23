@@ -13,6 +13,16 @@ class Changelog
       {"date": "2026-10-23", "entries": [
         {
           "area": "site",
+          "title": "Three and four voices on one staff",
+          "text": "A staff can now hold up to four voices in the editor, instead of two: a score with a third or "
+          + "fourth voice opens in the editor instead of as text only. Voices 1 and 3 have their stems up, 2 and "
+          + "4 down. Pick a voice with Ctrl+Alt+1 to 4, from the toolbox or the Add menu, write in it, and take "
+          + "it away again. Every voice plays, has its own track and colour in the MIDI view, and is copied and "
+          + "pasted with its staff. MusicXML files bring their third and fourth voices in, and take them out.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
           "title": "Ottava lines, fingerings and phrasing slurs in the editor",
           "text": "A score with an 8va line, fingerings, string numbers or phrasing slurs now opens in the editor "
           + "instead of as text only, and keeps them through every edit. Add them from the tools or the Insert "

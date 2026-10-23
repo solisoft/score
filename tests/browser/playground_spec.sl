@@ -278,7 +278,7 @@ describe("The playground, in a browser") do
     keys = evaluate("[...document.querySelectorAll('[data-keys-list] dt')].map((dt) => dt.textContent)")
     # Ctrl and Alt are ⌘ and ⌥ on a Mac, the sheet written for the keyboard in front of the person.
     mac = evaluate("/mac|iphone|ipad/i.test(navigator.userAgentData?.platform || navigator.platform)")
-    expected = ["R", "L / K, Ctrl+L / Ctrl+K", "Ctrl+Alt+1 / 2", "Ctrl+Shift+V", "Ctrl++ / Ctrl+−", "Space", "?"]
+    expected = ["R", "L / K, Ctrl+L / Ctrl+K", "Ctrl+Alt+1 – 4", "Ctrl+Shift+V", "Ctrl++ / Ctrl+−", "Space", "?"]
     expected.each do |key|
       label = mac ? key.replace("Ctrl+Shift+", "⌘⇧").replace("Ctrl+Alt+", "⌘⌥").replace("Ctrl+", "⌘") : key
       assert_contains(keys, label)
