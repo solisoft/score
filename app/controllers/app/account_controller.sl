@@ -81,7 +81,7 @@ class AppAccountController < AppBaseController
       return render("app/account/show", {}, {"status": 422})
     end
 
-    flash("notice", "Photos are now read with your #{ScoreReader.provider_name(this.user.ai_provider)} key.")
+    flash("notice", "The AI features now use your #{AiClient.provider_name(this.user.ai_provider)} key.")
     redirect(app_account_path())
   end
 

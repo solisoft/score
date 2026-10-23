@@ -280,6 +280,11 @@
   .studio-parts-note { font-size: 13px; margin: 6px 0 10px; }
   .studio-parts-preview { background: #fff; color: #111; border: 1px solid var(--line); border-radius: 10px; padding: 10px; max-height: 50vh; overflow: auto; margin-bottom: 12px; }
   .studio-parts-preview svg { max-width: 100%; height: auto; display: block; }
+  .studio-ai { width: min(820px, calc(100vw - 32px)); }
+  .studio-ai-request { width: 100%; box-sizing: border-box; font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--paper); color: var(--ink); resize: vertical; }
+  .studio-ai-result { display: grid; gap: 10px; margin: 6px 0 12px; }
+  .studio-ai-explanation { white-space: pre-wrap; font-size: 14px; line-height: 1.55; max-height: 30vh; overflow: auto; }
+  .studio-ai-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
   /* Over the selected note: what is done to a note most. */
   .studio-palette { position: absolute; z-index: 12; display: flex; gap: 2px; padding: 4px; background: var(--sheet); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: 0 8px 22px rgb(29 25 20 / .16); }

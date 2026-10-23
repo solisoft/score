@@ -2135,6 +2135,38 @@
     height: auto;
     display: block;
   }
+  .studio-ai {
+    width: min(820px, calc(100vw - 32px));
+  }
+  .studio-ai-request {
+    width: 100%;
+    box-sizing: border-box;
+    font: inherit;
+    font-size: 14px;
+    padding: 8px 10px;
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    background: var(--paper);
+    color: var(--ink);
+    resize: vertical;
+  }
+  .studio-ai-result {
+    display: grid;
+    gap: 10px;
+    margin: 6px 0 12px;
+  }
+  .studio-ai-explanation {
+    white-space: pre-wrap;
+    font-size: 14px;
+    line-height: 1.55;
+    max-height: 30vh;
+    overflow: auto;
+  }
+  .studio-ai-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
   .studio-palette {
     position: absolute;
     z-index: 12;

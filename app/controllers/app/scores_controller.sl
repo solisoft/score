@@ -52,6 +52,7 @@ class AppScoresController < AppBaseController
     @examples = ScoreLibrary.examples
     @eui_version = ScoreAssets.version
     @editing_score = @score
+    @ai_with = @_ai_with(current_user())
     @room_ticket = ScoreRoom.ticket(@score, current_user(), DateTime.utc.to_unix)
     @title = @score.title
     @description = "#{this.score.title}, in the EUI Score editor."
@@ -243,6 +244,17 @@ class AppScoresController < AppBaseController
       "link": "open to whoever has its link",
       "public": "public"
     }
+  end
+
+  # Which AI the editor's assistant answers with, in a sentence.
+  def _ai_with(user)
+    settings = user.ai_settings
+    return "There is no AI key yet: add one on your account page." if settings.nil?
+
+    left = "#{ScoreSuggestion.left_today(user)} questions left today."
+    return "Answered by Claude. #{left}" unless settings["own"]
+
+    "Answered by #{AiClient.provider_name(settings["provider"])}, #{settings["model"]}, with your key. #{left}"
   end
 
   # The score of the route, if the signed-in person may `action` it (403

@@ -1,5 +1,5 @@
-# Reading a photo of a score with Claude: the picture sent, the request
-# built, Claude's answers read, and a reading kept per person.
+# Reading a photo of a score: the picture sent, the conversation built, the
+# answer read as a source, and a reading kept per person.
 
 # A white PNG 3000 pixels wide: past the long edge Claude takes.
 const WIDE_PNG = "iVBORw0KGgoAAAANSUhEUgAAC7gAAAAUCAAAAAA4py/KAAAAbklEQVR42u3WIQEAAADCMPqXhhqILcLV"
@@ -13,20 +13,6 @@ def reader_user
   user.confirmed_at = DateTime.utc.to_unix
   user.save
   user
-end
-
-# Settings as a person's own key gives them.
-def own(provider, model)
-  {
-    "provider": provider,
-    "model": model,
-    "key": "sk-own-key-1234",
-    "own": true
-  }
-end
-
-def claude_said(status, body)
-  {"status": status, "body": JSON.stringify(body)}
 end
 
 describe("ScoreReader") do
@@ -45,170 +31,37 @@ describe("ScoreReader") do
     end
   end
 
-  describe("the request") do
-    test("sends the picture and the instructions to the server's Opus, thinking") do
-      request = ScoreReader.request("abc", ScoreReader.server_settings, nil, nil)
-      assert_eq(request["url"], "https://api.anthropic.com/v1/messages")
-      assert_eq(request["headers"]["x-api-key"], "test-key-never-sent")
-      assert_eq(request["headers"]["anthropic-beta"], "server-side-fallback-2026-07-01")
-      body = request["body"]
-      assert_eq(body["model"], "claude-opus-5-5")
-      assert_eq(body["thinking"]["type"], "adaptive")
-      assert_eq(body["fallbacks"], "default")
-      assert_null(body["temperature"])
-      assert_eq(body["messages"].length, 1)
-      content = body["messages"][0]["content"]
-      assert_eq(
-        content[0]["source"],
-        {
-          "type": "base64",
-          "media_type": "image/jpeg",
-          "data": "abc"
-        }
-      )
-      assert_contains(content[1]["text"], "LilyPond source only")
-    end
-
-    test("a Claude model of one's own gets only what every Claude model takes") do
-      request = ScoreReader.request("abc", own("anthropic", "claude-sonnet-5-5"), nil, nil)
-      assert_eq(request["headers"]["x-api-key"], "sk-own-key-1234")
-      assert_null(request["headers"]["anthropic-beta"])
-      assert_eq(request["body"]["model"], "claude-sonnet-5-5")
-      assert_null(request["body"]["thinking"])
-      assert_null(request["body"]["fallbacks"])
-    end
-
-    test("the other providers get the chat-completions request, the key as a bearer") do
-      request = ScoreReader.request("abc", own("moonshot", "kimi-latest"), nil, nil)
-      assert_eq(request["url"], "https://api.moonshot.ai/v1/chat/completions")
-      assert_eq(request["headers"]["Authorization"], "Bearer sk-own-key-1234")
-      assert_null(request["headers"]["x-api-key"])
-      body = request["body"]
-      assert_eq(body["model"], "kimi-latest")
-      content = body["messages"][0]["content"]
-      assert_contains(content[0]["text"], "LilyPond source only")
-      assert_eq(content[1]["image_url"]["url"], "data:image/jpeg;base64,abc")
-      ["openai", "gemini", "mistral", "deepseek", "openrouter"].each do |provider|
-        assert(
-          ScoreReader.request("abc", own(provider, "m"), nil, nil)["url"].ends_with?("/chat/completions"),
-          provider
-        )
-      end
+  describe("the conversation") do
+    test("sends the picture with the instructions") do
+      turns = ScoreReader.turns("abc", nil, nil)
+      assert_eq(turns.length, 1)
+      assert_eq(turns[0]["image"], "abc")
+      assert_contains(turns[0]["text"], "LilyPond source only")
     end
 
     test("on a second try, carries the first answer and the engraver's words") do
-      [ScoreReader.server_settings, own("openai", "gpt-5")].each do |settings|
-        body = ScoreReader.request("abc", settings, "{ c4 ( }", "unclosed slur")["body"]
-        assert_eq(body["messages"].length, 3)
-        assert_eq(
-          body["messages"][1],
-          {"role": "assistant", "content": "{ c4 ( }"}
-        )
-        assert_contains(body["messages"][2]["content"], "unclosed slur")
-      end
+      turns = ScoreReader.turns("abc", "{ c4 ( }", "unclosed slur")
+      assert_eq(turns.length, 3)
+      assert_eq(
+        turns[1],
+        {"role": "assistant", "text": "{ c4 ( }"}
+      )
+      assert_contains(turns[2]["text"], "unclosed slur")
+      assert_null(turns[2]["image"])
     end
   end
 
   describe("the answer") do
-    test("is the text of Claude's answer, without a fence") do
-      said = claude_said(
-        200,
-        {"stop_reason": "end_turn", "content": [
-          {"type": "thinking", "thinking": "a C major scale"},
-          {"type": "text", "text": "```lilypond\n{ c'4 d' e' f' }\n```"}
-        ]}
-      )
-      assert_eq(ScoreReader.answer(said, ScoreReader.server_settings), {"source": "{ c'4 d' e' f' }"})
+    test("is the source in the text, without a fence") do
+      assert_eq(ScoreReader.source_of({"text": "```lilypond\n{ c'4 d' e' f' }\n```"}), {"source": "{ c'4 d' e' f' }"})
       assert_eq(ScoreReader.unfenced("  { c4 }  "), "{ c4 }")
       assert_eq(ScoreReader.unfenced("```\n{ c4 }"), "{ c4 }")
     end
 
-    test("is the message of a chat-completions answer, as text or as parts") do
-      text = claude_said(200, {"choices": [{
-        "finish_reason": "stop",
-        "message": {"content": "{ c'4 }"}
-      }]})
-      assert_eq(ScoreReader.answer(text, own("openai", "gpt-5")), {"source": "{ c'4 }"})
-      parts = claude_said(200, {"choices": [{"message": {"content": [{
-        "type": "text",
-        "text": "{ d'4 }"
-      }]}}]})
-      assert_eq(ScoreReader.answer(parts, own("mistral", "pixtral-large-latest")), {"source": "{ d'4 }"})
-      filtered = claude_said(200, {"choices": [{
-        "finish_reason": "content_filter",
-        "message": {"content": ""}
-      }]})
-      assert_eq(
-        ScoreReader.answer(filtered, own("gemini", "g"))["error"],
-        "Google (Gemini) declined to read this picture."
-      )
-      none = claude_said(200, {"choices": []})
-      assert_contains(ScoreReader.answer(none, own("openai", "gpt-5"))["error"], "No music")
+    test("passes an error on, and names an answer with no music") do
+      assert_eq(ScoreReader.source_of({"error": "busy"}), {"error": "busy"})
+      assert_eq(ScoreReader.source_of({"text": "  "}), {"error": "No music was found in the picture."})
     end
-
-    test("names each way it can fail, and whose") do
-      server = ScoreReader.server_settings
-      assert_eq(
-        ScoreReader.answer(nil, server)["error"],
-        "Anthropic (Claude) could not be reached. Try again in a moment."
-      )
-      assert_contains(ScoreReader.answer(claude_said(529, {}), server)["error"], "busy")
-      assert_contains(ScoreReader.answer(claude_said(429, {}), server)["error"], "busy")
-      assert_contains(ScoreReader.answer(claude_said(500, {}), server)["error"], "busy")
-      assert_eq(
-        ScoreReader.answer(claude_said(401, {}), server)["error"],
-        "Anthropic (Claude) refused the request (401)."
-      )
-      assert_contains(ScoreReader.answer(
-        {"status": 200, "body": "not json"},
-        server
-      )["error"], "could not be read")
-      refused = claude_said(
-        200,
-        {"stop_reason": "refusal", "content": [{
-          "type": "text",
-          "text": "{ c4 }"
-        }]}
-      )
-      assert_contains(ScoreReader.answer(refused, server)["error"], "declined")
-      empty = claude_said(
-        200,
-        {"stop_reason": "end_turn", "content": [{
-          "type": "text",
-          "text": "  "
-        }]}
-      )
-      assert_contains(ScoreReader.answer(empty, server)["error"], "No music")
-      assert_null(ScoreReader.answer(empty, server)["source"])
-    end
-
-    test("names a refused key of one's own, and passes on the provider's words") do
-      assert_eq(
-        ScoreReader.answer(claude_said(401, {}), own("deepseek", "deepseek-chat"))["error"],
-        "DeepSeek refused your API key. Check it on your account page."
-      )
-      no_images = claude_said(400, {"error": {"message": "This model does not support image input"}})
-      assert_eq(
-        ScoreReader.answer(no_images, own("deepseek", "deepseek-chat"))["error"],
-        "DeepSeek refused the request (400): This model does not support image input"
-      )
-      plain = claude_said(404, {"error": "no such model"})
-      assert_eq(
-        ScoreReader.answer(plain, own("openrouter", "x"))["error"],
-        "OpenRouter (many models) refused the request (404): no such model"
-      )
-    end
-  end
-
-  describe("the engraver's check") do
-    test("passes music it engraves, and names what it refuses") do
-      assert_null(ScoreReader.problem("{ c'4 d' e' f' }"))
-      assert_contains(ScoreReader.problem("\\relax { c4 }"), "relax")
-    end
-  end
-
-  test("is offered when the server has a key") do
-    assert(ScoreReader.available?())
   end
 end
 
@@ -259,7 +112,7 @@ describe("ScoreReading") do
 
   test("reads with a key of one's own, with more readings a day") do
     user = reader_user()
-    assert_eq(user.ai_settings, ScoreReader.server_settings)
+    assert_eq(user.ai_settings, AiClient.server_settings)
     assert_null(user.keep_ai_key("moonshot", "kimi-latest", "sk-moonshot-secret-9876"))
     stored = User.find(user._key)
     assert(stored.own_ai?)

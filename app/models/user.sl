@@ -405,12 +405,13 @@ class User < Model
     this.update()
   end
 
-  # An AI key of one's own, for reading photos of scores (ScoreReader):
-  # `provider` one of SCORE_READER_PROVIDERS, the key kept encrypted and
+  # An AI key of one's own, for reading photos of scores and the editor's
+  # assistant (AiClient):
+  # `provider` one of AI_PROVIDERS, the key kept encrypted and
   # shown only by its last four characters. An error message, or nil once
   # kept.
   def keep_ai_key(provider, model, key)
-    return "Choose a provider." unless SCORE_READER_PROVIDERS.has_key(provider.to_s)
+    return "Choose a provider." unless AI_PROVIDERS.has_key(provider.to_s)
     return "Name the model to use." if model.to_s.trim.blank?
     return "Paste the API key." if key.to_s.trim.length < 8
     return "Keys cannot be kept on this server." unless User.two_step_available?()
@@ -429,16 +430,16 @@ class User < Model
   end
 
   def ai_provider_name
-    ScoreReader.provider_name(this.ai_provider)
+    AiClient.provider_name(this.ai_provider)
   end
 
   # The providers a key may be for, as the account page lists them.
   def ai_choices
-    SCORE_READER_PROVIDERS.keys.map do |id|
+    AI_PROVIDERS.keys.map do |id|
       {
         "id": id,
-        "name": SCORE_READER_PROVIDERS[id]["name"],
-        "models": SCORE_READER_PROVIDERS[id]["models"]
+        "name": AI_PROVIDERS[id]["name"],
+        "models": AI_PROVIDERS[id]["models"]
       }
     end
   end
@@ -463,9 +464,9 @@ class User < Model
       }
     end
 
-    return nil unless ScoreReader.available?()
+    return nil unless AiClient.available?()
 
-    ScoreReader.server_settings()
+    AiClient.server_settings()
   end
 
   # The time step `code` is for, one step either side of `now`, or nil.

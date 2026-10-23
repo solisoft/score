@@ -98,6 +98,17 @@
             <button type="button" role="menuitem" data-act="stop">Stop, back to the start</button>
           </div>
         </details>
+        <% if locals["photos"] %>
+          <details class="studio-dropdown">
+            <summary class="studio-menu">AI</summary>
+            <div class="studio-dropdown-items" role="menu">
+              <button type="button" role="menuitem" data-ai-ask="chords">Chord progression… <kbd>chord symbols</kbd></button>
+              <button type="button" role="menuitem" data-ai-ask="harmonize">Harmonize the melody… <kbd>accompaniment</kbd></button>
+              <button type="button" role="menuitem" data-ai-ask="improve">Suggest improvements…</button>
+              <button type="button" role="menuitem" data-ai-ask="ask">Ask the AI… <kbd>anything</kbd></button>
+            </div>
+          </details>
+        <% end %>
       </nav>
       <div class="studio-menu-group">
         <button type="button" class="studio-menu" data-act="undo" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>

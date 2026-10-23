@@ -21,7 +21,7 @@ class AppHomeController < AppBaseController
     settings = user.ai_settings
     return {"ready": false} if settings.nil?
 
-    with = settings["own"] ? "#{ScoreReader.provider_name(settings["provider"])}, #{settings["model"]}" : "Claude"
+    with = settings["own"] ? "#{AiClient.provider_name(settings["provider"])}, #{settings["model"]}" : "Claude"
     {
       "ready": true,
       "with": with,

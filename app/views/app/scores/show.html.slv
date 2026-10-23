@@ -1,5 +1,30 @@
 <%- partial("shared/studio", {"examples": examples, "figure": figure, "source": source, "photos": true}) %>
 
+<%# The AI assistant (AI menu): what to ask, then the explanation beside the
+    proposed score, to apply or discard. %>
+<dialog class="studio-keys studio-parts studio-ai" data-ai aria-labelledby="studio-ai-title">
+  <form method="dialog" data-ai-form>
+    <div class="studio-keys-head">
+      <h2 id="studio-ai-title" data-ai-title>AI</h2>
+      <button type="button" class="studio-menu" data-ai-close aria-label="Close">×</button>
+    </div>
+    <p class="muted studio-parts-note" data-ai-about></p>
+    <textarea class="studio-ai-request" data-ai-request rows="3"></textarea>
+    <p class="muted studio-parts-note" data-ai-with><%= ai_with %></p>
+    <p class="studio-parts-note" data-ai-status hidden></p>
+    <p class="form-error" data-ai-error hidden></p>
+    <div class="studio-ai-result" data-ai-result hidden>
+      <div class="studio-ai-explanation" data-ai-explanation></div>
+      <div class="studio-parts-preview" data-ai-preview></div>
+    </div>
+    <div class="studio-ai-actions">
+      <button type="submit" class="btn btn-primary" data-ai-send>Ask</button>
+      <button type="button" class="btn btn-primary" data-ai-apply hidden>Apply to the score</button>
+      <button type="button" class="btn btn-ghost" data-ai-again hidden>Ask again</button>
+    </div>
+  </form>
+</dialog>
+
 <%# The score saves itself: 1.5 s after the last change, a PUT of its source
     over the revision it was opened at. The header says where it stands.
     A 409 — saved from another window since — is never overwritten: the
@@ -200,5 +225,88 @@
     } finally {
       event.target.value = "";
     }
+  });
+
+  // The AI menu: the editor's text sent with what to ask, the suggestion asked
+  // after until it is ready, shown, and applied only on "Apply" (the score as
+  // it stands kept as a version first; Undo takes it back too).
+  const ai = document.querySelector("[data-ai]");
+  const aiPart = (name) => ai.querySelector(`[data-ai-${name}]`);
+  const AI_ASKS = {
+    chords: ["Chord progression", "Chord symbols for the melody, above it. Say a style if you like: jazz, pop, baroque, modal…", "Optional: a style, an era, how rich the chords should be"],
+    harmonize: ["Harmonize the melody", "An accompaniment under the melody, for piano unless you name other voices or instruments.", "Optional: for SATB choir, for string quartet, simple chords on the beat…"],
+    improve: ["Suggest improvements", "What the AI would change (voice leading, rhythm, dynamics, phrasing…), with the score revised.", "Optional: what to look at first"],
+    ask: ["Ask the AI", "Anything to do with this score.", "Make the bass line more mobile; transpose it for clarinet in B♭; add a coda…"],
+  };
+  let aiAction = "chords";
+  let aiAnswer = null;
+  const aiReset = () => {
+    aiAnswer = null;
+    for (const name of ["status", "error", "result", "apply", "again"]) aiPart(name).hidden = true;
+    aiPart("send").hidden = false;
+    aiPart("send").disabled = false;
+    aiPart("request").disabled = false;
+  };
+  document.querySelectorAll("[data-ai-ask]").forEach((button) => button.addEventListener("click", () => {
+    button.closest("details")?.removeAttribute("open");
+    aiAction = button.dataset.aiAsk;
+    const [title, about, hint] = AI_ASKS[aiAction];
+    aiPart("title").textContent = title;
+    aiPart("about").textContent = about;
+    aiPart("request").placeholder = hint;
+    aiPart("request").value = "";
+    aiReset();
+    ai.showModal();
+    aiPart("request").focus();
+  }));
+  aiPart("close").addEventListener("click", () => ai.close());
+  aiPart("again").addEventListener("click", aiReset);
+  aiPart("form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const fail = (message) => {
+      aiPart("status").hidden = true;
+      aiPart("error").textContent = message;
+      aiPart("error").hidden = false;
+      aiPart("send").disabled = false;
+      aiPart("request").disabled = false;
+    };
+    aiPart("error").hidden = true;
+    aiPart("send").disabled = true;
+    aiPart("request").disabled = true;
+    aiPart("status").textContent = "The AI is working on it… a minute or two.";
+    aiPart("status").hidden = false;
+    try {
+      const sent = await fetch("<%= app_score_suggestions_path(score) %>", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ action: aiAction, request: aiPart("request").value, source: studio.source() }),
+      });
+      const started = await sent.json();
+      if (sent.status !== 202) return fail(started.error);
+      for (;;) {
+        await new Promise((done) => setTimeout(done, 3000));
+        if (!ai.open) return;
+        const answer = await (await fetch("<%= app_suggestion_path("ID") %>".replace("ID", started.id), { headers: { Accept: "application/json" } })).json();
+        if (answer.state === "working") continue;
+        if (answer.state === "failed") return fail(answer.error);
+        aiAnswer = answer;
+        aiPart("status").hidden = true;
+        aiPart("explanation").textContent = answer.explanation || "Here is the score the AI proposes.";
+        aiPart("preview").innerHTML = answer.svg;
+        aiPart("result").hidden = false;
+        aiPart("send").hidden = true;
+        aiPart("apply").hidden = aiPart("again").hidden = false;
+        return;
+      }
+    } catch (problem) {
+      fail("The request could not be sent. Check your connection and try again.");
+    }
+  });
+  aiPart("apply").addEventListener("click", async () => {
+    if (!aiAnswer) return;
+    await save();
+    await fetch(`${url}/versions`, { method: "POST", headers: { Accept: "application/json" } });
+    studio.load(aiAnswer.source, `${AI_ASKS[aiAction][0]}: applied. Undo, or the History, takes it back.`);
+    ai.close();
   });
 </script>
