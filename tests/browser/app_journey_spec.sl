@@ -48,6 +48,16 @@ def sign_up_in_browser(email)
   # The form refuses what is sent back within two seconds of being shown.
   sleep(2.2)
   click("form.auth-form button[type=submit]")
+  # The address is confirmed from the link in the email: here, from a fresh
+  # link, opened in the browser. Then a sign-in.
+  wait_for_text("Check your inbox")
+  token = User.find_by("email", email).start_email_confirmation
+  visit("/confirm_email?token=#{token}")
+  wait_for_text("Your email address is confirmed")
+  visit("/login")
+  fill_in("#email", email)
+  fill_in("#password", JOURNEY_PASSWORD)
+  click("form.auth-form button[type=submit]")
   assert_page_path("/app")
 end
 
@@ -154,6 +164,7 @@ describe("The app, in a browser") do
     someone_else = User.new()
     someone_else.email = journey_email()
     someone_else.set_password(JOURNEY_PASSWORD)
+    someone_else.confirmed_at = DateTime.utc.to_unix
     someone_else.save
     login(someone_else.email, JOURNEY_PASSWORD)
     visit(score_path)

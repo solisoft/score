@@ -76,7 +76,13 @@ class SessionsController < Controller
     end
 
     if auth_require_confirmed_email() && !user.confirmed?()
-      return this._reject("Please confirm your email address first — check your inbox.", email, 403)
+      return render("sessions/new", {
+        "title": "Sign in",
+        "error": "Please confirm your email address first: open the link we sent you, or ask for a new one.",
+        "email": email,
+        "return_to": @_return_to,
+        "unconfirmed": true
+      }, {"status": 403})
     end
 
     user.clear_failed_attempts()

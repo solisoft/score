@@ -15,10 +15,12 @@ def fresh_email
   "spec-#{uuid_v4}@example.com"
 end
 
-def make_user(email)
+# An account whose address is confirmed, unless `confirmed` says otherwise.
+def make_user(email, confirmed = true)
   user = User.new()
   user.email = email
   user.set_password(SPEC_PASSWORD)
+  user.confirmed_at = DateTime.utc.to_unix if confirmed
   user.save()
   user
 end
@@ -37,7 +39,7 @@ describe("Accounts") do
   end
 
   describe("POST /signup") do
-    test("creates the account and signs it in, once the form has been on screen a moment") do
+    test("creates the account, asks to confirm the address, and signs in once it is") do
       email = fresh_email()
       fields = form_fields("/signup")
       sleep(2.1)
@@ -45,9 +47,21 @@ describe("Accounts") do
         "email": email,
         "password": SPEC_PASSWORD
       }))
-      assert_eq(res_status(response), 302)
-      assert_eq(res_location(response), "/app")
-      assert_not_null(User.find_by("email", email))
+      assert_eq(res_status(response), 200)
+      assert_contains(res_body(response), "Check your inbox")
+      assert_contains(res_body(response), "We sent a link to #{email}")
+      user = User.find_by("email", email)
+      assert_not(user.confirmed?)
+      assert_eq(res_status(get("/app/account")), 302, "not signed in yet")
+      # Refused until the address is confirmed, with the way to get a new link.
+      refused = sign_in_as(email)
+      assert_eq(res_status(refused), 403)
+      assert_contains(res_body(refused), "Please confirm your email address first")
+      assert_contains(res_body(refused), "Send the link again")
+      assert_eq(res_status(get("/app/account")), 302)
+      token = User.find(user._key).start_email_confirmation
+      assert_contains(res_body(get("/confirm_email?token=#{token}")), "Your email address is confirmed")
+      assert_eq(res_status(sign_in_as(email)), 302)
       assert_eq(res_status(get("/app/account")), 200)
     end
 
@@ -271,6 +285,30 @@ describe("Accounts") do
       member_page = res_body(get("/app/account"))
       assert_contains(member_page, "href=\"/app/account\"")
       assert_not(member_page.contains("Create account"))
+    end
+  end
+
+  describe("the address on the account page") do
+    test("says it is confirmed, or offers to send the link again") do
+      confirmed = make_user(fresh_email())
+      sign_in_as(confirmed.email)
+      page = res_body(get("/app/account"))
+      assert_contains(page, "Confirmed")
+      assert_not(page.includes?("Send the link again"))
+      clear_cookies()
+      # An account from before addresses were confirmed, still signed in.
+      unconfirmed = make_user(fresh_email())
+      sign_in_as(unconfirmed.email)
+      stale = User.find(unconfirmed._key)
+      stale.confirmed_at = nil
+      stale.save
+      page = res_body(get("/app/account"))
+      assert_contains(page, "Not confirmed yet")
+      assert_contains(page, "Send the link again")
+      # The button sends a fresh link: a new token replaces the old one.
+      before = User.find(unconfirmed._key).confirmation_token_digest
+      post("/confirmation/resend", {"email": unconfirmed.email})
+      assert_ne(User.find(unconfirmed._key).confirmation_token_digest, before)
     end
   end
 end

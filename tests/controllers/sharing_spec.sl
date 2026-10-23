@@ -6,6 +6,8 @@ def share_user
   user = User.new()
   user.email = "share-#{uuid_v4}@example.com"
   user.set_password(SHARE_PASSWORD)
+  # Confirmed: an address must be, to sign in.
+  user.confirmed_at = DateTime.utc.to_unix
   user.save
   user
 end

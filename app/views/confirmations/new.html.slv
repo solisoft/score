@@ -9,7 +9,7 @@
   <form action="<%= confirmation_resend_path() %>" method="POST" class="auth-form">
     <%- csrf_field() %>
     <label class="field">Email
-      <input id="email" name="email" type="email" required autocomplete="email">
+      <input id="email" name="email" type="email" required autocomplete="email" value="<%= locals["email"].to_s %>">
     </label>
     <button type="submit" class="btn btn-primary">Send a new confirmation link</button>
   </form>

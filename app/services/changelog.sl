@@ -12,6 +12,14 @@ class Changelog
     [
       {"date": "2026-10-23", "entries": [
         {
+          "area": "site",
+          "title": "Your email address, confirmed",
+          "text": "A new account confirms its address from the link we email before it signs in; the link can be "
+          + "sent again from the sign-in page or your account, and a password reset confirms it too.",
+          "link": "app",
+          "app": true
+        },
+        {
           "area": "engine",
           "title": "Cue notes and an ossia",
           "text": "\\cueDuring shows, small and silent over a player's rests, what another part plays meanwhile; an "

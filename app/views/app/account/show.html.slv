@@ -5,6 +5,19 @@
   <% end %>
   <dl class="account-facts">
     <dt>Email</dt><dd><%= user.email %></dd>
+    <dt>Address</dt>
+    <dd>
+      <% if user.confirmed?() %>
+        <span class="account-confirmed">Confirmed</span>
+      <% else %>
+        <span class="account-unconfirmed">Not confirmed yet</span>
+        <form action="<%= confirmation_resend_path() %>" method="POST" class="account-resend">
+          <%- csrf_field() %>
+          <input type="hidden" name="email" value="<%= user.email %>">
+          <button type="submit" class="btn btn-ghost">Send the link again</button>
+        </form>
+      <% end %>
+    </dd>
   </dl>
 
   <h2>Change your password</h2>

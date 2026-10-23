@@ -3,10 +3,11 @@
 
 const FLOW_PASSWORD = "correct horse battery"
 
-def flow_user
+def flow_user(confirmed = true)
   user = User.new()
   user.email = "flow-#{uuid_v4}@example.com"
   user.set_password(FLOW_PASSWORD)
+  user.confirmed_at = DateTime.utc.to_unix if confirmed
   user.save
   user
 end
@@ -31,6 +32,31 @@ describe("Account flows") do
       stale.reset_sent_at = DateTime.utc.to_unix - AUTH_RESET_TOKEN_TTL - 60
       stale.update
       assert_contains(res_body(get("/password/edit?token=#{token}")), "invalid or has expired")
+    end
+
+    test("a reset confirms an address that was not: the link reached its inbox") do
+      user = flow_user(false)
+      token = user.start_password_reset
+      refused = post(
+        "/password/update",
+        {
+          "token": token,
+          "password": "short",
+          "password_confirmation": "short"
+        }
+      )
+      assert_eq(res_status(refused), 422)
+      assert_not(User.find(user._key).confirmed?, "a refused reset confirms nothing")
+      done = post(
+        "/password/update",
+        {
+          "token": token,
+          "password": "a brand new password",
+          "password_confirmation": "a brand new password"
+        }
+      )
+      assert_eq(res_status(done), 302)
+      assert(User.find(user._key).confirmed?)
     end
 
     test("the new password must be long enough and typed twice the same") do
@@ -103,7 +129,7 @@ describe("Account flows") do
 
   describe("a confirmed address") do
     test("the link confirms it once") do
-      user = flow_user()
+      user = flow_user(false)
       token = user.start_email_confirmation
       assert_contains(res_body(get("/confirm_email?token=#{token}")), "Your email address is confirmed")
       assert(User.find(user._key).confirmed?)
@@ -111,7 +137,7 @@ describe("Account flows") do
     end
 
     test("an old link no longer confirms") do
-      user = flow_user()
+      user = flow_user(false)
       token = user.start_email_confirmation
       stale = User.find(user._key)
       stale.confirmation_sent_at = DateTime.utc.to_unix - AUTH_CONFIRMATION_TOKEN_TTL - 60
@@ -122,7 +148,7 @@ describe("Account flows") do
 
     test("asking for a new link answers the same for any address") do
       assert_eq(res_status(get("/confirmation/resend")), 200)
-      user = flow_user()
+      user = flow_user(false)
       known = post("/confirmation/resend", {"email": user.email})
       unknown = post("/confirmation/resend", {"email": "nobody-#{uuid_v4}@example.com"})
       assert_contains(res_body(known), "a fresh link is on its way")

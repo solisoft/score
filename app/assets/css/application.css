@@ -324,6 +324,10 @@
   .account-facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; }
   .account-facts dt { color: var(--muted); }
   .account-facts dd { margin: 0; color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
+  .account-confirmed { color: #2c5427; }
+  .account-unconfirmed { color: var(--accent); }
+  .account-resend, .auth-resend { display: inline-block; margin: 6px 0 0; }
+  .account-resend { margin-left: 10px; }
 
   .app-flash { margin: 16px auto 0; max-width: 1120px; width: calc(100% - 40px); border: 1px solid #c9dcc4; background: #eef6ec; color: #2c5427; border-radius: 10px; padding: 10px 14px; font-size: 14px; }
 

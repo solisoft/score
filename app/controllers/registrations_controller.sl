@@ -56,10 +56,12 @@ class RegistrationsController < Controller
 
     if auth_require_confirmed_email()
       return render(
-        "sessions/new",
+        "confirmations/new",
         {
-          "title": "Sign in",
-          "error": "Account created — confirm your email to sign in.",
+          "title": "Check your inbox",
+          "notice": "Your account is created. We sent a link to #{user.email}: "
+          + "open it to confirm your address, then sign in.",
+          "error": "",
           "email": user.email
         }
       )

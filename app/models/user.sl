@@ -37,11 +37,11 @@ def auth_base_url
   "http://localhost:5011"
 end
 
-# Require a confirmed email before sign-in. Flip to true once SMTP is
-# configured (SOLI_SMTP_* env vars — see the mailer docs) so users can
-# actually receive the confirmation link.
+# Require a confirmed email before sign-in: the site sends mail (SOLI_SMTP_*,
+# deploy/README.md), and an account whose link went astray asks for another
+# from the sign-in page or the confirmation page.
 def auth_require_confirmed_email
-  false
+  true
 end
 
 class User < Model

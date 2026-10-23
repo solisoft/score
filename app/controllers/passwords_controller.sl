@@ -103,6 +103,8 @@ class PasswordsController < Controller
     return this._reject_edit("Passwords don't match.") if password != params["password_confirmation"].to_s
 
     user.finish_password_reset(password)
+    # The reset link reached this inbox: the address is confirmed too.
+    User.find(user._key).confirm_email() unless user.confirmed?()
     # Sign the user straight in with a fresh session.
     session_regenerate()
     session_set("user_id", user["_key"])
