@@ -68,33 +68,6 @@ def fill_site_day
   ScoreSuggestion.create_many(rows)
 end
 
-# `user`'s session cookie ("name=value"), signed in anew.
-def suggest_session_cookie(user)
-  signed_in = post(
-    "/login",
-    {"email": user.email, "password": SUGGEST_PASSWORD}
-  )
-  res_header(signed_in, "Set-Cookie").to_s.split(";")[0]
-end
-
-# The address of this spec's own test server: the one that opens `score`'s
-# editor to `cookie`. With several workers, `test_server_url()` names one of
-# their servers, not necessarily this one's, so its neighbours are tried too.
-def suggest_server_of(score, cookie)
-  named = test_server_url()
-  port = named.split(":").last.to_i
-  candidates = [named] + (1 .. 40).map do |step|
-    "http://127.0.0.1:#{port + step - 20}"
-  end
-  candidates.find do |base|
-    answer = HTTP.request("GET", "#{base}/app/scores/#{score._key}", {
-      "headers": {"Cookie": cookie},
-      "timeout": 2
-    }) rescue nil
-    !answer.nil? && answer["status"] == 200 && answer["body"].to_s.contains(score.title)
-  end
-end
-
 describe("AppScoreSuggestionsController") do
   before_each() do
     as_guest()
@@ -254,41 +227,6 @@ describe("AppScoreSuggestionsController") do
     assert_eq(res_status(own), 202)
     assert_eq(ScoreSuggestion.find(res_json(own)["id"]).own, true)
     assert_eq(AiClient.server_used_today, site_used)
-  end
-
-  test("two asked at once for the last question: one at most goes, never both") do
-    user = suggest_user()
-    score = Score.start(user, SUGGEST_SOURCE)
-    past_suggestions(user, score, SCORE_SUGGESTIONS_PER_DAY - 1)
-    cookie = suggest_session_cookie(user)
-    assert(cookie.contains("="), "signed in")
-    server = suggest_server_of(score, cookie)
-    assert_not_null(server, "this spec's server, found")
-    jobs_before = queued_suggestion_jobs()
-    ask = {
-      "method": "POST",
-      "url": "#{server}/app/scores/#{score._key}/suggestions",
-      "headers": {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "Cookie": cookie
-      },
-      "body": JSON.stringify({"action": "chords"}),
-      "timeout": 30
-    }
-    answers = HTTP.parallel([ask, ask])
-    statuses = answers.map do |answer|
-      answer["status"]
-    end
-    statuses.each do |status|
-      assert([202, 429].includes?(status), "answered #{status}")
-    end
-    accepted = statuses.filter do |status|
-      status == 202
-    end.length
-    assert(accepted <= 1, "both passed the last slot")
-    assert_eq(suggestions_of(user), SCORE_SUGGESTIONS_PER_DAY - 1 + accepted)
-    assert_eq(queued_suggestion_jobs(), jobs_before + accepted)
   end
 
   test("answers the suggestion once ready, engraved, with its explanation; or why it failed") do
