@@ -23,6 +23,7 @@ const QUARTER_W = 26;
 const TRACK_MIN = 34;
 const TRACK_MAX = 96;
 const TRACK_ROW = 4;
+const KEYS_MIN_ROWS = 25;
 
 const BLACK = new Set([1, 3, 6, 8, 10]);
 const NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
@@ -86,7 +87,13 @@ export function rollLayout(score, { layout = "tracks", zoom = 1, only = null } =
   const range = (keys) => [(keys.length ? Math.min(...keys) : 60) - 2, (keys.length ? Math.max(...keys) : 67) + 2];
   let tracks;
   if (layout === "keys") {
-    const [low, high] = range(notes.map((n) => n.key));
+    // Two octaves at least, the notes in the middle: room to drag one up or down.
+    let [low, high] = range(notes.map((n) => n.key));
+    const short = KEYS_MIN_ROWS - (high - low + 1);
+    if (short > 0) {
+      low -= Math.floor(short / 2);
+      high += Math.ceil(short / 2);
+    }
     tracks = [{ lane: null, y: RULER_H, h: (high - low + 1) * ROW_H, low, high, row: ROW_H }];
   } else {
     let y = RULER_H;
@@ -108,7 +115,7 @@ export function rollHit(score, geo, px, py, target = null) {
   const bar = px < geo.left ? null : Math.min(geo.bars - 1, M.barAt(score, Math.floor(t)));
   const track = geo.tracks.find((tr) => py >= tr.y && py < tr.y + tr.h);
   const lane = geo.layout === "tracks" ? (track?.lane ?? null) : null;
-  const note = target?.dataset?.lane != null ? { lane: Number(target.dataset.lane), index: Number(target.dataset.index) } : null;
+  const note = target?.dataset?.lane != null ? { lane: Number(target.dataset.lane), index: Number(target.dataset.index), key: Number(target.dataset.key) } : null;
   return { bar, lane, note, ruler: py < RULER_H };
 }
 
@@ -182,7 +189,7 @@ export function drawRoll(score, { layout = "tracks", zoom = 1, sel = null, lit =
     const ny = track.y + (track.high - n.key) * track.row;
     const h = Math.max(2, track.row - (layout === "keys" ? 2 : 1));
     const classes = ["roll-note", chosen(n) ? "roll-note-chosen" : "", lit.has(`${n.lane}:${n.index}`) ? "roll-note-lit" : ""].filter(Boolean).join(" ");
-    parts.push(`<rect class="${classes}" data-lane="${n.lane}" data-index="${n.index}" x="${x(n.t0) + 1}" y="${ny + 0.5}" width="${Math.max(3, x(n.t1) - x(n.t0) - 2)}" height="${h}" rx="${Math.min(3, h / 2)}" fill="${laneColour(score, n.lane)}"><title>${keyName(n.key)}, bar ${M.barAt(score, n.t0) + 1}</title></rect>`);
+    parts.push(`<rect class="${classes}" data-lane="${n.lane}" data-index="${n.index}" data-key="${n.key}" x="${x(n.t0) + 1}" y="${ny + 0.5}" width="${Math.max(3, x(n.t1) - x(n.t0) - 2)}" height="${h}" rx="${Math.min(3, h / 2)}" fill="${laneColour(score, n.lane)}"><title>${keyName(n.key)}, bar ${M.barAt(score, n.t0) + 1}</title></rect>`);
   }
   if (cursor != null) parts.push(`<line class="roll-cursor" x1="${x(cursor)}" x2="${x(cursor)}" y1="0" y2="${height}"/>`);
   const label = `MIDI view: ${geo.bars} bars, ${geo.notes.length} notes`;

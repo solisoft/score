@@ -1143,6 +1143,47 @@ function markDynamics(staff, at, notes) {
   });
 }
 
+// ---- Notes moved on the piano roll --------------------------------------------
+
+/**
+ * Lane `s`'s note `i` (and the notes tied to it) moved `shift` ticks in time,
+ * its head on MIDI key `key` (every head with null) moved `semitones`, and
+ * lasting `length` ticks (null: as long as it did). What was under its new
+ * place is written over, where it was is left as rests, ties across bar
+ * lines follow. Answers the index of its first event.
+ */
+export function moveNote(score, s, i, { key = null, semitones = 0, shift = 0, length = null } = {}) {
+  const staff = score.staves[s];
+  const ev = staff?.events[i];
+  if (!ev || ev.rest) throw new Error("no note there");
+  const [a, b] = tiedNotes(staff, i);
+  if (staff.events.slice(a, b + 1).some((x) => x.tuplet)) throw new Error("a tuplet's notes cannot be moved yet");
+  const at = starts(staff);
+  const t0 = at[a];
+  const was = at[b] + ticksOf(staff.events[b]) - t0;
+  const t = t0 + shift;
+  const ticks = length ?? was;
+  if (t < 0 || ticks <= 0) throw new Error("that is as far as it goes");
+  const drums = isDrums(score, s);
+  const fifths = keyOf(score, s, t);
+  const keyOfPitch = (p) => (p.drum ? drumKey(p.drum) : midiKey(p.d, p.alter));
+  const moved = ev.pitches.map((p) => {
+    const k = keyOfPitch(p);
+    if (!semitones || (key != null && k !== key)) return { ...p };
+    if (k + semitones < 21 || k + semitones > 108) throw new Error("that is as far as it goes");
+    if (!drums) return pitchOfKey(k + semitones, fifths);
+    const name = drumByKey(k + semitones);
+    if (!name) throw new Error("no drum on that key");
+    return drumPitch(name);
+  });
+  // Two heads on one key are one.
+  const pitches = sortPitches(moved.filter((p, n) => moved.findIndex((q) => keyOfPitch(q) === keyOfPitch(p)) === n));
+  const { base, dots, tuplet, id, ...content } = structuredClone(ev);
+  write(score, s, t0, was, { rest: true });
+  write(score, s, t, ticks, { ...content, rest: false, pitches, tie: false });
+  return eventAt(staff, t);
+}
+
 // A section is bars a…b of several lanes at once: what the MIDI view copies.
 // Each part keeps its place among the lanes copied, counted from the first.
 

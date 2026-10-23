@@ -69,8 +69,8 @@ test("a point of the roll names its bar, its track and its note", () => {
   assert.deepEqual(R.rollHit(score, geo, middle(2), 10), { bar: 2, lane: null, note: null, ruler: true }, "the ruler, where the loop is set");
   assert.equal(R.rollHit(score, geo, 10, lane1).bar, null, "the track names are no bar");
   assert.equal(R.rollHit(score, geo, middle(99), lane1).bar, 3, "past the end: the last bar");
-  const target = { dataset: { lane: "0", index: "3" } };
-  assert.deepEqual(R.rollHit(score, geo, middle(0), 30, target).note, { lane: 0, index: 3 });
+  const target = { dataset: { lane: "0", index: "3", key: "65" } };
+  assert.deepEqual(R.rollHit(score, geo, middle(0), 30, target).note, { lane: 0, index: 3, key: 65 });
   assert.equal(R.rollHit(score, R.rollLayout(score, { layout: "keys" }), middle(1), 40).lane, null, "the keyboard has no tracks");
 });
 
@@ -142,7 +142,9 @@ test("one track alone on the keyboard: its notes, at its own range", () => {
   const bass = R.rollLayout(score, { layout: "keys", only: 1 });
   assert.ok(bass.notes.every((n) => n.lane === 1));
   assert.equal(bass.notes.length, 5);
-  assert.equal(bass.tracks[0].high, 48 + 2, "up to the bass's c, not the treble's c''");
+  assert.ok(bass.tracks[0].high < 72, "not up to the treble's c''");
+  assert.equal(bass.tracks[0].high - bass.tracks[0].low + 1, 25, "two octaves at least, to drag a note in");
+  assert.ok(bass.tracks[0].low <= 43 && bass.tracks[0].high >= 48, "its notes inside");
   assert.equal(R.rollLayout(score, { layout: "tracks", only: 1 }).notes.length, R.rollNotes(score).length, "the tracks layout shows them all");
   const svg = R.drawRoll(score, { layout: "keys", only: 1 });
   assert.equal((svg.match(/data-lane="0"/g) ?? []).length, 0);
@@ -160,4 +162,56 @@ test("the loop is drawn on the ruler, apart from the selection", () => {
   assert.match(svg, /class="roll-loop-span"/);
   assert.doesNotMatch(svg, /roll-band/, "no selection drawn for it");
   assert.doesNotMatch(R.drawRoll(score), /roll-loop/);
+});
+
+const engraves = (score) => assert.doesNotThrow(() => editor_view(M.toLilyPond(score).source, 900, 7, -1, -1));
+
+/** Lane `s` as LilyPond, its bars only. */
+const lane = (score, s = 0) => M.toLilyPond(score).source.split("\n").filter((line) => line.includes("|"))[s].trim();
+
+test("a note dragged on the keyboard: later, higher, longer — the score follows", () => {
+  const Q = M.WHOLE / 4;
+  const score = read("{ \\time 4/4 c'4 d'4 e'4 f'4 | g'1 }");
+  // d' a quarter later, over e': e' is written over, d' leaves a rest.
+  const later = structuredClone(score);
+  const i = M.moveNote(later, 0, 1, { shift: Q });
+  assert.equal(M.starts(later.staves[0])[i], 2 * Q);
+  assert.equal(lane(later), "c'4 r4 d'4 f'4 | g'1 \\bar \"|.\"");
+  // Two semitones up, spelled in the key.
+  const higher = structuredClone(score);
+  M.moveNote(higher, 0, 0, { key: 60, semitones: 2 });
+  assert.match(lane(higher), /^d'4 d'4 e'4 f'4/);
+  // Longer, over the bar line: tied.
+  const longer = structuredClone(score);
+  M.moveNote(longer, 0, 3, { length: 2 * Q });
+  assert.equal(lane(longer), "c'4 d'4 e'4 f'4~ | f'4 g'2. \\bar \"|.\"");
+  // A tied note moves with its tie, shorter.
+  const tied = structuredClone(longer);
+  M.moveNote(tied, 0, 3, { length: Q / 2 });
+  assert.match(lane(tied), /^c'4 d'4 e'4 f'8 r8 \| r4 g'2\./);
+  engraves(later);
+  engraves(longer);
+});
+
+test("one head of a chord moves alone up or down; the chord moves whole in time", () => {
+  const score = read("{ \\time 4/4 <c' e' g'>2 r2 }");
+  const one = structuredClone(score);
+  M.moveNote(one, 0, 0, { key: 64, semitones: 1 });
+  assert.match(lane(one), /^<c' f' g'>2/);
+  const merged = structuredClone(score);
+  M.moveNote(merged, 0, 0, { key: 64, semitones: 3 });
+  assert.match(lane(merged), /^<c' g'>2/, "onto g': one head");
+  const whole = structuredClone(score);
+  M.moveNote(whole, 0, 0, { shift: M.WHOLE / 2 });
+  assert.match(lane(whole), /^r2 <c' e' g'>2/);
+});
+
+test("on a drum staff a hit moves to the drum of its new key; the range and tuplets are refused", () => {
+  const drums = read("\\new DrumStaff \\drummode { \\time 4/4 bd4 sn bd sn }");
+  M.moveNote(drums, 0, 0, { key: 36, semitones: 6 });
+  assert.equal(drums.staves[0].events[0].pitches[0].drum, "hh");
+  assert.throws(() => M.moveNote(read("{ c'4 }"), 0, 0, { semitones: -60 }), /as far as it goes/);
+  assert.throws(() => M.moveNote(read("{ c'4 }"), 0, 0, { shift: -M.WHOLE }), /as far as it goes/);
+  assert.throws(() => M.moveNote(read("{ r4 c'4 }"), 0, 0, { shift: 1 }), /no note there/);
+  assert.throws(() => M.moveNote(read("{ \\tuplet 3/2 { c'8 d' e' } f'4 }"), 0, 0, { shift: 1 }), /tuplet/);
 });

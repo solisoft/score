@@ -139,6 +139,21 @@ const ROLL_TRACK_NAME = """
 }
 """
 
+# The keyboard's note `nth` of the first track, dragged up `rows` rows.
+const ROLL_NOTE_DRAG = """
+(nth, rows) => {
+  const note = [...document.querySelectorAll('.roll-keys .roll-note[data-lane="0"]')][nth];
+  const r = note.getBoundingClientRect();
+  const host = document.querySelector('.studio-roll');
+  const [x, y] = [r.left + 3, r.top + r.height / 2];
+  const press = (type, dy, el) =>
+    el.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX: x, clientY: y - dy, pointerId: 1 }));
+  press('pointerdown', 0, note);
+  press('pointermove', rows * 11, host);
+  press('pointerup', rows * 11, host);
+}
+"""
+
 # The note first drawn on the MIDI view, pressed.
 const ROLL_PICK = """
 (() => {
@@ -302,6 +317,12 @@ describe("The app, in a browser") do
     wait_for(".studio-roll-scroll svg.roll-keys")
     evaluate(ROLL_PICK.trim)
     wait_for(".roll-note-chosen")
+    # Dragged up two rows: the first c' is a d'; Ctrl+Z puts it back.
+    evaluate("(#{ROLL_NOTE_DRAG.trim})(0, 2)")
+    wait_for_text("Note moved")
+    assert_contains(editor_source(), "d'4 d'4 e'4 f'4 | g'1 | c'4")
+    roll_keys("z", false)
+    assert_contains(editor_source(), "c'4 d'4 e'4 f'4 | g'1 | c'4")
     # Back to the score: the engraving, with the bars put in.
     click("[data-midi-button]")
     wait_for(".studio-sheet:not([hidden]) svg")

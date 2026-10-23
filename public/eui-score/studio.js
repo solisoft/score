@@ -95,7 +95,7 @@ export function startStudio(root, options = {}) {
   // The MIDI view, in place of the engraving when it is on: its layout's
   // switch, and the roll, which scrolls sideways.
   const rollHost = Object.assign(document.createElement("div"), { className: "studio-roll", hidden: true, tabIndex: 0 });
-  rollHost.innerHTML = `<div class="studio-roll-bar"><span class="studio-roll-layouts" role="group" aria-label="MIDI view layout"><button type="button" class="studio-menu" data-act="roll-layout" data-layout="tracks" aria-pressed="true">Tracks</button><button type="button" class="studio-menu" data-act="roll-layout" data-layout="keys" aria-pressed="false">Keyboard</button></span><span class="studio-roll-only" data-roll-only hidden></span><span class="studio-roll-hint">Drag across bars and tracks to select a section; a click elsewhere lets it go. Drag on the bar numbers to set a loop; a click on it takes it away.</span></div><div class="studio-roll-scroll" data-roll-scroll></div>`;
+  rollHost.innerHTML = `<div class="studio-roll-bar"><span class="studio-roll-layouts" role="group" aria-label="MIDI view layout"><button type="button" class="studio-menu" data-act="roll-layout" data-layout="tracks" aria-pressed="true">Tracks</button><button type="button" class="studio-menu" data-act="roll-layout" data-layout="keys" aria-pressed="false">Keyboard</button></span><span class="studio-roll-only" data-roll-only hidden></span><span class="studio-roll-hint">Drag across bars and tracks to select a section; a click elsewhere lets it go. Drag on the bar numbers to set a loop; a click on it takes it away. On the keyboard, drag a note to move it, its right edge to change its length.</span></div><div class="studio-roll-scroll" data-roll-scroll></div>`;
   sheet.after(rollHost);
   const rollScroll = rollHost.querySelector("[data-roll-scroll]");
 
@@ -1406,6 +1406,31 @@ export function startStudio(root, options = {}) {
     rollHost.focus({ preventScroll: true });
     const p = rollPoint(event);
     if (!p) return;
+    // On the keyboard, a note is dragged: its body moves it (up, down, along),
+    // its right edge makes it longer or shorter, on the Quantize grid.
+    if (p.note && st.rollLayout === "keys" && !event.shiftKey) {
+      const rect = event.target.closest("[data-lane]").getBoundingClientRect();
+      select(p.note.lane, p.note.index, -1, false);
+      const staff = st.score.staves[p.note.lane];
+      const [a, b] = M.tiedNotes(staff, p.note.index);
+      const at = M.starts(staff);
+      const geo = R.rollLayout(st.score, { layout: "keys", zoom: st.zoom, only: st.rollOnly });
+      st.noteDrag = {
+        lane: p.note.lane,
+        index: p.note.index,
+        key: p.note.key,
+        x: event.clientX,
+        y: event.clientY,
+        resize: event.clientX > rect.right - 7,
+        perTick: geo.perTick,
+        row: geo.tracks[0].row,
+        length: at[b] + M.ticksOf(staff.events[b]) - at[a],
+        base: snapshot(),
+        change: null,
+      };
+      rollHost.setPointerCapture?.(event.pointerId);
+      return;
+    }
     if (p.note) return select(p.note.lane, p.note.index, -1, event.shiftKey);
     // The ruler: the loop's.
     if (p.ruler && p.bar != null) {
@@ -1429,6 +1454,12 @@ export function startStudio(root, options = {}) {
   });
 
   rollHost.addEventListener("pointermove", (event) => {
+    if (st.noteDrag) return dragNote(event);
+    // On the keyboard, the pointer tells a note's body (moved) from its right edge (resized).
+    if (!st.rollDrag && !st.loopDrag) {
+      const note = st.rollLayout === "keys" && event.target.closest?.(".roll-note");
+      rollScroll.style.cursor = note ? (event.clientX > note.getBoundingClientRect().right - 7 ? "ew-resize" : "grab") : "";
+    }
     const p = (st.rollDrag || st.loopDrag) && rollPoint(event);
     if (!p || p.bar == null) return;
     if (st.loopDrag) {
@@ -1455,7 +1486,52 @@ export function startStudio(root, options = {}) {
     draw();
   });
 
+  /** The note being dragged, as far as the pointer: a preview, on a copy of the score as it was at the press. */
+  function dragNote(event) {
+    const d = st.noteDrag;
+    const grid = M.RECORDING_GRIDS[quantizeBox?.value] ?? M.RECORDING_GRIDS.sixteenth;
+    const dx = Math.round((event.clientX - d.x) / d.perTick / grid) * grid;
+    const change = d.resize
+      ? { length: Math.max(grid, Math.round((d.length + dx) / grid) * grid) }
+      : { key: d.key, shift: dx, semitones: Math.round((d.y - event.clientY) / d.row) };
+    if (JSON.stringify(change) === JSON.stringify(d.change)) return;
+    const from = JSON.parse(d.base).score;
+    let i;
+    try {
+      i = M.moveNote(from, d.lane, d.index, change);
+    } catch (error) {
+      return;
+    }
+    d.change = change;
+    st.score = from;
+    const t = M.starts(from.staves[d.lane])[i];
+    st.sel = { staff: d.lane, t0: t, t1: t, head: -1 };
+    rollScroll.style.cursor = d.resize ? "ew-resize" : "grabbing";
+    writeText();
+    draw();
+  }
+
+  /** The drag let go: kept, one Undo away; or, back where it began, nothing done. */
+  function endNoteDrag() {
+    const d = st.noteDrag;
+    st.noteDrag = null;
+    if (!d.change) return;
+    const still = d.resize ? d.change.length === d.length : d.change.shift === 0 && d.change.semitones === 0;
+    if (still) {
+      restore(d.base);
+      return draw();
+    }
+    st.past.push(d.base);
+    st.future = [];
+    saveDraft();
+    draw();
+    hear();
+    const what = d.resize ? "made longer or shorter" : "moved";
+    say(`Note ${what} — Ctrl+Z puts it back.`);
+  }
+
   const endRollDrag = () => {
+    if (st.noteDrag) return endNoteDrag();
     if (st.loopDrag) {
       const drag = st.loopDrag;
       st.loopDrag = null;
