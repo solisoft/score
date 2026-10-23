@@ -46,8 +46,9 @@ describe("Readiness") do
   end
 
   test("a job left far past its time makes the whole check fail") do
-    Job.enqueue_at("DataCleanupJob", "2020-01-01T00:00:00Z", {})
-    report = Readiness.check
+    # Due in 2099 (a worker cannot claim it first), the clock an hour past.
+    Job.enqueue_at("DataCleanupJob", "2099-01-01T00:00:00Z", {})
+    report = Readiness.check(DateTime.parse("2099-01-01T01:00:00Z").to_unix)
     assert_not(report["ready"])
     assert_eq(report["problems"], ["1 job(s) waiting past their time: no worker claims them"])
   end

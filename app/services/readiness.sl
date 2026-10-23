@@ -8,14 +8,15 @@
 const READINESS_JOB_LATE_SECONDS = 1800
 
 class Readiness
-  # {"ready": Bool, "problems": [String]} for this process.
-  static def check
+  # {"ready": Bool, "problems": [String]} for this process, at `now` (Unix
+  # seconds; a spec puts it past a job no worker will reach first).
+  static def check(now = nil)
     return Readiness.verdict(["database not configured"]) unless AppSetup.ready?
 
     database = Readiness.database_problem
     return Readiness.verdict([database]) unless database.nil?
 
-    jobs = Readiness.jobs_problem(DateTime.utc.to_unix)
+    jobs = Readiness.jobs_problem(now ?? DateTime.utc.to_unix)
     Readiness.verdict(jobs.nil? ? [] : [jobs])
   end
 
