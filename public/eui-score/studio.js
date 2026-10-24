@@ -26,6 +26,8 @@ const { mixerPanel } = await import(`./mixer-ui.js${V}`);
 // Swing, humanize and the tempo's glides, put into the MIDI that is heard (#379).
 const F = await import(`./feel.js${V}`);
 const A = await import(`./automation.js${V}`);
+const Ch = await import(`./channels.js${V}`);
+const G = await import(`./graces.js${V}`);
 const { automationLane } = await import(`./automation-ui.js${V}`);
 /** The MP3 and the stems (audio-export.js), loaded the first time one is saved. */
 const audioExport = () => import(`./audio-export.js${V}`);
@@ -1866,7 +1868,7 @@ export function startStudio(root, options = {}) {
     const text = st.text;
     if (st.velHeard.text !== text) {
       st.velHeard.text = text;
-      toMidi(...heard(score))
+      engraved(score)
         .then((bytes) => {
           if (st.text !== text) return;
           st.velHeard = { text, map: Vel.heardVelocities(score, bytes) };
@@ -2718,11 +2720,20 @@ export function startStudio(root, options = {}) {
    * volume and pan in too.
    */
   const heardMidi = (score, passes = score ? M.playback(score) : [], { mix = null } = {}) =>
-    toMidi(...heard(score)).then((bytes) => {
+    engraved(score).then((bytes) => {
       const velocities = score ? Vel.applyVelocities(score, bytes) : bytes;
-      const curves = score ? A.applyAutomation(score, velocities, { passes, mix, volumeMin: X.VOLUME_MIN }) : velocities;
-      return F.feel(curves, { score, passes, ...F.feelOf(score ? score.meta : M.readMeta(st.text)) });
+      // Past fifteen channels, two staves may go through one mixer strip: their volume and pan in the file (#389).
+      const shared = score && !mix ? X.fileMixLanes(mixHeard(), M.channels(score)) : [];
+      const fileMix = mix ?? (shared.length ? mixHeard() : null);
+      const curves = score ? A.applyAutomation(score, velocities, { passes, mix: fileMix, mixLanes: mix ? null : shared, volumeMin: X.VOLUME_MIN }) : velocities;
+      const graced = score ? G.applyGraces(score, curves, { passes }) : curves;
+      return F.feel(graced, { score, passes, ...F.feelOf(score ? score.meta : M.readMeta(st.text)) });
     });
+
+  /** The engraver's MIDI of what is heard, each staff on its own channel (channels.js, #389). */
+  function engraved(score) {
+    return toMidi(...heard(score)).then((bytes) => Ch.assignChannels(score, bytes));
+  }
 
   // The Playback section's settings, kept from one visit to the next.
   const PLAYBACK = "eui-score-studio-playback";
@@ -3434,7 +3445,7 @@ export function startStudio(root, options = {}) {
     const starts = st.score.staves.map((staff) => M.starts(staff));
     st.items.forEach(({ staff, index }, item) => {
       if (st.score.staves[staff].events[index].rest) return;
-      for (const sec of M.heardAt(st.score, passes, staff, index, starts[staff][index])) {
+      for (const sec of G.heardAt(st.score, passes, staff, index, starts[staff][index])) {
         const key = Math.round(sec * 1000);
         if (!at.has(key)) at.set(key, { sec, items: [] });
         at.get(key).items.push(item);

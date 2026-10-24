@@ -248,9 +248,10 @@ export function automationEvents(score, { passes = M.playback(score), skip = () 
 export function eventBytes(channel, id, value) {
   if (id === "bend") {
     const v = Math.max(0, Math.min(16383, value + 8192));
-    return [0xe0 | channel, v & 127, v >> 7];
+    return [0xe0 | (channel & 15), v & 127, v >> 7];
   }
-  return [0xb0 | channel, controller(id).number, value];
+  // A second port's channel (16 and on) is written as its channel in the port.
+  return [0xb0 | (channel & 15), controller(id).number, value];
 }
 
 // ---- The MIDI file, rewritten ------------------------------------------------------------
@@ -301,17 +302,21 @@ export function panCc(pan) {
  * `mix` (Save as MIDI): each staff's mixer volume and pan as CC 7 and CC 10
  * at its start, its volume curve scaled by its fader; a pan curve takes
  * over from the mixer's pan at its first point. Play and Save the sound
- * leave them out: the mixer's graph does that, on the sound.
+ * leave them out: the mixer's graph does that, on the sound — but for
+ * `mixLanes`, the staves whose mixer strip another staff's sound goes
+ * through too (mixer.js `fileMixLanes`, past fifteen channels).
  */
-export function applyAutomation(score, bytes, { passes = null, mix = null, volumeMin = -60 } = {}) {
+export function applyAutomation(score, bytes, { passes = null, mix = null, mixLanes = null, volumeMin = -60 } = {}) {
   if (!score || (!Object.keys(curvesOf(score)).length && !mix)) return bytes;
   const smf = F.readSmf(bytes);
+  // Each synthesizer channel's track: port × 16 + channel (channels.js).
   const trackOf = new Map();
+  const ports = smf.tracks.map((track) => 16 * (track.find((e) => e.data[0] === 0xff && e.data[1] === 0x21)?.data[3] ?? 0));
   smf.tracks.forEach((track, k) => {
-    for (const e of track) if (isChannel(e.data) && !trackOf.has(e.data[0] & 15)) trackOf.set(e.data[0] & 15, k);
+    for (const e of track) if (isChannel(e.data) && !trackOf.has(ports[k] + (e.data[0] & 15))) trackOf.set(ports[k] + (e.data[0] & 15), k);
   });
   // The pedal written in the notes: its staff's curve is left out.
-  const pedalled = new Set(smf.tracks.flat().filter((e) => (e.data[0] & 0xf0) === 0xb0 && e.data[1] === 64).map((e) => e.data[0] & 15));
+  const pedalled = new Set(smf.tracks.flatMap((track, k) => track.filter((e) => (e.data[0] & 0xf0) === 0xb0 && e.data[1] === 64).map((e) => ports[k] + (e.data[0] & 15))));
   // The score's ticks in the file's: its quarter over the file's.
   const ratio = M.WHOLE / 4 / smf.division;
   const fader = new Map();
@@ -322,11 +327,12 @@ export function applyAutomation(score, bytes, { passes = null, mix = null, volum
   };
   if (mix) {
     for (const { lane, channel } of M.channels(score)) {
+      if (mixLanes && !mixLanes.includes(lane)) continue;
       const t = mix.tracks?.[lane] ?? {};
       const db = Number(t.volume ?? 0);
       fader.set(channel, db <= volumeMin ? 0 : 10 ** (db / 40));
-      add(channel, 0, [0xb0 | channel, 7, volumeCc(db, volumeMin)]);
-      add(channel, 0, [0xb0 | channel, 10, panCc(t.pan ?? 0)]);
+      add(channel, 0, [0xb0 | (channel & 15), 7, volumeCc(db, volumeMin)]);
+      add(channel, 0, [0xb0 | (channel & 15), 10, panCc(t.pan ?? 0)]);
     }
   }
   const skip = (channel, id) => id === "64" && pedalled.has(channel);
@@ -341,7 +347,7 @@ export function applyAutomation(score, bytes, { passes = null, mix = null, volum
     list.sort((x, y) => x.tick - y.tick);
     let k = trackOf.get(channel);
     if (k == null) {
-      tracks.push([]);
+      tracks.push(channel >= 16 ? [{ tick: 0, data: [0xff, 0x21, 1, channel >> 4] }] : []);
       k = tracks.length - 1;
       trackOf.set(channel, k);
     }

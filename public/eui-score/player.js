@@ -360,8 +360,10 @@ export function listen(id, onKey, onRelease = null) {
 
 /** A note on or off, straight to the MIDI device chosen in Sound to. */
 function sendNote(channel, key, on, velocity = 90) {
+  // A second port's channel (score-model.js `channels`, 16 and on): its channel in the port.
+  const c = channel & 15;
   try {
-    output.send(on ? [0x90 | channel, key, velocity] : [0x80 | channel, key, 0]);
+    output.send(on ? [0x90 | c, key, velocity] : [0x80 | c, key, 0]);
   } catch (error) {}
 }
 

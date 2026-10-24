@@ -34,6 +34,8 @@ class ScoreAssets
       "automation-ui.js",
       "audio-export.js",
       "merge.js",
+      "channels.js",
+      "graces.js",
       "vendor/README.md",
       "eui_score_web.js",
       "wasm.version"

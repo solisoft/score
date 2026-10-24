@@ -1401,7 +1401,7 @@ export function padded(score) {
   const end = barsOf(out);
   insertBars(out, end, RECORDING_MORE_BARS);
   const total = barStart(out, end + RECORDING_MORE_BARS);
-  out.staves.push({ name: "", short: "", instrument: "", clef: "treble", events: rests(out, 0, total) });
+  out.staves.push({ name: "", short: "", instrument: "", clef: "treble", padding: true, events: rests(out, 0, total) });
   write(out, out.staves.length - 1, total - WHOLE / 16, WHOLE / 16, { rest: false, pitches: [{ d: 28, alter: 0 }] });
   return out;
 }
@@ -3397,13 +3397,77 @@ export function beats(score, passes, { subdivide = 0 } = {}) {
   return out;
 }
 
-/** Each staff and the MIDI channel eui-score gives it: [{ lane, name, channel }], as it numbers them. */
+// ---- MIDI channels (#389) -------------------------------------------------------------
+//
+// eui-score numbers a staff's channel by its place (the tenth skipped, kept
+// for the drums) and stops at the sixteenth: past fifteen staves, the last
+// ones play on one channel, in the instrument of the last heard. `channels`
+// plans them so that they do not: as eui-score numbers them when nothing
+// collides; else each pitched staff a channel of its own while fifteen are
+// enough; else staves of the same instrument and the same mixer settings
+// (and no curves of their own) sharing one, and past fifteen of those a
+// second MIDI port (a third…), sixteen channels more each, the drums' tenth
+// left out there too. `channel` is the synthesizer's: port × 16 + the
+// channel written in the file. channels.js rewrites the engraver's MIDI so.
+
+/** The channels a port gives pitched staves: all but the drums' tenth. */
+export const PITCHED_CHANNELS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15];
+
+/** The channel eui-score itself gives the `k`th staff. */
+export function engineChannel(drums, k) {
+  return drums ? 9 : k < 9 ? k : Math.min(15, k + 1);
+}
+
+/** A value as text, its keys sorted: two settings alike read alike. */
+const canonical = (x) =>
+  Array.isArray(x)
+    ? `[${x.map(canonical).join(",")}]`
+    : x && typeof x === "object"
+      ? `{${Object.keys(x).sort().map((k) => `${JSON.stringify(k)}:${canonical(x[k])}`).join(",")}}`
+      : JSON.stringify(x ?? null);
+
+/** What two pitched staves must have alike to share a channel: the instrument, the mixer's settings, and no curves. */
+function sharingKey(score, lane) {
+  const curves = score.meta?.cc?.[lane];
+  if (curves && Object.keys(curves).length) return `lane ${lane}`;
+  return `${score.staves[lane].instrument ?? ""}|${canonical(score.meta?.mixer?.tracks?.[lane] ?? {})}`;
+}
+
+/** The synthesizer channel of the `n`th pitched slot: port after port, the tenth left out. */
+const slot = (n) => 16 * Math.floor(n / 15) + PITCHED_CHANNELS[n % 15];
+
+/**
+ * Each staff and its MIDI channel: [{ lane, name, channel, port }] — `port`
+ * the file's MIDI port, `channel` the synthesizer's (port × 16 + the file's).
+ * The staff `padded` adds never moves the others: it takes a channel of its
+ * own after them.
+ */
 export function channels(score) {
-  return staffLanes(score).map((lane, k) => ({
-    lane,
-    name: score.staves[lane].name || `Staff ${k + 1}`,
-    channel: score.staves[lane].drums ? 9 : k < 9 ? k : Math.min(15, k + 1),
-  }));
+  const rows = staffLanes(score).map((lane, k) => ({ lane, name: score.staves[lane].name || `Staff ${k + 1}`, channel: engineChannel(score.staves[lane].drums, k) }));
+  const real = rows.filter((r) => !score.staves[r.lane].padding);
+  const pitched = real.filter((r) => !score.staves[r.lane].drums);
+  if (new Set(pitched.map((r) => r.channel)).size !== pitched.length) {
+    if (pitched.length <= PITCHED_CHANNELS.length) pitched.forEach((r, n) => (r.channel = slot(n)));
+    else {
+      const groups = new Map();
+      for (const r of pitched) {
+        const key = sharingKey(score, r.lane);
+        if (!groups.has(key)) groups.set(key, slot(groups.size));
+        r.channel = groups.get(key);
+      }
+    }
+  }
+  const used = new Set(real.map((r) => r.channel));
+  for (const r of rows) {
+    if (!score.staves[r.lane].padding) continue;
+    if (used.has(r.channel)) {
+      let n = 0;
+      while (used.has(slot(n))) n++;
+      r.channel = slot(n);
+    }
+    used.add(r.channel);
+  }
+  return rows.map((r) => ({ ...r, port: Math.floor(r.channel / 16) }));
 }
 
 /** A lane's bars in the order they sound; a jump back says again the metre and the speed it returns to. */

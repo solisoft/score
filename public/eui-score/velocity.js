@@ -159,7 +159,7 @@ export function fromRecording(score, lane, played, grid) {
 
 // ---- In the MIDI ----------------------------------------------------------------------
 
-/** A Standard MIDI File's note-ons: [{ channel, key, velocity, sec, at }], `at` the velocity's byte. */
+/** A Standard MIDI File's note-ons: [{ channel, key, velocity, sec, at }], `at` the velocity's byte, `channel` the synthesizer's (port × 16 + channel). */
 export function midiNoteOns(bytes) {
   const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   const ppq = (b[12] << 8) | b[13];
@@ -172,6 +172,7 @@ export function midiNoteOns(bytes) {
     const end = Math.min(b.length, p + length);
     let ticks = 0;
     let status = 0;
+    let port = 0;
     const vlq = () => {
       let x = 0;
       for (;;) {
@@ -187,6 +188,8 @@ export function midiNoteOns(bytes) {
         const type = b[p++];
         const size = vlq();
         if (type === 0x51) tempos.push([ticks, (b[p] << 16) | (b[p + 1] << 8) | b[p + 2]]);
+        // A MIDI port (channels.js, past fifteen staves): 16 channels more each.
+        if (type === 0x21) port = b[p];
         p += size;
       } else if (status === 0xf0 || status === 0xf7) {
         // Read first: `p += vlq()` would add to the `p` before the length was read.
@@ -194,7 +197,7 @@ export function midiNoteOns(bytes) {
         p += size;
       } else {
         const kind = status & 0xf0;
-        if (kind === 0x90 && b[p + 1] > 0) ons.push({ channel: status & 15, key: b[p], velocity: b[p + 1], ticks, at: p + 1 });
+        if (kind === 0x90 && b[p + 1] > 0) ons.push({ channel: 16 * port + (status & 15), key: b[p], velocity: b[p + 1], ticks, at: p + 1 });
         p += kind === 0xc0 || kind === 0xd0 ? 1 : 2;
       }
     }

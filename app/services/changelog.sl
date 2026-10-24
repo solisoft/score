@@ -13,6 +13,19 @@ class Changelog
       {"date": "2026-10-24", "entries": [
         {
           "area": "site",
+          "title": "Grace notes played as their kind asks; more than fifteen staves each heard",
+          "text": "Grace notes now sound the way they are written. An acciaccatura (the slashed one) or a "
+          + "plain grace note is short, a thirty-second note or 60 milliseconds, whichever is shorter, and is "
+          + "played just before the beat, so the note it leads to still falls on the beat. An appoggiatura "
+          + "takes half of its note, or two thirds of a dotted one, and the note starts that much later. "
+          + "Several grace notes share the time between them. A score with more than fifteen staves no longer "
+          + "puts the last ones on one MIDI channel, where they played as one instrument: each staff keeps its "
+          + "own instrument, volume, pan, velocities and curves. Staves with the same instrument and the same "
+          + "mixer settings share a channel when they must, and past that the saved MIDI file uses a second "
+          + "MIDI port, with the drums on their own channel. Play, Save as MIDI and Save the sound all do this."
+        },
+        {
+          "area": "site",
           "title": "Two people edit one score: bars merge, and each sees where the other works",
           "text": "When someone else saves a score you are changing too, their changes are now merged with yours "
           + "bar by bar instead of asking you to choose one version: a bar, a staff's settings, the title or a "

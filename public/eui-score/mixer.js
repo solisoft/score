@@ -156,12 +156,49 @@ export function dbToGain(db) {
  */
 export function channelSettings(mix, channels) {
   const out = Array.from({ length: 16 }, () => ({ ...settings(), gain: 1 }));
-  for (const { lane, channel } of channels ?? []) {
-    if (channel < 0 || channel > 15) continue;
-    const s = trackOf(mix, lane);
-    out[channel] = { ...s, gain: audible(mix, lane) ? dbToGain(s.volume) : 0 };
+  for (const [strip, lanes] of stripLanes(channels)) {
+    // Two staves through one strip (a second port's channel, #389): theirs
+    // when they are alike, else left flat — fileMixLanes puts their volume
+    // and pan in the MIDI, and the synthesizer mutes each.
+    const alike = stripOf(mix, lanes);
+    if (alike) out[strip] = alike;
   }
   return out;
+}
+
+/** The settings of a strip carrying `lanes`: theirs when they are all alike, else null. */
+function stripOf(mix, lanes) {
+  const each = lanes.map((lane) => {
+    const s = trackOf(mix, lane);
+    return { ...s, gain: audible(mix, lane) ? dbToGain(s.volume) : 0 };
+  });
+  return each.every((s) => JSON.stringify(s) === JSON.stringify(each[0])) ? each[0] : null;
+}
+
+/**
+ * The staves each of the 16 strips carries: SpessaSynth renders channel n
+ * on output n mod 16, so a second MIDI port's channel 16 + n goes through
+ * strip n with channel n. Map strip → [lane].
+ */
+function stripLanes(channels) {
+  const out = new Map();
+  for (const { lane, channel } of channels ?? []) {
+    if (channel < 0) continue;
+    if (!out.has(channel % 16)) out.set(channel % 16, []);
+    out.get(channel % 16).push(lane);
+  }
+  return out;
+}
+
+/**
+ * The staves whose volume and pan go in the MIDI as CC 7 and CC 10 on Play
+ * (automation.js `mixLanes`): those on a strip `channelSettings` leaves
+ * flat, unlike the other staff it carries. Empty up to fifteen channels.
+ */
+export function fileMixLanes(mix, channels) {
+  const out = [];
+  for (const lanes of stripLanes(channels).values()) if (!stripOf(mix, lanes)) out.push(...lanes);
+  return out.sort((a, b) => a - b);
 }
 
 // ---- The reverb's rooms -------------------------------------------------------------

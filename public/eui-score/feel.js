@@ -100,7 +100,7 @@ const isOff = (ev) => (ev.data[0] & 0xf0) === 0x80 || ((ev.data[0] & 0xf0) === 0
 const isChannel = (ev) => ev.data[0] >= 0x80 && ev.data[0] < 0xf0;
 
 /** Each track sorted by tick: a note's end before another's start on the same tick, the end of track last. */
-function sortTracks(smf) {
+export function sortTracks(smf) {
   for (const events of smf.tracks) {
     const end = events.filter((ev) => isMeta(ev, 0x2f));
     const rest = events.filter((ev) => !isMeta(ev, 0x2f));
