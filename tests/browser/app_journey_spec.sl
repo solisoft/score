@@ -84,6 +84,8 @@ const VIOLIN_XML = """<?xml version="1.0" encoding="UTF-8"?>
 
 # Chooses a file for the start screen's Import, as a person does.
 def import_in_browser(name, text)
+  # Its listener is set by the page's script, which runs after the page's text is shown.
+  wait_for("[data-import][data-ready]")
   evaluate("(() => { const input = document.querySelector('[data-import]'); const files = new DataTransfer();"
   + " files.items.add(new File([#{JSON.stringify(text)}], #{JSON.stringify(name)})); input.files = files.files;"
   + " input.dispatchEvent(new Event('change', { bubbles: true })); })()")
@@ -217,6 +219,8 @@ const MIDI_MARCH = """
 
 # Chooses a file of bytes (a JS expression's Uint8Array) for the start screen's Import.
 def import_bytes_in_browser(name, bytes_js)
+  # Its listener is set by the page's script, which runs after the page's text is shown.
+  wait_for("[data-import][data-ready]")
   evaluate("(() => { const input = document.querySelector('[data-import]'); const files = new DataTransfer();"
   + " files.items.add(new File([#{bytes_js.trim}], #{JSON.stringify(name)})); input.files = files.files;"
   + " input.dispatchEvent(new Event('change', { bubbles: true })); })()")

@@ -34,6 +34,8 @@ end
 
 # Imports `text` as a file named `name`, as File › Import does.
 def auto_import(name, text)
+  # Its listener is set by the page's script, which runs after the page's text is shown.
+  wait_for("[data-import][data-ready]")
   evaluate("(() => { const input = document.querySelector('[data-import]'); const files = new DataTransfer();"
   + " files.items.add(new File([#{JSON.stringify(text)}], #{JSON.stringify(name)})); input.files = files.files;"
   + " input.dispatchEvent(new Event('change', { bubbles: true })); })()")

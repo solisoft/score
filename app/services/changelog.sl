@@ -13,6 +13,13 @@ class Changelog
       {"date": "2026-10-24", "entries": [
         {
           "area": "site",
+          "title": "A file chosen on the start screen while it loads is no longer lost",
+          "text": "On the app's start screen, a file chosen with Import in the first moments after the page "
+          + "appeared could be dropped without a word, and the score never opened. The page now listens for "
+          + "the file from the start."
+        },
+        {
+          "area": "site",
           "title": "Undo survives a reload, with no limit of 300 steps",
           "text": "The score editor now keeps its undo history in your browser, for each score: reload the page, "
           + "or open the score again another day, and Edit ▸ Undo still goes back through your changes, and "

@@ -143,7 +143,6 @@
   </section>
 
   <script type="module">
-    const M = await import("/eui-score/score-model.js?v=<%= eui_version %>");
     const startForm = document.getElementById("start-form");
     const begin = (source, title = "") => {
       document.getElementById("start-source").value = source;
@@ -151,6 +150,44 @@
       startForm.submit();
     };
     const titleOf = (source) => /\\header\s*\{[^}]*?title\s*=\s*"([^"]*)"/.exec(source)?.[1] || "Untitled";
+
+    // Import: the file's text, titled after the file when it has no title.
+    // MusicXML and MIDI are read as LilyPond first; what they hold that the editor does not write is named before going on.
+    // Listened to before the score model loads, so a file chosen meanwhile is not lost. data-ready says so: the
+    // page's text is there well before this, and a file chosen before it would be dropped (the browser specs wait for it).
+    const importInput = document.querySelector("[data-import]");
+    importInput.addEventListener("change", async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      const name = file.name.replace(/\.[^.]+$/, "");
+      const midi = /\.(mid|midi|smf|kar)$/i.test(file.name);
+      if (!midi && !/\.(musicxml|mxl|xml)$/i.test(file.name)) return begin(await file.text(), name);
+      const note = document.querySelector("[data-import-note]");
+      const message = document.querySelector("[data-import-message]");
+      const anyway = document.querySelector("[data-import-anyway]");
+      try {
+        let read;
+        if (midi) {
+          const I = await import("/eui-score/midi-import.js?v=<%= eui_version %>");
+          read = I.fromMidi(new Uint8Array(await file.arrayBuffer()), { title: name });
+        } else {
+          const X = await import("/eui-score/musicxml.js?v=<%= eui_version %>");
+          read = X.fromMusicXML(await X.musicXmlOf(file));
+        }
+        const { source, warnings } = read;
+        if (!warnings.length) return begin(source, name);
+        message.textContent = `Left out of ${file.name}: ${warnings.join("; ")}.`;
+        anyway.hidden = false;
+        anyway.onclick = () => begin(source, name);
+      } catch (problem) {
+        message.textContent = problem.message;
+        anyway.hidden = true;
+      }
+      note.hidden = false;
+    });
+    importInput.dataset.ready = "";
+
+    const M = await import("/eui-score/score-model.js?v=<%= eui_version %>");
 
     // New: a template, its settings, the model's LilyPond.
     const box = document.querySelector("[data-templates]");
@@ -181,38 +218,6 @@
         error.textContent = problem.message;
         error.hidden = false;
       }
-    });
-
-    // Import: the file's text, titled after the file when it has no title.
-    // MusicXML and MIDI are read as LilyPond first; what they hold that the editor does not write is named before going on.
-    document.querySelector("[data-import]").addEventListener("change", async (event) => {
-      const file = event.target.files[0];
-      if (!file) return;
-      const name = file.name.replace(/\.[^.]+$/, "");
-      const midi = /\.(mid|midi|smf|kar)$/i.test(file.name);
-      if (!midi && !/\.(musicxml|mxl|xml)$/i.test(file.name)) return begin(await file.text(), name);
-      const note = document.querySelector("[data-import-note]");
-      const message = document.querySelector("[data-import-message]");
-      const anyway = document.querySelector("[data-import-anyway]");
-      try {
-        let read;
-        if (midi) {
-          const I = await import("/eui-score/midi-import.js?v=<%= eui_version %>");
-          read = I.fromMidi(new Uint8Array(await file.arrayBuffer()), { title: name });
-        } else {
-          const X = await import("/eui-score/musicxml.js?v=<%= eui_version %>");
-          read = X.fromMusicXML(await X.musicXmlOf(file));
-        }
-        const { source, warnings } = read;
-        if (!warnings.length) return begin(source, name);
-        message.textContent = `Left out of ${file.name}: ${warnings.join("; ")}.`;
-        anyway.hidden = false;
-        anyway.onclick = () => begin(source, name);
-      } catch (problem) {
-        message.textContent = problem.message;
-        anyway.hidden = true;
-      }
-      note.hidden = false;
     });
 
     // A photo: sent to be read, asked after until it is, shown beside what was read.
