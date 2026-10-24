@@ -19,6 +19,7 @@ const M = await import(`./score-model.js${V}`);
 const P = await import(`./player.js${V}`);
 const R = await import(`./piano-roll.js${V}`);
 const K = await import(`./shortcuts.js${V}`);
+const S = await import(`./midi-sync.js${V}`);
 const { editor_view_lit, score_json, source_spans } = engine;
 
 /** The MusicXML reader and writer, loaded the first time a file needs it. */
@@ -744,6 +745,7 @@ export function startStudio(root, options = {}) {
         return draw();
       case "insert-copied": return insertCopied();
       case "record": return record();
+      case "midi-learn": return sync.open();
       case "set-loop": return setLoop(selectedBarsOrNull());
       case "clear-loop": return setLoop(null);
       case "written": {
@@ -2924,16 +2926,22 @@ export function startStudio(root, options = {}) {
     return staff?.name || `staff ${M.staffNumber(st.score, s) + 1}`;
   }
 
-  /** The tick being heard now, while recording; null before the music has started or while it is paused. */
-  function recordingNow() {
+  /**
+   * The tick being heard now, while recording — or when the key's message
+   * was `stamp` (ms, performance.now()), less the time it waited to be read;
+   * null before the music has started or while it is paused.
+   */
+  function recordingNow(stamp = null) {
     const handle = st.playing?.handle;
-    return st.recording && handle && !handle.paused ? M.tickAtPlayed(st.score, st.playing.passes, handle.heard) : null;
+    if (!st.recording || !handle || handle.paused) return null;
+    const sec = stamp == null ? handle.heard : S.struckAt(handle.heard, handle.rate, performance.now() - stamp);
+    return M.tickAtPlayed(st.score, st.playing.passes, sec);
   }
 
-  function recordKey(key, held, velocity = 100) {
+  function recordKey(key, held, velocity = 100, stamp = null) {
     if (!st.recording) return;
     P.hold(key, true, st.recording.program, { drums: st.recording.drums, velocity, channel: st.recording.channel });
-    const t = recordingNow();
+    const t = recordingNow(stamp);
     if (t != null) st.recording.down.set(key, { t, velocity });
   }
 
@@ -3057,6 +3065,9 @@ export function startStudio(root, options = {}) {
     });
     return [...at.values()].sort((a, b) => a.sec - b.sec);
   }
+
+  // The MIDI clock, sent and followed, and MIDI learn (midi-sync.js).
+  const sync = S.attach({ root, st, M, P, act, say });
 
   // ---- Start ---------------------------------------------------------------------
 

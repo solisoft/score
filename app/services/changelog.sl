@@ -13,6 +13,18 @@ class Changelog
       {"date": "2026-10-24", "entries": [
         {
           "area": "engine",
+          "title": "MIDI clock and MIDI learn",
+          "text": "With Send MIDI clock ticked under Playback, the device in Sound to gets the editor's clock, with "
+          + "Start, Stop and the place in the piece: GarageBand, Logic or a drum machine play in time, tempo changes "
+          + "included. Follow a MIDI clock does the reverse, from your MIDI keyboard. Play ▸ MIDI learn gives Play, "
+          + "Stop, Record, the speed, the volume and each staff's mute and solo to a knob, a pad or a key of your "
+          + "controller; this browser remembers them. Pitch bend and aftertouch sound as you play. A setting for "
+          + "the MIDI device's latency keeps recordings in time with it. Ableton Link is out of reach: a web page "
+          + "cannot use the network the way Link does, so sync with Live through its MIDI clock.",
+          "link": "playground"
+        },
+        {
+          "area": "engine",
           "title": "Real LilyPond files open",
           "text": "Files written for LilyPond itself now open instead of being refused. Layout settings such as "
           + "\\override, \\set, \\tweak or a \\layout block are skipped, and the editor names them when you open "

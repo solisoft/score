@@ -89,6 +89,28 @@ def marked_text
   evaluate("document.querySelector('[data-source-mark] mark')?.textContent ?? null")
 end
 
+# A MIDI keyboard the page is given instead of the browser's: its messages
+# are sent from the test with window.fakeKeyboard.onmidimessage(…).
+const FAKE_MIDI = """
+(() => {
+  window.fakeKeyboard = { id: 'fake-kb', name: 'Fake keys', onmidimessage: null };
+  const access = { inputs: new Map([['fake-kb', window.fakeKeyboard]]), outputs: new Map() };
+  Object.defineProperty(navigator, 'requestMIDIAccess', { configurable: true, value: async () => access });
+})()
+"""
+
+# A message from the fake keyboard.
+def midi_in(bytes)
+  evaluate("window.fakeKeyboard.onmidimessage({ data: new Uint8Array(#{JSON.stringify(bytes)}),"
+  + " timeStamp: performance.now() })")
+  sleep(0.1)
+end
+
+# What a selector's element says.
+def text_of(selector)
+  evaluate("document.querySelector(#{JSON.stringify(selector)})?.textContent ?? null")
+end
+
 describe("The playground, in a browser") do
   before_each() do
     visit("/playground")
@@ -312,6 +334,62 @@ describe("The playground, in a browser") do
       )
     end
     assert_eq(keys.length, evaluate("[...document.querySelectorAll('[data-keys-list] dd')].length"))
+    assert_no_page_errors()
+  end
+
+  test("MIDI learn gives a controller's knob to Speed, kept in the browser, and clears it") do
+    evaluate("localStorage.removeItem('eui-score-midi-learn')")
+    evaluate(FAKE_MIDI)
+    evaluate("(() => { const box = document.querySelector('[data-midi-in]'); box.value = 'find';"
+    + " box.dispatchEvent(new Event('change', { bubbles: true })); })()")
+    sleep(0.4)
+    assert_eq(evaluate("document.querySelector('[data-midi-in]').value"), "fake-kb")
+    click("[data-section=\"playback\"] [data-act=\"midi-learn\"]")
+    sleep(0.3)
+    assert(evaluate("document.querySelector('[data-midi-learn]').open"), "the dialog opens")
+    targets = evaluate("[...document.querySelectorAll('.midi-learn-row')].map((row) => row.dataset.target)")
+    ["play", "stop", "record", "tempo", "volume"].each do |target|
+      assert_contains(targets, target)
+    end
+    assert_contains(text_of("[data-midi-learn]"), "Ableton Link")
+    click("[data-learn=\"tempo\"]")
+    sleep(0.2)
+    assert_contains(text_of("[data-target=\"tempo\"] .midi-learn-control"), "move a control")
+    # The knob turned: CC 21 on channel 1 is now the Speed's.
+    midi_in([176, 21, 40])
+    assert_eq(text_of("[data-target=\"tempo\"] .midi-learn-control"), "CC 21, channel 1")
+    kept = evaluate("JSON.parse(localStorage.getItem('eui-score-midi-learn'))")
+    assert_eq(kept["tempo"]["number"], 21)
+    # Turned all the way up: the fastest speed; down: the slowest. Another knob does nothing.
+    midi_in([176, 21, 127])
+    assert_eq(evaluate("document.querySelector('[data-play=\"rate\"]').value"), "1.5")
+    midi_in([176, 21, 0])
+    assert_eq(evaluate("document.querySelector('[data-play=\"rate\"]').value"), "0.5")
+    midi_in([176, 22, 127])
+    assert_eq(evaluate("document.querySelector('[data-play=\"rate\"]').value"), "0.5")
+    click("[data-learn-clear=\"tempo\"]")
+    sleep(0.2)
+    assert_eq(text_of("[data-target=\"tempo\"] .midi-learn-control"), "—")
+    assert_eq(evaluate("localStorage.getItem('eui-score-midi-learn')"), "{}")
+    midi_in([176, 21, 127])
+    assert_eq(
+      evaluate("document.querySelector('[data-play=\"rate\"]').value"),
+      "0.5",
+      "forgotten: the knob moves nothing"
+    )
+    assert_no_page_errors()
+  end
+
+  test("the MIDI clock and the device's latency are kept in the browser") do
+    evaluate("localStorage.removeItem('eui-score-midi-sync')")
+    click("[data-sync=\"clock-out\"]")
+    evaluate("(() => { const box = document.querySelector('[data-sync=\"delay\"]'); box.value = '25';"
+    + " box.dispatchEvent(new Event('change', { bubbles: true })); })()")
+    sleep(0.2)
+    kept = evaluate("JSON.parse(localStorage.getItem('eui-score-midi-sync'))")
+    assert_eq(kept["clockOut"], true)
+    assert_eq(kept["clockIn"], false)
+    assert_eq(kept["delay"], 25)
     assert_no_page_errors()
   end
 end

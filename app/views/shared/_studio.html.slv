@@ -123,6 +123,8 @@
             <hr>
             <button type="button" role="menuitem" data-act="set-loop">Loop the selected bars <kbd>played and recorded</kbd></button>
             <button type="button" role="menuitem" data-act="clear-loop">No loop</button>
+            <hr>
+            <button type="button" role="menuitem" data-act="midi-learn">MIDI learn and clock…</button>
           </div>
         </details>
         <% if locals["app"] %>
@@ -200,6 +202,13 @@
             <option value="">this browser</option><option value="find">MIDI devices…</option>
           </select>
         </label>
+        <%# MIDI clock and latency (public/eui-score/midi-sync.js), kept in this browser. %>
+        <label class="tool-check" title="24 pulses a quarter, Start, Stop and Song Position, to the device in Sound to: GarageBand, Logic or a drum machine play in time"><input type="checkbox" data-sync="clock-out"> Send MIDI clock</label>
+        <label class="tool-check" title="Start, Stop and the tempo of a clock coming in on the MIDI keyboard chosen in Mode"><input type="checkbox" data-sync="clock-in"> Follow a MIDI clock</label>
+        <label class="tool-field" title="How late the device in Sound to sounds what it is sent: recordings are moved back by it">MIDI device latency, ms
+          <input type="number" min="-500" max="500" step="1" value="0" data-sync="delay">
+        </label>
+        <button type="button" class="tool tool-wide" data-act="midi-learn">MIDI learn…</button>
         <div class="tool-staves" data-play="staves" aria-label="Mute or solo a staff"></div>
       </details>
 
@@ -621,6 +630,24 @@
         <label class="tool-check"><input type="checkbox" data-field="even-pages"> Spread the lines evenly over the pages</label>
     <p class="muted studio-properties-note">Paper and staff size are the PDF's. Each staff's instrument, clef and name: select a note of it, then the toolbox's
       <strong>This staff</strong>.</p>
+  </dialog>
+
+  <%# Play ▸ MIDI learn and clock…: the controls a MIDI controller is given,
+      filled by public/eui-score/midi-sync.js; kept in this browser. %>
+  <dialog class="studio-keys midi-learn" data-midi-learn aria-labelledby="midi-learn-title">
+    <div class="studio-keys-head">
+      <h2 id="midi-learn-title">MIDI learn</h2>
+      <button type="button" class="studio-menu" data-learn-close aria-label="Close">×</button>
+    </div>
+    <p class="muted midi-learn-note">Press <strong>Learn</strong>, then move a knob or a fader, or press a pad or a key, on the MIDI
+      keyboard chosen in Mode: it now does that. Pitch bend and aftertouch always sound as you play.</p>
+    <div class="midi-learn-list" data-learn-list></div>
+    <div class="tool-row studio-new-actions">
+      <button type="button" class="tool tool-wide" data-learn-clear-all>Clear them all</button>
+    </div>
+    <p class="muted midi-learn-note">The MIDI clock (Playback ▸ Send MIDI clock) goes to the device in Sound to, 24 pulses a quarter
+      with Start, Stop and Song Position. <strong>Ableton Link</strong> is out of a browser's reach: it talks over the
+      network, which a web page cannot; sync with Live through its MIDI clock instead.</p>
   </dialog>
 
   <%# File ▸ Print a part…: one instrument of the score, as its player reads it. %>

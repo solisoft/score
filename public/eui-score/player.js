@@ -66,13 +66,17 @@ function start() {
       ctx.audioWorklet.addModule(new URL(`vendor/spessasynth_processor.min.js${V}`, import.meta.url)),
     ]);
     const synth = new WorkletSynthesizer(ctx);
-    synth.connect(ctx.destination);
+    // Through a gain: the volume a controller's fader sets (MIDI learn).
+    const gain = ctx.createGain();
+    gain.gain.value = volume;
+    synth.connect(gain);
+    gain.connect(ctx.destination);
     await synth.soundBankManager.addSoundBank(bank, "main");
     await synth.isReady;
     // The score's first beat is at 0 s, a rest or not: the editor's timings count from there.
     const seq = new Sequencer(synth, { skipToFirstNoteOn: false });
     job.done = true;
-    return { ctx, synth, seq };
+    return { ctx, synth, seq, gain };
   })();
   // A failed load is tried again on the next Play.
   job.promise.catch(() => {
@@ -168,8 +172,7 @@ export async function play(midi, { at = 0, onStop, onProgress } = {}) {
      * Bluetooth headphones. For lighting the notes being heard.
      */
     get heard() {
-      const latency = (ctx.outputLatency || 0) + (ctx.baseLatency || 0);
-      return Math.max(0, seq.currentHighResolutionTime - latency * seq.playbackRate);
+      return Math.max(0, seq.currentHighResolutionTime - outputDelay(ctx, Boolean(output), deviceDelay) * seq.playbackRate);
     },
     get duration() {
       return seq.duration;
@@ -273,6 +276,17 @@ export async function midiInputs() {
 }
 
 let input = null;
+const taps = new Set();
+
+/**
+ * Hears every message of the MIDI keyboard listened to, before its keys are:
+ * `fn(data, timeStamp)` answering true keeps a message from going further
+ * (a key learnt for Play writes no note). Answers the function that stops it.
+ */
+export function tap(fn) {
+  taps.add(fn);
+  return () => taps.delete(fn);
+}
 
 /**
  * Listens to MIDI keyboard `id` (null: to none). `onKey(key, held,
@@ -285,13 +299,14 @@ export function listen(id, onKey, onRelease = null) {
   input = id && access ? access.inputs.get(id) ?? null : null;
   if (!input) return null;
   const down = new Set();
-  input.onmidimessage = ({ data }) => {
+  input.onmidimessage = ({ data, timeStamp }) => {
+    for (const fn of taps) if (fn(data, timeStamp)) return;
     const [status, key, velocity] = data;
     const kind = status & 0xf0;
     if (kind === 0x90 && velocity > 0) {
       const held = [...down];
       down.add(key);
-      onKey(key, held, velocity);
+      onKey(key, held, velocity, timeStamp);
     } else if (kind === 0x80 || kind === 0x90) {
       down.delete(key);
       onRelease?.(key);
@@ -313,6 +328,46 @@ export function setOutput(id) {
   return output;
 }
 
+/** The MIDI device chosen in Sound to (a MIDIOutput), or null: where the MIDI clock goes too. */
+export function outputPort() {
+  return output;
+}
+
+// How late a MIDI device sounds what it is sent, in ms: set by hand, since
+// no device says. Bluetooth MIDI, or a software synth's buffer, adds some.
+let deviceDelay = 0;
+
+/** Sets the Sound to device's latency, in ms. */
+export function setDeviceDelay(ms) {
+  deviceDelay = Number(ms) || 0;
+}
+
+/**
+ * How late the music reaches the ear, in seconds: the audio output's own
+ * latency (`outputLatency`, or `baseLatency` where it is all a browser
+ * says) in this browser; the latency set by hand for a MIDI device.
+ */
+export function outputDelay(ctx, toDevice = false, deviceMs = 0) {
+  if (toDevice) return Math.max(0, deviceMs) / 1000;
+  return (ctx?.outputLatency || 0) + (ctx?.baseLatency || 0);
+}
+
+let volume = 1;
+
+/** The volume, 0 to 1: this browser's sound, or Channel Volume (CC 7) on every channel of a MIDI device. */
+export function setVolume(value) {
+  volume = Math.max(0, Math.min(1, Number(value)));
+  if (output) {
+    for (let channel = 0; channel < 16; channel++) {
+      try {
+        output.send([0xb0 | channel, 7, Math.round(volume * 127)]);
+      } catch (error) {}
+    }
+  }
+  if (engine?.done) engine.promise.then(({ ctx, gain }) => gain.gain.setTargetAtTime(volume, ctx.currentTime, 0.02));
+  return volume;
+}
+
 // The notes heard while writing sound on a channel of their own, so the
 // piece's channels keep their instruments.
 const PREVIEW = 15;
@@ -323,6 +378,7 @@ const PREVIEW = 15;
  * starts loading them and stays silent: the next note is heard.
  */
 export function preview(keys, program = 0, { drums = false, channel = 0 } = {}) {
+  live = drums ? 9 : output ? channel : PREVIEW;
   // To the MIDI device chosen in Sound to, on the staff's channel.
   if (output) {
     for (const key of keys) sendNote(drums ? 9 : channel, key, true, 90);
@@ -354,6 +410,7 @@ export function preview(keys, program = 0, { drums = false, channel = 0 } = {}) 
  * stops it with `on` false. Silent until the sounds have loaded.
  */
 export function hold(key, on, program = 0, { drums = false, velocity = 100, channel = 0 } = {}) {
+  live = drums ? 9 : output ? channel : PREVIEW;
   if (output) {
     sendNote(drums ? 9 : channel, key, on, velocity);
     return true;
@@ -366,6 +423,27 @@ export function hold(key, on, program = 0, { drums = false, velocity = 100, chan
     if (!drums) synth.programChange(channel, program);
     synth.noteOn(channel, key, velocity);
   });
+  return true;
+}
+
+// The channel the last key sounded on: where the keyboard's bends go.
+let live = PREVIEW;
+
+/**
+ * Pitch bend, channel pressure or key pressure from the keyboard (`data`, a
+ * MIDI message), sounded on the channel of the keys being played: in this
+ * browser, or on the MIDI device.
+ */
+export function express(data) {
+  const message = [(data[0] & 0xf0) | live, ...Array.from(data).slice(1)];
+  if (output) {
+    try {
+      output.send(message);
+    } catch (error) {}
+    return true;
+  }
+  if (!engine?.done) return false;
+  engine.promise.then(({ synth }) => synth.sendMessage(message));
   return true;
 }
 

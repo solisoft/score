@@ -22,6 +22,7 @@ class ScoreAssets
       "piano-roll.js",
       "shortcuts.js",
       "player.js",
+      "midi-sync.js",
       "vendor/README.md",
       "eui_score_web.js",
       "wasm.version"
