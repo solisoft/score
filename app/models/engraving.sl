@@ -14,7 +14,7 @@ const ENGRAVINGS_KEPT = 2000
 # 2.28.4, the browser's engraver on the server; 3: data-breaks for printing;
 # 4: Soli 2.28.5, the engine with movements, mid-bar changes and gathered
 # rests).
-const ENGRAVING_FORMAT = 4
+const ENGRAVING_FORMAT = 5
 
 class Engraving < Model
   # The engraving kept under `digest`, as `ScoreSvg.engrave` answers it

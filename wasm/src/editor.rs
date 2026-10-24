@@ -728,6 +728,10 @@ pub fn score(src: &str) -> Result<Value, String> {
             if ev.graces.iter().any(|g| g.grace != grace_kind || !g.drums.is_empty() || g.tie || !g.scripts.is_empty() || !g.fingers.is_empty() || g.phrase_on || g.phrase_off || g.tremolo > 0 || g.dots > 2) {
                 unsupported.push("grace notes");
             }
+            // `\afterGrace`'s notes, kept as the grace notes before a note are.
+            if ev.after_graces.iter().any(|g| !g.drums.is_empty() || g.tie || !g.scripts.is_empty() || !g.fingers.is_empty() || g.phrase_on || g.phrase_off || g.tremolo > 0 || g.dots > 2) {
+                unsupported.push("grace notes after a note");
+            }
             if ev.percent.is_some() {
                 unsupported.push("percent repeats");
             }
@@ -790,6 +794,9 @@ pub fn score(src: &str) -> Result<Value, String> {
                     GraceKind::Slashed => "slashedGrace",
                     GraceKind::Plain => "grace",
                 }),
+                // `\afterGrace`'s notes, the same way, and where they start in the note (3/4 unless written).
+                "after_graces": ev.after_graces.iter().map(|g| json!([g.pitches.iter().map(|p| [p.d, p.alter]).collect::<Vec<_>>(), g.base, g.dots])).collect::<Vec<_>>(),
+                "after_at": ev.after_at,
                 "arpeggio": ev.arpeggio,
                 "gliss": ev.gliss,
                 "tremolo": ev.tremolo,
