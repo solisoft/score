@@ -230,6 +230,14 @@ fn several_scores_are_movements() {
 }
 
 #[test]
+fn a_chord_name_says_how_it_is_written() {
+    let parsed = score("<< \\new ChordNames \\chordmode { c2:m7 bes:maj7/d | r1 } \\new Staff { c''1 | d''1 } >>").unwrap();
+    let written: Vec<_> = parsed["staves"][0]["events"].as_array().unwrap().iter().map(|e| e["chord_text"].clone()).collect();
+    assert_eq!(written, vec![json!("c2:m7"), json!("bes:maj7/d"), json!("r1")]);
+    assert_eq!(parsed["staves"][1]["events"][0]["chord_text"], json!(null));
+}
+
+#[test]
 fn staves_and_voices_say_their_names() {
     let src = "\\new PianoStaff << \\new Staff = \"up\" << \\new Voice = \"sop\" { \\voiceOne c''1 } \\new Voice = \"alto\" { \\voiceTwo a'1 } >> \\new Lyrics \\lyricsto \"alto\" { la } \\new Staff = \"down\" { \\clef bass c4 \\change Staff = \"up\" e'4 d'2 } >>";
     let parsed = score(src).unwrap();

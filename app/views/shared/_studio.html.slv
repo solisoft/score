@@ -123,6 +123,7 @@
             <button type="button" role="menuitem" data-act="pedal" data-how="on">Sustain pedal</button>
             <hr>
             <button type="button" role="menuitem" data-act="add-staff">A staff</button>
+            <button type="button" role="menuitem" data-act="chord-line">A line of chord names over the staff</button>
             <button type="button" role="menuitem" data-act="voice" data-voice="2">A second voice <kbd>Ctrl+Alt+2</kbd></button>
             <button type="button" role="menuitem" data-act="voice" data-voice="3">A third voice <kbd>Ctrl+Alt+3</kbd></button>
             <button type="button" role="menuitem" data-act="voice" data-voice="4">A fourth voice <kbd>Ctrl+Alt+4</kbd></button>

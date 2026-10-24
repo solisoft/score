@@ -31,6 +31,17 @@ class Changelog
         },
         {
           "area": "editor",
+          "title": "A line of chord names, edited beat by beat",
+          "text": "A score with a line of chord names over its music (\\new ChordNames \\chordmode) now opens in "
+          + "the editor, each chord written back as it was written. Insert › A line of chord names puts one over "
+          + "the selected staff; then select a note under it, press K and type a chord (Am7, Bbmaj7, G7/B, "
+          + "Dm7b5, N.C.), Space for the next beat. A chord holds until the next one, and a symbol the line "
+          + "cannot write is refused. Transposing moves the chords with the music; two people editing other "
+          + "bars keep them; MusicXML takes them out as chord symbols, each at its beat.",
+          "link": "playground"
+        },
+        {
+          "area": "editor",
           "title": "Notes on the other staff, and words under the second voice",
           "text": "A piano score whose right hand reaches into the bass staff (\\change Staff) now opens in the "
           + "editor instead of as text only: select the notes and press Ctrl+Shift+↓ (or ↑), or use Insert, to "

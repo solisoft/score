@@ -28,7 +28,7 @@ function engrave(score) {
   assert.ok(items.every((it) => score.staves[it.staff].events[it.index]), "every item is an event");
   assert.equal(new Set(items.map((it) => `${it.staff}:${it.index}`)).size, items.length, "no event twice");
   // A spacer (`s`) is drawn as nothing: no item of the view.
-  assert.equal(view.items.length, items.filter((it) => !score.staves[it.staff].events[it.index].spacer).length, `the engraver sees every item\n${source}`);
+  assert.equal(view.items.length, items.filter((it) => M.isDrawn(score, it)).length, `the engraver sees every item\n${source}`);
   return { source, view };
 }
 

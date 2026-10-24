@@ -441,7 +441,8 @@ export function transpose(score, { steps, semitones, s = null, a = 0, b = Infini
       }
       for (const g of ev.graces) g.pitches = g.pitches.map((p) => transposePitch(p, steps, semitones));
       for (const g of ev.afterGraces ?? []) g.pitches = g.pitches.map((p) => transposePitch(p, steps, semitones));
-      if (s == null && ev.chord) ev.chord = transposeChord(ev.chord, steps, semitones);
+      if (s == null && ev.chord && ev.chord !== "N.C.") ev.chord = transposeChord(ev.chord, steps, semitones);
+      if (s == null && ev.chordmode && ev.chordmode !== "r") ev.chordmode = transposeChordmode(ev.chordmode, steps, semitones);
     });
   }
 }
@@ -664,6 +665,8 @@ function pieces(score, ev, at, ticks, role) {
       delete p.cautionary;
       delete p.repeatTie;
       delete p.hairpinWords;
+      // A chord of a line of chord names is named once, where it starts.
+      delete p.chordmode;
     }
     if (!(last && keepsEnd)) {
       delete p.beamEnd;
@@ -701,6 +704,7 @@ export function ensureLength(score, ticks) {
 export function write(score, s, t, ticks, content, { tidyUp = true } = {}) {
   const staff = score.staves[s];
   if (!staff) throw new Error("no such staff");
+  if (staff.chords && content.rest === false) throw new Error(CHORD_LINE_NOTES);
   if (!Number.isInteger(t) || t < 0 || !Number.isInteger(ticks) || ticks <= 0) throw new Error("nothing to write there");
   ensureLength(score, t + ticks);
   const from = cut(score, staff, t);
@@ -1274,7 +1278,17 @@ export function setTremolo(score, s, i, value) {
 }
 
 export function setChordSymbol(score, s, i, text) {
-  noteOf(score, s, i).chord = text.trim();
+  const ev = noteOf(score, s, i);
+  const symbol = text.trim();
+  if (isChords(score, s)) {
+    // On a line of chord names: a chord it can write, or N.C.; the source's spelling goes.
+    const none = /^n\.?c\.?$/i.test(symbol);
+    if (symbol && !none) chordmodeOf(symbol);
+    delete ev.chordmode;
+    ev.chord = none ? "N.C." : symbol;
+    return;
+  }
+  ev.chord = symbol;
 }
 
 /** The most verses a score's lyrics may have: a line under the staff each. */
@@ -2036,7 +2050,15 @@ export function removeStaff(score, s) {
   const n = staffNumber(score, u);
   // The notes drawn on it go back to their own staves.
   const id = score.staves[u].id;
-  score.staves.splice(u, voiceLanes(score, u).length);
+  const count = voiceLanes(score, u).length;
+  score.staves.splice(u, count);
+  // What the meta line keys by lane: the staff's own go, the later lanes' move back.
+  if (score.meta) {
+    const gone = (lane) => Number(lane) >= u && Number(lane) < u + count;
+    if (score.meta.velocity) score.meta.velocity = Object.fromEntries(Object.entries(score.meta.velocity).filter(([key]) => !gone(key.split(":")[0])));
+    for (const part of [score.meta.cc, score.meta.mixer?.tracks]) for (const lane of Object.keys(part ?? {})) if (gone(lane)) delete part[lane];
+    shiftMetaLanes(score.meta, u + count, -count);
+  }
   if (id) for (const lane of score.staves) for (const ev of lane.events) if (ev.cross === id) delete ev.cross;
   score.groups = (score.groups ?? [])
     .map((g) => ({ ...g, first: g.first > n ? g.first - 1 : g.first, last: g.last >= n ? g.last - 1 : g.last }))
@@ -2276,9 +2298,16 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
   const repeats = score.repeats ?? [];
   // A staff's words sung to a lower voice: a Lyrics line beside the staves, so inside << >>.
   let lyricsTo = false;
+  const music0 = firstMusic(score);
   const staves = staffLanes(score).map((s) => {
     const staff = score.staves[s];
     const upper = staffBars(score, staff, s);
+    if (staff.chords) {
+      // A line of chord names: its bars, the metre and the repeats left to the music's staves.
+      for (const bar of upper) items.push(...bar.items);
+      const texts = upper.map((bar) => bar.text);
+      return `\\new ChordNames \\chordmode {\n  ${unfold ? playedOut(score, s, texts) : checked(texts)}\n}`;
+    }
     // The other voices, each its bars: a bar is written in voices up to the
     // last that sounds there (or that the page writes in), those before it as they are.
     const others = voiceLanes(score, s).slice(1).map((lane) => ({ lane, bars: staffBars(score, score.staves[lane], lane) }));
@@ -2288,7 +2317,7 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
       while (last >= 0 && !shown(others[last])) last--;
       return others.slice(0, last + 1).map((o) => o.bars[b]);
     };
-    const top = staffNumber(score, s) === 0;
+    const top = s === music0;
     // Words sung to a lower voice (\lyricsto): the staff's voices are written
     // whole, side by side, that voice named — LilyPond's lyrics follow one voice.
     const sungLane = lyricsLane(score, s);
@@ -2329,7 +2358,7 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
     const name = staff.name ? `instrumentName = ${quote(staff.name)} ` : "";
     const short = staff.short ? `shortInstrumentName = ${quote(staff.short)} ` : "";
     const midi = staff.instrument && !staff.drums ? `midiInstrument = ${quote(staff.instrument)} ` : "";
-    const tempo = s === 0 && score.tempo && (score.tempo.text || score.tempo.bpm) ? ` ${tempoText(score.tempo)}` : "";
+    const tempo = s === music0 && score.tempo && (score.tempo.text || score.tempo.bpm) ? ` ${tempoText(score.tempo)}` : "";
     const clef = clefText(staff.clef);
     const time = staff.time ?? score.time;
     const partial = score.pickup > 0 ? ` \\partial ${pickupText(score.pickup)}` : "";
@@ -2538,7 +2567,7 @@ function changesText(score, s, b) {
   const c = changeAt(score, b);
   if (c?.key != null && !drums) parts.push(`\\key ${keyText(keyOf(score, s, barStart(score, b)), c.mode)}`);
   if (c?.time) parts.push(`\\time ${c.time[0]}/${c.time[1]}`);
-  if (c?.tempo && staffNumber(score, s) === 0) parts.push(tempoText(c.tempo));
+  if (c?.tempo && s === firstMusic(score)) parts.push(tempoText(c.tempo));
   if (c?.line) parts.unshift(`\\bar "${c.line}"`);
   return parts.length ? parts.join(" ") + " " : "";
 }
@@ -2571,7 +2600,7 @@ export function handBeams(score, staff) {
  */
 function midChanges(score, s) {
   const staff = score.staves[s];
-  if (staff.voice || staff.drums) return [];
+  if (staff.voice || staff.drums || staff.chords) return [];
   const own = staff.key == null ? 0 : staff.key - score.key;
   const keys = (score.midKeys ?? []).map((m) => ({ bar: m.bar, pos: m.pos, order: 1, text: `\\key ${keyText(Math.max(-7, Math.min(7, m.key + own)), m.mode)}` }));
   const clefs = (staff.midClefs ?? []).map((c) => ({ bar: c.bar, pos: c.pos, order: 0, text: `\\clef ${clefText(c.clef)}` }));
@@ -2619,7 +2648,7 @@ function staffBars(score, staff, s) {
     const on = crossOf(score, s, ev);
     if (on !== drawnOn) change(on);
     drawnOn = on;
-    current.parts.push(eventText(ev, beams[i]));
+    current.parts.push(staff.chords ? chordText(ev) : eventText(ev, beams[i]));
     t += ticksOf(ev);
     if (Math.abs(t - barStart(score, bars.length + 1)) < 1e-6) close();
   });
@@ -3036,6 +3065,166 @@ export function isDrums(score, s) {
 
 function refuseDrums(score, s) {
   if (isDrums(score, s)) throw new Error("A drum staff has drums, not pitches: the drum buttons write and change them");
+  if (isChords(score, s)) throw new Error(CHORD_LINE_NOTES);
+}
+
+// ---- Lines of chord names ---------------------------------------------------------
+//
+// `\new ChordNames \chordmode { c2:m7 f:7 }`: a staff of its own (`staff.chords`)
+// whose events are rests that last as long as a chord holds, each its symbol
+// (`ev.chord`, "Cm7"), "N.C." (written `r`), or none (`s`). `ev.chordmode`
+// keeps a chord as the source wrote it (`c:m7`), written back as it was
+// until the chord is changed. The music's metre, pickup and repeats are the
+// other staves': the line follows them.
+
+const CHORD_LINE_NOTES = "A line of chord names holds chord symbols, not notes: select a beat and type one (K)";
+
+/** Whether lane `s` is a line of chord names. */
+export function isChords(score, s) {
+  return Boolean(score.staves[upperOf(score, s)]?.chords);
+}
+
+/** The first staff of music (not a line of chord names): the one that writes the marks, the tempo and the breaks. */
+function firstMusic(score) {
+  return staffLanes(score).find((u) => !score.staves[u].chords) ?? 0;
+}
+
+const CHORD_ALTERS = { "#": 1, "♯": 1, b: -1, "♭": -1, "": 0 };
+// A symbol's quality and the \chordmode modifier it is: "m7" is ":m7".
+const CHORD_KINDS = [
+  ["", ""], ["m", "m"], ["6", "6"], ["m6", "m6"], ["7", "7"], ["9", "9"], ["11", "11"], ["13", "13"],
+  ["maj7", "maj7"], ["maj9", "maj9"], ["m7", "m7"], ["m9", "m9"], ["m11", "m11"], ["dim", "dim"], ["dim7", "dim7"],
+  ["aug", "aug"], ["aug7", "aug7"], ["m7b5", "m7.5-"], ["sus2", "sus2"], ["sus4", "sus4"], ["7sus4", "sus4.7"],
+  ["6/9", "6.9"], ["add9", "5.9"], ["m(maj7)", "m7+"], ["5", "1.5"],
+];
+// Other ways people write them.
+const CHORD_SAME = { min: "m", "-": "m", M7: "maj7", "Δ": "maj7", "Δ7": "maj7", "△": "maj7", "△7": "maj7", "-7": "m7", min7: "m7", "°": "dim", "°7": "dim7", "+": "aug", "+7": "aug7", "ø": "m7b5", "ø7": "m7b5", sus: "sus4", 69: "6/9", mMaj7: "m(maj7)", "m(Δ7)": "m(maj7)" };
+
+/** A note name of \chordmode ("bes", "fis") from a letter and its sign ("Bb", "F#"). */
+function chordRoot(letter, sign) {
+  return spellPitch("CDEFGAB".indexOf(letter), CHORD_ALTERS[sign] ?? 0);
+}
+
+/**
+ * A chord symbol as \chordmode writes it, without its duration: "Cm7" is
+ * "c:m7", "Bbmaj7/D" "bes:maj7/d", "C7b9" "c:7.9-". Throws on one it cannot write.
+ */
+export function chordmodeOf(symbol) {
+  const text = String(symbol ?? "").trim();
+  const m = /^([A-G])([#b♯♭]?)(.*?)(?:\/([A-G])([#b♯♭]?))?$/.exec(text);
+  const refuse = () => new Error(`“${text}” is not a chord the line of chord names can write: try C, Am7, F7, Bbmaj7, G7/B, Dm7b5, Csus4`);
+  if (!m) throw refuse();
+  const rest = m[3];
+  // The quality, then any altered fifths, ninths, elevenths, thirteenths: C7b9#11.
+  const found = /^(.*?)((?:[#b♯♭](?:5|9|11|13))*)$/.exec(rest);
+  const quality = CHORD_SAME[found[1]] ?? found[1];
+  const kind = CHORD_KINDS.find(([name]) => name === quality);
+  if (!kind) throw refuse();
+  const alters = [...found[2].matchAll(/([#b♯♭])(\d+)/g)].map(([, sign, n]) => `${n}${CHORD_ALTERS[sign] > 0 ? "+" : "-"}`);
+  const mods = [kind[1], ...alters].filter(Boolean).join(".");
+  return chordRoot(m[1], m[2]) + (mods ? `:${mods}` : "") + (m[4] ? `/${chordRoot(m[4], m[5])}` : "");
+}
+
+/** A \chordmode chord (its duration left out or not) as its symbol: "c:m7" is "Cm7"; null for one this does not name. */
+export function symbolOfChordmode(written) {
+  const m = /^([a-g])((?:is|es|s)*)[',]*(?:\d+\.*)?(?::([0-9a-z.+\-^]*))?(?:\/([a-g])((?:is|es|s)*))?$/.exec(String(written ?? "").trim());
+  if (!m) return null;
+  const sign = (suffix) => ({ is: "#", isis: "##", es: "b", s: "b", eses: "bb", ses: "bb" })[suffix] ?? "";
+  const name = (letter, suffix) => letter.toUpperCase() + sign(suffix);
+  // The quality, as the longest modifier it starts with, and the alterations after it.
+  const mods = m[3] ?? "";
+  const kinds = [...CHORD_KINDS].filter(([, mod]) => mods === mod || (mod && mods.startsWith(`${mod}.`)) || !mod).sort((x, y) => y[1].length - x[1].length);
+  for (const [quality, mod] of kinds) {
+    const rest = mod ? mods.slice(mod.length) : mods ? `.${mods}` : "";
+    const alters = rest.split(".").filter(Boolean);
+    if (!alters.every((a) => /^(5|9|11|13)[+-]$/.test(a))) continue;
+    const altered = alters.map((a) => `${a.endsWith("+") ? "#" : "b"}${a.slice(0, -1)}`).join("");
+    return name(m[1], m[2]) + quality + altered + (m[4] ? `/${name(m[4], m[5])}` : "");
+  }
+  return null;
+}
+
+/** A \chordmode chord moved by `steps` letters and `semitones`: its root and its bass, the rest as written. */
+function transposeChordmode(written, steps, semitones) {
+  const move = (letter, suffix) => {
+    const alter = { is: 1, isis: 2, es: -1, s: -1, eses: -2, ses: -2 }[suffix] ?? 0;
+    const p = transposePitch({ d: "cdefgab".indexOf(letter), alter }, steps, semitones);
+    return spellPitch(mod7(p.d), p.alter);
+  };
+  return written.replace(/^([a-g])((?:is|es|s)*)/, (_, l, s) => move(l, s)).replace(/\/([a-g])((?:is|es|s)*)/, (_, l, s) => `/${move(l, s)}`);
+}
+
+/** A chord's name as ChordNames prints it ("BaccidentalFlat△"), as a symbol people type: "Bbmaj7". */
+function symbolOfName(name) {
+  return String(name ?? "").replace(/accidentalFlat/g, "b").replace(/accidentalSharp/g, "#").replace(/△/g, "maj").replace(/°/g, "dim").replace(/ø/g, "m7b5").replace(/\s+/g, "");
+}
+
+/** What a line of chord names writes for one of its events: the chord, "r" for N.C., "s" for none. */
+function chordText(ev) {
+  const value = ev.base + ".".repeat(ev.dots);
+  const written = ev.chordmode ?? (ev.chord === "N.C." ? "r" : ev.chord ? chordmodeOf(ev.chord) : "s");
+  // The duration goes after the root: c2:m7.
+  const root = /^([a-g](?:is|es|s)*[',]*|[rs])/.exec(written)?.[0] ?? written;
+  return root + value + written.slice(root.length);
+}
+
+/** The time of the beat after `t` (ticks): a quarter in 4/4, an eighth in 6/8. */
+export function nextBeat(score, t) {
+  const b = barAt(score, t);
+  const beat = WHOLE / timeAt(score, b)[1];
+  const from = barStart(score, b);
+  return from + (Math.floor((t - from) / beat + 1e-9) + 1) * beat;
+}
+
+/** Whether an item of `toLilyPond` is drawn: a spacer is not, nor a beat of a line of chord names with no chord. */
+export function isDrawn(score, item) {
+  const ev = score.staves[item.staff]?.events[item.index];
+  return Boolean(ev) && !ev.spacer && !(score.staves[item.staff].chords && !ev.chord);
+}
+
+/** The line of chord names right over the staff of lane `s` (or that lane itself when it is one), or −1. */
+export function chordLineOver(score, s) {
+  if (isChords(score, s)) return upperOf(score, s);
+  const lanes = staffLanes(score);
+  const above = lanes[staffNumber(score, s) - 1];
+  return above != null && score.staves[above].chords ? above : -1;
+}
+
+/**
+ * The chord from `t` (ticks) on lane `s`, a line of chord names: the line is
+ * cut there, the chord before it holding up to it, this one up to the next.
+ * Empty text takes it away; "N.C." is no chord, said.
+ */
+export function setChordAt(score, s, t, text) {
+  const staff = score.staves[s];
+  if (!staff?.chords) throw new Error("not a line of chord names");
+  if (t < 0 || t >= lengthOf(staff)) throw new Error("no beat there");
+  const symbol = String(text ?? "").trim();
+  if (symbol && !/^n\.?c\.?$/i.test(symbol)) chordmodeOf(symbol);
+  if (cut(score, staff, t) !== t) throw new Error("a chord does not start inside a tuplet");
+  setChordSymbol(score, s, eventAt(staff, t), symbol);
+  tidy(score, staff);
+}
+
+/** Lanes `at` and after moved by `by` in what the meta line keys by lane: velocities, curves, the mixer's tracks. */
+function shiftMetaLanes(meta, at, by) {
+  if (!meta) return;
+  const moved = (lane) => (Number(lane) >= at ? Number(lane) + by : Number(lane));
+  if (meta.velocity) meta.velocity = Object.fromEntries(Object.entries(meta.velocity).map(([id, v]) => [[moved(id.split(":")[0]), ...id.split(":").slice(1)].join(":"), v]));
+  if (meta.cc) meta.cc = Object.fromEntries(Object.entries(meta.cc).map(([lane, v]) => [moved(lane), v]));
+  if (meta.mixer?.tracks) meta.mixer.tracks = Object.fromEntries(Object.entries(meta.mixer.tracks).map(([lane, v]) => [moved(lane), v]));
+}
+
+/** A line of chord names over the staff of lane `s`, empty: answers its lane. */
+export function addChordStaff(score, s = 0) {
+  const u = upperOf(score, s);
+  if (!score.staves[u]) throw new Error("no such staff");
+  if (score.staves[u].chords) throw new Error("this is a line of chord names already");
+  const n = staffNumber(score, u);
+  score.staves.splice(u, 0, { name: "", short: "", instrument: "", clef: "treble", chords: true, events: rests(score, 0, lengthOf(score.staves[u])) });
+  score.groups = (score.groups ?? []).map((g) => ({ ...g, first: g.first >= n ? g.first + 1 : g.first, last: g.last >= n ? g.last + 1 : g.last }));
+  shiftMetaLanes(score.meta, u, 1);
+  return u;
 }
 
 /** Lane `s`'s event `i` struck on drum `name` — instead of what it was, or `add`ed to it. */
@@ -3837,7 +4026,7 @@ export function channels(score) {
 
 /** A lane's bars in the order they sound; a jump back says again the metre and the speed it returns to. */
 function playedOut(score, s, bars) {
-  const first = staffNumber(score, s) === 0;
+  const first = s === firstMusic(score);
   let previous = -1;
   return playOrder(score)
     .map((b) => {
@@ -3884,6 +4073,33 @@ export function passedOver(warnings) {
 const CLEF_NAMES = { "G,-2,0": "treble", "G,-2,-1": "treble_8", "F,2,0": "bass", "F,2,-1": "bass_8", "C,0,0": "alto", "C,2,0": "tenor", "C,-4,0": "soprano" };
 
 /**
+ * A line of chord names from its parse: each chord a rest as long as it
+ * holds, its symbol and its \chordmode spelling; N.C. for `r`, nothing for
+ * `s`. Read once the music's metre is known: a chord over a bar line is cut
+ * there, the line going on after it.
+ */
+function chordLine(score, staff, unsupported) {
+  const out = { name: staff.name ?? "", short: staff.short ?? "", instrument: "", clef: "treble", chords: true, events: [] };
+  for (const ev of staff.events) {
+    ev.unsupported.forEach((u) => unsupported.add(u));
+    if (ev.k !== "Note" && ev.k !== "Rest") continue;
+    if (ev.tuplet) unsupported.add("a tuplet in a line of chord names");
+    const ticks = ev.ticks * Math.max(1, ev.count ?? 1);
+    const at = lengthOf(out);
+    if (ev.k === "Rest" && (ev.spacer || ev.full)) {
+      out.events.push(...rests(score, at, ticks));
+      continue;
+    }
+    const written = String(ev.chord_text ?? "").replace(/^([a-g](?:is|es|s)*[',]*|r)\d*\.*(?:\*\d+)?/, "$1");
+    const chord = ev.k === "Rest" ? "N.C." : symbolOfChordmode(written) ?? symbolOfName(ev.chord_name);
+    const read = makeEvent({ base: ev.base, dots: ev.dots, chord, ...(written ? { chordmode: written } : {}) });
+    if (at + ticks > nextBarLine(score, at) + 1e-6 || notated(ev.base, ev.dots) !== ticks) out.events.push(...pieces(score, read, at, ticks, "whole"));
+    else out.events.push(read);
+  }
+  return out;
+}
+
+/**
  * A score from `score_json`'s answer, or `{ unsupported: [...] }` naming
  * what it uses that this model does not keep — so the page edits the text
  * instead of losing it.
@@ -3916,9 +4132,18 @@ export function fromParsed(parsed, source = null) {
     .filter((g) => g !== outer && kinds[g.kind])
     .map((g) => ({ kind: kinds[g.kind], first: g.first, last: g.last, name: g.name ?? "", short: g.short ?? "" }));
   let first = true;
-  for (const staff of parsed.staves) {
+  // Each staff's lanes, in the source's order. Lines of chord names are read
+  // after the music, whose metre, pickup and repeats they follow.
+  const placed = [];
+  const order = parsed.staves.map((_, k) => k).sort((x, y) => Number(parsed.staves[x].kind === "ChordNames") - Number(parsed.staves[y].kind === "ChordNames"));
+  for (const k of order) {
+    const staff = parsed.staves[k];
+    if (staff.kind === "ChordNames") {
+      placed[k] = [chordLine(score, staff, unsupported)];
+      continue;
+    }
     const drums = staff.kind === "Drums";
-    const kinds = { Tab: "tablature", ChordNames: "chord-name staves", Figures: "a figured bass", FretBoards: "guitar chord diagrams", Ossia: "an ossia" };
+    const kinds = { Tab: "tablature", Figures: "a figured bass", FretBoards: "guitar chord diagrams", Ossia: "an ossia" };
     if (staff.kind !== "Notes" && !drums) unsupported.add(kinds[staff.kind] ?? "a staff of another kind");
     const out = { name: staff.name ?? "", short: staff.short ?? "", instrument: drums ? "" : staff.instrument ?? "", clef: drums ? "percussion" : "treble", events: [] };
     if (drums) out.drums = true;
@@ -4185,16 +4410,14 @@ export function fromParsed(parsed, source = null) {
         });
       });
     }
-    score.staves.push(out);
     // The voices up to the last that sounds: one before it that is silent stays, as rests.
     let kept = others.length;
     while (kept > 0 && !(others[kept - 1].events.length && sounding(others[kept - 1].events))) kept--;
-    for (const other of others.slice(0, kept)) {
-      pad(other, lengthOf(out));
-      score.staves.push(other);
-    }
+    for (const other of others.slice(0, kept)) pad(other, lengthOf(out));
+    placed[k] = [out, ...others.slice(0, kept)];
     first = false;
   }
+  score.staves = placed.flat();
   // A staff whose notes go to another one needs a name to come back to.
   for (const u of staffLanes(score)) {
     if (!score.staves[u].id && voiceLanes(score, u).some((lane) => score.staves[lane].events.some((ev) => ev.cross))) staffId(score, u);

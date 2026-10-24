@@ -33,7 +33,7 @@ function engrave(score) {
     throw new Error(`${e.message ?? e}\n${source}`);
   }
   // A spacer has no ink: it is numbered, and not drawn.
-  const drawn = items.filter((it) => !score.staves[it.staff].events[it.index].spacer);
+  const drawn = items.filter((it) => M.isDrawn(score, it));
   assert.equal(view.items.length, drawn.length, `the engraver sees every drawn item\n${source}`);
   assert.ok(view.items.every((it) => items[it.item]), "every item the engraver numbers is an event of the model");
   return source;

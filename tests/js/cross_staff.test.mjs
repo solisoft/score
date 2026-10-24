@@ -27,7 +27,7 @@ function read(src) {
 function engrave(score) {
   const { source, items } = M.toLilyPond(score);
   const view = JSON.parse(editor_view(source, 900, 7, -1, -1));
-  const drawn = items.filter((it) => !score.staves[it.staff].events[it.index].spacer);
+  const drawn = items.filter((it) => M.isDrawn(score, it));
   assert.equal(view.items.length, drawn.length, `the engraver sees every drawn item\n${source}`);
   return source;
 }

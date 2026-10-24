@@ -33,7 +33,7 @@ function engrave(score) {
   } catch (e) {
     throw new Error(`${e.message ?? e}\n${source}`);
   }
-  const drawn = items.filter((it) => !score.staves[it.staff].events[it.index].spacer);
+  const drawn = items.filter((it) => M.isDrawn(score, it));
   assert.equal(view.items.length, drawn.length, `the engraver sees every drawn item\n${source}`);
   return source;
 }

@@ -265,7 +265,7 @@ function readPart(part, info, first, warnings) {
   const staffOf = (n) => {
     while (lanes.length < n) {
       const counts = [0, 1, 2, 3].map(() => ({ sung: 0, tiedOver: false }));
-      lanes.push({ drums: false, voices: [], lanes: [[], [], [], []], pos: [0, 0, 0, 0], lyrics: new Map(), lyricLane: null, counts, queue: [[], [], [], []], pending: [], measureFrom: 0 });
+      lanes.push({ drums: false, voices: [], lanes: [[], [], [], []], pos: [0, 0, 0, 0], lyrics: new Map(), lyricLane: null, counts, queue: [[], [], [], []], pending: [], timed: [], measureFrom: 0 });
     }
     return lanes[n - 1];
   };
@@ -432,6 +432,9 @@ function readPart(part, info, first, warnings) {
         measureLength = Math.max(measureLength, cursor - measureStart);
       } else if (el.name === "direction") {
         const s = Number(textIn(el, "staff") ?? 1);
+        // Later in the bar (<offset>): on the note that starts then, or the first after.
+        const offset = numberIn(el, "offset") ?? 0;
+        const later = (staff, text) => (offset > 0 ? staff.timed.push({ at: cursor + offset, text }) : attach(staff, text));
         const above = el.attrs.placement !== "below";
         const types = kids(el, "direction-type").flatMap((dt) => dt.children);
         const sound = kid(el, "sound");
@@ -464,20 +467,20 @@ function readPart(part, info, first, warnings) {
           for (const d of dt.children) {
             if (d.name === "dynamics") {
               const mark = d.children[0]?.name;
-              if (DYNAMICS_IN.includes(mark)) attach(at(s), `\\${mark === "fz" ? "sfz" : mark === "sfp" ? "fp" : mark}`);
+              if (DYNAMICS_IN.includes(mark)) later(at(s), `\\${mark === "fz" ? "sfz" : mark === "sfp" ? "fp" : mark}`);
               else if (mark) warnings.add("some dynamics");
             } else if (d.name === "wedge") {
               const type = d.attrs.type;
-              attach(at(s), type === "crescendo" ? "\\<" : type === "diminuendo" ? "\\>" : "\\!");
+              later(at(s), type === "crescendo" ? "\\<" : type === "diminuendo" ? "\\>" : "\\!");
             } else if (d.name === "words" && d.text.trim()) {
               const styles = (d.attrs["font-weight"] === "bold" ? "\\bold " : "") + (d.attrs["font-style"] === "italic" ? "\\italic " : "");
               const words = d.text.trim();
-              attach(at(s), `${above ? "^" : "_"}${styles ? `\\markup ${styles}${quoted(words)}` : quoted(words)}`);
+              later(at(s), `${above ? "^" : "_"}${styles ? `\\markup ${styles}${quoted(words)}` : quoted(words)}`);
             } else if (d.name === "pedal") {
               const type = d.attrs.type;
-              if (type === "start") attach(at(s), "\\sustainOn");
-              else if (type === "stop") attach(at(s), "\\sustainOff");
-              else if (type === "change") attach(at(s), "\\sustainOff\\sustainOn");
+              if (type === "start") later(at(s), "\\sustainOn");
+              else if (type === "stop") later(at(s), "\\sustainOff");
+              else if (type === "change") later(at(s), "\\sustainOff\\sustainOn");
             } else if (d.name === "octave-shift") {
               // 8va is a shift "down": the notes drawn lower than they sound.
               const octaves = Number(d.attrs.size ?? 8) >= 15 ? 2 : 1;
@@ -494,7 +497,10 @@ function readPart(part, info, first, warnings) {
         }
       } else if (el.name === "harmony") {
         const chord = chordName(el);
-        if (chord) attach(at(Number(textIn(el, "staff") ?? 1)), `^${quoted(chord)}`);
+        const offset = numberIn(el, "offset") ?? 0;
+        // Later in the bar (<offset>): on the note that starts then, or the first after.
+        if (chord && offset > 0) at(Number(textIn(el, "staff") ?? 1)).timed.push({ at: cursor + offset, text: `^${quoted(chord)}` });
+        else if (chord) attach(at(Number(textIn(el, "staff") ?? 1)), `^${quoted(chord)}`);
       } else if (el.name === "barline") {
         const repeat = kid(el, "repeat")?.attrs.direction;
         const style = textIn(el, "bar-style");
@@ -778,6 +784,13 @@ function readPart(part, info, first, warnings) {
         graces.set(key, []);
       }
       // The words and marks waiting for this staff's next note go on the first lane's.
+      if (v === 0) {
+        staff.timed = staff.timed.filter((x) => {
+          if (x.at >= start + Math.max(duration, 1) - 1e-9) return true;
+          staff.pending.push(x.text);
+          return false;
+        });
+      }
       const extra = v === 0 ? staff.pending.splice(0).join("") : "";
       const entry = { pitches: rest ? [] : [pitch], marks: [marks], start, index: lane.length, rest: Boolean(rest), render: null, after: null };
       if (drawnOn) crossing.add(s).add(drawnOn);
@@ -850,7 +863,7 @@ function readPart(part, info, first, warnings) {
       }
     }
   }
-  if (lanes.some((st) => st.pending.length)) warnings.add("words or marks after the last note");
+  if (lanes.some((st) => st.pending.length || st.timed.length)) warnings.add("words or marks after the last note");
   for (const st of lanes) {
     if (st.alternative === "between") st.lanes[0].push("}");
     else if (st.alternative === "in") st.lanes[0].push("} }");
@@ -967,7 +980,9 @@ export function toMusicXML(score) {
   const parts = [];
   const braced = new Set();
   // A piano alone, its brace the score's own, is one too.
-  const pianoAlone = score.group === "brace" && uppers.length === 2 ? [{ kind: "brace", first: 0, last: 1, name: "", short: "" }] : [];
+  // A line of chord names is no part: its chords go out as the chord symbols of the part under it.
+  const music = uppers.filter((u) => !score.staves[u].chords);
+  const pianoAlone = score.group === "brace" && music.length === 2 && uppers.length === 2 ? [{ kind: "brace", first: 0, last: 1, name: "", short: "" }] : [];
   for (const g of [...pianoAlone, ...(score.groups ?? [])]) {
     if (g.kind === "brace" && g.last === g.first + 1 && !braced.has(g.first) && !braced.has(g.last)) {
       parts.push({ staves: [uppers[g.first], uppers[g.last]], name: g.name || "", short: g.short || "" });
@@ -975,9 +990,14 @@ export function toMusicXML(score) {
     }
   }
   uppers.forEach((s, k) => {
-    if (!braced.has(k)) parts.push({ staves: [s], name: score.staves[s].name || "", short: score.staves[s].short || "" });
+    if (!braced.has(k) && !score.staves[s].chords) parts.push({ staves: [s], name: score.staves[s].name || "", short: score.staves[s].short || "" });
   });
   parts.sort((a, b) => a.staves[0] - b.staves[0]);
+  // Each line of chord names goes with the part under it (the last part, when none is).
+  for (const line of uppers.filter((u) => score.staves[u].chords)) {
+    const under = parts.find((p) => p.staves[0] > line) ?? parts[parts.length - 1];
+    if (under) (under.chordLines ??= []).push(line);
+  }
   parts.forEach((p, k) => {
     p.id = `P${k + 1}`;
     const staff = score.staves[p.staves[0]];
@@ -1118,6 +1138,17 @@ export function toMusicXML(score) {
         if (change?.mark === "coda") out.push('<direction placement="above"><direction-type><coda/></direction-type><sound coda="coda"/></direction>');
         const tempo = b === 0 ? score.tempo : change?.tempo;
         if (tempo) out.push(tempoDirection(tempo));
+      }
+      // The chords of a line of chord names over the part: each where it starts in the bar.
+      for (const line of p.chordLines ?? []) {
+        const at = M.starts(score.staves[line]);
+        score.staves[line].events.forEach((ev, i) => {
+          if (!ev.chord || M.barAt(score, at[i]) !== b) return;
+          const offset = dur(at[i] - M.barStart(score, b));
+          const timed = offset ? `<offset>${offset}</offset>` : "";
+          const symbol = ev.chord === "N.C." ? null : harmony(ev.chord);
+          out.push(symbol ? symbol.replace("</harmony>", `${timed}</harmony>`) : `<direction placement="above"><direction-type><words>${xml(ev.chord)}</words></direction-type>${timed}</direction>`);
+        });
       }
       const barLength = M.barLength(score, b);
       lanesOf.forEach((lanes, k) => {

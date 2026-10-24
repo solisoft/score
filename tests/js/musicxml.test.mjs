@@ -37,6 +37,8 @@ test("musicxml: every gallery score the editor reads comes back as itself", () =
     for (const file of readdirSync(new URL(`${group}/`, dir)).filter((f) => f.endsWith(".ly"))) {
       const read = M.fromParsed(JSON.parse(score_json(readFileSync(new URL(`${group}/${file}`, dir), "utf8"))));
       if (!read.score) continue;
+      // A line of chord names goes out as MusicXML's chord symbols, which come back over the notes (chord_names.test.mjs).
+      if (read.score.staves.some((st) => st.chords)) continue;
       const { source, warnings } = X.fromMusicXML(X.toMusicXML(read.score));
       assert.deepEqual(warnings, [], `${group}/${file}: nothing left out`);
       assert.equal(M.toLilyPond(scoreOf(source)).source, M.toLilyPond(read.score).source, `${group}/${file}`);

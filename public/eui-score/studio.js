@@ -1237,6 +1237,13 @@ export function startStudio(root, options = {}) {
         say(a === b ? `Bar ${barNo(a)} taken away` : `Bars ${barNo(a)}–${barNo(b)} taken away`);
         return { at: Math.min(a, b), removed: Math.abs(b - a) + 1, added: 0 };
       });
+      // A line of chord names over the selected staff: K on its notes then types the chords, beat by beat.
+      case "chord-line": return edit((score) => {
+        const s = staffOf();
+        M.addChordStaff(score, s);
+        st.sel = { staff: s + 1, t0: 0, t1: 0, head: -1 };
+        say("A line of chord names: select a note of the staff under it and press K, then Space for the next beat.");
+      });
       case "add-staff": return edit((score) => {
         const [k, clef] = root.querySelector('[data-field="new-staff"]').value.split("|");
         const it = M.INSTRUMENTS[Number(k)] ?? M.INSTRUMENTS[0];
@@ -1490,9 +1497,14 @@ export function startStudio(root, options = {}) {
         draw();
       }
     }
-    const ev = st.score.staves[t.s].events[t.i];
+    // A chord symbol over a staff under a line of chord names goes on the line, at that time.
+    const time = M.starts(st.score.staves[t.s])[t.i];
+    const line = kind === "chord" ? M.chordLineOver(st.score, t.s) : -1;
+    const lane = line >= 0 ? line : t.s;
+    const at = M.eventAt(st.score.staves[lane], time);
+    const ev = at >= 0 ? st.score.staves[lane].events[at] : null;
     const box = Object.assign(document.createElement("input"), { type: "text", className: `studio-words studio-words-${kind}` });
-    box.value = wordsOf(ev, kind);
+    box.value = ev ? wordsOf(ev, kind) : "";
     box.placeholder = { lyric: "syllable", chord: "Am7", text: "solo", expression: "dolce" }[kind];
     box.setAttribute("aria-label", {
       lyric: "Syllable — Space next note, - hyphen, Enter done",
@@ -1501,7 +1513,7 @@ export function startStudio(root, options = {}) {
       expression: "Expression, in italics — Enter done",
     }[kind]);
     sheet.appendChild(box);
-    wordsBox = { box, kind, s: t.s, t: M.starts(st.score.staves[t.s])[t.i] };
+    wordsBox = { box, kind, s: lane, t: time, anchor: t.s };
     placeWords();
     box.focus();
     box.select();
@@ -1517,7 +1529,7 @@ export function startStudio(root, options = {}) {
         sheet.focus();
       } else if ((event.key === " " && (kind === "lyric" || kind === "chord")) || event.key === "Tab" || (event.key === "-" && kind === "lyric")) {
         event.preventDefault();
-        commitWords({ hyphen: event.key === "-" });
+        commitWords({ hyphen: event.key === "-", next: true });
         nextWords();
       }
     });
@@ -1550,6 +1562,9 @@ export function startStudio(root, options = {}) {
       if (kind === "lyric") {
         if (score.staves[s].events[i].rest) return;
         M.setLyric(score, s, i, value, Boolean(extra.hyphen), false, verse());
+      } else if (kind === "chord" && M.isChords(score, s)) {
+        // On a line of chord names: from this beat on, the line cut there.
+        if (value.trim() || i >= 0) M.setChordAt(score, s, t, value);
       } else if (kind === "chord") M.setChordSymbol(score, s, i, value);
       else M.setText(score, s, i, kind === "text" ? "staff" : "expression", value);
     });
@@ -1560,6 +1575,22 @@ export function startStudio(root, options = {}) {
     const { kind, s, t } = wordsBox;
     const staff = st.score.staves[s];
     const at = M.starts(staff);
+    if (M.isChords(st.score, s)) {
+      // A line of chord names goes beat by beat, the staff under it selected where a note starts.
+      const next = M.nextBeat(st.score, t);
+      if (next >= M.lengthOf(staff)) return closeWords();
+      const under = st.score.staves[wordsBox.anchor];
+      const k = M.eventAt(under, next);
+      if (k >= 0) st.sel = { staff: wordsBox.anchor, t0: next, t1: next, head: -1 };
+      draw();
+      const i = M.eventAt(staff, next);
+      wordsBox.t = next;
+      wordsBox.box.value = i >= 0 ? wordsOf(staff.events[i], kind) : "";
+      placeWords();
+      wordsBox.box.focus();
+      wordsBox.box.select();
+      return;
+    }
     let i = M.eventAt(staff, t) + 1;
     // Lyrics skip rests, tied-to notes and the notes under a slur (as
     // LilyPond sets them); a chord symbol goes on any note.
@@ -1600,7 +1631,13 @@ export function startStudio(root, options = {}) {
   function placeWords() {
     if (!wordsBox || !st.view) return;
     const k = st.items.findIndex((it) => it.staff === wordsBox.s && M.starts(st.score.staves[it.staff])[it.index] === wordsBox.t);
-    const item = st.view.items.find((it) => it.item === k);
+    // A beat of a line of chord names with nothing drawn: over the staff's note sounding then.
+    const under = (it) => {
+      if (it.staff !== wordsBox.anchor || it.staff === wordsBox.s) return false;
+      const at = M.starts(st.score.staves[it.staff]);
+      return at[it.index] <= wordsBox.t && at[it.index] + M.ticksOf(st.score.staves[it.staff].events[it.index]) > wordsBox.t;
+    };
+    const item = st.view.items.find((it) => it.item === k) ?? st.view.items.find((it) => under(st.items[it.item] ?? {}));
     const g = geometry();
     if (!item || !g) return;
     const [x0, y0, , y1] = item.box;

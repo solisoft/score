@@ -837,6 +837,11 @@ pub fn score(src: &str) -> Result<Value, String> {
             event["repeat_tie"] = json!(ev.repeat_tie);
             // `\cresc`, `\dim`, `\decresc`: the hairpin it starts, as words.
             event["hairpin_text"] = json!(ev.hairpin_text);
+            // A `\\chordmode` chord as it is written, `bes2:maj7/d`: what its name
+            // (`chord_name`, as ChordNames prints it) does not say back.
+            event["chord_text"] = json!((!ev.chord_name.is_empty())
+                .then(|| bytes.get(ev.at).and_then(|&at| src.get(at..)).map(|rest| rest.split(|c: char| c.is_whitespace() || "|}>~".contains(c)).next().unwrap_or("").to_string()))
+                .flatten());
             // `\startTextSpan`, with the words before its line (empty: none), and `\stopTextSpan`.
             event["span_start"] = json!(ev.span_start.as_ref().map(|runs| runs.iter().filter(|r| !r.glyph).map(|r| r.text.as_str()).collect::<Vec<_>>().join(" ")));
             event["span_stop"] = json!(ev.span_stop);

@@ -23,6 +23,13 @@ def caret_on(token)
   sleep(0.4)
 end
 
+# Types `words` into the open words box, then presses `key` ("Enter", " ").
+def type_chord(words, key)
+  evaluate("(() => { const box = document.querySelector('.studio-words'); box.value = #{JSON.stringify(words)};"
+  + " box.dispatchEvent(new KeyboardEvent('keydown', { key: #{JSON.stringify(key)}, bubbles: true })); })()")
+  sleep(0.4)
+end
+
 # The LilyPond the source box holds.
 def playground_text
   evaluate("document.querySelector('[data-source]').value")
@@ -279,6 +286,31 @@ describe("The playground, in a browser") do
     + " \\new Voice = \"alto\" { \\voiceTwo a'2 b' } >> \\new Lyrics \\lyricsto \"alto\" { Al -- to } >>")
     assert_not(evaluate("document.querySelector('#studio').classList.contains('studio-text-only')"))
     assert_contains(playground_text(), "\\new Lyrics \\lyricsto \"alto\" { Al -- to }")
+    assert_no_page_errors()
+  end
+
+  test("a line of chord names opens on the score, and its chords are typed beat by beat (#375)") do
+    type_source("{ c''2 d'' | e''1 }")
+    caret_on("c''2")
+    evaluate("document.querySelector(\"[data-act='chord-line']\").click()")
+    sleep(0.4)
+    assert_contains(playground_text(), "\\new ChordNames \\chordmode")
+    assert_not(evaluate("document.querySelector('#studio').classList.contains('studio-text-only')"))
+    caret_on("c''2")
+    evaluate("document.querySelector(\"[data-act='chord']\").click()")
+    sleep(0.3)
+    # Am7, Space to the next beat, D7, Enter.
+    type_chord("Am7", " ")
+    type_chord("D7", " ")
+    type_chord("G", "Enter")
+    assert_contains(playground_text(), "a4:m7 d4:7 g2 | s1")
+    # A symbol the line cannot write is refused, and the line stays.
+    before = playground_text()
+    caret_on("e''1")
+    evaluate("document.querySelector(\"[data-act='chord']\").click()")
+    sleep(0.3)
+    type_chord("blue", "Enter")
+    assert_eq(playground_text(), before)
     assert_no_page_errors()
   end
 
