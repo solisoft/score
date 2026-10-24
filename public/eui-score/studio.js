@@ -1105,6 +1105,11 @@ export function startStudio(root, options = {}) {
         const r = range() ?? (() => { throw new Error("Select the note the line ends before"); })();
         M.endOttava(score, r.s, r.a);
       });
+      // The selected notes drawn on the staff above or below (\\change Staff), again to bring them back.
+      case "cross": return edit((score) => {
+        const r = range() ?? (() => { throw new Error("Select the notes to draw on the other staff"); })();
+        M.setCross(score, r.s, r.a, r.b, Number(data.dir));
+      });
       // A finger (1–5) or a string (1–6) on the selected notes — on the selected note of a chord.
       case "finger": case "string-number": return edit((score) => {
         const r = range() ?? (() => { throw new Error("Select a note first"); })();

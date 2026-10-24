@@ -740,7 +740,7 @@ const sameNote = (a, b) => Boolean(a && b && !a.rest && !b.rest && a.pitches.len
 
 /** A rest with nothing on it (a spacer may be one): what tidy merges, and a bar of rest gathers. */
 export function isBareRest(ev) {
-  const marked = ev.ottava != null || ev.stemDir != null || ev.noAutoBeam != null || ev.breath || ev.spanStart != null || ev.spanEnd;
+  const marked = ev.ottava != null || ev.stemDir != null || ev.noAutoBeam != null || ev.breath || ev.spanStart != null || ev.spanEnd || ev.cross != null;
   return ev.rest && !ev.tuplet && !ev.dynamic && !ev.hairpin && !ev.hairpinEnd && !ev.texts.length && !ev.chord && !ev.arts.length && !ev.pedalOn && !ev.pedalOff && !ev.beamStart && !ev.beamEnd && !marked;
 }
 
@@ -887,6 +887,7 @@ export function remove(score, s, i, head = -1) {
   delete ev.cautionary;
   delete ev.lv;
   delete ev.repeatTie;
+  delete ev.cross;
   const prev = score.staves[s].events[i - 1];
   if (prev && prev.tie) prev.tie = false;
   tidy(score, score.staves[s]);
@@ -1027,6 +1028,64 @@ export function endOttava(score, s, i) {
   if (ottavaAt(staff, i) === 0) throw new Error("no ottava line here to end");
   staff.events[i].ottava = 0;
   tidyOttavas(staff);
+}
+
+// ---- Notes drawn on the other staff -----------------------------------------------
+//
+// `\change Staff = "down"`: a note of one staff drawn on another — a piano's
+// right hand reaching into the bass staff. `ev.cross` is the id of the staff
+// it is drawn on (`staff.id`, `\new Staff = "down"`); it sounds, and is
+// edited, in its own staff. Each bar is written starting and ending on its
+// own staff, so the voices of a bar never inherit another's change.
+
+/** A staff id no staff has yet: "up" and "down" for a piano's two staves, else "staffN". */
+function freshStaffId(score, u) {
+  const taken = new Set(score.staves.map((x) => x.id).filter(Boolean));
+  const lanes = staffLanes(score);
+  const n = lanes.indexOf(u);
+  const brace = (score.groups ?? []).find((g) => g.kind === "brace" && g.last === g.first + 1 && (g.first === n || g.last === n));
+  const piano = brace ?? (score.group === "brace" && lanes.length === 2 ? { first: 0 } : null);
+  const wanted = piano ? (n === piano.first ? "up" : "down") : `staff${n + 1}`;
+  let id = wanted;
+  for (let k = 2; taken.has(id); k++) id = `${wanted}${k}`;
+  return id;
+}
+
+/** Staff `u`'s id, given one when it has none. */
+function staffId(score, u) {
+  const staff = score.staves[u];
+  staff.id ||= freshStaffId(score, u);
+  return staff.id;
+}
+
+/** The staff event `ev` of lane `s` is drawn on, by its id: null for its own (or one the score lacks). */
+export function crossOf(score, s, ev) {
+  if (!ev?.cross) return null;
+  const own = score.staves[upperOf(score, s)]?.id;
+  if (!own || ev.cross === own) return null;
+  return staffLanes(score).some((u) => score.staves[u].id === ev.cross) ? ev.cross : null;
+}
+
+/**
+ * The notes `a`…`b` of lane `s` drawn on the staff above (`dir` −1) or below
+ * (1); when they are all there already, back on their own staff. Rests stay.
+ */
+export function setCross(score, s, a, b, dir) {
+  refuseDrums(score, s);
+  const lanes = staffLanes(score);
+  const other = lanes[staffNumber(score, s) + Math.sign(dir)];
+  if (other == null) throw new Error(dir < 0 ? "there is no staff above to draw the notes on" : "there is no staff below to draw the notes on");
+  if (score.staves[other].drums) throw new Error("notes are not drawn on a drum staff");
+  const [from, to] = [Math.min(a, b), Math.max(a, b)];
+  const notes = score.staves[s].events.slice(from, to + 1).filter((ev) => !ev.rest);
+  if (!notes.length) throw new Error("select the notes to draw on the other staff");
+  const id = staffId(score, other);
+  staffId(score, upperOf(score, s));
+  const back = notes.every((ev) => crossOf(score, s, ev) === id);
+  for (const ev of notes) {
+    if (back) delete ev.cross;
+    else ev.cross = id;
+  }
 }
 
 // ---- Fingerings and string numbers ------------------------------------------------
@@ -1221,13 +1280,56 @@ export function setChordSymbol(score, s, i, text) {
 /** The most verses a score's lyrics may have: a line under the staff each. */
 export const MAX_VERSES = 6;
 
-/** Event `i`'s syllable of verse `verse` (1 the first); empty text takes it away. */
+// A staff's words are sung to one of its voices: the first, or the voice its
+// first lane's `lyricsVoice` names (2 to 4) — an alto's words under the
+// alto's notes, `\new Lyrics \lyricsto "alto"`. `lyricsName` keeps the name
+// the source gave that voice; the editor makes one up otherwise.
+
+/** The voice the staff of lane `s` sings its words to: 1 to 4. */
+export function lyricsVoiceOf(score, s) {
+  return score.staves[upperOf(score, s)]?.lyricsVoice ?? 1;
+}
+
+/** The lane the words of the staff of lane `s` go under, or −1 when that voice is gone. */
+export function lyricsLane(score, s) {
+  return laneOfVoice(score, s, lyricsVoiceOf(score, s));
+}
+
+/** The name `\lyricsto` sings to on the staff of lane `s`: the source's, or one made of the staff's place. */
+function lyricsName(score, s) {
+  const staff = score.staves[upperOf(score, s)];
+  return staff.lyricsName || `staff${staffNumber(score, s) + 1}voice${lyricsVoiceOf(score, s)}`;
+}
+
+/** The staff of lane `s` sings to its first voice again: what a staff whose words are all gone does. */
+function lyricsBackToFirst(score, s) {
+  const staff = score.staves[upperOf(score, s)];
+  delete staff.lyricsVoice;
+  delete staff.lyricsName;
+}
+
+/**
+ * Event `i`'s syllable of verse `verse` (1 the first); empty text takes it
+ * away. Words go under the voice the staff sings to; a staff with no words
+ * yet sings to the voice of the first syllable written, any of its four.
+ */
 export function setLyric(score, s, i, text, hyphen = false, extend = false, verse = 1) {
-  if (isLower(score, s)) throw new Error("words go with the first voice");
   if (!Number.isInteger(verse) || verse < 1 || verse > MAX_VERSES) throw new Error(`a verse is 1 to ${MAX_VERSES}`);
   const ev = noteOf(score, s, i);
   if (ev.rest) throw new Error("a syllable goes under a note");
+  const voice = voiceOf(score, s);
+  const sung = lyricsVoiceOf(score, s);
+  if (voice !== sung) {
+    const lane = lyricsLane(score, s);
+    if (lane >= 0 && versesOf(score.staves[lane]) > 0) throw new Error(`this staff's words go with voice ${sung}: a staff sings all its verses to one voice`);
+    if (!text.trim()) return;
+    const staff = score.staves[upperOf(score, s)];
+    delete staff.lyricsName;
+    if (voice === 1) delete staff.lyricsVoice;
+    else staff.lyricsVoice = voice;
+  }
   putSyllable(ev, verse, text.trim() ? { text: text.trim(), hyphen, extend } : null);
+  if (voice > 1 && versesOf(score.staves[s]) === 0) lyricsBackToFirst(score, s);
 }
 
 function putSyllable(ev, verse, syllable) {
@@ -1747,6 +1849,8 @@ export function removeVoice(score, s, voice = null) {
   if (v < 2 || v > lanes.length) throw new Error(`this staff has no voice ${v}`);
   const lane = lanes[v - 1];
   score.staves[lane].events = rests(score, 0, lengthOf(score.staves[lanes[0]]));
+  // The words sung to it go with it.
+  if (lyricsVoiceOf(score, lanes[0]) === v) lyricsBackToFirst(score, lanes[0]);
   for (let k = lanes.length - 1; k >= 1 && !sounding(score.staves[lanes[k]].events); k--) score.staves.splice(lanes[k], 1);
 }
 
@@ -1930,7 +2034,10 @@ export function removeStaff(score, s) {
   if (staffLanes(score).length < 2) throw new Error("a score keeps one staff at least");
   const u = upperOf(score, s);
   const n = staffNumber(score, u);
+  // The notes drawn on it go back to their own staves.
+  const id = score.staves[u].id;
   score.staves.splice(u, voiceLanes(score, u).length);
+  if (id) for (const lane of score.staves) for (const ev of lane.events) if (ev.cross === id) delete ev.cross;
   score.groups = (score.groups ?? [])
     .map((g) => ({ ...g, first: g.first > n ? g.first - 1 : g.first, last: g.last >= n ? g.last - 1 : g.last }))
     .filter((g) => g.last >= g.first);
@@ -2167,6 +2274,8 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
   const items = [];
   const header = Object.entries(score.header).filter(([, v]) => v).map(([k, v]) => `${k} = ${quote(v)}`).join(" ");
   const repeats = score.repeats ?? [];
+  // A staff's words sung to a lower voice: a Lyrics line beside the staves, so inside << >>.
+  let lyricsTo = false;
   const staves = staffLanes(score).map((s) => {
     const staff = score.staves[s];
     const upper = staffBars(score, staff, s);
@@ -2180,8 +2289,13 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
       return others.slice(0, last + 1).map((o) => o.bars[b]);
     };
     const top = staffNumber(score, s) === 0;
+    // Words sung to a lower voice (\lyricsto): the staff's voices are written
+    // whole, side by side, that voice named — LilyPond's lyrics follow one voice.
+    const sungLane = lyricsLane(score, s);
+    const toVoice = !unfold && sungLane > s && versesOf(score.staves[sungLane]) > 0;
+    if (toVoice) lyricsTo = true;
     // Under \compressMMRests, bars of rest side by side are written R1*n: gathered.
-    const gathered = !unfold && score.compress ? restRuns(score, upper, voicesIn, repeats) : [];
+    const gathered = !toVoice && !unfold && score.compress ? restRuns(score, upper, voicesIn, repeats) : [];
     const bars = upper.map((bar, b) => {
       const broken = top && b > 0 ? { line: "\\break ", page: "\\pageBreak " }[(score.breaks ?? {})[b - 1]] ?? "" : "";
       const run = gathered[b];
@@ -2191,7 +2305,7 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
         items.push(bar.items[0]);
         return broken + changesText(score, s, b) + (top ? markText(score, b) : "") + run.text + (top ? jumpText(score, b + run.bars - 1) : "");
       }
-      const voices = voicesIn(b);
+      const voices = toVoice ? [] : voicesIn(b);
       items.push(...bar.items, ...voices.flatMap((v) => v.items));
       // A voice drawn as nothing in the bar (spacers) is not counted among the voices:
       // past two, each then says which it is, so voice 3 stays voice 3.
@@ -2200,7 +2314,17 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
       const music = voices.length ? `<< ${parts.join(" \\\\ ")} >>` : bar.text;
       return broken + changesText(score, s, b) + (top ? markText(score, b) : "") + music + (top ? jumpText(score, b) : "");
     });
-    const music = unfold ? playedOut(score, s, bars) : withRepeats(bars, repeats);
+    let music = unfold ? playedOut(score, s, bars) : withRepeats(bars, repeats);
+    if (toVoice) {
+      // The first voice keeps the bar's changes and the repeats; the others are its bars, one after another.
+      const lower = others.map((o) => {
+        for (const bar of o.bars) items.push(...bar.items);
+        const voice = voiceOf(score, o.lane);
+        const named = o.lane === sungLane ? `\\new Voice = ${quote(lyricsName(score, s))}` : "\\new Voice";
+        return `${named} { \\voice${VOICE_NAMES[voice - 1]} ${checked(o.bars.map((bar) => bar.text))} }`;
+      });
+      music = `<< { \\voiceOne ${music} }\n    ${lower.join("\n    ")} >>`;
+    }
     const lastRepeat = !unfold && repeats.find((r) => r.endings.length === 0 && r.to === bars.length - 1);
     const name = staff.name ? `instrumentName = ${quote(staff.name)} ` : "";
     const short = staff.short ? `shortInstrumentName = ${quote(staff.short)} ` : "";
@@ -2218,10 +2342,15 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
     // A drum staff: its strokes in \\drummode, with no clef and no key.
     const opening = staff.drums
       ? `\\new DrumStaff ${settings ? `\\with { ${settings}} ` : ""}\\drummode {\n  \\time ${timeText(score, time)}${partial}${tempo}`
-      : `\\new Staff ${settings ? `\\with { ${settings}} ` : ""}${brace}\n  \\clef ${clef} \\key ${keyText(keyOf(score, s), score.mode)} \\time ${timeText(score, time)}${partial}${tempo}`;
+      : `\\new Staff ${staff.id ? `= ${quote(staff.id)} ` : ""}${settings ? `\\with { ${settings}} ` : ""}${brace}\n  \\clef ${clef} \\key ${keyText(keyOf(score, s), score.mode)} \\time ${timeText(score, time)}${partial}${tempo}`;
     let out = `${opening}\n  ${music.replace(/\n {4}/g, "\n  ")}${ending}\n}`;
-    // Each verse a line under the one before.
-    for (let verse = 1; verse <= versesOf(staff); verse++) out += `\n\\addlyrics { ${lyricText(staff, verse)} }`;
+    // Each verse a line under the one before; sung to a lower voice, a Lyrics line that follows it.
+    if (toVoice) {
+      const sung = score.staves[sungLane];
+      for (let verse = 1; verse <= versesOf(sung); verse++) out += `\n\\new Lyrics \\lyricsto ${quote(lyricsName(score, s))} { ${lyricText(sung, verse)} }`;
+    } else if (sungLane === s) {
+      for (let verse = 1; verse <= versesOf(staff); verse++) out += `\n\\addlyrics { ${lyricText(staff, verse)} }`;
+    }
     return out;
   });
   const kinds = { brace: "\\new PianoStaff", bracket: "\\new StaffGroup", choir: "\\new ChoirStaff" };
@@ -2246,7 +2375,7 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
   };
   const groups = (score.groups ?? []).filter((g) => kinds[g.kind] && g.first <= g.last && g.last < staves.length);
   const group = kinds[score.group] ?? "";
-  const body = staves.length > 1 || group ? `${group ? group + " " : ""}<<\n${indent(nest(0, staves.length - 1, groups))}\n>>` : staves[0];
+  const body = staves.length > 1 || group || lyricsTo ? `${group ? group + " " : ""}<<\n${indent(nest(0, staves.length - 1, groups))}\n>>` : staves[0];
   // Bars of rest gathered on every staff: a part's long rests, as one bar.
   const gathering = score.compress ? "\\compressMMRests " : "";
   const source = pageText(score) + (header ? `\\header { ${header} }\n` : "") + gathering + body + "\n";
@@ -2459,7 +2588,13 @@ function staffBars(score, staff, s) {
   let current = { parts: [], items: [], events: [] };
   let t = 0;
   let open = null;
+  // The staff the notes are drawn on: each bar starts and ends on its own.
+  const own = score.staves[upperOf(score, s)].id;
+  let drawnOn = null;
+  const change = (id) => current.parts.push(`\\change Staff = ${quote(id ?? own)}`);
   const close = () => {
+    if (drawnOn !== null) change(null);
+    drawnOn = null;
     if (open !== null) current.parts.push("}");
     open = null;
     bars.push({ text: current.parts.join(" "), items: current.items, events: current.events });
@@ -2481,6 +2616,9 @@ function staffBars(score, staff, s) {
       current.parts.push(`\\tuplet ${ev.tuplet.n}/${ev.tuplet.d} {`);
       open = tid;
     }
+    const on = crossOf(score, s, ev);
+    if (on !== drawnOn) change(on);
+    drawnOn = on;
     current.parts.push(eventText(ev, beams[i]));
     t += ticksOf(ev);
     if (Math.abs(t - barStart(score, bars.length + 1)) < 1e-6) close();
@@ -3784,6 +3922,8 @@ export function fromParsed(parsed, source = null) {
     if (staff.kind !== "Notes" && !drums) unsupported.add(kinds[staff.kind] ?? "a staff of another kind");
     const out = { name: staff.name ?? "", short: staff.short ?? "", instrument: drums ? "" : staff.instrument ?? "", clef: drums ? "percussion" : "treble", events: [] };
     if (drums) out.drums = true;
+    // `\new Staff = "down"`: the name \change Staff goes to.
+    if (staff.id) out.id = staff.id;
     // Voices 2 to 4, `<< { … } \\ { … } \\ { … } >>`: each its own lane, rests where it is silent.
     const others = [2, 3, 4].map((voice) => ({ voice, events: [] }));
     // Which voice a part is: the one the engraver gave it (\voiceThree…), else counted.
@@ -3806,8 +3946,6 @@ export function fromParsed(parsed, source = null) {
       ev.unsupported.forEach((u) => unsupported.add(u));
       // A tuplet in a tuplet is engraved and played; the score tools write one level.
       if (ev.tuplet_outer) unsupported.add("a tuplet inside a tuplet");
-      // Engraved and played; the score tools write each voice on its own staff.
-      if (ev.cross) unsupported.add("notes moved to another staff");
       const k = ev.k;
       // A change after the first note is the bar's it starts: the first staff
       // writes the score's changes, the others must change with it.
@@ -3958,6 +4096,7 @@ export function fromParsed(parsed, source = null) {
           if (whole.length && ev.span_start != null) whole[0].spanStart = ev.span_start;
           if (whole.length && ev.span_stop) whole[whole.length - 1].spanEnd = true;
           if (whole.length && BREATHS_READ[ev.breath]) whole[whole.length - 1].breath = BREATHS_READ[ev.breath];
+          if (ev.cross) for (const r of whole) r.cross = ev.cross;
           lane.events.push(...whole);
           continue;
         }
@@ -4007,6 +4146,8 @@ export function fromParsed(parsed, source = null) {
           ...(ev.span_start != null ? { spanStart: ev.span_start } : {}),
           ...(ev.span_stop ? { spanEnd: true } : {}),
           ...(BREATHS_READ[ev.breath] ? { breath: BREATHS_READ[ev.breath] } : {}),
+          // Drawn on another staff, `\change Staff = "down"`: that staff's id.
+          ...(ev.cross ? { cross: ev.cross } : {}),
         });
         // \\stemUp and \\autoBeamOff hold until changed: written where the lane's notes change them.
         if (k === "Note") {
@@ -4026,11 +4167,18 @@ export function fromParsed(parsed, source = null) {
     // An \ottava with no note after it draws nothing.
     if (ottavas.size) lost.add("an \\ottava after the last note");
     if (staff.lyrics) {
-      if (staff.lyrics_voice !== 1) unsupported.add("lyrics to a second voice");
-      const skip = melismata(out);
+      // Sung to a lower voice (\lyricsto "alto"): under that voice's notes, its name kept.
+      const voice = staff.lyrics_voice ?? 1;
+      const sung = laneFor(voice);
+      if (voice > 1) {
+        out.lyricsVoice = voice;
+        const name = (staff.voices ?? []).find(([, v]) => v === voice)?.[0];
+        if (name) out.lyricsName = name;
+      }
+      const skip = melismata(sung);
       [staff.lyrics, ...(staff.verses ?? [])].forEach((words, v) => {
         let k = 0;
-        out.events.forEach((ev, i) => {
+        sung.events.forEach((ev, i) => {
           if (skip[i]) return;
           const syl = words[k++];
           if (syl && syl.text && syl.text !== "_") putSyllable(ev, v + 1, { text: syl.text, hyphen: syl.hyphen, extend: syl.extend });
@@ -4046,6 +4194,10 @@ export function fromParsed(parsed, source = null) {
       score.staves.push(other);
     }
     first = false;
+  }
+  // A staff whose notes go to another one needs a name to come back to.
+  for (const u of staffLanes(score)) {
+    if (!score.staves[u].id && voiceLanes(score, u).some((lane) => score.staves[lane].events.some((ev) => ev.cross))) staffId(score, u);
   }
   if (signs.length) {
     const repeats = repeatsFrom(signs);

@@ -218,7 +218,9 @@ export function fromMusicXML(text) {
 
   const parts = kids(root, "part");
   if (!parts.length) throw new Error("This MusicXML score has no part.");
-  const blocks = parts.map((part, p) => readPart(part, partInfo.get(part.attrs.id) ?? { name: "", short: "", sound: null, drums: new Map() }, p === 0, warnings));
+  // The staff names given so far (\\change Staff, \\lyricsto): each once in the score.
+  const taken = new Set();
+  const blocks = parts.map((part, p) => readPart(part, { ...(partInfo.get(part.attrs.id) ?? { name: "", short: "", sound: null, drums: new Map() }), taken, index: p }, p === 0, warnings));
   const head = header.length ? `\\header {\n  ${header.join("\n  ")}\n}\n` : "";
   const indent = (text) => text.replace(/^/gm, "  ");
   // Parts `from`…`to`, each group that starts there around its parts.
@@ -248,7 +250,8 @@ export function fromMusicXML(text) {
   };
   const valid = groups.filter((g) => g.first <= g.last && g.last < blocks.length);
   const whole = valid.find((g) => g.first === 0 && g.last === blocks.length - 1 && g.first < g.last);
-  const body = blocks.length === 1 ? blocks[0] : whole ? nest(0, blocks.length - 1, valid) : `<<\n${indent(nest(0, blocks.length - 1, valid))}\n>>`;
+  // One staff whose words follow a voice: its Lyrics line beside it, inside << >>.
+  const body = blocks.length === 1 ? (/\\lyricsto/.test(blocks[0]) ? `<<\n${indent(blocks[0])}\n>>` : blocks[0]) : whole ? nest(0, blocks.length - 1, valid) : `<<\n${indent(nest(0, blocks.length - 1, valid))}\n>>`;
   // Bars of rest drawn as one (<multiple-rest>): gathered, as \\compressMMRests gathers them.
   const gathered = parts.some((part) => kids(part, "measure").some((m) => kids(m, "attributes").some((a) => kid(kid(a, "measure-style"), "multiple-rest"))));
   return { source: `${head}${gathered ? "\\compressMMRests " : ""}${body}\n`, warnings: [...warnings] };
@@ -260,7 +263,10 @@ function readPart(part, info, first, warnings) {
   let staves = 1;
   // Per staff: its voices (MusicXML's voice ids, in the order they come), its lanes' music, its lyrics.
   const staffOf = (n) => {
-    while (lanes.length < n) lanes.push({ drums: false, voices: [], lanes: [[], [], [], []], pos: [0, 0, 0, 0], lyrics: new Map(), pending: [], sung: 0, tiedOver: false, measureFrom: 0 });
+    while (lanes.length < n) {
+      const counts = [0, 1, 2, 3].map(() => ({ sung: 0, tiedOver: false }));
+      lanes.push({ drums: false, voices: [], lanes: [[], [], [], []], pos: [0, 0, 0, 0], lyrics: new Map(), lyricLane: null, counts, queue: [[], [], [], []], pending: [], measureFrom: 0 });
+    }
     return lanes[n - 1];
   };
   const lanes = [];
@@ -276,18 +282,58 @@ function readPart(part, info, first, warnings) {
   const slurDepth = new Map();
   let firstMeasure = true;
   const laneKey = (s, v) => `${s}:${v}`;
+  // Each voice's staff (MusicXML numbers voices across the part), the staff
+  // its last note was drawn on when another, and the staves notes cross to
+  // or from: named, `\\new Staff = "P1s2"`.
+  const voiceHome = new Map();
+  const lastCross = new Map();
+  const crossing = new Set();
+  // "up" and "down" for a piano, as the editor names them; a later piano's "up2", "down2".
+  const names = new Map();
+  const unique = (wanted) => {
+    let name = wanted;
+    for (let k = 2; info.taken?.has(name); k++) name = `${wanted}${k}`;
+    info.taken?.add(name);
+    return name;
+  };
+  const staffName = (n) => {
+    if (!names.has(n)) names.set(n, unique(staves === 2 ? (n === 1 ? "up" : "down") : `staff${n}`));
+    return names.get(n);
+  };
+  // A voice words are sung to: named after its part ("alto"), else its staff.
+  const voiceName = (n, lane) => unique(`${(info.name ?? "").toLowerCase().replace(/[^a-z0-9]/g, "") || `part${(info.index ?? 0) + 1}`}${staves > 1 ? `staff${n}` : ""}v${lane + 1}`);
 
   /** Lane `v` (0 to 3: voices 1 to 4) of staff `s`, filled to absolute time `at` (divisions) with rests or spacers. */
   function fill(staff, v, at) {
-    const gap = at - staff.pos[v];
-    if (gap <= 1e-9) return;
-    const pieces = spell(gap / divisions);
+    // The commands due by then, each where its time falls.
+    const queue = staff.queue[v];
+    while (queue.length && queue[0].at <= at + 1e-9) {
+      const due = queue.shift();
+      gap(staff, v, due.at);
+      staff.lanes[v].push(due.text);
+    }
+    gap(staff, v, at);
+  }
+
+  function gap(staff, v, at) {
+    const missing = at - staff.pos[v];
+    if (missing <= 1e-9) return;
+    const pieces = spell(missing / divisions);
     staff.lanes[v].push(...pieces.map((d) => (v === 0 ? "r" : "s") + durationText(d)));
     staff.pos[v] = at;
   }
 
-  /** A command (a clef, a key…) in lane `v` of `staff`, where time `at` falls. */
+  /**
+   * A command (a clef, a key…) in lane `v` of `staff`, where time `at` falls:
+   * ahead of the lane (a key read on a piano's upper staff, its lower one not
+   * there yet), it waits for the lane's music to reach it.
+   */
   function put(staff, v, at, text) {
+    if (at > staff.pos[v] + 1e-9) {
+      staff.queue[v].push({ at, text });
+      staff.queue[v].sort((x, y) => x.at - y.at);
+      return;
+    }
     fill(staff, v, at);
     staff.lanes[v].push(text);
   }
@@ -557,9 +603,24 @@ function readPart(part, info, first, warnings) {
     function readNote(note) {
       const isChord = Boolean(kid(note, "chord"));
       const isGrace = Boolean(kid(note, "grace"));
-      const s = Number(textIn(note, "staff") ?? 1);
-      const staff = at(s);
       const voiceId = textIn(note, "voice") ?? "1";
+      let s = Number(textIn(note, "staff") ?? 1);
+      // A voice is its first note's staff's. A note of it on the other staff,
+      // going on from where the voice is there, is drawn on that staff
+      // (\\change Staff); a voice the other staff has as its own stays there.
+      if (!voiceHome.has(voiceId)) voiceHome.set(voiceId, s);
+      const home = voiceHome.get(voiceId);
+      let drawnOn = null;
+      if (home !== s && s <= staves && !at(s).voices.includes(voiceId)) {
+        const k = at(home).voices.indexOf(voiceId);
+        const goesOn = isChord ? lastCross.get(voiceId) === s : k >= 0 && at(home).pos[k] <= cursor + 1e-9;
+        if (goesOn) {
+          drawnOn = s;
+          s = home;
+        }
+      }
+      if (!isChord && !isGrace) lastCross.set(voiceId, drawnOn);
+      const staff = at(s);
       let v = staff.voices.indexOf(voiceId);
       if (v < 0) {
         // The first voice met is the first lane; another goes to the lane its
@@ -719,6 +780,10 @@ function readPart(part, info, first, warnings) {
       // The words and marks waiting for this staff's next note go on the first lane's.
       const extra = v === 0 ? staff.pending.splice(0).join("") : "";
       const entry = { pitches: rest ? [] : [pitch], marks: [marks], start, index: lane.length, rest: Boolean(rest), render: null, after: null };
+      if (drawnOn) crossing.add(s).add(drawnOn);
+      // Drawn on the other staff: there for this note, back after it.
+      const there = drawnOn ? `\\change Staff = "${staffName(drawnOn)}" ` : "";
+      const back = drawnOn ? ` \\change Staff = "${staffName(s)}"` : "";
       entry.render = () => {
         // A rest not printed (print-object="no") is a spacer.
         const chord = entry.pitches.length > 1;
@@ -736,7 +801,7 @@ function readPart(part, info, first, warnings) {
           const fraction = Math.abs(entry.after.at - M.AFTER_GRACE_AT) > 1e-9 ? `${M.afterFraction(entry.after.at)} ` : "";
           pieces[last] = `\\afterGrace ${fraction}${pieces[last]}${tremolo} { ${entry.after.written.join(" ")} }`;
         }
-        lane[entry.index] = pieces.join(" ") + tail + (entry.beam ?? "") + extra;
+        lane[entry.index] = there + pieces.join(" ") + tail + (entry.beam ?? "") + extra + back;
       };
       lane.push("");
       // Kept within its measure, as the editor keeps it.
@@ -757,27 +822,31 @@ function readPart(part, info, first, warnings) {
       staff.pos[v] = start + duration;
       cursor = start + duration;
       measureLength = Math.max(measureLength, cursor - measureStart);
-      // Its words, a verse each.
-      if (v === 0 && !rest) {
-        const tiedOver = staff.tiedOver;
-        staff.tiedOver = suffix.includes("~");
-        for (const lyric of kids(note, "lyric")) {
+      // Its words, a verse each: a staff sings them to one voice, the first that has some.
+      const words = rest ? [] : kids(note, "lyric").filter((lyric) => textIn(lyric, "text") != null);
+      if (words.length && staff.lyricLane == null) staff.lyricLane = v;
+      if (words.length && staff.lyricLane !== v) warnings.add("words under two voices of one staff: the second voice's left out");
+      if ((staff.lyricLane ?? v) === v && !rest) {
+        // Counted on every voice until one has words: they line up with its notes.
+        const count = staff.counts[v];
+        const tiedOver = count.tiedOver;
+        count.tiedOver = suffix.includes("~");
+        for (const lyric of words) {
           const n = Number(lyric.attrs.number ?? 1) || 1;
           const syllables = staff.lyrics.get(n) ?? [];
-          while (syllables.length < staff.sung) syllables.push("_");
+          while (syllables.length < count.sung) syllables.push("_");
           const text = textIn(lyric, "text");
-          if (text == null) continue;
           const syllabic = textIn(lyric, "syllabic") ?? "single";
           let word = /^[A-Za-zÀ-ɏ'’]+$/.test(text) ? text : quoted(text);
           if (syllabic === "begin" || syllabic === "middle") word += " --";
           if (kid(lyric, "extend")) word += " __";
-          syllables[staff.sung] = word;
+          syllables[count.sung] = word;
           staff.lyrics.set(n, syllables);
         }
         // A note tied from the one before, or inside a slur, takes no syllable: LilyPond skips it.
         const melisma = tiedOver || (depth > 0 && !slurStarts);
-        if (!melisma) staff.sung = (staff.sung ?? 0) + 1;
-        else for (const syllables of staff.lyrics.values()) if (syllables.length > staff.sung) syllables.length = staff.sung;
+        if (!melisma) count.sung++;
+        else if (staff.lyricLane === v) for (const syllables of staff.lyrics.values()) if (syllables.length > count.sung) syllables.length = count.sung;
       }
     }
   }
@@ -802,16 +871,22 @@ function readPart(part, info, first, warnings) {
     const voices = [one, ...st.lanes.slice(1, st.voices.length).map(tidy)];
     const silent = voices.some((m) => !m.split(" ").some((x) => x && x !== "|" && !/^s\d/.test(x) && !x.startsWith("\\")));
     const say = voices.length > 2 && silent ? (k) => `\\voice${["One", "Two", "Three", "Four"][k]} ` : () => "";
-    const music = voices.length > 1 ? `<< ${voices.map((m, k) => `{ ${say(k)}${m} }`).join(" \\\\ ")} >>` : one;
+    const ordinal = (n) => ["One", "Two", "Three", "Four"][n];
+    // Words sung to a lower voice: the voices side by side, that one named for \\lyricsto.
+    const sungTo = st.lyrics.size && st.lyricLane > 0 && st.lyricLane < voices.length ? voiceName(k + 1, st.lyricLane) : null;
+    const music = sungTo
+      ? `<< { \\voiceOne ${one} } ${voices.slice(1).map((m, n) => `\\new Voice${n + 1 === st.lyricLane ? ` = "${sungTo}"` : ""} { \\voice${ordinal(n + 1)} ${m} }`).join(" ")} >>`
+      : voices.length > 1 ? `<< ${voices.map((m, k) => `{ ${say(k)}${m} }`).join(" \\\\ ")} >>` : one;
     const named = lanes.length === 1 && (info.name || info.short || info.sound);
     const props = [];
     if (named && info.name) props.push(`instrumentName = ${quoted(info.name)}`);
     if (named && info.short) props.push(`shortInstrumentName = ${quoted(info.short)}`);
     if (info.sound && info.sound !== "acoustic grand" && !st.drums) props.push(`midiInstrument = ${quoted(info.sound)}`);
     const withBlock = props.length ? ` \\with { ${props.join(" ")} }` : "";
-    const verses = [...st.lyrics.keys()].sort((a, b) => a - b).map((n) => `\\addlyrics { ${st.lyrics.get(n).join(" ")} }`);
+    const verses = [...st.lyrics.keys()].sort((a, b) => a - b).map((n) => `${sungTo ? `\\new Lyrics \\lyricsto "${sungTo}"` : "\\addlyrics"} { ${st.lyrics.get(n).join(" ")} }`);
     if (st.drums) return `\\new DrumStaff${withBlock} \\drummode { ${music.replace(/\\clef [^ ]+ /g, "").replace(/\\key [a-z]+ \\[a-z]+ ?/g, "")} }`;
-    return [`\\new Staff${withBlock} { ${music} }`, ...verses].join("\n");
+    const id = crossing.has(k + 1) ? ` = "${staffName(k + 1)}"` : "";
+    return [`\\new Staff${id}${withBlock} { ${music} }`, ...verses].join("\n");
   };
   const blocks = lanes.map(staffText);
   if (blocks.length === 1) return blocks[0];
@@ -891,8 +966,10 @@ export function toMusicXML(score) {
   const uppers = M.staffLanes(score);
   const parts = [];
   const braced = new Set();
-  for (const g of score.groups ?? []) {
-    if (g.kind === "brace" && g.last === g.first + 1) {
+  // A piano alone, its brace the score's own, is one too.
+  const pianoAlone = score.group === "brace" && uppers.length === 2 ? [{ kind: "brace", first: 0, last: 1, name: "", short: "" }] : [];
+  for (const g of [...pianoAlone, ...(score.groups ?? [])]) {
+    if (g.kind === "brace" && g.last === g.first + 1 && !braced.has(g.first) && !braced.has(g.last)) {
       parts.push({ staves: [uppers[g.first], uppers[g.last]], name: g.name || "", short: g.short || "" });
       braced.add(g.first).add(g.last);
     }
@@ -1067,7 +1144,10 @@ export function toMusicXML(score) {
             // Keys first, then clefs, as MusicXML orders the attributes.
             if (due.length) out.push(`<attributes>${[...due.filter((m) => m.xml.startsWith("<key")), ...due.filter((m) => !m.xml.startsWith("<key"))].map((m) => m.xml).join("")}</attributes>`);
             for (const m of due) m.done = true;
-            out.push(...noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, firstLane: v === 0, part: p.id }));
+            // A note drawn on the part's other staff (\\change Staff) is that staff's <staff>, in its own voice.
+            const crossed = staffNo ? p.staves.findIndex((u) => score.staves[u].id && score.staves[u].id === M.crossOf(score, item.lane, item.ev)) : -1;
+            const sung = M.lyricsLane(score, item.lane) === item.lane;
+            out.push(...noteXml(lane, item, { voice, staffNo: crossed >= 0 ? crossed + 1 : staffNo, dur, barLength, interval, drums, firstLane: v === 0, sung, part: p.id }));
           }
         });
       });
@@ -1117,7 +1197,7 @@ function fingeringText(notations) {
 }
 
 /** One event of a lane as <note> elements (a chord's heads one after the other), with its directions before. */
-function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, firstLane, part }) {
+function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, firstLane, sung, part }) {
   const { ev, i } = item;
   const before = lane[i - 1]?.ev;
   const after = lane[i + 1]?.ev;
@@ -1220,7 +1300,8 @@ function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, 
     if (ev.arpeggio && p) notations.push("<arpeggiate/>");
     if (p && technical(k)) notations.push(`<technical>${technical(k)}</technical>`);
     if (notations.length) n.push(`<notations>${notations.join("")}</notations>`);
-    if (k === 0 && p && firstLane) n.push(...lyricsXml(lane, i));
+    // The words, under the voice the staff sings them to.
+    if (k === 0 && p && sung) n.push(...lyricsXml(lane, i));
     // A spacer takes its time and is not printed.
     out.push(`<note${ev.rest && ev.spacer ? ' print-object="no"' : ""}>${n.join("")}</note>`);
   });

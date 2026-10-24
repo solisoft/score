@@ -854,6 +854,10 @@ pub fn score(src: &str) -> Result<Value, String> {
             "lyrics": lyrics,
             "verses": verses,
             "lyrics_voice": staff.lyrics_voice,
+            // Its name, `\\new Staff = "down"`: what `\\change Staff` names (`cross`).
+            "id": staff.name,
+            // Its voices' names, `\\new Voice = "alto"`, each `[name, voice]`: what `\\lyricsto` names.
+            "voices": staff.voices.iter().map(|(name, v)| json!([name, v])).collect::<Vec<_>>(),
             "events": events,
         }));
     }

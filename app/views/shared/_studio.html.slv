@@ -110,6 +110,8 @@
             <button type="button" role="menuitem" data-act="ottava" data-value="1">8va above the selection</button>
             <button type="button" role="menuitem" data-act="ottava" data-value="-1">8vb below the selection</button>
             <button type="button" role="menuitem" data-act="ottava-end">End the ottava line here</button>
+            <button type="button" role="menuitem" data-act="cross" data-dir="-1">Notes on the staff above <kbd>Ctrl+Shift+↑</kbd></button>
+            <button type="button" role="menuitem" data-act="cross" data-dir="1">Notes on the staff below <kbd>Ctrl+Shift+↓</kbd></button>
             <button type="button" role="menuitem" data-act="lyrics">Lyrics <kbd>Ctrl+L</kbd></button>
             <button type="button" role="menuitem" data-act="chord">Chord symbol <kbd>Ctrl+K</kbd></button>
             <button type="button" role="menuitem" data-act="text">Staff text</button>
@@ -326,6 +328,10 @@
           <button type="button" class="tool tool-wide" data-act="ottava" data-value="1" title="8va: the selected notes drawn an octave lower, under a line; again to take it away">8va</button>
           <button type="button" class="tool tool-wide" data-act="ottava" data-value="-1" title="8vb: the selected notes drawn an octave higher, over a line; again to take it away">8vb</button>
           <button type="button" class="tool tool-wide" data-act="ottava-end" title="End the ottava line before the selected note">End 8va</button>
+        </div>
+        <div class="tool-row" aria-label="Cross-staff">
+          <button type="button" class="tool tool-wide" data-act="cross" data-dir="-1" title="Draw the selected notes on the staff above (Ctrl+Shift+↑); again to bring them back">↥ Staff above</button>
+          <button type="button" class="tool tool-wide" data-act="cross" data-dir="1" title="Draw the selected notes on the staff below (Ctrl+Shift+↓); again to bring them back">↧ Staff below</button>
         </div>
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="hairpin" data-kind="&lt;" title="Crescendo over the selection">𝆒 cresc.</button>

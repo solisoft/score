@@ -27,7 +27,8 @@ function engrave(score) {
   if (!score.compress) assert.equal(items.filter((it) => !score.staves[it.staff].voice).length, upper, "one item per event");
   assert.ok(items.every((it) => score.staves[it.staff].events[it.index]), "every item is an event");
   assert.equal(new Set(items.map((it) => `${it.staff}:${it.index}`)).size, items.length, "no event twice");
-  assert.equal(view.items.length, items.length, `the engraver sees every item\n${source}`);
+  // A spacer (`s`) is drawn as nothing: no item of the view.
+  assert.equal(view.items.length, items.filter((it) => !score.staves[it.staff].events[it.index].spacer).length, `the engraver sees every item\n${source}`);
   return { source, view };
 }
 
@@ -543,10 +544,11 @@ test("a staff of four voices: its bars deleted, its part taken, the staff remove
   assert.equal(s.staves[0].clef, "bass");
 });
 
-test("notes sent to the other staff are engraved and left to the text", () => {
+test("notes sent to the other staff are engraved and read into the editor (#375)", () => {
   const crossing = '\\new PianoStaff << \\new Staff = "up" { c\'\'4 \\change Staff = "down" c\'4 e\'4 \\change Staff = "up" c\'\'4 } \\new Staff = "down" { \\clef bass s1 } >>';
   JSON.parse(editor_view(crossing, 900, 7, -1, -1));
-  assert.ok(M.fromParsed(JSON.parse(score_json(crossing))).unsupported.includes("notes moved to another staff"));
+  const { score } = M.fromParsed(JSON.parse(score_json(crossing)));
+  assert.deepEqual(score.staves[0].events.map((ev) => ev.cross ?? null), [null, "down", "down", null]);
 });
 
 test("a tie needs a note after it; a slur on one note goes to the next, and comes off whole", () => {
@@ -1203,7 +1205,11 @@ test("a voice is added, written in, opened where it is empty, and taken away", (
   assert.match(M.toLilyPond(s, { open: [{ staff: 1, bar: 2 }] }).source, /r1 \| r1 \| << \{ r1 \} \\\\ \{ r1 \} >> \| r1/, "where the page writes in it, it is");
   M.write(s, lane, M.notated(4), M.notated(2), { rest: false, pitches: [{ d: 5, alter: 0 }] });
   assert.match(engrave(s).source, /<< \{ r1 \} \\\\ \{ r4 a2 r4 \} >> \| r1/);
-  assert.throws(() => M.setLyric(s, lane, 1, "la"), /first voice/);
+  // Words under the second voice: the staff sings to it (#375).
+  M.setLyric(s, lane, 1, "la");
+  assert.equal(M.lyricsVoiceOf(s, 0), 2);
+  M.setLyric(s, lane, 1, "");
+  assert.equal(M.lyricsVoiceOf(s, 0), 1);
   M.addStaff(s);
   assert.deepEqual(M.staffLanes(s), [0, 2]);
   assert.equal(M.staffNumber(s, 2), 1);

@@ -256,6 +256,32 @@ describe("The playground, in a browser") do
     assert_no_page_errors()
   end
 
+  test("notes drawn on the other staff and words under the alto are edited on the score (#375)") do
+    type_source("\\new PianoStaff << \\new Staff = \"up\" { c''4 d'' e'' f'' | g''1 }"
+    + " \\new Staff = \"down\" { \\clef bass c1 | c1 } >>")
+    assert_not(evaluate("document.querySelector('#studio').classList.contains('studio-text-only')"))
+    caret_on("e''4")
+    evaluate("document.querySelector(\"[data-act='cross'][data-dir='1']\").click()")
+    sleep(0.4)
+    assert_contains(playground_text(), "d''4 \\change Staff = \"down\" e''4 \\change Staff = \"up\" f''4")
+    # Again: back on its own staff.
+    caret_on("e''4")
+    evaluate("document.querySelector(\"[data-act='cross'][data-dir='1']\").click()")
+    sleep(0.4)
+    assert_not(playground_text().includes?("\\change Staff"))
+    # The top staff has no staff above it: said, and nothing changed.
+    before = playground_text()
+    evaluate("document.querySelector(\"[data-act='cross'][data-dir='-1']\").click()")
+    sleep(0.4)
+    assert_eq(playground_text(), before)
+    # A choir staff whose words go to the alto opens on the score too.
+    type_source("<< \\new Staff << \\new Voice = \"s\" { \\voiceOne c''2 d'' }"
+    + " \\new Voice = \"alto\" { \\voiceTwo a'2 b' } >> \\new Lyrics \\lyricsto \"alto\" { Al -- to } >>")
+    assert_not(evaluate("document.querySelector('#studio').classList.contains('studio-text-only')"))
+    assert_contains(playground_text(), "\\new Lyrics \\lyricsto \"alto\" { Al -- to }")
+    assert_no_page_errors()
+  end
+
   test("a real file's breaths, bowings, cis! and mid-bar clef are edited on the score; its settings are named") do
     type_source("{ \\override NoteHead.color = #red \\stemUp c''4\\upbow cis''!4 \\breathe \\clef bass e4 f4 | g1 }")
     assert_not(evaluate("document.querySelector('#studio').classList.contains('studio-text-only')"))

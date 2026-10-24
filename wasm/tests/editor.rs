@@ -228,3 +228,15 @@ fn several_scores_are_movements() {
     let kinds: Vec<_> = parsed["staves"][0]["events"].as_array().unwrap().iter().map(|e| e["k"].as_str().unwrap().to_string()).collect();
     assert!(kinds.contains(&"Movement".to_string()), "{kinds:?}");
 }
+
+#[test]
+fn staves_and_voices_say_their_names() {
+    let src = "\\new PianoStaff << \\new Staff = \"up\" << \\new Voice = \"sop\" { \\voiceOne c''1 } \\new Voice = \"alto\" { \\voiceTwo a'1 } >> \\new Lyrics \\lyricsto \"alto\" { la } \\new Staff = \"down\" { \\clef bass c4 \\change Staff = \"up\" e'4 d'2 } >>";
+    let parsed = score(src).unwrap();
+    assert_eq!(parsed["staves"][0]["id"], json!("up"));
+    assert_eq!(parsed["staves"][0]["voices"], json!([["sop", 1], ["alto", 2]]));
+    assert_eq!(parsed["staves"][0]["lyrics_voice"], json!(2));
+    assert_eq!(parsed["staves"][1]["id"], json!("down"));
+    let crossed: Vec<_> = parsed["staves"][1]["events"].as_array().unwrap().iter().filter(|e| e["k"] == "Note").map(|e| e["cross"].clone()).collect();
+    assert_eq!(crossed, vec![json!(null), json!("up"), json!("up")]);
+}

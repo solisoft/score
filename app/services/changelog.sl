@@ -31,6 +31,17 @@ class Changelog
         },
         {
           "area": "editor",
+          "title": "Notes on the other staff, and words under the second voice",
+          "text": "A piano score whose right hand reaches into the bass staff (\\change Staff) now opens in the "
+          + "editor instead of as text only: select the notes and press Ctrl+Shift+↓ (or ↑), or use Insert, to "
+          + "draw them on the staff below or above; again brings them back. They still play with their own "
+          + "hand. A choir score whose words go under the alto or the bass (\\new Lyrics \\lyricsto \"alto\") "
+          + "opens too: type the words under the second voice's notes and the staff sings to that voice. Both "
+          + "are kept when two people edit other bars, and go to MusicXML and back.",
+          "link": "playground"
+        },
+        {
+          "area": "editor",
           "title": "Comments follow their bars and are live on the read page; @ names; \\afterGrace in MusicXML",
           "text": "A comment now stays on its bars when bars are put in or taken away before them, by you, by an "
           + "Undo, or by someone else editing at the same time, and on its staff when a staff or a voice is added "

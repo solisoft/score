@@ -123,8 +123,8 @@ test("musicxml: a clef and a key inside a measure go out and come back", () => {
   const { score } = read("\\new PianoStaff << \\new Staff { c''2 \\key d \\major d''2 | e''1 } \\new Staff { \\clef bass c2 \\clef treble \\key d \\major a'2 | b1 } >>");
   const xml = X.toMusicXML(score);
   assert.match(xml, /<attributes><key><fifths>2<\/fifths><\/key><\/attributes>\s*<note>/);
-  // Two parts here (no piano named): each has its own key, the second its clef.
-  assert.match(xml, /<attributes><key><fifths>2<\/fifths><\/key><clef><sign>G<\/sign><line>2<\/line><\/clef><\/attributes>/);
+  // A piano is one part (#375): the second staff's clef changes on its own staff.
+  assert.match(xml, /<attributes><clef number="2"><sign>G<\/sign><line>2<\/line><\/clef><\/attributes>/);
   const { source, warnings } = X.fromMusicXML(xml);
   assert.deepEqual(warnings, []);
   const back = read(source).score;

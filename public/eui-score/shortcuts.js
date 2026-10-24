@@ -43,6 +43,11 @@ export const SHORTCUTS = [
     },
   },
   {
+    keys: "Ctrl+Shift+↑ ↓",
+    does: "draw the notes on the staff above / below (again: back)",
+    match: (k) => (k.mod && k.shiftKey && !k.altKey && (k.key === "ArrowUp" || k.key === "ArrowDown") ? ["cross", { dir: k.key === "ArrowUp" ? "-1" : "1" }] : null),
+  },
+  {
     keys: "↑ ↓",
     does: "step; Shift semitone; Ctrl octave",
     match: (k) => {
