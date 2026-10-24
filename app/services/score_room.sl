@@ -118,8 +118,11 @@ class ScoreRoom
   # (`relay_cursor`); saves go through HTTP, which tells the room. When a
   # page goes, its cursor goes with it.
   static def on_event(event, now)
-    type = event["type"]
-    return ScoreRoom.on_connect(event, now) if type == "connect"
+
+    # Not `type`: a bare assignment to that name replaces the builtin type()
+    # for the whole app (the readiness check stopped reading the job queue).
+    event_type = event["type"]
+    return ScoreRoom.on_connect(event, now) if event_type == "connect"
 
     # The room a message or a leaving page is of: its ticket's, which was
     # checked at the door (a connection refused there is in no presence).
@@ -127,8 +130,8 @@ class ScoreRoom
     return {} if entered.nil?
 
     channel = ScoreRoom.channel(entered["score"])
-    return ScoreRoom.relay_cursor(event, entered) if type == "message"
-    return ScoreRoom.cursor_gone(event, channel) if type == "disconnect"
+    return ScoreRoom.relay_cursor(event, entered) if event_type == "message"
+    return ScoreRoom.cursor_gone(event, channel) if event_type == "disconnect"
 
     {}
   end

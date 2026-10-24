@@ -53,6 +53,9 @@ describe("ScoreRoom") do
       {"type": "message", "message": "hello"},
       now
     ), {})
+    # Reading an event's type must not replace the builtin type() for the
+    # whole app: the readiness check needs it.
+    assert_eq(type("a word"), "string")
   end
 
   test("a save is told to the room with the score as it now stands") do
