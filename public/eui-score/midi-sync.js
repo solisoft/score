@@ -31,7 +31,13 @@ const SPP_MAX = 16383;
  */
 export function timeline(passes, whole) {
   let q0 = 0;
-  return passes.map((p) => {
+  return passes.flatMap((p) => {
+    // A bar gliding through a rit. or an accel. (#379): its steps, each at its own speed.
+    if (p.steps?.length > 1) {
+      const lines = p.steps.slice(1).map((s, k) => ({ start: p.steps[k].sec, end: s.sec, q0: q0 + p.steps[k].q, q: s.q - p.steps[k].q }));
+      q0 += p.steps.at(-1).q;
+      return lines;
+    }
     const held = (p.holds ?? []).reduce((sum, h) => sum + h.ticks, 0);
     const ticks = Math.max(0, ((p.end - p.start) * p.bpm) / 60 * (whole / p.base) - held);
     const q = ticks / (whole / 4);

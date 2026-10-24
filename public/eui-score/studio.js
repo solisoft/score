@@ -23,6 +23,8 @@ const S = await import(`./midi-sync.js${V}`);
 const X = await import(`./mixer.js${V}`);
 const Vel = await import(`./velocity.js${V}`);
 const { mixerPanel } = await import(`./mixer-ui.js${V}`);
+// Swing, humanize and the tempo's glides, put into the MIDI that is heard (#379).
+const F = await import(`./feel.js${V}`);
 const { editor_view_lit, score_json, source_spans } = engine;
 
 /** The MusicXML reader and writer, loaded the first time a file needs it. */
@@ -33,6 +35,8 @@ const midiImport = () => import(`./midi-import.js${V}`);
 const isMidiName = (name) => /\.(mid|midi|smf|kar)$/i.test(name ?? "");
 /** The drum grid, the arpeggiator and the chord track (Edit menu), loaded the first time one is opened. */
 const patternTools = () => import(`./pattern-tools.js${V}`);
+/** Quantize, swing and humanize (Edit and Play menus), loaded the first time one is opened. */
+const feelTools = () => import(`./feel-tools.js${V}`);
 
 const COLOURS = { selection: "#b4373a", head: "#e0662a", cursor: "#2563c9", playing: "#0f9d47" };
 const DRAFT = "eui-score-studio-draft";
@@ -730,6 +734,7 @@ export function startStudio(root, options = {}) {
   // What changes or moves to a note sounds it, as the person works.
   const SOUNDING = new Set(["letter", "drum", "move", "alter", "head-up", "head-down", "next", "previous"]);
   let patterns = null;
+  let feel = null;
 
   function act(name, data = {}) {
     const done = doAct(name, data);
@@ -774,6 +779,10 @@ export function startStudio(root, options = {}) {
       case "drum-grid": case "arpeggiate": case "chord-track":
         patterns ??= patternTools().then((T) => T.install({ root, st, M, P, edit, say, setLoop, togglePlay, stopPlay, range, selectedBarsOrNull, barNo }));
         return patterns.then((tools) => tools.open(name));
+      // Edit ▸ Quantize…, Play ▸ Swing and humanize…: feel-tools.js's dialogs.
+      case "quantize": case "swing":
+        feel ??= feelTools().then((T) => T.install({ root, st, M, edit, say, range, barNo }));
+        return feel.then((tools) => tools.open(name));
       case "break": {
         let bar;
         try {
@@ -2592,8 +2601,17 @@ export function startStudio(root, options = {}) {
       ? [M.toLilyPond(score, { unfold: true }).source, { bpm: M.DEFAULT_BPM, beat: 4, unfold: false }]
       : [st.text, { bpm: M.DEFAULT_BPM, beat: 4 }];
 
-  /** The MIDI of what is heard, each note at the velocity set for it (velocity.js). */
-  const heardMidi = (score) => toMidi(...heard(score)).then((bytes) => (score ? Vel.applyVelocities(score, bytes) : bytes));
+  /**
+   * The MIDI of what is heard: each note at the velocity set for it
+   * (velocity.js), then as it is played (feel.js) — swung and humanized as
+   * the meta line asks, on top of those velocities, its rit. and accel.
+   * gliding. Play, Save as MIDI and Save the sound all play this.
+   */
+  const heardMidi = (score, passes = score ? M.playback(score) : []) =>
+    toMidi(...heard(score)).then((bytes) => {
+      const velocities = score ? Vel.applyVelocities(score, bytes) : bytes;
+      return F.feel(velocities, { score, passes, ...F.feelOf(score ? score.meta : M.readMeta(st.text)) });
+    });
 
   // The Playback section's settings, kept from one visit to the next.
   const PLAYBACK = "eui-score-studio-playback";
@@ -2603,12 +2621,19 @@ export function startStudio(root, options = {}) {
     if (kept.rate) playOption("rate").value = kept.rate;
     playOption("metronome").checked = Boolean(kept.metronome);
     playOption("count-in").checked = Boolean(kept.countIn);
+    if (playOption("subdivide") && kept.subdivide) playOption("subdivide").value = kept.subdivide;
+    if (playOption("accent")) playOption("accent").checked = kept.accent !== false;
   } catch (error) {}
+  /** The metronome's first beat of each bar accented (Playback), as it always was unless turned off. */
+  const accent = () => playOption("accent")?.checked ?? true;
   root.querySelector('[data-section="playback"]')?.addEventListener("change", (event) => {
     if (event.target.dataset.play === "output") return chooseOutput(event.target);
     if (event.target.dataset.play === "rate" && st.playing?.handle) st.playing.handle.rate = rate();
     try {
-      localStorage.setItem(PLAYBACK, JSON.stringify({ rate: playOption("rate").value, metronome: playOption("metronome").checked, countIn: playOption("count-in").checked }));
+      localStorage.setItem(
+        PLAYBACK,
+        JSON.stringify({ rate: playOption("rate").value, metronome: playOption("metronome").checked, countIn: playOption("count-in").checked, subdivide: playOption("subdivide")?.value, accent: accent() }),
+      );
     } catch (error) {}
   });
   const rate = () => Number(playOption("rate")?.value) || 1;
@@ -2650,11 +2675,11 @@ export function startStudio(root, options = {}) {
     const at = loop ? loop.start : from == null ? 0 : (passes.find((p) => p.bar === from)?.start ?? 0);
     let bytes;
     try {
-      bytes = await heardMidi(played);
+      bytes = await heardMidi(played, passes);
     } catch (error) {
       return say(error.message ?? String(error), true);
     }
-    const state = { handle: null, passes, times: noteTimes(passes), beats: played ? M.beats(played, passes) : [], loop, next: null, now: [], lit: -1, frame: 0, timer: 0, ticker: 0 };
+    const state = { handle: null, passes, times: noteTimes(passes), beats: played ? M.beats(played, passes, { subdivide: Number(playOption("subdivide")?.value) || 0 }) : [], loop, next: null, now: [], lit: -1, frame: 0, timer: 0, ticker: 0 };
     st.playing = state;
     showState();
     const progress = (f) => st.playing === state && say(`Loading the sounds… ${Math.round(100 * f)} % (38 MB, once)`);
@@ -2711,7 +2736,7 @@ export function startStudio(root, options = {}) {
     const [num, den] = M.timeAt(st.score, pass.bar);
     const beat = ((M.WHOLE / den) / (M.WHOLE / pass.base)) * (60 / pass.bpm) / rate();
     const t0 = P.audioTime() + 0.05;
-    for (let k = 0; k < num; k++) P.click(t0 + k * beat, k === 0);
+    for (let k = 0; k < num; k++) P.click(t0 + k * beat, k === 0 && accent());
     say("One bar to come in…");
     return new Promise((resolve) => setTimeout(resolve, (num * beat + 0.05) * 1000));
   }
@@ -2735,7 +2760,7 @@ export function startStudio(root, options = {}) {
     if (lost) state.next = Math.max(0, beats.findIndex((b) => b.sec >= now - 0.01));
     while (state.next < beats.length && beats[state.next].sec < now + 0.12) {
       const b = beats[state.next++];
-      if (b.sec >= now - 0.01) P.click(P.audioTime() + (b.sec - now) / handle.rate, b.down);
+      if (b.sec >= now - 0.01) P.click(P.audioTime() + (b.sec - now) / handle.rate, b.down && accent(), b.sub);
     }
   }
 

@@ -561,6 +561,12 @@
   .studio-grid-cell[data-value="2"] { background: var(--accent); border-color: var(--accent-ink); }
   .studio-grid-cell:focus-visible { outline: 2px solid #2563c9; outline-offset: 1px; }
   .studio-grid-actions { margin-top: 12px; }
+  /* Edit ▸ Quantize, Play ▸ Swing and humanize (public/eui-score/feel-tools.js). */
+  .studio-quantize, .studio-feel { width: min(520px, calc(100vw - 32px)); }
+  .studio-feel h3 { font-size: 14px; margin: 14px 0 0; }
+  .studio-feel-slider { display: inline-flex; align-items: center; gap: 8px; }
+  .studio-feel-slider input { width: 160px; }
+  .studio-feel-slider output { min-width: 44px; font-variant-numeric: tabular-nums; font-size: 13px; }
   .studio-templates { border: 0; margin: 0 0 10px; padding: 0; }
   .studio-templates legend { font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; padding: 0; }
   .studio-templates [data-templates] { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }

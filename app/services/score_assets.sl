@@ -22,6 +22,8 @@ class ScoreAssets
       "piano-roll.js",
       "patterns.js",
       "pattern-tools.js",
+      "feel.js",
+      "feel-tools.js",
       "shortcuts.js",
       "player.js",
       "midi-sync.js",

@@ -3407,6 +3407,26 @@
   .studio-grid-actions {
     margin-top: 12px;
   }
+  .studio-quantize, .studio-feel {
+    width: min(520px, calc(100vw - 32px));
+  }
+  .studio-feel h3 {
+    font-size: 14px;
+    margin: 14px 0 0;
+  }
+  .studio-feel-slider {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .studio-feel-slider input {
+    width: 160px;
+  }
+  .studio-feel-slider output {
+    min-width: 44px;
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+  }
   .studio-templates {
     border: 0;
     margin: 0 0 10px;

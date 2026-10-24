@@ -78,6 +78,7 @@
             <button type="button" role="menuitem" data-act="drum-grid">Drum grid… <kbd>a drum staff's bar</kbd></button>
             <button type="button" role="menuitem" data-act="arpeggiate">Arpeggiate the selected chords…</button>
             <button type="button" role="menuitem" data-act="chord-track">Chord track from the chord symbols…</button>
+            <button type="button" role="menuitem" data-act="quantize">Quantize… <kbd>the selection, or the score</kbd></button>
           </div>
         </details>
         <details class="studio-dropdown">
@@ -128,7 +129,9 @@
             <button type="button" role="menuitem" data-act="set-loop">Loop the selected bars <kbd>played and recorded</kbd></button>
             <button type="button" role="menuitem" data-act="clear-loop">No loop</button>
             <hr>
+            <button type="button" role="menuitem" data-act="swing">Swing and humanize…</button>
             <button type="button" role="menuitem" data-act="mixer">Mixer… <kbd>volume, pan, effects</kbd></button>
+            <hr>
             <button type="button" role="menuitem" data-act="midi-learn">MIDI learn and clock…</button>
           </div>
         </details>
@@ -201,6 +204,12 @@
         </label>
         <label class="tool-check"><input type="checkbox" data-play="loop"> Loop the selected bars</label>
         <label class="tool-check"><input type="checkbox" data-play="metronome"> Metronome</label>
+        <label class="tool-field">Clicks
+          <select data-play="subdivide" title="The metronome's clicks: the beats, or the eighths or sixteenths between them, softer">
+            <option value="0">beats</option><option value="8">eighths</option><option value="16">sixteenths</option>
+          </select>
+        </label>
+        <label class="tool-check"><input type="checkbox" data-play="accent" checked> Accent the first beat</label>
         <label class="tool-check"><input type="checkbox" data-play="count-in"> Count in one bar</label>
         <label class="tool-field">Sound to
           <select data-play="output" title="This browser's sounds, or a MIDI device: GarageBand, Logic…">

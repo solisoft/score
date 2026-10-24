@@ -3257,19 +3257,65 @@ function holdsIn(score, b) {
 
 /** Seconds from a pass's start to `into` ticks into its bar, the fermatas before it held. */
 function intoPass(p, into) {
+  if (p.curve) {
+    // A glide through the bar: each fermata held at the speed where it is.
+    const held = p.holds.filter((h) => h.at <= into).reduce((sum, h) => sum + holdSeconds(p, h), 0);
+    return curveTime(p.curve, 0, into) + held;
+  }
   const held = p.holds.filter((h) => h.at <= into).reduce((sum, h) => sum + h.ticks, 0);
   return ((into + held) / M_TICKS(p.base)) * (60 / p.bpm);
+}
+
+/** A fermata's hold in pass `p`, in seconds: at the speed where it is held. */
+const holdSeconds = (p, h) => (p.curve ? (h.ticks * 240) / WHOLE / curveSpeed(p.curve, h.at) : (h.ticks / M_TICKS(p.base)) * (60 / p.bpm));
+
+/** Pass `p`'s length as played, in ticks: its bar's, and its fermatas' holds — as the MIDI file has it. */
+export function passTicks(score, p) {
+  return barLength(score, p.bar) + p.holds.reduce((sum, h) => sum + h.ticks, 0);
+}
+
+/**
+ * Seconds from pass `p`'s start to `u` ticks into it as played: a fermata's
+ * hold counted where the MIDI holds it, after the held note's written end.
+ */
+export function passSeconds(p, u) {
+  let held = 0;
+  for (const h of [...p.holds].sort((a, b) => a.at - b.at)) {
+    const from = h.at + held;
+    if (u < from) break;
+    if (u < from + h.ticks) return intoPass(p, h.at) - holdSeconds(p, h) + ((u - from) / h.ticks) * holdSeconds(p, h);
+    held += h.ticks;
+  }
+  return intoPass(p, u - held);
+}
+
+/** A gliding bar's clock line: [{ sec, q }] every sixteenth, `q` the quarters into it. */
+function stepsOf(p, length) {
+  const out = [];
+  for (let x = 0; ; x = Math.min(length, x + WHOLE / 16)) {
+    out.push({ sec: p.start + intoPass(p, x), q: x / (WHOLE / 4) });
+    if (x >= length) return out;
+  }
 }
 
 /** Every pass through a bar, in the order they sound: [{ bar, start, end, bpm, base, holds }], in seconds. */
 export function playback(score) {
   let sec = 0;
+  // A rit. or an accel. on the way: the bars it touches glide (`curve`), and give their clock's steps.
+  const ramps = tempoRamps(score);
+  const curves = new Map();
   return playOrder(score).map((bar) => {
     const { bpm, base } = speedAt(score, bar);
     const start = sec;
     const pass = { bar, start, end: 0, bpm, base, holds: holdsIn(score, bar) };
-    sec += intoPass(pass, barLength(score, bar));
+    if (ramps.length) {
+      if (!curves.has(bar)) curves.set(bar, curveOf(score, ramps, bar));
+      if (curves.get(bar)) pass.curve = curves.get(bar);
+    }
+    const length = barLength(score, bar);
+    sec += intoPass(pass, length);
     pass.end = sec;
+    if (pass.curve) pass.steps = stepsOf(pass, length);
     return pass;
   });
 }
@@ -3312,20 +3358,40 @@ export function tickAtPlayed(score, passes, sec) {
   const p = passAt(passes, sec);
   if (!p) return 0;
   const length = barLength(score, p.bar);
-  const into = p.end > p.start ? ((sec - p.start) / (p.end - p.start)) * length : 0;
+  let into = p.end > p.start ? ((sec - p.start) / (p.end - p.start)) * length : 0;
+  if (p.curve) {
+    // A gliding bar: where its time reaches `sec`.
+    let [lo, hi] = [0, length];
+    for (let k = 0; k < 40; k++) {
+      const mid = (lo + hi) / 2;
+      if (p.start + intoPass(p, mid) < sec) lo = mid;
+      else hi = mid;
+    }
+    into = lo;
+  }
   return barStart(score, p.bar) + Math.max(0, Math.min(length, into));
 }
 
-/** The metronome's beats, every repeat played out: [{ sec, down }], `down` on each bar's first. */
-export function beats(score, passes) {
+/**
+ * The metronome's beats, every repeat played out: [{ sec, down }], `down`
+ * on each bar's first. `subdivide` (8 or 16) adds the eighths or sixteenths
+ * between the beats, as { sec, down: false, sub: true }, where they are
+ * shorter than the beat.
+ */
+export function beats(score, passes, { subdivide = 0 } = {}) {
   const out = [];
   for (const p of passes) {
     const [num, den] = timeAt(score, p.bar);
     // A pickup is the end of a bar: its beats are the bar's last ones.
     const missing = (WHOLE * num) / den - barLength(score, p.bar);
+    const parts = subdivide > den && subdivide % den === 0 ? subdivide / den : 1;
     for (let k = 0; k < num; k++) {
-      const into = (k * WHOLE) / den - missing;
-      if (into >= 0) out.push({ sec: p.start + intoPass(p, into), down: k === 0 });
+      for (let j = 0; j < parts; j++) {
+        const into = (k * WHOLE) / den + (j * WHOLE) / (den * parts) - missing;
+        if (into < 0) continue;
+        const sec = p.start + intoPass(p, into);
+        out.push(j ? { sec, down: false, sub: true } : { sec, down: k === 0 });
+      }
     }
   }
   return out;
@@ -3693,4 +3759,274 @@ export function fromParsed(parsed) {
     if (kept < staff.events.filter((ev) => ev.beamStart).length) lost.add("a beam across a bar line, or around a rest or a longer note");
   }
   return lost.size ? { score, lost: [...lost] } : { score };
+}
+
+// ---- Tempo ramps: rit., rall., accel. played ---------------------------------------------
+//
+// A rit., a rall. or an accel. — a `\tempo "rit."`, the words over a note
+// (`^\markup "accel."`), or a text spanner's (`\startTextSpan`, its left text
+// "rit.") — makes the speed glide, from where it stands, to the next tempo
+// indication: to its speed when it gives one (`\tempo 4 = 60`), else by
+// RAMP_FACTOR. A spanner glides to its end. The words with a speed
+// (`\tempo "rit." 4 = 60`) glide to that speed. "a tempo" or "Tempo I" go
+// back to the speed before; a glide that ends otherwise holds its speed.
+
+const SLOWER = /\b(rit|ritard|ritardando|rall|rallentando|allarg|allargando|calando|slentando)\b/i;
+const FASTER = /\b(accel|accelerando|stringendo|string\.|incalzando)/i;
+const BACK = /\b(a\s+tempo|tempo\s+(i|1|primo))\b/i;
+
+/** How far a glide with no speed to reach goes: three quarters as fast, or a quarter faster. */
+export const RAMP_FACTOR = { slower: 0.75, faster: 1.25 };
+
+/** "slower", "faster", or null: which way words such as "poco rit." make the speed go. */
+export function rampOf(text) {
+  if (!text || BACK.test(text)) return null;
+  if (SLOWER.test(text)) return "slower";
+  if (FASTER.test(text)) return "faster";
+  return null;
+}
+
+/** A tempo as quarters a minute. */
+const qpmOf = ({ bpm, base }) => (bpm * 4) / (base || 4);
+
+/**
+ * The stretches where the speed is not the bars' own, in written ticks:
+ * [{ t0, t1, q0, q1 }], the speed (quarters a minute) gliding from q0 to q1
+ * — the same, for a speed a glide left behind.
+ */
+export function tempoRamps(score) {
+  const end = Math.max(0, ...score.staves.map(lengthOf));
+  const begins = [];
+  const stops = [];
+  for (const c of score.changes ?? []) {
+    if (!c.tempo) continue;
+    const t = barStart(score, c.bar);
+    const way = rampOf(c.tempo.text);
+    if (way) begins.push({ t, way, target: c.tempo.bpm ? qpmOf(c.tempo) : null, before: Math.max(0, c.bar - 1) });
+    else stops.push({ t, qpm: c.tempo.bpm ? qpmOf(c.tempo) : null, back: BACK.test(c.tempo.text ?? "") || Boolean(c.tempo.bpm) });
+  }
+  for (const staff of score.staves) {
+    const at = starts(staff);
+    staff.events.forEach((ev, i) => {
+      for (const words of ev.texts ?? []) {
+        const way = rampOf(words.text);
+        if (way) begins.push({ t: at[i], way, target: null });
+        else if (BACK.test(words.text)) stops.push({ t: at[i], qpm: null, back: true });
+      }
+      const way = ev.spanStart != null ? rampOf(ev.spanStart) : null;
+      if (!way) return;
+      const k = staff.events.findIndex((x, j) => j > i && x.spanEnd);
+      begins.push({ t: at[i], way, target: null, until: k < 0 ? end : at[k] });
+    });
+  }
+  const seen = new Set();
+  const ramps = begins.sort((a, b) => a.t - b.t).filter((b) => !seen.has(b.t) && seen.add(b.t));
+  stops.sort((a, b) => a.t - b.t);
+  const step = (b) => qpmOf(speedAt(score, b));
+  const out = [];
+  let held = null;
+  ramps.forEach((r, k) => {
+    // A speed a glide left behind holds until the next indication.
+    if (held && stops.some((s) => s.t >= held.t0 && s.t <= r.t)) {
+      const stop = stops.find((s) => s.t >= held.t0);
+      if (stop.t > held.t0) out.push({ t0: held.t0, t1: stop.t, q0: held.q, q1: held.q });
+      held = null;
+    }
+    const stop = stops.find((s) => s.t > r.t);
+    const next = ramps[k + 1]?.t ?? Infinity;
+    const t1 = Math.min(r.until ?? Infinity, stop?.t ?? Infinity, next, end);
+    if (held) out.push({ t0: held.t0, t1: r.t, q0: held.q, q1: held.q });
+    const from = held ? held.q : step(r.before ?? barAt(score, r.t));
+    held = null;
+    if (t1 <= r.t) return;
+    const reached = stop && stop.t === t1 && r.until == null ? stop.qpm : null;
+    const to = r.target ?? reached ?? from * RAMP_FACTOR[r.way];
+    out.push({ t0: r.t, t1, q0: from, q1: to });
+    // Arrived without a new speed written there: the glide's speed holds.
+    if (!(stop && stop.t === t1 && stop.back) && r.target == null) held = { t0: t1, q: to };
+  });
+  if (held) {
+    const stop = stops.find((s) => s.t >= held.t0);
+    const t1 = Math.min(stop?.t ?? end, end);
+    if (t1 > held.t0) out.push({ t0: held.t0, t1, q0: held.q, q1: held.q });
+  }
+  return out;
+}
+
+/**
+ * Bar `b`'s speed where the ramps touch it, as pieces over the bar: [{ x0,
+ * x1, q0, q1 }] in ticks from its start, quarters a minute — null where none does.
+ */
+function curveOf(score, ramps, b) {
+  const from = barStart(score, b);
+  const length = barLength(score, b);
+  const touching = ramps.filter((r) => r.t0 < from + length && r.t1 > from);
+  if (!touching.length) return null;
+  const plain = qpmOf(speedAt(score, b));
+  const edges = [...new Set([0, length, ...touching.flatMap((r) => [r.t0 - from, r.t1 - from]).filter((x) => x > 0 && x < length)])].sort((x, y) => x - y);
+  const pieces = [];
+  for (let k = 0; k + 1 < edges.length; k++) {
+    const [x0, x1] = [edges[k], edges[k + 1]];
+    const r = touching.find((u) => u.t0 - from <= x0 && u.t1 - from >= x1);
+    const at = (x) => (r ? r.q0 + ((r.q1 - r.q0) * (x + from - r.t0)) / (r.t1 - r.t0) : plain);
+    pieces.push({ x0, x1, q0: at(x0), q1: at(x1) });
+  }
+  return pieces;
+}
+
+/** Seconds from `a` to `b` (ticks into the bar) along a bar's curve. */
+function curveTime(curve, a, b) {
+  let sec = 0;
+  for (const p of curve) {
+    const [x0, x1] = [Math.max(a, p.x0), Math.min(b, p.x1)];
+    if (x1 <= x0) continue;
+    const at = (x) => p.q0 + ((p.q1 - p.q0) * (x - p.x0)) / (p.x1 - p.x0);
+    const [qa, qb] = [at(x0), at(x1)];
+    // The speed gliding evenly in ticks: the time is its inverse's integral.
+    const span = Math.abs(qb - qa) < 1e-9 ? (x1 - x0) / qa : ((x1 - x0) * Math.log(qb / qa)) / (qb - qa);
+    sec += (span * 240) / WHOLE;
+  }
+  return sec;
+}
+
+/** A bar's speed (quarters a minute) at `x` ticks into it, along its curve. */
+function curveSpeed(curve, x) {
+  const p = curve.find((u) => x >= u.x0 && x < u.x1) ?? curve[curve.length - 1];
+  return p.q0 + ((p.q1 - p.q0) * (Math.min(x, p.x1) - p.x0)) / (p.x1 - p.x0);
+}
+
+// ---- Quantizing what the score holds -----------------------------------------------------
+//
+// The score is notation: every note already sits on some grid. Quantizing
+// moves notes that sit on a finer one (a recording fitted to thirty-seconds,
+// swing written out as dotted rhythms) to a coarser grid: a note's start goes
+// to the nearest step of the grid, counted from its bar line, or part of the
+// way (`strength`, 0 to 1); its end with it (as long as it was), or to the
+// grid too (`ends`). Notes landing together make a chord; a note reaching the
+// next one's start is cut there. Their articulations, dynamics and words go
+// with them. On a triplet grid, or over a tuplet, the notes are rewritten as
+// a recording is: the pitches and the rhythm kept, not what is written on them.
+
+/** The finest step a partial quantize lands on: a sixty-fourth. */
+const FINE = WHOLE / 64;
+
+/**
+ * Lane `s`'s notes starting from `from` to `to` (ticks) quantized to `grid`
+ * (ticks; RECORDING_GRIDS lists them). Answers how many notes moved.
+ */
+export function quantizeLane(score, s, from, to, { grid, strength = 1, ends = false } = {}) {
+  const staff = score.staves[s];
+  if (!staff) throw new Error("no such staff");
+  if (!(grid > 0)) throw new Error("choose a grid");
+  const amount = Math.max(0, Math.min(1, Number(strength)));
+  const at = starts(staff);
+  const near = (t, step) => {
+    const bar = barStart(score, barAt(score, t));
+    return bar + Math.round((t - bar) / step) * step;
+  };
+  const triplet = Boolean(tripletBeat(grid));
+  // Part of the way lands on a sixty-fourth; a triplet grid always all the way.
+  const moved = (t) => (amount < 1 && !triplet ? near(t + (near(t, grid) - t) * amount, FINE) : near(t, grid));
+  const inRange = (i) => at[i] >= from && at[i] < to;
+  const tuplets = staff.events.some((ev, i) => inRange(i) && ev.tuplet);
+  if (triplet || tuplets) {
+    const played = notesOf(score, s, from, to);
+    if (!played.length) return 0;
+    const step = amount < 1 && !triplet ? FINE : grid;
+    const notes = played.map((n) => {
+      const t0 = moved(n.t0);
+      return { ...n, t0, t1: Math.max(t0 + step, ends ? moved(n.t1) : t0 + (n.t1 - n.t0)) };
+    });
+    const end = Math.max(to, ...notes.map((n) => n.t1));
+    writeRecording(score, s, from, nextBarLine(score, end - 1), notes, step);
+    return new Set(played.filter((n, k) => n.t0 !== notes[k].t0 || n.t1 !== notes[k].t1).map((n) => n.t0)).size;
+  }
+  const items = [];
+  for (let i = 0; i < staff.events.length; i++) {
+    const ev = staff.events[i];
+    if (ev.rest || !inRange(i)) continue;
+    const [a, b] = tiedNotes(staff, i);
+    if (a !== i) continue;
+    const { base, dots, tuplet, id, tie, ...content } = structuredClone(ev);
+    items.push({ t0: at[a], t1: at[b] + ticksOf(staff.events[b]), content });
+  }
+  if (!items.length) return 0;
+  const end = Math.max(to, ...items.map((n) => n.t1));
+  let count = 0;
+  const placed = [];
+  for (const n of items) {
+    const t0 = Math.max(from, Math.min(end - FINE, moved(n.t0)));
+    let t1 = ends ? moved(n.t1) : t0 + (n.t1 - n.t0);
+    if (t1 <= t0) t1 = t0 + (ends ? grid : n.t1 - n.t0);
+    if (t0 !== n.t0 || t1 !== n.t1) count++;
+    const same = placed.find((p) => p.t0 === t0);
+    if (same) {
+      // Landing together: one chord.
+      for (const p of n.content.pitches) if (!same.content.pitches.some((q) => q.d === p.d && q.alter === p.alter && q.drum === p.drum)) same.content.pitches.push(p);
+      same.content.pitches = sortPitches(same.content.pitches);
+      same.t1 = Math.max(same.t1, t1);
+    } else placed.push({ t0, t1, content: n.content });
+  }
+  placed.sort((x, y) => x.t0 - y.t0);
+  placed.forEach((n, k) => {
+    // A note reaching the next one's start stops there.
+    if (placed[k + 1]) n.t1 = Math.min(n.t1, placed[k + 1].t0);
+  });
+  write(score, s, from, end - from, { rest: true });
+  for (const n of placed) write(score, s, n.t0, n.t1 - n.t0, { ...n.content, rest: false, tie: false });
+  return count;
+}
+
+/** Lane `s`'s notes starting from `from` to `to`, as keys played: [{ key, t0, t1 }], a tied note once. */
+function notesOf(score, s, from, to) {
+  const staff = score.staves[s];
+  const at = starts(staff);
+  const out = [];
+  staff.events.forEach((ev, i) => {
+    if (ev.rest || at[i] < from || at[i] >= to) return;
+    const [a, b] = tiedNotes(staff, i);
+    if (a !== i) return;
+    const t1 = at[b] + ticksOf(staff.events[b]);
+    for (const p of ev.pitches) out.push({ key: p.drum ? drumKey(p.drum) : midiKey(p.d, p.alter), t0: at[i], t1 });
+  });
+  return out;
+}
+
+// ---- Swing, written into the notes ------------------------------------------------------
+
+/**
+ * Each pair of even eighths (`unit` 8) or sixteenths (16) on lane `s`, on
+ * the beat, from `from` to `to`, written swung: "dotted" a dotted note and
+ * the short one, "triplet" a triplet of the long and the short. Notes and
+ * rests alike; a pair already uneven, or in a tuplet, is left. Answers how
+ * many pairs.
+ */
+export function writeSwing(score, s, from, to, { unit = 8, feel = "triplet" } = {}) {
+  const staff = score.staves[s];
+  if (!staff) throw new Error("no such staff");
+  if (unit !== 8 && unit !== 16) throw new Error("swing is of eighths or sixteenths");
+  const step = WHOLE / unit;
+  const at = starts(staff);
+  let count = 0;
+  for (let i = 0; i + 1 < staff.events.length; i++) {
+    const [a, b] = [staff.events[i], staff.events[i + 1]];
+    const t = at[i];
+    if (t < from || t >= to) continue;
+    const bar = barAt(score, t);
+    const into = t - barStart(score, bar);
+    if (into % (2 * step) || into + 2 * step > barLength(score, bar)) continue;
+    if ([a, b].some((ev) => ev.base !== unit || ev.dots || ev.tuplet || ev.graces?.length)) continue;
+    if (feel === "dotted") {
+      a.dots = 1;
+      b.base = unit * 2;
+    } else {
+      const id = newId();
+      a.base = unit / 2;
+      a.tuplet = { id, n: 3, d: 2 };
+      b.tuplet = { id, n: 3, d: 2 };
+    }
+    count++;
+    i++;
+  }
+  return count;
 }

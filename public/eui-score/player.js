@@ -260,13 +260,17 @@ export function audioTime() {
   return context?.currentTime ?? 0;
 }
 
-/** A metronome click at audio time `when`; `accent` for a bar's first beat. Silent before the sounds have loaded. */
-export function click(when, accent = false) {
+/**
+ * A metronome click at audio time `when`; `accent` for a bar's first beat,
+ * `soft` for an eighth or a sixteenth between the beats. Silent before the
+ * sounds have loaded.
+ */
+export function click(when, accent = false, soft = false) {
   if (!engine?.done) return;
   engine.promise.then(({ synth }) => {
     synth.midiChannels[CLICK]?.setDrums(true);
     const key = accent ? 76 : 77;
-    synth.noteOn(CLICK, key, accent ? 120 : 90, { time: when });
+    synth.noteOn(CLICK, key, accent ? 120 : soft ? 50 : 90, { time: when });
     synth.noteOff(CLICK, key, { time: when + 0.08 });
   });
 }

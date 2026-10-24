@@ -12,6 +12,19 @@ class Changelog
     [
       {"date": "2026-10-24", "entries": [
         {
+          "area": "site",
+          "title": "Rit. and accel. are played; quantize, swing and humanize",
+          "text": "A rit., rall. or accel. now slows down or speeds up when the score plays, whether it is a tempo "
+          + "mark, words over a note or a dashed line: the speed glides to the next tempo given, and the playhead, "
+          + "the metronome, the MIDI clock, the saved WAV and the saved MIDI file all follow it. Edit ▸ Quantize… "
+          + "moves notes that sit between the beats onto a grid from quarters to thirty-seconds or triplets, all "
+          + "the way or part of it, their starts only or their ends too. Play ▸ Swing and humanize… swings the "
+          + "eighths or sixteenths as the music plays, without changing what is written, or writes them as "
+          + "triplets or dotted pairs; humanize plays each note a little early or late and a little softer or "
+          + "harder, the same way each time. The settings are saved with the score. The metronome can also click "
+          + "eighths or sixteenths between the beats, and its accent on the first beat can be turned off."
+        },
+        {
           "area": "editor",
           "title": "A mixer, effects and each note's velocity",
           "text": "Play › Mixer opens a mixer: each staff has its volume, pan, mute and solo, and the master a "
