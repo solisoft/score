@@ -23,17 +23,31 @@
 #             beside as .env.before-own-user). The site restarts and must
 #             answer /health/deep with "ok", or the old .env comes back. The
 #             server's admin and the other sites are left as they are.
+#   admin   — the error tracker and alerts (#376): SOLI_ADMIN_USER (input),
+#             SOLI_ADMIN_PASSWORD (the production environment's secret of that
+#             name, sent over the SSH connection's input, never on a command
+#             line or in a log), SOLI_ADMIN_TOKEN (made on the server if the
+#             .env has none) and SOLI_NOTIFY_EMAILS (input). The site restarts;
+#             /__soli/errors must refuse a visitor and open to the admin.
 name: production database
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: "inspect, setup, encryption-key, jobs, or own-user"
+        description: "inspect, setup, encryption-key, jobs, own-user, or admin"
         required: true
         default: inspect
         type: choice
-        options: [inspect, setup, encryption-key, jobs, own-user]
+        options: [inspect, setup, encryption-key, jobs, own-user, admin]
+      admin_user:
+        description: "admin: the user name for /__soli/errors"
+        required: false
+        default: soli
+      notify_emails:
+        description: "admin: where alerts go (comma-separated)"
+        required: false
+        default: ""
 
 concurrency:
   group: deploy-refs/heads/main
@@ -230,3 +244,53 @@ jobs:
           as_admin -X DELETE "$api/_api/auth/users/$name" >/dev/null
           exit 1
           REMOTE
+
+      - name: Error tracker and alerts
+        if: inputs.action == 'admin'
+        env:
+          PROXY_CONF: ${{ vars.DEPLOY_PROXY_CONF || '/home/rocky/proxy.conf' }}
+          APP: ${{ vars.DEPLOY_APP || 'score' }}
+          ADMIN_USER: ${{ inputs.admin_user }}
+          NOTIFY: ${{ inputs.notify_emails }}
+          ADMIN_PASSWORD: ${{ secrets.SOLI_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [ -n "$ADMIN_PASSWORD" ] || { echo "no SOLI_ADMIN_PASSWORD secret in the production environment" >&2; exit 1; }
+          case "$ADMIN_USER$NOTIFY" in *[\'\"\ \$\`]*) echo "a quote, space or \$ in the inputs" >&2; exit 1 ;; esac
+          # The script reads the password from the line after its first.
+          { echo 'IFS= read -r pw'; printf '%s\n' "$ADMIN_PASSWORD"; cat <<'REMOTE'
+          set -euo pipefail
+          cd "$SITES_DIR/$DOMAIN"
+          cp -p .env .env.before-admin
+          token="$(grep -E '^SOLI_ADMIN_TOKEN=.+' .env | head -1 | cut -d= -f2- || true)"
+          [ -n "$token" ] || token="$(openssl rand -hex 32)"
+          grep -vE '^(SOLI_ADMIN_USER|SOLI_ADMIN_PASSWORD|SOLI_ADMIN_TOKEN|SOLI_NOTIFY_EMAILS)=' .env.before-admin > .env.next
+          {
+            echo "# /__soli/errors, /__soli/jobs, /__soli/slow_queries, and where alerts go (#376)."
+            echo "SOLI_ADMIN_USER=$ADMIN_USER"
+            printf 'SOLI_ADMIN_PASSWORD=%s\n' "$pw"
+            echo "SOLI_ADMIN_TOKEN=$token"
+            if [ -n "$NOTIFY" ]; then echo "SOLI_NOTIFY_EMAILS=$NOTIFY"; fi
+          } >> .env.next
+          chmod 600 .env.next && mv .env.next .env
+          soli-proxy restart -c "$PROXY_CONF" "$APP" >/dev/null 2>&1 || true
+          url="https://$DOMAIN/__soli/errors"
+          for attempt in 1 2 3 4 5 6; do
+            sleep 5
+            ready="$(curl -sk -m 8 --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/health/deep" || true)"
+            echo "$ready" | grep -q '"status":"ok"' && break
+          done
+          guest="$(curl -sk -m 8 --resolve "$DOMAIN:443:127.0.0.1" -o /dev/null -w '%{http_code}' "$url")"
+          admin="$(printf 'user = "%s:%s"\n' "$ADMIN_USER" "$pw" | curl -sk -m 8 --resolve "$DOMAIN:443:127.0.0.1" -K - -o /dev/null -w '%{http_code}' "$url")"
+          echo "ready: $ready | /__soli/errors: visitor $guest, admin $admin"
+          if echo "$ready" | grep -q '"status":"ok"' && [ "$guest" != "200" ] && [ "$admin" = "200" ]; then
+            echo "done: the names now set, without their values:"
+            grep -E '^(SOLI_ADMIN_|SOLI_NOTIFY_)' .env | cut -d= -f1 | tr '\n' ' '; echo
+            exit 0
+          fi
+          echo "not as expected: the old .env comes back" >&2
+          cp -p .env.before-admin .env
+          soli-proxy restart -c "$PROXY_CONF" "$APP" >/dev/null 2>&1 || true
+          exit 1
+          REMOTE
+          } | ssh "$USER@$HOST" SITES_DIR="$SITES_DIR" DOMAIN="$DOMAIN" PROXY_CONF="$PROXY_CONF" APP="$APP" ADMIN_USER="$ADMIN_USER" NOTIFY="$NOTIFY" bash -s
