@@ -1007,7 +1007,27 @@ export function toMusicXML(score) {
           if (k > 0 || v > 0) out.push(`<backup><duration>${dur(barLength)}</duration></backup>`);
           const voice = k * 4 + v + 1;
           const staffNo = p.staves.length > 1 ? k + 1 : 0;
-          for (const item of lane.filter((x) => x.bar === b)) out.push(...noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, firstLane: v === 0, part: p.id }));
+          // A clef or a key changed inside the bar (#360): its attributes before the note it falls at, in the first voice.
+          const staff = score.staves[p.staves[k]];
+          const own = (staff.key ?? score.key) - score.key;
+          const mids = v > 0 || drums ? [] : [
+            ...(staff.midClefs ?? []).filter((c) => c.bar === b).map((c) => {
+              const [sign, lineNo, octave] = CLEFS_OUT[c.clef] ?? CLEFS_OUT.treble;
+              return { pos: c.pos, xml: `<clef${staffNo ? ` number="${staffNo}"` : ""}><sign>${sign}</sign>${lineNo ? `<line>${lineNo}</line>` : ""}${octave ? `<clef-octave-change>${octave}</clef-octave-change>` : ""}</clef>` };
+            }),
+            ...(k === 0 ? (score.midKeys ?? []).filter((m) => m.bar === b) : []).map((m) => {
+              const fifths = Math.max(-7, Math.min(7, m.key + own));
+              return { pos: m.pos, xml: `<key><fifths>${interval ? writtenKey(fifths, interval) : fifths}</fifths>${m.mode && m.mode !== "major" ? `<mode>${m.mode}</mode>` : ""}</key>` };
+            }),
+          ].sort((x, y) => x.pos - y.pos);
+          const start = M.barStart(score, b);
+          for (const item of lane.filter((x) => x.bar === b)) {
+            const due = mids.filter((m) => !m.done && m.pos <= item.t - start + 1e-6);
+            // Keys first, then clefs, as MusicXML orders the attributes.
+            if (due.length) out.push(`<attributes>${[...due.filter((m) => m.xml.startsWith("<key")), ...due.filter((m) => !m.xml.startsWith("<key"))].map((m) => m.xml).join("")}</attributes>`);
+            for (const m of due) m.done = true;
+            out.push(...noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, firstLane: v === 0, part: p.id }));
+          }
         });
       });
       if (p === parts[0] && change?.jump) {

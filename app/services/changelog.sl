@@ -10,15 +10,26 @@
 class Changelog
   static def days
     [
-      {"date": "2026-10-24", "entries": [{
-        "area": "engine",
-        "title": "Parts gather their bars of rest",
-        "text": "A printed part now shows a long rest as one bar with its count over it, as players expect, "
-        + "instead of every empty bar one after another. In your own scores, \\compressMMRests gathers bars "
-        + "of rest written R1*8, and the editor keeps it through every edit; \\compressFullBarRests and "
-        + "skipBars work too.",
-        "link": "playground"
-      }]},
+      {"date": "2026-10-24", "entries": [
+        {
+          "area": "engine",
+          "title": "A clef or a key can change in the middle of a bar",
+          "text": "Write \\clef bass or \\key d \\major between two notes of a bar: the new clef is drawn small "
+          + "before the note, the new key cancels the old one's sharps and flats, as LilyPond draws them. The "
+          + "editor keeps these changes through every edit, the notes you type after a new key are spelled in "
+          + "it, and a MusicXML file with a clef change inside a measure now opens.",
+          "link": "playground"
+        },
+        {
+          "area": "engine",
+          "title": "Parts gather their bars of rest",
+          "text": "A printed part now shows a long rest as one bar with its count over it, as players expect, "
+          + "instead of every empty bar one after another. In your own scores, \\compressMMRests gathers bars "
+          + "of rest written R1*8, and the editor keeps it through every edit; \\compressFullBarRests and "
+          + "skipBars work too.",
+          "link": "playground"
+        }
+      ]},
       {"date": "2026-10-23", "entries": [
         {
           "area": "site",
