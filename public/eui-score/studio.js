@@ -117,6 +117,7 @@ export function startStudio(root, options = {}) {
     text: sourceBox.value,
     unsupported: [],
     lost: [], // what the text holds that the model does not keep: the first rewrite drops it
+    passed: [], // the settings the engraver read and passed over in the text: said when it is opened
     lostNotice: "", // said once it has been dropped
     items: [], // item number → { staff, index }
     view: null,
@@ -286,12 +287,15 @@ export function startStudio(root, options = {}) {
       st.score = result.score ?? null;
       st.unsupported = result.unsupported ?? [];
       st.lost = result.lost ?? [];
+      // What the engraver read and passed over (\\override, \\set …): said when the text is opened.
+      st.passed = M.passedOver(parsed.warnings);
       // The notes and rests the engraver numbers in this text.
       st.textItems = 1 + Math.max(-1, ...parsed.staves.flatMap((staff) => staff.events.filter((ev) => ev.k === "Note" || ev.k === "Rest").map((ev) => ev.i)));
     } catch (error) {
       st.score = null;
       st.unsupported = [];
       st.lost = [];
+      st.passed = [];
     }
     st.lostNotice = "";
   }
@@ -312,7 +316,7 @@ export function startStudio(root, options = {}) {
     if (!st.score) return;
     // The first rewrite of a text holding what the model does not keep: said, once.
     if (st.lost.length) {
-      const what = st.lost.length > 1 ? "those" : "that";
+      const what = st.lost.length > 1 || st.lost[0].startsWith("the settings") ? "those" : "that";
       st.lostNotice = `The score editor rewrote this piece's text without ${st.lost.join(", ")}: it does not keep ${what}.${undo ? " Undo puts the text back as it was." : ""}`;
       st.lost = [];
     }
@@ -422,7 +426,12 @@ export function startStudio(root, options = {}) {
     st.input = { ...st.input, on: false, t: 0, staff: 0, last: null };
     saveDraft();
     draw();
-    if (message) say(message);
+    if (message || st.passed.length) say(`${message ?? ""}${passedText()}`.trim());
+  }
+
+  /** The settings the engraver passed over in the text read, briefly: " Passed over: \\override …", or "". */
+  function passedText() {
+    return st.passed.length ? ` Passed over, not drawn: ${st.passed.join(", ")}.` : "";
   }
 
   // ---- Selection, in times -------------------------------------------------------
@@ -918,6 +927,15 @@ export function startStudio(root, options = {}) {
       case "art": return edit((score) => {
         const r = range() ?? (() => { throw new Error("Select a note first"); })();
         for (let i = r.a; i <= r.b; i++) if (!r.staff.events[i].rest || data.name === "fermata") M.toggleArticulation(score, r.s, i, data.name);
+      });
+      case "breath": return edit((score) => {
+        const r = range() ?? (() => { throw new Error("Select a note first"); })();
+        M.toggleBreath(score, r.s, r.b, data.kind);
+      });
+      case "reminder": return edit((score) => {
+        const r = range() ?? (() => { throw new Error("Select a note first"); })();
+        const head = r.a === r.b ? st.sel.head : -1;
+        for (let i = r.a; i <= r.b; i++) if (!r.staff.events[i].rest) M.toggleReminder(score, r.s, i, data.kind, head);
       });
       case "grace": return edit((score) => {
         const t = need();
@@ -3067,7 +3085,8 @@ export function startStudio(root, options = {}) {
     if (sharedText != null) saveDraft();
     return draw().then(() => sharedText);
   }).then((sharedText) => {
-    if (options.greeting) say(options.greeting);
+    if (st.passed.length) say(`${options.greeting ?? "Opened."}${passedText()}`);
+    else if (options.greeting) say(options.greeting);
     else if (shared && sharedText == null) say(`That link holds no score: here is ${draft ? "your last one" : "the starting one"}.`, true);
     else if (sharedText != null) say("A shared score. Your changes stay in this browser; Share makes a new link.");
     else if (!fromExample && start !== sourceBox.defaultValue) say("Your last score, kept in this browser. New starts afresh.");

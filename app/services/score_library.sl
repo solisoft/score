@@ -362,13 +362,15 @@ class ScoreLibrary
 
   # What the engraver refuses, each with a source that shows it: the limits
   # page engraves them live, so the messages it prints are the engraver's own.
+  # Only what is still refused: since Soli 2.28.5, layout settings (\stemUp,
+  # \override) and a forced accidental (cis!) are read.
   static def refusals
     [
       {"what": "256th notes", "src": "{ c''256 }"},
       {"what": "Tuplets three deep", "src": "{ \\tuplet 3/2 { \\tuplet 3/2 { \\tuplet 3/2 { c'32 d' e' } } } }"},
       {"what": "Five voices", "src": "{ << { c''4 } \\\\ { a'4 } \\\\ { f'4 } \\\\ { d'4 } \\\\ { b4 } >> }"},
-      {"what": "Layout tweaks", "src": "{ \\stemUp c''4 \\override NoteHead.color = #red d''4 }"},
-      {"what": "A forced accidental", "src": "{ cis''!4 }"},
+      {"what": "A change of metre inside a bar", "src": "{ c''4 \\time 3/4 d''4 e'' f'' }"},
+      {"what": "Grace notes after a note", "src": "{ c''4 \\afterGrace d''2 { e''16 } r4 }"},
       {"what": "An unknown command", "src": "{ c''4 \\shiver d''4 }"}
     ]
   end

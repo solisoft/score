@@ -13,6 +13,19 @@ class Changelog
       {"date": "2026-10-24", "entries": [
         {
           "area": "engine",
+          "title": "Real LilyPond files open",
+          "text": "Files written for LilyPond itself now open instead of being refused. Layout settings such as "
+          + "\\override, \\set, \\tweak or a \\layout block are skipped, and the editor names them when you open "
+          + "the file and before your first edit leaves them out. \\stemUp, \\stemDown and \\autoBeamOff are "
+          + "followed. Breath marks, caesuras, up-bows and down-bows, harmonics, \\espressivo, \\laissezVibrer, "
+          + "\\repeatTie, cresc. and dim. in words and text spans like rit. are drawn and kept as you edit; "
+          + "accidentals written cis! (always shown) and cis? (in brackets) too. New buttons add breath marks, "
+          + "bowings and these accidentals. A file with several \\score blocks shows each as a movement on its "
+          + "own line; edit those in the text, one at a time.",
+          "link": "playground"
+        },
+        {
+          "area": "engine",
           "title": "A clef or a key can change in the middle of a bar",
           "text": "Write \\clef bass or \\key d \\major between two notes of a bar: the new clef is drawn small "
           + "before the note, the new key cancels the old one's sharps and flats, as LilyPond draws them. The "

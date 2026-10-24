@@ -39,6 +39,14 @@ describe("PagesController") do
         assert_not_null(refusal["message"], refusal["what"])
       end
       assert_contains(res_body(response), "\\shiver is not a command this reads")
+      assert_contains(res_body(response), "\\time in the middle of a bar")
+    end
+
+    test("lists no longer what real files write, and says since when") do
+      body = res_body(get("/limits"))
+      assert_contains(body, "Since Soli 2.28.5, real LilyPond files open.")
+      assert_not(body.contains("Layout tweaks"))
+      assert_not(body.contains("A forced accidental"))
     end
   end
 
@@ -75,6 +83,9 @@ describe("PagesController") do
       assert_contains(body, "Record live from a MIDI keyboard")
       assert_contains(body, "The MIDI view: every track at a glance")
       assert_contains(body, "Notes dragged and resized on the MIDI view")
+      # Soli 2.28.5's engine.
+      assert_contains(body, "Saturday, October 24, 2026")
+      assert_contains(body, "Real LilyPond files open")
     end
 
     test("links a change to the page that shows it, and no further") do

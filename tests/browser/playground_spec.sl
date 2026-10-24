@@ -234,6 +234,26 @@ describe("The playground, in a browser") do
     assert_no_page_errors()
   end
 
+  test("a real file's breaths, bowings, cis! and mid-bar clef are edited on the score; its settings are named") do
+    type_source("{ \\override NoteHead.color = #red \\stemUp c''4\\upbow cis''!4 \\breathe \\clef bass e4 f4 | g1 }")
+    assert_not(evaluate("document.querySelector('#studio').classList.contains('studio-text-only')"))
+    # The rewrite left out the \override, and said so.
+    assert_contains(evaluate("document.querySelector('[data-notice]').textContent"), "\\override NoteHead.color")
+    assert_contains(playground_text(), "\\stemUp c''4\\upbow cis''!4 \\breathe \\clef bass e4 f4 | g1")
+    caret_on("e4")
+    evaluate("document.querySelector(\"[data-act='breath'][data-kind='caesura']\").click()")
+    sleep(0.4)
+    assert_contains(playground_text(), "\\clef bass e4 \\caesura f4")
+    evaluate("document.querySelector(\"[data-act='art'][data-name='downbow']\").click()")
+    sleep(0.4)
+    assert_contains(playground_text(), "e4\\downbow \\caesura")
+    caret_on("f4")
+    evaluate("document.querySelector(\"[data-act='reminder'][data-kind='cautionary']\").click()")
+    sleep(0.4)
+    assert_contains(playground_text(), "f?4 | g1")
+    assert_no_page_errors()
+  end
+
   test("the menus are moved through with the arrows, and the score keeps its keys meanwhile") do
     caret_on("e'2")
     source_before = evaluate("document.querySelector('[data-source]').value")

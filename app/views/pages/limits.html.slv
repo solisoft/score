@@ -42,6 +42,19 @@
       and <code>\fine</code>, are set against their bar line. The library, the shared pages and the PDFs show
       what the editor shows.
     </p>
+    <p>
+      Since Soli 2.28.5, real LilyPond files open. The layout settings nearly every file writes —
+      <code>\override</code>, <code>\set</code>, <code>\tweak</code>, a <code>\with { … }</code> or a
+      <code>\layout</code> block, header fields no title prints — are read and passed over, each named in a
+      warning, so the music after them is engraved; <code>\stemUp</code>/<code>\stemDown</code> and
+      <code>\autoBeamOff</code> are honoured. <code>\breathe</code>, <code>\caesura</code>, <code>\upbow</code>,
+      <code>\downbow</code>, <code>\flageolet</code>, <code>\espressivo</code>, <code>\laissezVibrer</code>,
+      <code>\repeatTie</code>, <code>\cresc</code> and <code>\dim</code> in words and text spans are drawn, and
+      so are forced and cautionary accidentals (<code>cis!</code>, <code>cis?</code>). Several
+      <code>\score</code> blocks, or a <code>\book</code> of <code>\bookpart</code>s, become movements, each
+      starting on a line of its own. A clef or a key may change in the middle of a bar, and
+      <code>\compressMMRests</code> gathers bars of rest into one.
+    </p>
     <ul>
       <li><strong>Layout</strong>: no cross-staff notation, and a page breaker simpler than LilyPond's.</li>
     </ul>

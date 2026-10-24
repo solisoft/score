@@ -29,7 +29,13 @@ const CLEFS = ["treble", "bass", "alto", "tenor", "treble_8", "bass_8", "soprano
 const SCRIPTS = {
   staccato: "-.", accent: "->", tenuto: "--", marcato: "-^", staccatissimo: "-!", portato: "-_", fermata: "\\fermata",
   trill: "\\trill", prall: "\\prall", mordent: "\\mordent", turn: "\\turn",
+  // Bowings, a harmonic's circle and the espressivo (Soli 2.28.5).
+  upbow: "\\upbow", downbow: "\\downbow", flageolet: "\\flageolet", espressivo: "\\espressivo",
 };
+/** A breath mark after a note or rest: `\\breathe` (a comma) or `\\caesura` (//). */
+export const BREATHS = ["breathe", "caesura"];
+/** A crescendo or diminuendo written as words with a dashed line: `\\cresc`, `\\dim`, `\\decresc`. */
+const HAIRPIN_WORDS = ["cresc", "dim", "decresc"];
 /** The kinds of grace notes: slashed and slurred, slurred, plain, slashed. */
 export const GRACES = ["acciaccatura", "appoggiatura", "grace", "slashedGrace"];
 /** A tremolo's strokes: the note repeated in eighths, sixteenths or thirty-seconds. */
@@ -645,14 +651,26 @@ function pieces(score, ev, at, ticks, role) {
     p.tie = !p.rest && (last ? (role === "head" ? true : Boolean(ev.tie)) : true);
     if (!(k === 0 && keepsStart)) {
       delete p.beamStart;
-      // An ottava starts, a fingering stands, a phrase begins on the first piece only.
+      // An ottava starts, a fingering stands, a phrase begins on the first piece only;
+      // so do a switch of stems or beaming, a text span, a reminder accidental, a tie repeated.
       delete p.ottava;
       delete p.fingers;
       delete p.phraseStart;
+      delete p.stemDir;
+      delete p.noAutoBeam;
+      delete p.spanStart;
+      delete p.forced;
+      delete p.cautionary;
+      delete p.repeatTie;
+      delete p.hairpinWords;
     }
     if (!(last && keepsEnd)) {
       delete p.beamEnd;
       delete p.phraseEnd;
+      // A breath is taken, a tie let ring, a text span ended after the last piece.
+      delete p.breath;
+      delete p.lv;
+      delete p.spanEnd;
     }
     if (!(k === 0 && keepsStart)) Object.assign(p, { slurStart: false, dynamic: null, hairpin: null, arts: [], chord: "", texts: [], lyric: null, verses: [], graces: [], grace: null, arpeggio: false, pedalOn: false, pedalOff: false });
     if (!(last && keepsEnd)) Object.assign(p, { slurEnd: false, hairpinEnd: false, gliss: false });
@@ -696,15 +714,17 @@ export function write(score, s, t, ticks, content, { tidyUp = true } = {}) {
   }
   const note = makeEvent({ ...content, tuplet: null });
   const fill = [...rests(score, from, t - from), ...pieces(score, note, t, ticks, "whole"), ...rests(score, t + ticks, to - (t + ticks))];
-  // The ottava lines over what is written over: as they were before it and after it.
+  // The ottava lines, the stems and the beaming over what is written over: as they were before it and after it.
   const replaced = staff.events.slice(a, b);
-  const ottavaThen = ottavaAt(staff, b - 1);
-  const lastMarker = replaced.findLast((ev) => ev.ottava != null)?.ottava;
+  const then = Object.fromEntries(Object.keys(MARKERS).map((field) => [field, markerAt(staff, b - 1, field)]));
+  const lastMarkers = Object.fromEntries(Object.keys(MARKERS).map((field) => [field, replaced.findLast((ev) => ev[field] != null)?.[field]]));
   staff.events.splice(a, b - a, ...fill);
-  if (fill[0].ottava == null && lastMarker != null) fill[0].ottava = lastMarker;
   const next = staff.events[a + fill.length];
-  if (next && next.ottava == null && ottavaAt(staff, a + fill.length - 1) !== ottavaThen) next.ottava = ottavaThen;
-  tidyOttavas(staff);
+  for (const field of Object.keys(MARKERS)) {
+    if (fill[0][field] == null && lastMarkers[field] != null) fill[0][field] = lastMarkers[field];
+    if (next && next[field] == null && markerAt(staff, a + fill.length - 1, field) !== then[field]) next[field] = then[field];
+    tidyMarkers(staff, field);
+  }
   // A note cut before `from` was tied to its tail, which is gone now.
   const before = staff.events[a - 1];
   const after = staff.events[a];
@@ -717,7 +737,8 @@ const sameNote = (a, b) => Boolean(a && b && !a.rest && !b.rest && a.pitches.len
 
 /** A rest with nothing on it (a spacer may be one): what tidy merges, and a bar of rest gathers. */
 export function isBareRest(ev) {
-  return ev.rest && !ev.tuplet && !ev.dynamic && !ev.hairpin && !ev.hairpinEnd && !ev.texts.length && !ev.chord && !ev.arts.length && !ev.pedalOn && !ev.pedalOff && !ev.beamStart && !ev.beamEnd && ev.ottava == null;
+  const marked = ev.ottava != null || ev.stemDir != null || ev.noAutoBeam != null || ev.breath || ev.spanStart != null || ev.spanEnd;
+  return ev.rest && !ev.tuplet && !ev.dynamic && !ev.hairpin && !ev.hairpinEnd && !ev.texts.length && !ev.chord && !ev.arts.length && !ev.pedalOn && !ev.pedalOff && !ev.beamStart && !ev.beamEnd && !marked;
 }
 
 /** Rests side by side in a bar, with nothing on them, written as few as can be. */
@@ -853,10 +874,14 @@ export function remove(score, s, i, head = -1) {
     return;
   }
   Object.assign(ev, { rest: true, pitches: [], tie: false, slurStart: false, slurEnd: false, arts: [], lyric: null, graces: [], grace: null, arpeggio: false, gliss: false, tremolo: 0 });
-  // A rest takes no fingering, and no phrasing slur starts or ends on it.
+  // A rest takes no fingering, and no phrasing slur starts or ends on it; no accidental, no tie let ring.
   delete ev.fingers;
   delete ev.phraseStart;
   delete ev.phraseEnd;
+  delete ev.forced;
+  delete ev.cautionary;
+  delete ev.lv;
+  delete ev.repeatTie;
   const prev = score.staves[s].events[i - 1];
   if (prev && prev.tie) prev.tie = false;
   tidy(score, score.staves[s]);
@@ -933,20 +958,35 @@ export function togglePhrase(score, s, a, b) {
 
 export const OTTAVAS = [-2, -1, 0, 1, 2];
 
-/** The ottava in force at event `i` of a lane: 0 when none. */
-export function ottavaAt(staff, i) {
-  for (let k = Math.min(i, staff.events.length - 1); k >= 0; k--) if (staff.events[k].ottava != null) return staff.events[k].ottava;
-  return 0;
+// What holds from the event it is written on until it changes, and its value
+// before any: an ottava (`ev.ottava`), the stems (`ev.stemDir`: 1 \\stemUp,
+// -1 \\stemDown, 0 \\stemNeutral), the beaming (`ev.noAutoBeam`: true
+// \\autoBeamOff, false \\autoBeamOn). An event without one carries no field.
+const MARKERS = { ottava: 0, stemDir: 0, noAutoBeam: false };
+
+/** Marker `field` in force at event `i` of a lane. */
+function markerAt(staff, i, field) {
+  for (let k = Math.min(i, staff.events.length - 1); k >= 0; k--) if (staff.events[k][field] != null) return staff.events[k][field];
+  return MARKERS[field];
 }
 
-/** A lane's ottava changes, each kept only where the ottava changes. */
-function tidyOttavas(staff) {
-  let now = 0;
+/** A lane's marker `field`, kept only where it changes. */
+function tidyMarkers(staff, field) {
+  let now = MARKERS[field];
   for (const ev of staff.events) {
-    if (ev.ottava == null) continue;
-    if (ev.ottava === now) delete ev.ottava;
-    else now = ev.ottava;
+    if (ev[field] == null) continue;
+    if (ev[field] === now) delete ev[field];
+    else now = ev[field];
   }
+}
+
+/** The ottava in force at event `i` of a lane: 0 when none. */
+export function ottavaAt(staff, i) {
+  return markerAt(staff, i, "ottava");
+}
+
+function tidyOttavas(staff) {
+  tidyMarkers(staff, "ottava");
 }
 
 /** Where an ottava may go: on the first voice of a staff of notes. */
@@ -1013,6 +1053,14 @@ export function removeFingerings(score, s, i) {
 
 /** A chord's fingerings follow its notes, moved from `was` to `now` head by head. */
 function followHeads(ev, was, now) {
+  // A reminder accidental stays on its note (cis! moved to d is d!).
+  for (const field of ["forced", "cautionary"]) {
+    if (!ev[field]) continue;
+    ev[field] = ev[field].map((d) => {
+      const k = was.findIndex((p) => p.d === d);
+      return k >= 0 && now[k] ? now[k].d : d;
+    });
+  }
   if (!ev.fingers) return;
   ev.fingers = ev.fingers.map((f) => {
     const k = f.head == null ? -1 : was.findIndex((p) => p.d === f.head);
@@ -1030,6 +1078,8 @@ export function setHairpin(score, s, a, b, kind) {
   const events = score.staves[s].events;
   const [from, to] = [Math.min(a, b), Math.max(a, b)];
   const ev = events[from];
+  // A hairpin set by hand is drawn as a wedge.
+  delete ev.hairpinWords;
   if (ev.hairpin === kind && from === to) {
     ev.hairpin = null;
     return;
@@ -1042,6 +1092,30 @@ export function toggleArticulation(score, s, i, name) {
   const ev = noteOf(score, s, i);
   if (ev.rest && name !== "fermata") throw new Error("select a note");
   ev.arts = ev.arts.includes(name) ? ev.arts.filter((a) => a !== name) : [...ev.arts, name];
+}
+
+/** A breath mark (`kind`: "breathe" or "caesura") after event `i`; the same again takes it away. */
+export function toggleBreath(score, s, i, kind = "breathe") {
+  if (!BREATHS.includes(kind)) throw new Error("a breath mark is breathe or caesura");
+  const ev = noteOf(score, s, i);
+  if (ev.breath === kind) delete ev.breath;
+  else ev.breath = kind;
+}
+
+/**
+ * Note `i`'s accidental printed whatever the key and the bar say — `kind`
+ * "forced" (cis!) or "cautionary" (cis?, in parentheses) — on head `head`
+ * of a chord, or every head; again takes it away.
+ */
+export function toggleReminder(score, s, i, kind, head = -1) {
+  if (!["forced", "cautionary"].includes(kind)) throw new Error("an accidental is forced or cautionary");
+  const ev = pitchedNote(score, s, i);
+  const heads = (head >= 0 && ev.pitches[head] ? [ev.pitches[head]] : ev.pitches).map((p) => p.d);
+  const other = kind === "forced" ? "cautionary" : "forced";
+  const on = heads.every((d) => (ev[kind] ?? []).includes(d));
+  ev[kind] = on ? (ev[kind] ?? []).filter((d) => !heads.includes(d)) : [...new Set([...(ev[kind] ?? []), ...heads])];
+  ev[other] = (ev[other] ?? []).filter((d) => !heads.includes(d));
+  for (const field of [kind, other]) if (!ev[field].length) delete ev[field];
 }
 
 // ---- Grace notes, arpeggios, glissandi, tremolos ---------------------------------
@@ -1981,10 +2055,17 @@ function wordsText(t) {
 }
 
 function eventText(ev, beam = "") {
-  const head = (p) => p.drum ?? spellPitch(p.d, p.alter);
-  const notes = (pitches) => (pitches.length === 1 ? head(pitches[0]) : `<${pitches.map(head).join(" ")}>`);
+  // cis! and cis?: the accidental printed whatever the key says, or in parentheses.
+  const reminder = (p) => (p.drum ? "" : (ev.forced ?? []).includes(p.d) ? "!" : (ev.cautionary ?? []).includes(p.d) ? "?" : "");
+  const bare = (p) => p.drum ?? spellPitch(p.d, p.alter);
+  const head = (p) => bare(p) + (ev.rest ? "" : reminder(p));
+  const notes = (pitches, at = head) => (pitches.length === 1 ? at(pitches[0]) : `<${pitches.map(at).join(" ")}>`);
+  // The stems and the beaming switched, a text span's words, before the note.
+  let out = ev.stemDir != null ? `${["\\stemDown", "\\stemNeutral", "\\stemUp"][Math.sign(ev.stemDir) + 1]} ` : "";
+  if (ev.noAutoBeam != null) out += ev.noAutoBeam ? "\\autoBeamOff " : "\\autoBeamOn ";
+  if (ev.spanStart) out += `\\override TextSpanner.bound-details.left.text = ${quote(ev.spanStart)} `;
   // An ottava line starts (or ends) before the note, its grace notes too.
-  let out = ev.ottava != null ? `\\ottava #${ev.ottava} ` : "";
+  if (ev.ottava != null) out += `\\ottava #${ev.ottava} `;
   // Fingerings and string numbers: a chord's in it, by its note; the others after the value.
   const fingers = ev.rest || ev.pitches.some((p) => p.drum) ? [] : ev.fingers ?? [];
   const fingerText = (f) => (f.circled ? `\\${f.text}` : `${f.dir < 0 ? "^" : f.dir > 0 ? "_" : "-"}${f.text}`);
@@ -1993,7 +2074,7 @@ function eventText(ev, beam = "") {
   const headMarks = (p) => onHead(p).sort((x, y) => Number(y.circled) - Number(x.circled)).map(fingerText).join("");
   const loose = fingers.filter((f) => !ev.pitches.some((p) => onHead(p).includes(f)));
   if (ev.graces.length && !ev.rest) {
-    const graces = ev.graces.map((g) => notes(g.pitches) + g.base + ".".repeat(g.dots));
+    const graces = ev.graces.map((g) => notes(g.pitches, bare) + g.base + ".".repeat(g.dots));
     out += `\\${ev.grace ?? "grace"} ${graces.length === 1 ? graces[0] : `{ ${graces.join(" ")} }`} `;
   }
   out += ev.rest ? (ev.spacer ? "s" : "r") : ev.pitches.length > 1 ? `<${ev.pitches.map((p) => head(p) + headMarks(p)).join(" ")}>` : notes(ev.pitches);
@@ -2007,7 +2088,7 @@ function eventText(ev, beam = "") {
   if (ev.phraseStart && !ev.rest) out += "\\(";
   if (ev.dynamic) out += `\\${ev.dynamic}`;
   if (ev.hairpinEnd) out += "\\!";
-  if (ev.hairpin) out += ev.hairpin === "<" ? "\\<" : "\\>";
+  if (ev.hairpin) out += HAIRPIN_WORDS.includes(ev.hairpinWords) ? `\\${ev.hairpinWords}` : ev.hairpin === "<" ? "\\<" : "\\>";
   for (const a of ev.arts) out += SCRIPTS[a] ?? "";
   out += loose.map(fingerText).join("");
   if (ev.chord) out += `^${quote(ev.chord)}`;
@@ -2017,6 +2098,12 @@ function eventText(ev, beam = "") {
   // Let go before pressed again, when a note has both.
   if (ev.pedalOff) out += "\\sustainOff";
   if (ev.pedalOn) out += "\\sustainOn";
+  // What LilyPond reads as commands after the note: a tie let ring or repeated, a text span, a breath.
+  if (ev.lv && !ev.rest) out += "\\laissezVibrer";
+  if (ev.repeatTie && !ev.rest) out += "\\repeatTie";
+  if (ev.spanEnd) out += "\\stopTextSpan";
+  if (ev.spanStart != null) out += "\\startTextSpan";
+  if (BREATHS.includes(ev.breath)) out += ` \\${ev.breath}`;
   return out;
 }
 
@@ -3233,6 +3320,27 @@ function playedOut(score, s, bars) {
 
 // ---- Reading eui-score's parse back ---------------------------------------------------------
 
+/** What the editor says of a piece of several movements (#359): engraved, edited in the text. */
+const MOVEMENTS = "several movements (one \\score after another): edit them one at a time in the text";
+/** The parse's breath marks, by their glyph, as the model names them. */
+const BREATHS_READ = { breathMarkComma: "breathe", caesura: "caesura" };
+
+/**
+ * What the engraver's warnings (Parsed.warnings) name as passed over — a
+ * layout setting (`\\override Stem.direction`), a `\\layout` block, a header
+ * field no title prints — each once: what a rewrite leaves out. A movement
+ * the engraver could not set is not a setting (see MOVEMENTS).
+ */
+export function passedOver(warnings) {
+  const names = new Set();
+  for (const w of warnings ?? []) {
+    if (/^movement \d|^the lyrics of movement/.test(w)) continue;
+    names.add(w.replace(/:.*$/, "").replace(/ (is|are) not (drawn|read|engraved|set|words this prints).*$/, "").replace(/ outside the music$/, "").trim());
+  }
+  const list = [...names].filter(Boolean);
+  return list.length > 6 ? [...list.slice(0, 5), `${list.length - 5} more`] : list;
+}
+
 const CLEF_NAMES = { "G,-2,0": "treble", "G,-2,-1": "treble_8", "F,2,0": "bass", "F,2,-1": "bass_8", "C,0,0": "alto", "C,2,0": "tenor", "C,-4,0": "soprano" };
 
 /**
@@ -3244,6 +3352,10 @@ export function fromParsed(parsed) {
   const unsupported = new Set();
   // What the model reads and does not keep: the first edit writes the text without it.
   const lost = new Set();
+  // The layout settings the engraver passes over (\\override, \\set, \\with …): not written again.
+  const settings = passedOver(parsed.warnings);
+  if (settings.length) lost.add(`the settings the engraver passes over (${settings.join(", ")})`);
+  if ((parsed.warnings ?? []).some((w) => /^movement \d/.test(w))) unsupported.add(MOVEMENTS);
   const score = { header: { ...parsed.header }, key: 0, time: [4, 4], tempo: null, group: "none", groups: [], staves: [], repeats: [], changes: [] };
   score.paper = paperFrom(parsed.paper);
   score.breaks = {};
@@ -3279,6 +3391,8 @@ export function fromParsed(parsed) {
     let midKeysSeen = 0;
     // An \ottava waiting for its lane's next note or rest.
     const ottavas = new Map();
+    // Each lane's stems and beaming, as its notes last said.
+    const switches = new Map();
     for (const ev of staff.events) {
       ev.unsupported.forEach((u) => unsupported.add(u));
       // A tuplet in a tuplet is engraved and played; the score tools write one level.
@@ -3297,6 +3411,10 @@ export function fromParsed(parsed) {
       }
       if (k === "Ottava") {
         ottavas.set(lane, ev.ottava);
+        continue;
+      }
+      if (k === "Movement") {
+        unsupported.add(MOVEMENTS);
         continue;
       }
       if (k === "Clef" && drums) continue;
@@ -3427,6 +3545,10 @@ export function fromParsed(parsed) {
         if (k === "Rest" && ev.full) {
           const whole = rests(score, lengthOf(lane), ev.ticks * Math.max(1, ev.count));
           if (ottava != null && whole.length) whole[0].ottava = ottava;
+          // A breath or a text span on a bar's rest: on its first rest, or its last.
+          if (whole.length && ev.span_start != null) whole[0].spanStart = ev.span_start;
+          if (whole.length && ev.span_stop) whole[whole.length - 1].spanEnd = true;
+          if (whole.length && BREATHS_READ[ev.breath]) whole[whole.length - 1].breath = BREATHS_READ[ev.breath];
           lane.events.push(...whole);
           continue;
         }
@@ -3464,7 +3586,23 @@ export function fromParsed(parsed) {
           ...(!drums && ev.fingers?.length ? { fingers: ev.fingers.map(([text, dir, head, circled]) => ({ text, dir, head: head ?? null, circled })) } : {}),
           ...(ev.phrase_on ? { phraseStart: true } : {}),
           ...(ev.phrase_off ? { phraseEnd: true } : {}),
+          // Real files (#359): cis! and cis?, a crescendo in words, a tie let ring or repeated, a text span, a breath.
+          ...(!drums && k === "Note" && ev.forced?.length ? { forced: [...ev.forced] } : {}),
+          ...(!drums && k === "Note" && ev.cautionary?.length ? { cautionary: [...ev.cautionary] } : {}),
+          ...(ev.hairpin && HAIRPIN_WORDS.includes(String(ev.hairpin_text ?? "").replace(/\.$/, "")) ? { hairpinWords: ev.hairpin_text.replace(/\.$/, "") } : {}),
+          ...(k === "Note" && ev.lv ? { lv: true } : {}),
+          ...(k === "Note" && ev.repeat_tie ? { repeatTie: true } : {}),
+          ...(ev.span_start != null ? { spanStart: ev.span_start } : {}),
+          ...(ev.span_stop ? { spanEnd: true } : {}),
+          ...(BREATHS_READ[ev.breath] ? { breath: BREATHS_READ[ev.breath] } : {}),
         });
+        // \\stemUp and \\autoBeamOff hold until changed: written where the lane's notes change them.
+        if (k === "Note") {
+          const was = switches.get(lane) ?? { stem: 0, beam: false };
+          if ((ev.stem ?? 0) !== was.stem) read.stemDir = ev.stem ?? 0;
+          if (Boolean(ev.no_autobeam) !== was.beam) read.noAutoBeam = Boolean(ev.no_autobeam);
+          switches.set(lane, { stem: ev.stem ?? 0, beam: Boolean(ev.no_autobeam) });
+        }
         // A note past its bar line, as the engraver cuts it: tied pieces.
         const at = lengthOf(lane);
         if (!tuplet && at + ev.ticks > nextBarLine(score, at) + 1e-6) lane.events.push(...pieces(score, read, at, ev.ticks, "whole"));

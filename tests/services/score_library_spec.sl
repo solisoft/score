@@ -98,5 +98,14 @@ describe("ScoreLibrary") do
         assert_contains(message, "(at character ")
       end
     end
+
+    test("no longer list what the engraver reads since Soli 2.28.5") do
+      # Layout settings are passed over, a forced accidental is drawn.
+      listed = ScoreLibrary.refusals.map(&:src)
+      ["{ \\stemUp c''4 \\override NoteHead.color = #red d''4 }", "{ cis''!4 }"].each do |src|
+        assert_null(eui_score_layout(src, 100, {})["error"], src)
+        assert_not(listed.includes?(src), src)
+      end
+    end
   end
 end

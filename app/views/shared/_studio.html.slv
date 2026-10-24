@@ -252,6 +252,10 @@
           <button type="button" class="tool" data-act="alter" data-alter="1" title="Sharp (+)">♯</button>
           <button type="button" class="tool" data-act="alter" data-alter="2" title="Double sharp">𝄪</button>
         </div>
+        <div class="tool-row" aria-label="Reminder accidentals">
+          <button type="button" class="tool tool-wide" data-act="reminder" data-kind="forced" title="Print the accidental whatever the key and the bar say (cis!); again to take it away">Show ♯♭♮</button>
+          <button type="button" class="tool tool-wide" data-act="reminder" data-kind="cautionary" title="A cautionary accidental, in parentheses (cis?); again to take it away">(♯♭♮)</button>
+        </div>
         <div class="tool-row tool-transpose">
           <select class="tool-select" data-transpose-interval aria-label="Interval to transpose by"></select>
           <select class="tool-select" data-transpose-way aria-label="Up or down">
@@ -302,6 +306,12 @@
           <button type="button" class="tool" data-act="art" data-name="marcato" title="Marcato">^</button>
           <button type="button" class="tool" data-act="art" data-name="staccatissimo" title="Staccatissimo">▾</button>
           <button type="button" class="tool" data-act="art" data-name="fermata" title="Fermata">𝄐</button>
+        </div>
+        <div class="tool-row" aria-label="Bowings and breaths">
+          <button type="button" class="tool" data-act="art" data-name="downbow" title="Down-bow (\downbow)">⊓</button>
+          <button type="button" class="tool" data-act="art" data-name="upbow" title="Up-bow (\upbow)">V</button>
+          <button type="button" class="tool" data-act="breath" data-kind="breathe" title="Breath mark after the note (\breathe); again to take it away">,</button>
+          <button type="button" class="tool" data-act="breath" data-kind="caesura" title="Caesura after the note (\caesura); again to take it away">//</button>
         </div>
       </details>
 
