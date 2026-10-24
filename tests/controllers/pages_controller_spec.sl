@@ -68,13 +68,13 @@ describe("PagesController") do
     test("lists every day newest first, each change tagged with where it lives") do
       response = get("/changelog")
       assert_eq(res_status(response), 200)
-      days = assigns()["days"]
-      assert_eq(days.length, Changelog.days.length)
-      dates = days.map do |day|
-        day["date"]
-      end
-      assert_eq(dates, dates.sort().reverse())
       body = res_body(response)
+      # Read from the page: the days outgrow what assigns() carries back.
+      dates = body.split("<section class=\"changelog-day\" id=\"").slice(1, 1000).map do |part|
+        part.substring(0, 10)
+      end
+      assert_eq(dates.length, Changelog.days.length)
+      assert_eq(dates, dates.sort().reverse())
       assert_contains(body, "Monday, October 19, 2026")
       assert_contains(body, "change-tag-engine\">Engraver")
       assert_contains(body, "change-tag-site\">Site &amp; editor")
@@ -89,31 +89,26 @@ describe("PagesController") do
     end
 
     test("links a change to the page that shows it, and no further") do
-      get("/changelog")
-      entries = assigns()["days"].map do |day|
+      body = res_body(get("/changelog"))
+      entries = Changelog.shown(AppSetup.ready?).map do |day|
         day["entries"]
       end.flatten
       linked = entries.filter do |entry|
         !entry["link"].nil?
       end
       assert(linked.length > 0)
-      linked.each do |entry|
-        assert_not_null(entry["href"], entry["title"])
-      end
-      entries.filter do |entry|
-        entry["link"].nil?
-      end.each do |entry|
-        assert_null(entry["href"])
-      end
-      assert_contains(res_body(get("/changelog")), "href=\"/playground\">Try it")
+      # One "Try it" per linked change, none for the others.
+      assert_eq(body.split("class=\"changelog-try\"").length - 1, linked.length)
+      assert_contains(body, "href=\"/playground\">Try it")
     end
 
     test("draws a sample score under an engraver change that names one, in the browser's engraver") do
       response = get("/changelog")
       body = res_body(response)
-      entries = assigns()["days"].map do |day|
+      with_sample = fn(entry) { entry.merge({"sample": Changelog.sample(entry["sample"])}) }
+      entries = Changelog.shown(AppSetup.ready?).map do |day|
         day["entries"]
-      end.flatten
+      end.flatten.map(with_sample)
       four_voices = entries.filter do |entry|
         entry["title"].starts_with?("Four voices on a staff")
       end[0]
