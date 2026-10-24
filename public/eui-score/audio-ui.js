@@ -603,10 +603,13 @@ export function audioTracks({ root, st, studio, options = {} }) {
     const n = Pi.noteOf(freq, a4());
     name.textContent = n.name;
     octave.textContent = String(n.octave);
-    cents.textContent = n.cents === 0 ? "in tune" : `${n.cents > 0 ? "+" : "−"}${Math.abs(n.cents)} cents ${n.cents > 0 ? "sharp" : "flat"}`;
+    // Within 5 cents is in tune (the needle turns green there too); the cents still show.
+    const off = `${n.cents > 0 ? "+" : "−"}${Math.abs(n.cents)} cents`;
+    const inTune = Math.abs(n.cents) <= 5;
+    cents.textContent = n.cents === 0 ? "in tune" : inTune ? `in tune, ${off}` : `${off} ${n.cents > 0 ? "sharp" : "flat"}`;
     tunerBox.querySelector("[data-tuner-freq]").textContent = `${freq.toFixed(1)} Hz`;
     needle.setAttribute("transform", `rotate(${(n.cents * 0.9).toFixed(1)} 100 100)`);
-    tunerBox.classList.toggle("tuner-in", Math.abs(n.cents) <= 5);
+    tunerBox.classList.toggle("tuner-in", inTune);
     tunerBox.dataset.heard = `${n.name}${n.octave} ${n.cents}`;
   }
 
