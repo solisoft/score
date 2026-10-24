@@ -12,6 +12,18 @@ class Changelog
     [
       {"date": "2026-10-24", "entries": [
         {
+          "area": "editor",
+          "title": "A mixer, effects and each note's velocity",
+          "text": "Play › Mixer opens a mixer: each staff has its volume, pan, mute and solo, and the master a "
+          + "level meter. Each track and the master have a reverb (room, chamber, hall or cathedral), a "
+          + "three-band EQ and a compressor, each with its own switch. Under the MIDI view, a strip shows how "
+          + "hard each note is played: draw across it with the mouse, or choose notes and drag them, set a "
+          + "fixed velocity, soften them or accent the beats. A recording keeps how hard each key was struck. "
+          + "The mixer and the velocities are saved with the score, heard on Play, written into Save as MIDI "
+          + "and mixed into Save the sound; Undo takes them back like any edit.",
+          "link": "playground"
+        },
+        {
           "area": "site",
           "title": "Drum grid, arpeggiator and chord track",
           "text": "Three new tools in the Edit menu write notes for you. Drum grid shows a drum staff's bar as "

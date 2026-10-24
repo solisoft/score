@@ -128,6 +128,7 @@
             <button type="button" role="menuitem" data-act="set-loop">Loop the selected bars <kbd>played and recorded</kbd></button>
             <button type="button" role="menuitem" data-act="clear-loop">No loop</button>
             <hr>
+            <button type="button" role="menuitem" data-act="mixer">Mixer… <kbd>volume, pan, effects</kbd></button>
             <button type="button" role="menuitem" data-act="midi-learn">MIDI learn and clock…</button>
           </div>
         </details>
@@ -214,6 +215,7 @@
         </label>
         <button type="button" class="tool tool-wide" data-act="midi-learn">MIDI learn…</button>
         <div class="tool-staves" data-play="staves" aria-label="Mute or solo a staff"></div>
+        <button type="button" class="tool tool-mixer" data-act="mixer" title="Each staff's volume, pan and effects, and the master">Mixer…</button>
       </details>
 
       <details class="tool-section" data-section="duration" open>

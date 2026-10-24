@@ -20,6 +20,9 @@ const P = await import(`./player.js${V}`);
 const R = await import(`./piano-roll.js${V}`);
 const K = await import(`./shortcuts.js${V}`);
 const S = await import(`./midi-sync.js${V}`);
+const X = await import(`./mixer.js${V}`);
+const Vel = await import(`./velocity.js${V}`);
+const { mixerPanel } = await import(`./mixer-ui.js${V}`);
 const { editor_view_lit, score_json, source_spans } = engine;
 
 /** The MusicXML reader and writer, loaded the first time a file needs it. */
@@ -288,6 +291,8 @@ export function startStudio(root, options = {}) {
       const parsed = JSON.parse(score_json(text));
       const result = M.fromParsed(parsed);
       st.score = result.score ?? null;
+      // The mixer, the velocities…: on the text's last line, a comment the engraver passes over.
+      if (st.score) st.score.meta = M.readMeta(text);
       st.unsupported = result.unsupported ?? [];
       st.lost = result.lost ?? [];
       // What the engraver read and passed over (\\override, \\set …): said when the text is opened.
@@ -301,6 +306,7 @@ export function startStudio(root, options = {}) {
       st.passed = [];
     }
     st.lostNotice = "";
+    mixFromMeta();
   }
 
   /**
@@ -350,6 +356,8 @@ export function startStudio(root, options = {}) {
       sourceBox.value = st.text;
       readText(st.text);
     }
+    mixFromMeta();
+    applyMix();
   }
 
   /** Runs `fn` on the model as one undoable edit; a refusal leaves everything as it was. */
@@ -359,6 +367,8 @@ export function startStudio(root, options = {}) {
     const before = snapshot();
     try {
       fn(st.score);
+      // A note whose pitch changed in place keeps its velocity; a note gone, its velocity with it.
+      if (st.score.meta?.velocity) Vel.reconcile(JSON.parse(before).score, st.score);
     } catch (error) {
       restore(before);
       return say(error.message ?? String(error), true);
@@ -780,13 +790,11 @@ export function startStudio(root, options = {}) {
       case "play": return togglePlay();
       case "stop": return stopPlay();
       case "mute": case "solo": {
+        // The mixer's own: kept in the score.
         const lane = Number(data.lane);
-        const set = st.mix[name];
-        if (set.has(lane)) set.delete(lane);
-        else set.add(lane);
-        applyMix();
-        return renderMix();
+        return mixCommit(lane, { [name]: !X.trackOf(X.mixOf(st.score), lane)[name] });
       }
+      case "mixer": return st.mixer.toggle();
       case "keys": {
         const sheetOfKeys = root.querySelector("[data-keys]");
         if (sheetOfKeys.open) sheetOfKeys.close();
@@ -827,7 +835,7 @@ export function startStudio(root, options = {}) {
         if (edit((score) => M.transpose(score, { ...by, s: r.s, a: r.a, b: r.b }))) say(`${r.b - r.a + 1} selected, ${words}.`);
         return;
       }
-      case "save-midi": return toMidi(...heard(st.score)).then((m) => download(m, `${fileName()}.mid`, "audio/midi")).catch((e) => refuse(e));
+      case "save-midi": return heardMidi(st.score).then((m) => download(m, `${fileName()}.mid`, "audio/midi")).catch((e) => refuse(e));
       case "save-wav": return saveWav();
       case "save-svg": case "save-png": return saveImage(name === "save-png");
       case "mode-select": return setInput(false);
@@ -1522,7 +1530,7 @@ export function startStudio(root, options = {}) {
       cursor = cursor == null ? t : Math.min(cursor, t);
     }
     const left = rollScroll.scrollLeft;
-    rollScroll.innerHTML = R.drawRoll(st.score, { layout: st.rollLayout, zoom: st.zoom, sel: st.sel, lit, cursor, loop: st.loopBars, only: st.rollLayout === "keys" ? st.rollOnly : null });
+    rollScroll.innerHTML = R.drawRoll(st.score, { layout: st.rollLayout, zoom: st.zoom, sel: st.sel, lit, cursor, loop: st.loopBars, only: st.rollLayout === "keys" ? st.rollOnly : null }) + velocityStrip();
     const only = rollHost.querySelector("[data-roll-only]");
     only.hidden = !(st.rollLayout === "keys" && st.rollOnly != null);
     if (!only.hidden) only.textContent = `${R.laneNames(st.score)[st.rollOnly] ?? ""} only`;
@@ -1563,7 +1571,7 @@ export function startStudio(root, options = {}) {
   }
 
   rollHost.addEventListener("pointerdown", (event) => {
-    if (event.target.closest(".studio-roll-bar") || !st.score) return;
+    if (event.target.closest(".studio-roll-bar, .studio-velocity-bar, .vel-strip") || !st.score) return;
     rollHost.focus({ preventScroll: true });
     const p = rollPoint(event);
     if (!p) return;
@@ -1658,11 +1666,14 @@ export function startStudio(root, options = {}) {
     if (JSON.stringify(change) === JSON.stringify(d.change)) return;
     const from = JSON.parse(d.base).score;
     let i;
+    const was = M.starts(from.staves[d.lane])[d.index];
     try {
       i = M.moveNote(from, d.lane, d.index, change);
     } catch (error) {
       return;
     }
+    // Its velocity goes with it.
+    if (from.meta?.velocity) Vel.remap(from, d.lane, was, M.starts(from.staves[d.lane])[i], (k) => (change.semitones && k === d.key ? k + change.semitones : k));
     d.change = change;
     st.score = from;
     const t = M.starts(from.staves[d.lane])[i];
@@ -1716,6 +1727,148 @@ export function startStudio(root, options = {}) {
   };
   rollHost.addEventListener("pointerup", endRollDrag);
   rollHost.addEventListener("pointercancel", endRollDrag);
+
+  // ---- Velocity, under the roll (velocity.js) -------------------------------------
+  //
+  // A bar per note, as tall as it is played: drawn across with the mouse,
+  // or chosen (a click, Shift for more, Shift-drag for a stretch) and
+  // dragged together. A note with none set plays as its dynamics, drawn pale.
+
+  st.velSel = new Set();
+  st.velDrag = null;
+  st.velHeard = { text: null, map: {} };
+  const velBar = (st.velBar = Object.assign(document.createElement("div"), { className: "studio-velocity-bar" }));
+  velBar.setAttribute("role", "toolbar");
+  velBar.setAttribute("aria-label", "Velocity");
+  velBar.innerHTML = `<span class="studio-velocity-what" data-vel-what></span><span class="studio-velocity-fixed"><button type="button" class="studio-menu" data-vel-act="fixed">Fixed velocity</button><input type="number" min="1" max="127" value="96" data-vel-value aria-label="The fixed velocity, 1 to 127"></span><button type="button" class="studio-menu" data-vel-act="soften">Soften</button><button type="button" class="studio-menu" data-vel-act="accent">Accent the beats</button><button type="button" class="studio-menu" data-vel-act="clear">As the dynamics</button><span class="studio-roll-hint">Drag across the bars to draw; click one to choose it, Shift for more; drag a chosen one to move them all.</span>`;
+  rollHost.append(velBar);
+
+  /** The velocities the dynamics give, as the MIDI plays them: found once per text, then drawn. */
+  function heardVelocities() {
+    const score = st.score;
+    const text = st.text;
+    if (st.velHeard.text !== text) {
+      st.velHeard.text = text;
+      toMidi(...heard(score))
+        .then((bytes) => {
+          if (st.text !== text) return;
+          st.velHeard = { text, map: Vel.heardVelocities(score, bytes) };
+          drawRoll();
+        })
+        .catch(() => {});
+    }
+    return st.velHeard.map;
+  }
+
+  /** The strip under the roll, as HTML; a drag's velocities shown before they are kept. */
+  function velocityStrip() {
+    // Not yet: the studio is still being set up.
+    if (!st.velBar) return "";
+    st.velGeo = R.rollLayout(st.score, { layout: st.rollLayout, zoom: st.zoom, only: st.rollLayout === "keys" ? st.rollOnly : null });
+    const set = { ...Vel.velocitiesOf(st.score), ...(st.velDrag?.changes ?? {}) };
+    const what = st.velBar.querySelector("[data-vel-what]");
+    what.textContent = st.velSel.size ? `${st.velSel.size} chosen` : "All the notes";
+    return `<div class="studio-velocity">${Vel.drawStrip(st.score, st.velGeo, { set, heard: heardVelocities(), selected: st.velSel })}</div>`;
+  }
+
+  /** The strip's bars as they are drawn. */
+  function velBars() {
+    return Vel.stripBars(st.score, st.velGeo, Vel.velocitiesOf(st.score), st.velHeard.map);
+  }
+
+  function velPoint(event) {
+    const box = rollScroll.querySelector(".vel-strip").getBoundingClientRect();
+    return { x: event.clientX - box.left, y: event.clientY - box.top };
+  }
+
+  /** Velocities changed: kept, one Undo away. */
+  function velCommit(changes, words) {
+    const n = Object.keys(changes).length;
+    if (!n) return say("No note there.");
+    if (edit((score) => Vel.setVelocities(score, changes))) say(`${words}: ${n === 1 ? "1 note" : `${n} notes`}. Ctrl+Z takes it back.`);
+  }
+
+  rollHost.addEventListener("pointerdown", (event) => {
+    if (!event.target.closest(".vel-strip") || !st.score) return;
+    rollHost.focus({ preventScroll: true });
+    const p = velPoint(event);
+    const bars = velBars();
+    const hit = Vel.barAtX(bars, p.x);
+    const more = event.shiftKey || event.metaKey || event.ctrlKey;
+    if (hit && more) {
+      if (st.velSel.has(hit.id)) st.velSel.delete(hit.id);
+      else st.velSel.add(hit.id);
+      return drawRoll();
+    }
+    // On a chosen bar: they all move together. Elsewhere: a drag draws, a click chooses (or lets go).
+    if (hit && st.velSel.has(hit.id)) {
+      const start = Object.fromEntries(bars.filter((b) => st.velSel.has(b.id)).map((b) => [b.id, b.v]));
+      st.velDrag = { mode: "move", y: p.y, start, changes: {} };
+    } else if (more) {
+      st.velDrag = { mode: "band", x: p.x, changes: {} };
+    } else st.velDrag = { mode: "draw", x: p.x, y: p.y, changes: {}, pick: hit?.id ?? null, moved: false };
+    rollHost.setPointerCapture?.(event.pointerId);
+    drawRoll();
+  });
+
+  /** Drawing: the bars between the pointer's last place and this one, at the heights along the line. */
+  function velPaint(bars, p) {
+    const d = st.velDrag;
+    const [x0, x1] = [Math.min(d.x, p.x) - 5, Math.max(d.x, p.x) + 5];
+    for (const b of bars) {
+      if (b.x < x0 || b.x > x1) continue;
+      const y = d.x === p.x ? p.y : d.y + ((b.x - d.x) / (p.x - d.x)) * (p.y - d.y);
+      d.changes[b.id] = Vel.velocityOfY(y);
+    }
+    Object.assign(d, { x: p.x, y: p.y });
+  }
+
+  rollHost.addEventListener("pointermove", (event) => {
+    const d = st.velDrag;
+    if (!d) return;
+    const p = velPoint(event);
+    if (d.mode === "move") {
+      const by = Vel.velocityOfY(Vel.yOfVelocity(64) + p.y - d.y) - 64;
+      d.changes = Object.fromEntries(Object.entries(d.start).map(([id, v]) => [id, Math.max(1, Math.min(127, v + by))]));
+    } else if (d.mode === "draw") {
+      d.moved = true;
+      velPaint(velBars(), p);
+    }
+    else {
+      const [x0, x1] = [Math.min(d.x, p.x), Math.max(d.x, p.x)];
+      st.velSel = new Set(velBars().filter((b) => b.x >= x0 && b.x <= x1).map((b) => b.id));
+    }
+    drawRoll();
+  });
+
+  const endVelDrag = () => {
+    const d = st.velDrag;
+    if (!d) return;
+    st.velDrag = null;
+    // A click, not a drag: the bar under it chosen, or none.
+    if (d.mode === "draw" && !d.moved) {
+      st.velSel = d.pick ? new Set([d.pick]) : new Set();
+      return drawRoll();
+    }
+    const changed = Object.entries(d.changes).filter(([id, v]) => v !== d.start?.[id]);
+    if (changed.length) velCommit(Object.fromEntries(changed), d.mode === "draw" ? "Velocity drawn" : "Velocity changed");
+    else drawRoll();
+  };
+  rollHost.addEventListener("pointerup", endVelDrag);
+  rollHost.addEventListener("pointercancel", endVelDrag);
+
+  velBar.addEventListener("click", (event) => {
+    const act = event.target.closest("[data-vel-act]")?.dataset.velAct;
+    if (!act || !st.score) return;
+    // The notes chosen, or every note the roll shows.
+    const ids = st.velSel.size ? [...st.velSel] : st.velGeo.notes.map((n) => Vel.noteId(n.lane, n.t0, n.key));
+    const set = Vel.velocitiesOf(st.score);
+    const value = Number(velBar.querySelector("[data-vel-value]").value) || 96;
+    if (act === "fixed") return velCommit(Vel.fixed(ids, value), `Velocity ${Math.max(1, Math.min(127, Math.round(value)))}`);
+    if (act === "soften") return velCommit(Vel.soften(ids, set, st.velHeard.map), "Softer");
+    if (act === "accent") return velCommit(Vel.accentBeats(st.score, ids, set, st.velHeard.map), "The beats accented");
+    if (act === "clear") return velCommit(Object.fromEntries(ids.filter((id) => set[id] != null).map((id) => [id, null])), "As the dynamics again");
+  });
 
   /** The bars of another voice (2 to 4) the cursor or the selection is in: written even while they are rests. */
   function openBars() {
@@ -2439,6 +2592,9 @@ export function startStudio(root, options = {}) {
       ? [M.toLilyPond(score, { unfold: true }).source, { bpm: M.DEFAULT_BPM, beat: 4, unfold: false }]
       : [st.text, { bpm: M.DEFAULT_BPM, beat: 4 }];
 
+  /** The MIDI of what is heard, each note at the velocity set for it (velocity.js). */
+  const heardMidi = (score) => toMidi(...heard(score)).then((bytes) => (score ? Vel.applyVelocities(score, bytes) : bytes));
+
   // The Playback section's settings, kept from one visit to the next.
   const PLAYBACK = "eui-score-studio-playback";
   const playOption = (name) => root.querySelector(`[data-play="${name}"]`);
@@ -2494,7 +2650,7 @@ export function startStudio(root, options = {}) {
     const at = loop ? loop.start : from == null ? 0 : (passes.find((p) => p.bar === from)?.start ?? 0);
     let bytes;
     try {
-      bytes = await toMidi(...heard(played));
+      bytes = await heardMidi(played);
     } catch (error) {
       return say(error.message ?? String(error), true);
     }
@@ -2752,18 +2908,63 @@ export function startStudio(root, options = {}) {
 
   // ---- Mute, solo, and where the sound goes ----------------------------------------
 
-  st.mix = { mute: new Set(), solo: new Set() };
+  // The mixer (mixer.js) is the score's: kept in its text, one Undo away,
+  // its M and S the same as the Playback section's. Its graph is built on
+  // Play's AudioContext with the synthesizer, and again on each WAV's.
 
-  /** Each staff's channel muted or not: muted, or not soloed while another is. */
+  /** Mute and solo as the Playback section shows them: the score's mixer's, and the staff recorded into. */
+  function mixFromMeta() {
+    const mix = X.mixOf(st.score);
+    st.mix = { mute: new Set(X.lanesWith(mix, "mute")), solo: new Set(X.lanesWith(mix, "solo")) };
+    if (st.recording?.muted) st.mix.mute.add(st.recording.lane);
+  }
+  mixFromMeta();
+
+  /** The mixer as heard: the score's, or the one a moving fader previews; the staff recorded into silent. */
+  function mixHeard() {
+    const mix = st.heardMix ?? X.mixOf(st.score);
+    return st.recording?.muted ? (X.patched(mix, st.recording.lane, { mute: true }) ?? {}) : mix;
+  }
+
+  // Play's mixer goes out through the MIDI-learn volume (player.js), a WAV's straight to its file.
+  P.setRouter((ctx, synth, offline, destination) => {
+    const graph = X.mixerGraph(ctx, synth, destination);
+    graph.apply(mixHeard(), st.score ? M.channels(st.score) : []);
+    if (!offline) st.liveMixer = graph;
+  });
+
+  /** Each staff's channel as the mixer says: muted, or not soloed while another is; its level, pan and effects. */
   function applyMix() {
     if (!st.score) return;
-    for (const { lane, channel } of M.channels(st.score)) {
-      P.mute(channel, st.mix.mute.has(lane) || (st.mix.solo.size > 0 && !st.mix.solo.has(lane)));
-    }
+    const mix = mixHeard();
+    for (const { lane, channel } of M.channels(st.score)) P.mute(channel, !X.audible(mix, lane));
+    st.liveMixer?.apply(mix, M.channels(st.score));
   }
+
+  /** A track's (or the master's) settings changed: kept in the score, heard at once. */
+  function mixCommit(lane, patch) {
+    st.heardMix = null;
+    edit((score) => X.setMix(score, lane, patch));
+    mixFromMeta();
+    applyMix();
+    renderMix();
+  }
+
+  st.mixer = mixerPanel({
+    root,
+    tracks: () => (st.score ? M.channels(st.score).map(({ lane, name }) => ({ lane, name, colour: R.laneColour(st.score, lane) })) : []),
+    mix: () => X.mixOf(st.score),
+    preview: (mix) => {
+      st.heardMix = mix;
+      applyMix();
+    },
+    commit: mixCommit,
+    level: () => (st.playing?.handle && st.liveMixer ? st.liveMixer.level().peak : 0),
+  });
 
   /** The Playback section's staves, a Mute and a Solo for each. */
   function renderMix() {
+    st.mixer?.refresh();
     const box = playOption("staves");
     if (!box) return;
     const rows = st.score ? M.channels(st.score) : [];
@@ -2794,11 +2995,11 @@ export function startStudio(root, options = {}) {
   async function saveWav() {
     let bytes;
     try {
-      bytes = await toMidi(...heard(st.score));
+      bytes = await heardMidi(st.score);
     } catch (error) {
       return refuse(error);
     }
-    const muted = st.score ? M.channels(st.score).filter(({ lane }) => st.mix.mute.has(lane) || (st.mix.solo.size > 0 && !st.mix.solo.has(lane))).map(({ channel }) => channel) : [];
+    const muted = st.score ? M.channels(st.score).filter(({ lane }) => !X.audible(mixHeard(), lane)).map(({ channel }) => channel) : [];
     say("Making the WAV file…");
     try {
       const wav = await P.renderWav(bytes, { muted, onProgress: (f) => say(`Loading the sounds… ${Math.round(100 * f)} % (38 MB, once)`) });
@@ -2992,6 +3193,8 @@ export function startStudio(root, options = {}) {
     let written = 0;
     edit((score) => {
       written = M.writeRecording(score, rec.lane, from, M.barStart(score, lastBar + 1), rec.played, grid, { dynamics: Boolean(dynamicsBox?.checked) });
+      // How hard each key was struck: the velocity of the note it wrote.
+      Vel.setVelocities(score, Vel.fromRecording(score, rec.lane, rec.played, grid));
     });
     const bars = lastBar === first ? `bar ${barNo(first)}` : `bars ${barNo(first)}–${barNo(lastBar)}`;
     say(`Recorded ${written === 1 ? "1 note" : `${written} notes`} into ${laneName(rec.lane)}, ${bars}, fitted to ${quantizeBox?.selectedOptions[0]?.textContent ?? "sixteenths"}. Ctrl+Z takes it back.`);

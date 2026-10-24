@@ -2241,7 +2241,48 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
   const body = staves.length > 1 || group ? `${group ? group + " " : ""}<<\n${indent(nest(0, staves.length - 1, groups))}\n>>` : staves[0];
   // Bars of rest gathered on every staff: a part's long rests, as one bar.
   const gathering = score.compress ? "\\compressMMRests " : "";
-  return { source: pageText(score) + (header ? `\\header { ${header} }\n` : "") + gathering + body + "\n", items };
+  const source = pageText(score) + (header ? `\\header { ${header} }\n` : "") + gathering + body + "\n";
+  // What is not notation (the mixer, the notes' velocities…) rides along at the end, as a comment.
+  return { source: unfold || !score.meta ? source : writeMeta(source, score.meta), items };
+}
+
+// ---- What is not notation, kept in the text --------------------------------------
+//
+// The mixer, each note's velocity and the like are kept in the LilyPond
+// itself, on one last line the engraver reads as a comment:
+//
+//   %% eui-score {"mixer":{…},"velocity":{…}}
+//
+// one JSON object whose keys are per feature. History, sharing and saving
+// then keep them with the notes.
+
+const META = /^%% eui-score (.*)$/m;
+
+/** The object on the text's `%% eui-score` line: {} when there is none, or when it does not read. */
+export function readMeta(source) {
+  const line = META.exec(source ?? "");
+  if (!line) return {};
+  try {
+    const read = JSON.parse(line[1]);
+    return read && typeof read === "object" && !Array.isArray(read) ? read : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * `source` with `obj`'s keys merged into its `%% eui-score` line, the
+ * others kept; a key set to null (or undefined) goes. The line is the last
+ * one; no line when nothing is left.
+ */
+export function writeMeta(source, obj) {
+  const meta = { ...readMeta(source) };
+  for (const [key, value] of Object.entries(obj ?? {})) {
+    if (value == null) delete meta[key];
+    else meta[key] = value;
+  }
+  const text = (source ?? "").replace(/^%% eui-score .*$\n?/m, "").replace(/\n*$/, "\n");
+  return Object.keys(meta).length ? `${text}%% eui-score ${JSON.stringify(meta)}\n` : text;
 }
 
 /**

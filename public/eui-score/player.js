@@ -43,6 +43,26 @@ export function unlock(made) {
   return context;
 }
 
+// What the synthesizer's outputs go through on their way out: straight to
+// the speakers, or a mixer's graph (mixer.js), on Play's AudioContext and on
+// the OfflineAudioContext that renders a WAV alike.
+let router = null;
+
+/**
+ * `fn(ctx, synth, offline, destination)` connects each synthesizer made
+ * from now on (Play's, once; a WAV's, each time) to `destination` — Play's
+ * through the MIDI-learn volume, a WAV's straight out; null connects them
+ * straight there.
+ */
+export function setRouter(fn) {
+  router = fn;
+}
+
+function route(ctx, synth, offline, destination = ctx.destination) {
+  if (router) router(ctx, synth, offline, destination);
+  else synth.connect(destination);
+}
+
 /** True once the synthesizer and its sounds are loaded: Play will start at once. */
 export function isReady() {
   return Boolean(engine?.done);
@@ -66,11 +86,12 @@ function start() {
       ctx.audioWorklet.addModule(new URL(`vendor/spessasynth_processor.min.js${V}`, import.meta.url)),
     ]);
     const synth = new WorkletSynthesizer(ctx);
-    // Through a gain: the volume a controller's fader sets (MIDI learn).
+    // Through a gain: the volume a controller's fader sets (MIDI learn), a
+    // performance control after the mixer, not kept with the score.
     const gain = ctx.createGain();
     gain.gain.value = volume;
-    synth.connect(gain);
     gain.connect(ctx.destination);
+    route(ctx, synth, false, gain);
     await synth.soundBankManager.addSoundBank(bank, "main");
     await synth.isReady;
     // The score's first beat is at 0 s, a rest or not: the editor's timings count from there.
@@ -221,7 +242,7 @@ export async function renderWav(midi, { muted = [], onProgress } = {}) {
   const offline = new OfflineAudioContext({ numberOfChannels: 2, sampleRate: rate, length: Math.ceil(rate * (sequence.duration + 2)) });
   await offline.audioWorklet.addModule(new URL(`vendor/spessasynth_processor.min.js${V}`, import.meta.url));
   const synth = new WorkletSynthesizer(offline);
-  synth.connect(offline.destination);
+  route(offline, synth, true);
   await synth.startOfflineRender({ midiSequence: sequence, soundBankList: [{ soundBankBuffer: bank, bankOffset: 0 }], loopCount: 0, sequencerOptions: { skipToFirstNoteOn: false } });
   for (const channel of muted) synth.midiChannels[channel]?.setSystemParameter?.("isMuted", true);
   const rendered = await offline.startRendering();

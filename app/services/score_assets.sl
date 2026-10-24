@@ -25,6 +25,9 @@ class ScoreAssets
       "shortcuts.js",
       "player.js",
       "midi-sync.js",
+      "mixer.js",
+      "mixer-ui.js",
+      "velocity.js",
       "vendor/README.md",
       "eui_score_web.js",
       "wasm.version"
