@@ -13,6 +13,19 @@ class Changelog
       {"date": "2026-10-24", "entries": [
         {
           "area": "site",
+          "title": "Automation curves, the stems and MP3",
+          "text": "Under the MIDI view, below the velocities, a lane draws how a staff's modulation, expression, "
+          + "volume, pan, sustain pedal or pitch bend moves while it plays: choose the staff and the curve, click "
+          + "to add a point, drag one to move it, double-click to take it away. A recording keeps the wheel, the "
+          + "pedal and the bend played on the MIDI keyboard, and a MIDI file opened keeps its own. The curves are "
+          + "saved with the score, heard on Play, written into Save as MIDI (with the mixer's volume and pan at "
+          + "the start of each track) and into Save the sound; a pedal written in the notes wins over the lane's. "
+          + "File ▸ Save the stems saves a WAV for each staff, alone, in one zip, and Save the sound as MP3 a "
+          + "compressed file (its encoder is fetched the first time, so that once needs the network).",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "Rit. and accel. are played; quantize, swing and humanize",
           "text": "A rit., rall. or accel. now slows down or speeds up when the score plays, whether it is a tempo "
           + "mark, words over a note or a dashed line: the speed glides to the next tempo given, and the playhead, "

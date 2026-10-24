@@ -207,7 +207,7 @@ const MIDI_MARCH = """
     [0, 0xff, 0x58, 4, 3, 2, 24, 8],
   ]);
   const flute = track([
-    [0, 0xc0, 73], [q, 0xe0, 0, 90],
+    [0, 0xc0, 73], [q, 0xe0, 0, 90], [q, 0xb0, 74, 30],
     ...note(0, 72, 0, 1), ...note(0, 74, 1, 1), ...note(0, 76, 2, 1), ...note(0, 77, 3, 3),
   ]);
   const drums = track([...note(9, 36, 0, 1), ...note(9, 38, 1, 1), ...note(9, 42, 2, 1)]);
@@ -359,10 +359,10 @@ describe("The app, in a browser") do
     assert_not(editor_source().includes?("a'2"))
   end
 
-  test("import a MIDI file: its tracks become staves, what it leaves out is named first") do
+  test("import a MIDI file: its tracks become staves, its bends curves, what it leaves out is named first") do
     sign_up_in_browser(journey_email())
     import_bytes_in_browser("march.mid", MIDI_MARCH)
-    wait_for_text("Left out of march.mid: pitch bends.")
+    wait_for_text("Left out of march.mid: controllers other than modulation, expression")
     assert_page_path("/app")
     click_button("Create the score anyway")
     wait_for("[data-save-state]")
@@ -375,6 +375,8 @@ describe("The app, in a browser") do
     assert_contains(source, "c''4 d''4 e''4")
     assert_contains(source, "\\new DrumStaff")
     assert_contains(source, "bd4 sn4 hh4")
+    # The bend is kept, as the flute's automation curve.
+    assert_contains(source, "\"bend\":[[20160,3328]]")
     assert_no_page_errors()
   end
 

@@ -233,8 +233,14 @@ export async function play(midi, { at = 0, onStop, onProgress } = {}) {
  * sound to die away. `muted` lists the MIDI channels to leave out;
  * `onProgress(fraction)` while the sounds download.
  */
-export async function renderWav(midi, { muted = [], onProgress } = {}) {
-  const [{ WorkletSynthesizer, BasicMIDI, audioBufferToWav }, bank] = await Promise.all([import(`./vendor/spessasynth.js${V}`), (onProgress && watchers.add(onProgress), sounds())]);
+export async function renderWav(midi, options = {}) {
+  const { audioBufferToWav } = await import(`./vendor/spessasynth.js${V}`);
+  return audioBufferToWav(await renderAudio(midi, options));
+}
+
+/** `midi` rendered as renderWav renders it, as an AudioBuffer: for a compressed file, or a stem. */
+export async function renderAudio(midi, { muted = [], onProgress } = {}) {
+  const [{ WorkletSynthesizer, BasicMIDI }, bank] = await Promise.all([import(`./vendor/spessasynth.js${V}`), (onProgress && watchers.add(onProgress), sounds())]);
   if (onProgress) watchers.delete(onProgress);
   const bytes = midi instanceof ArrayBuffer ? midi : midi.buffer.slice(midi.byteOffset, midi.byteOffset + midi.byteLength);
   const sequence = BasicMIDI.fromArrayBuffer(bytes);
@@ -245,8 +251,7 @@ export async function renderWav(midi, { muted = [], onProgress } = {}) {
   route(offline, synth, true);
   await synth.startOfflineRender({ midiSequence: sequence, soundBankList: [{ soundBankBuffer: bank, bankOffset: 0 }], loopCount: 0, sequencerOptions: { skipToFirstNoteOn: false } });
   for (const channel of muted) synth.midiChannels[channel]?.setSystemParameter?.("isMuted", true);
-  const rendered = await offline.startRendering();
-  return audioBufferToWav(rendered);
+  return offline.startRendering();
 }
 
 // ---- Around the piece ---------------------------------------------------------------------
@@ -302,6 +307,18 @@ export async function midiInputs() {
 
 let input = null;
 const taps = new Set();
+const ears = new Set();
+
+/**
+ * Hears every message of the MIDI keyboard listened to, before anything
+ * else does, and keeps none from going further: `fn(data, timeStamp)` — the
+ * knobs and the bend recorded while recording (automation-ui.js). Answers
+ * the function that stops it.
+ */
+export function overhear(fn) {
+  ears.add(fn);
+  return () => ears.delete(fn);
+}
 
 /**
  * Hears every message of the MIDI keyboard listened to, before its keys are:
@@ -325,6 +342,7 @@ export function listen(id, onKey, onRelease = null) {
   if (!input) return null;
   const down = new Set();
   input.onmidimessage = ({ data, timeStamp }) => {
+    for (const fn of ears) fn(data, timeStamp);
     for (const fn of taps) if (fn(data, timeStamp)) return;
     const [status, key, velocity] = data;
     const kind = status & 0xf0;

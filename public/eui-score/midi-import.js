@@ -8,13 +8,16 @@
 //   fromMidi(bytes, { title, grid }) → { source, score, warnings } the score, as LilyPond
 //   isMidi(name)                  → whether a file's name is a MIDI one
 //
-// Nothing leaves the page. What a file holds that the score does not keep
-// (pitch bends, the sustain pedal, tempo changes after the first…) is left
-// out, and each such thing is named once in `warnings`. Fetched only when a
-// MIDI file is opened.
+// Nothing leaves the page. The controllers the editor's automation follows
+// (modulation, expression, volume, pan, the sustain pedal) and pitch bend
+// are kept as its curves (automation.js), on their staff. What a file
+// holds that the score does not keep (other controllers, tempo changes
+// after the first…) is left out, and each such thing is named once in
+// `warnings`. Fetched only when a MIDI file is opened.
 
 const V = new URL(import.meta.url).search;
 const M = await import(`./score-model.js${V}`);
+const A = await import(`./automation.js${V}`);
 
 /** The most staves an imported score is given; the tracks after them are left out, and named. */
 export const MAX_STAVES = 16;
@@ -125,9 +128,9 @@ function readTrack(bytes, start, end, number) {
       case 0xc0: events.push({ tick, kind: "program", channel, program: a }); break;
       case 0xd0: events.push({ tick, kind: "pressure", channel }); break;
       default: {
+        // −8192…8191, 0 the centre: a bend back to the centre is kept too.
         const b = byte();
-        // A bend away from the middle; the centre itself bends nothing.
-        if (a !== 0 || b !== 64) events.push({ tick, kind: "bend", channel });
+        events.push({ tick, kind: "bend", channel, value: ((b << 7) | a) - 8192 });
       }
     }
   }
@@ -148,8 +151,6 @@ function partsOf(midi, warnings) {
     const open = new Map();
     for (const e of track.events) {
       if (e.kind === "program" && !programs.has(e.channel)) programs.set(e.channel, { program: e.program, tick: e.tick });
-      if (e.kind === "bend") warnings.add("pitch bends");
-      if (e.kind === "controller" && e.controller === 64) warnings.add("the sustain pedal");
       if (e.kind !== "on" && e.kind !== "off") continue;
       const id = `${e.channel}:${e.key}`;
       if (e.kind === "on") {
@@ -175,10 +176,36 @@ function partsOf(midi, warnings) {
       // Program changes across the music: the first one keeps its sound.
       const changes = new Set(track.events.filter((e) => e.kind === "program" && e.channel === channel).map((e) => e.program));
       if (changes.size > 1) warnings.add("instrument changes in a track, its first instrument kept");
-      parts.push({ track: t, channel, name, program: programs.get(channel)?.program ?? 0, notes: notes.sort((x, y) => x.t0 - y.t0 || x.key - y.key) });
+      parts.push({ track: t, channel, name, program: programs.get(channel)?.program ?? 0, notes: notes.sort((x, y) => x.t0 - y.t0 || x.key - y.key), curves: curvesOf(track, channel, warnings) });
     }
   });
   return parts;
+}
+
+/**
+ * A track's controllers and bends on `channel`, as automation curves: { id:
+ * [[tick, value]] } in the file's ticks. A bend that never leaves the centre,
+ * or a curve that never moves from its first value at the start, is
+ * nothing. Other controllers are named in `warnings`.
+ */
+function curvesOf(track, channel, warnings) {
+  const out = {};
+  for (const e of track.events) {
+    if (e.channel !== channel) continue;
+    if (e.kind === "bend") (out.bend ??= []).push([e.tick, e.value]);
+    else if (e.kind === "controller") {
+      const id = A.idOfNumber(e.controller);
+      if (id) (out[id] ??= []).push([e.tick, e.value]);
+      // Bank select and the data entry around a program are not music played.
+      else if (![0, 32, 6, 38, 98, 99, 100, 101, 121].includes(e.controller)) warnings.add("controllers other than modulation, expression, volume, pan and the sustain pedal");
+    }
+  }
+  for (const id of Object.keys(out)) {
+    const points = out[id];
+    if (id === "bend" && points.every(([, v]) => v === 0)) delete out[id];
+    else if (points.every(([t, v]) => t === 0 && v === points[0][1]) && id !== "7" && id !== "10") delete out[id];
+  }
+  return out;
 }
 
 /** The first meta event of `type` across the tracks, and whether others follow it later. */
@@ -253,7 +280,7 @@ export function fromMidi(bytes, { title = "", grid = "sixteenth" } = {}) {
     const notes = part.notes.map((n) => ({ key: n.key, t0: n.t0 * scale, t1: n.t1 * scale, velocity: n.velocity })).filter((n) => n.t0 < limit);
     if (part.channel === DRUM_CHANNEL) {
       if (notes.some((n) => !M.drumByKey(n.key))) warnings.add("drums this editor does not name, left out");
-      lanes.push({ staff: { name: part.name || "Drum kit", short: "Dr.", instrument: "", clef: "percussion", drums: true, events: [] }, notes });
+      lanes.push({ staff: { name: part.name || "Drum kit", short: "Dr.", instrument: "", clef: "percussion", drums: true, events: [] }, notes, curves: part.curves });
       continue;
     }
     const it = instrumentFor(part.program);
@@ -262,13 +289,13 @@ export function fromMidi(bytes, { title = "", grid = "sixteenth" } = {}) {
     const high = notes.filter((n) => n.key >= 60);
     const wide = !it.clef && low.some((n) => n.key < 53) && high.some((n) => n.key > 67);
     if (wide) {
-      lanes.push({ staff: { name: "", short: "", instrument: it.sound, clef: "treble", events: [] }, notes: high, brace: { name, short: it.short } });
+      lanes.push({ staff: { name: "", short: "", instrument: it.sound, clef: "treble", events: [] }, notes: high, brace: { name, short: it.short }, curves: part.curves });
       lanes.push({ staff: { name: "", short: "", instrument: it.sound, clef: "bass", events: [] }, notes: low });
       continue;
     }
     const average = notes.reduce((sum, n) => sum + n.key, 0) / Math.max(1, notes.length);
     const clef = it.clef ?? (average < 57 ? "bass" : "treble");
-    lanes.push({ staff: { name, short: it.short, instrument: it.sound, clef, events: [] }, notes });
+    lanes.push({ staff: { name, short: it.short, instrument: it.sound, clef, events: [] }, notes, curves: part.curves });
   }
   // A brace split across the limit is not left with one staff.
   let kept = lanes.length;
@@ -285,6 +312,13 @@ export function fromMidi(bytes, { title = "", grid = "sixteenth" } = {}) {
   M.ensureLength(score, total);
   const length = M.lengthOf(score.staves[0]);
   lanes.slice(0, kept).forEach((lane, s) => M.writeRecording(score, s, 0, length, lane.notes, step));
+  // The controllers and bends, as the staff's curves (a brace's on its upper staff), thinned.
+  lanes.slice(0, kept).forEach((lane, s) => {
+    for (const [id, points] of Object.entries(lane.curves ?? {})) {
+      const inside = points.map(([t, v]) => [t * scale, v]).filter(([t]) => t < length);
+      A.setCurve(score, s, id, A.thin(id, inside));
+    }
+  });
   return { source: M.toLilyPond(score).source, score, warnings: [...warnings] };
 }
 

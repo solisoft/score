@@ -152,10 +152,40 @@ test("midi import: what the score does not keep is named once each", () => {
     "drums this editor does not name, left out",
     "instrument changes in a track, its first instrument kept",
     "metre changes, the first metre kept",
-    "pitch bends",
     "tempo changes, the first tempo kept",
-    "the sustain pedal",
   ]);
+});
+
+test("midi import: the controllers and the bends are kept as the staff's curves", () => {
+  const Q = M.WHOLE / 4;
+  const piano = track([
+    [0, 0xc0, 0],
+    [0, 0xb0, 64, 127], [2 * DIVISION, 0xb0, 64, 0],
+    // The modulation wheel turned up across a bar: thinned to its line.
+    ...Array.from({ length: 16 }, (_, k) => [(k * DIVISION) / 4, 0xb0, 1, k * 8]),
+    [DIVISION, 0xe0, 0, 80], [3 * DIVISION, 0xe0, 0, 64],
+    [0, 0xb0, 7, 90],
+    // A controller the editor does not follow: named.
+    [0, 0xb0, 74, 30],
+    ...note(0, 60, 0, 4),
+  ]);
+  const { source, warnings } = I.fromMidi(file(0, [piano]));
+  assert.deepEqual(warnings, ["controllers other than modulation, expression, volume, pan and the sustain pedal"]);
+  const cc = M.readMeta(source).cc;
+  assert.deepEqual(cc["0"]["64"], [[0, 127], [2 * Q, 0]], "the pedal, pressed and let go");
+  assert.deepEqual(cc["0"].bend, [[Q, 2048], [3 * Q, 0]], "the bend up a quarter of its range, and back");
+  assert.deepEqual(cc["0"]["7"], [[0, 90]], "the volume set at the start is kept");
+  assert.ok(cc["0"]["1"].length <= 4, `the wheel thinned: ${JSON.stringify(cc["0"]["1"])}`);
+  assert.deepEqual(cc["0"]["1"][0], [0, 0]);
+  assert.deepEqual(cc["0"]["1"].at(-1), [(15 * Q) / 4, 120]);
+  // The score still reads, its meta line passed over by the engraver.
+  assert.deepEqual(JSON.parse(score_json(source)).warnings, []);
+});
+
+test("midi import: a bend that stays at the centre, a knob never moved, is nothing", () => {
+  const piano = track([[0, 0xe0, 0, 64], [DIVISION, 0xe0, 0, 64], [0, 0xb0, 1, 0], ...note(0, 60, 0, 4)]);
+  const { source } = I.fromMidi(file(0, [piano]));
+  assert.equal(M.readMeta(source).cc, undefined);
 });
 
 test("midi import: more tracks than staves — the first are kept, the rest named", () => {

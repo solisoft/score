@@ -30,6 +30,9 @@ class ScoreAssets
       "mixer.js",
       "mixer-ui.js",
       "velocity.js",
+      "automation.js",
+      "automation-ui.js",
+      "audio-export.js",
       "vendor/README.md",
       "eui_score_web.js",
       "wasm.version"

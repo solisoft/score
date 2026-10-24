@@ -25,6 +25,10 @@ const Vel = await import(`./velocity.js${V}`);
 const { mixerPanel } = await import(`./mixer-ui.js${V}`);
 // Swing, humanize and the tempo's glides, put into the MIDI that is heard (#379).
 const F = await import(`./feel.js${V}`);
+const A = await import(`./automation.js${V}`);
+const { automationLane } = await import(`./automation-ui.js${V}`);
+/** The MP3 and the stems (audio-export.js), loaded the first time one is saved. */
+const audioExport = () => import(`./audio-export.js${V}`);
 const { editor_view_lit, score_json, source_spans } = engine;
 
 /** The MusicXML reader and writer, loaded the first time a file needs it. */
@@ -844,8 +848,10 @@ export function startStudio(root, options = {}) {
         if (edit((score) => M.transpose(score, { ...by, s: r.s, a: r.a, b: r.b }))) say(`${r.b - r.a + 1} selected, ${words}.`);
         return;
       }
-      case "save-midi": return heardMidi(st.score).then((m) => download(m, `${fileName()}.mid`, "audio/midi")).catch((e) => refuse(e));
+      case "save-midi": return heardMidi(st.score, undefined, { mix: X.mixOf(st.score) }).then((m) => download(m, `${fileName()}.mid`, "audio/midi")).catch((e) => refuse(e));
       case "save-wav": return saveWav();
+      case "save-mp3": return saveSound("mp3");
+      case "save-stems": return saveSound("stems");
       case "save-svg": case "save-png": return saveImage(name === "save-png");
       case "mode-select": return setInput(false);
       case "mode-input": return setInput(true);
@@ -1539,7 +1545,7 @@ export function startStudio(root, options = {}) {
       cursor = cursor == null ? t : Math.min(cursor, t);
     }
     const left = rollScroll.scrollLeft;
-    rollScroll.innerHTML = R.drawRoll(st.score, { layout: st.rollLayout, zoom: st.zoom, sel: st.sel, lit, cursor, loop: st.loopBars, only: st.rollLayout === "keys" ? st.rollOnly : null }) + velocityStrip();
+    rollScroll.innerHTML = R.drawRoll(st.score, { layout: st.rollLayout, zoom: st.zoom, sel: st.sel, lit, cursor, loop: st.loopBars, only: st.rollLayout === "keys" ? st.rollOnly : null }) + velocityStrip() + (st.automation?.html() ?? "");
     const only = rollHost.querySelector("[data-roll-only]");
     only.hidden = !(st.rollLayout === "keys" && st.rollOnly != null);
     if (!only.hidden) only.textContent = `${R.laneNames(st.score)[st.rollOnly] ?? ""} only`;
@@ -1580,7 +1586,7 @@ export function startStudio(root, options = {}) {
   }
 
   rollHost.addEventListener("pointerdown", (event) => {
-    if (event.target.closest(".studio-roll-bar, .studio-velocity-bar, .vel-strip") || !st.score) return;
+    if (event.target.closest(".studio-roll-bar, .studio-velocity-bar, .vel-strip, .studio-cc-bar, .cc-strip") || !st.score) return;
     rollHost.focus({ preventScroll: true });
     const p = rollPoint(event);
     if (!p) return;
@@ -1751,6 +1757,9 @@ export function startStudio(root, options = {}) {
   velBar.setAttribute("aria-label", "Velocity");
   velBar.innerHTML = `<span class="studio-velocity-what" data-vel-what></span><span class="studio-velocity-fixed"><button type="button" class="studio-menu" data-vel-act="fixed">Fixed velocity</button><input type="number" min="1" max="127" value="96" data-vel-value aria-label="The fixed velocity, 1 to 127"></span><button type="button" class="studio-menu" data-vel-act="soften">Soften</button><button type="button" class="studio-menu" data-vel-act="accent">Accent the beats</button><button type="button" class="studio-menu" data-vel-act="clear">As the dynamics</button><span class="studio-roll-hint">Drag across the bars to draw; click one to choose it, Shift for more; drag a chosen one to move them all.</span>`;
   rollHost.append(velBar);
+
+  // The automation lane (automation-ui.js), under the velocity strip.
+  st.automation = automationLane({ rollHost, rollScroll, st, edit, say, redraw: () => drawRoll(), recordingNow, learnt: () => sync?.learnt?.list() ?? [] });
 
   /** The velocities the dynamics give, as the MIDI plays them: found once per text, then drawn. */
   function heardVelocities() {
@@ -2603,14 +2612,17 @@ export function startStudio(root, options = {}) {
 
   /**
    * The MIDI of what is heard: each note at the velocity set for it
-   * (velocity.js), then as it is played (feel.js) — swung and humanized as
-   * the meta line asks, on top of those velocities, its rit. and accel.
-   * gliding. Play, Save as MIDI and Save the sound all play this.
+   * (velocity.js), the curves drawn played (automation.js), then as it is
+   * played (feel.js) — swung and humanized as the meta line asks, on top of
+   * those velocities, its rit. and accel. gliding. Play, Save as MIDI and
+   * Save the sound all play this; `mix` (Save as MIDI) writes the mixer's
+   * volume and pan in too.
    */
-  const heardMidi = (score, passes = score ? M.playback(score) : []) =>
+  const heardMidi = (score, passes = score ? M.playback(score) : [], { mix = null } = {}) =>
     toMidi(...heard(score)).then((bytes) => {
       const velocities = score ? Vel.applyVelocities(score, bytes) : bytes;
-      return F.feel(velocities, { score, passes, ...F.feelOf(score ? score.meta : M.readMeta(st.text)) });
+      const curves = score ? A.applyAutomation(score, velocities, { passes, mix, volumeMin: X.VOLUME_MIN }) : velocities;
+      return F.feel(curves, { score, passes, ...F.feelOf(score ? score.meta : M.readMeta(st.text)) });
     });
 
   // The Playback section's settings, kept from one visit to the next.
@@ -2947,6 +2959,8 @@ export function startStudio(root, options = {}) {
 
   /** The mixer as heard: the score's, or the one a moving fader previews; the staff recorded into silent. */
   function mixHeard() {
+    // A stem being made: its staff alone.
+    if (st.stemMix) return st.stemMix;
     const mix = st.heardMix ?? X.mixOf(st.score);
     return st.recording?.muted ? (X.patched(mix, st.recording.lane, { mute: true }) ?? {}) : mix;
   }
@@ -3033,6 +3047,31 @@ export function startStudio(root, options = {}) {
     } catch (error) {
       say(`The WAV file could not be made: ${error.message ?? error}`, true);
     }
+  }
+
+  /** The sound as an MP3, or the stems (a WAV a staff, in a zip): audio-export.js. */
+  async function saveSound(kind) {
+    let bytes;
+    try {
+      bytes = await heardMidi(st.score);
+    } catch (error) {
+      return refuse(error);
+    }
+    const ex = await audioExport();
+    const common = { P, midi: bytes, name: fileName(), say, download };
+    if (kind === "mp3") {
+      const muted = st.score ? M.channels(st.score).filter(({ lane }) => !X.audible(mixHeard(), lane)).map(({ channel }) => channel) : [];
+      return ex.saveMp3({ ...common, muted });
+    }
+    if (!st.score) return say("The stems are made from the score the editor reads; this text holds what it does not edit.", true);
+    const tracks = M.channels(st.score);
+    // Each staff alone: the others muted, its own mute and every solo let go.
+    const alone = (lane) => {
+      let mix = X.mixOf(st.score);
+      if (lane != null) for (const t of tracks) mix = X.patched(mix, t.lane, { mute: t.lane !== lane, solo: false }) ?? {};
+      st.stemMix = lane == null ? null : mix;
+    };
+    return ex.saveStems({ ...common, tracks, alone });
   }
 
   /** The score as a picture: SVG as drawn, or PNG at twice its size — on white, in black ink, nothing selected. */
@@ -3220,6 +3259,8 @@ export function startStudio(root, options = {}) {
       written = M.writeRecording(score, rec.lane, from, M.barStart(score, lastBar + 1), rec.played, grid, { dynamics: Boolean(dynamicsBox?.checked) });
       // How hard each key was struck: the velocity of the note it wrote.
       Vel.setVelocities(score, Vel.fromRecording(score, rec.lane, rec.played, grid));
+      // The knobs, the pedal and the bend played meanwhile (automation-ui.js), as curves.
+      A.writeRecorded(score, M.upperOf(score, rec.lane), rec.cc, from, M.barStart(score, lastBar + 1));
     });
     const bars = lastBar === first ? `bar ${barNo(first)}` : `bars ${barNo(first)}–${barNo(lastBar)}`;
     say(`Recorded ${written === 1 ? "1 note" : `${written} notes`} into ${laneName(rec.lane)}, ${bars}, fitted to ${quantizeBox?.selectedOptions[0]?.textContent ?? "sixteenths"}. Ctrl+Z takes it back.`);
