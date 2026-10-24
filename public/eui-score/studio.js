@@ -28,6 +28,8 @@ const isMusicXmlName = (name) => /\.(musicxml|mxl|xml)$/i.test(name ?? "");
 /** The MIDI file reader, loaded the first time a .mid is opened. */
 const midiImport = () => import(`./midi-import.js${V}`);
 const isMidiName = (name) => /\.(mid|midi|smf|kar)$/i.test(name ?? "");
+/** The drum grid, the arpeggiator and the chord track (Edit menu), loaded the first time one is opened. */
+const patternTools = () => import(`./pattern-tools.js${V}`);
 
 const COLOURS = { selection: "#b4373a", head: "#e0662a", cursor: "#2563c9", playing: "#0f9d47" };
 const DRAFT = "eui-score-studio-draft";
@@ -717,6 +719,7 @@ export function startStudio(root, options = {}) {
 
   // What changes or moves to a note sounds it, as the person works.
   const SOUNDING = new Set(["letter", "drum", "move", "alter", "head-up", "head-down", "next", "previous"]);
+  let patterns = null;
 
   function act(name, data = {}) {
     const done = doAct(name, data);
@@ -757,6 +760,10 @@ export function startStudio(root, options = {}) {
         return draw();
       }
       case "parts": return openParts();
+      // Edit ▸ Drum grid…, Arpeggiate…, Chord track…: pattern-tools.js's dialogs.
+      case "drum-grid": case "arpeggiate": case "chord-track":
+        patterns ??= patternTools().then((T) => T.install({ root, st, M, P, edit, say, setLoop, togglePlay, stopPlay, range, selectedBarsOrNull, barNo }));
+        return patterns.then((tools) => tools.open(name));
       case "break": {
         let bar;
         try {

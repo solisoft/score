@@ -20,6 +20,8 @@ class ScoreAssets
       "musicxml.js",
       "midi-import.js",
       "piano-roll.js",
+      "patterns.js",
+      "pattern-tools.js",
       "shortcuts.js",
       "player.js",
       "midi-sync.js",

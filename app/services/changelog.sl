@@ -12,6 +12,18 @@ class Changelog
     [
       {"date": "2026-10-24", "entries": [
         {
+          "area": "site",
+          "title": "Drum grid, arpeggiator and chord track",
+          "text": "Three new tools in the Edit menu write notes for you. Drum grid shows a drum staff's bar as "
+          + "sixteen steps for the kick, snare, hi-hats, toms, crash and ride: click a step to strike it, again to "
+          + "accent it, a third time to clear it, or use the mouse wheel. The bar loops while you build it, and "
+          + "every change goes straight into the score. Arpeggiate breaks the selected chords into runs going up, "
+          + "down, up and down, or at random, in eighths, sixteenths or triplets, over one to three octaves. "
+          + "Chord track writes an accompaniment from your chord symbols on the staff you choose: block chords, "
+          + "arpeggios, or a bass note and then the chord. Undo takes back any of them in one step.",
+          "link": "playground"
+        },
+        {
           "area": "engine",
           "title": "MIDI clock and MIDI learn",
           "text": "With Send MIDI clock ticked under Playback, the device in Sound to gets the editor's clock, with "

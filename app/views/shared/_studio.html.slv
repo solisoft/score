@@ -74,6 +74,10 @@
             <hr>
             <button type="button" role="menuitem" data-act="transpose" data-scope="selection">Transpose the selection</button>
             <button type="button" role="menuitem" data-act="transpose" data-scope="score">Transpose the score</button>
+            <hr>
+            <button type="button" role="menuitem" data-act="drum-grid">Drum grid… <kbd>a drum staff's bar</kbd></button>
+            <button type="button" role="menuitem" data-act="arpeggiate">Arpeggiate the selected chords…</button>
+            <button type="button" role="menuitem" data-act="chord-track">Chord track from the chord symbols…</button>
           </div>
         </details>
         <details class="studio-dropdown">

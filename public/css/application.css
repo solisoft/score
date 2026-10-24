@@ -3360,6 +3360,53 @@
   .studio-new {
     width: min(560px, calc(100vw - 32px));
   }
+  .studio-pattern-note {
+    font-size: 13px;
+    margin: 6px 0 10px;
+  }
+  .studio-drum-grid {
+    width: min(760px, calc(100vw - 32px));
+  }
+  .studio-grid {
+    display: grid;
+    grid-template-columns: 92px repeat(var(--steps, 16), minmax(0, 1fr));
+    gap: 3px;
+    align-items: center;
+    overflow-x: auto;
+  }
+  .studio-grid-name {
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+  .studio-grid-cell {
+    height: 26px;
+    min-width: 16px;
+    padding: 0;
+    border: 1px solid var(--line-strong);
+    border-radius: 5px;
+    background: var(--sheet);
+    cursor: pointer;
+  }
+  .studio-grid-cell.beat {
+    border-left: 2px solid var(--ink-soft);
+  }
+  .studio-grid-cell[data-value="1"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    opacity: .6;
+  }
+  .studio-grid-cell[data-value="2"] {
+    background: var(--accent);
+    border-color: var(--accent-ink);
+  }
+  .studio-grid-cell:focus-visible {
+    outline: 2px solid #2563c9;
+    outline-offset: 1px;
+  }
+  .studio-grid-actions {
+    margin-top: 12px;
+  }
   .studio-templates {
     border: 0;
     margin: 0 0 10px;
