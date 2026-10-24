@@ -337,6 +337,10 @@
   .account-unconfirmed { color: var(--accent); }
   .account-resend, .auth-resend { display: inline-block; margin: 6px 0 0; }
   .account-resend { margin-left: 10px; }
+  .account-pending { padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--accent-soft); }
+  .account-pending p { margin: 0 0 8px; overflow-wrap: anywhere; }
+  .account-export { display: flex; flex-wrap: wrap; gap: 8px; }
+  .playground-app-only { margin: 0; padding: 4px 20px 6px; font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--line); }
   .two-step-steps { padding-left: 20px; color: var(--ink); }
   .two-step-qr { width: 200px; margin: 8px 0; }
   .two-step-qr svg { display: block; width: 100%; height: auto; background: #fff; }

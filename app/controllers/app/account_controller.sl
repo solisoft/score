@@ -121,6 +121,90 @@ class AppAccountController < AppBaseController
     redirect(app_home_path())
   end
 
+  # POST /app/account/export — a zip of everything in the account (?part=N
+  # of a big one: AccountExport)
+  def download_data
+    user = current_user()
+    unless AccountExport.allowed?(user)
+      @export_error = "You have downloaded your data #{EXPORTS_PER_WINDOW} times this hour: try again in an hour."
+      return @_refuse(user, "", 429)
+    end
+
+    parts = AccountExport.parts(user)
+    number = params["part"].blank? ? 1 : params["part"].to_s.to_i
+    halt(404, "That part of the export does not exist.") if number < 1 || number > parts.length
+
+    now = DateTime.utc.to_unix
+    name = "eui-score-#{DateTime.from_unix(now).to_iso.substring(0, 10)}"
+    name = "#{name}-part-#{number}-of-#{parts.length}" if parts.length > 1
+    {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/zip",
+        "Content-Disposition": "attachment; filename=\"#{name}.zip\"",
+        "Cache-Control": "no-store"
+      },
+      "body": AccountExport.zip(user, parts, number, now)
+    }
+  end
+
+  # POST /app/account/email — a new address, with the password (and a code,
+  # with two-step sign-in on): a link goes to it, a notice to the old one
+  def change_email
+    user = current_user()
+    unless User.email_change_allowed?(user)
+      wait = "You have asked to change your address #{EMAIL_CHANGES_PER_HOUR} times this hour: try again in an hour."
+      return @_refuse(user, wait, 429)
+    end
+
+    error = user.email_change_error(params["email"], params["password"], params["code"])
+    return @_refuse(user, error, 422) unless error.nil?
+    unless User.account_email_allowed?(params["email"], client_ip(req))
+      return @_refuse(user, AUTH_EMAILS_REFUSED, 429)
+    end
+
+    token = user.start_email_change(params["email"])
+    sent = MailDelivery.attempt("email change", fn() { AuthMailer.confirm_new_email(user, token) })
+    unless sent
+      user.forget_email_change()
+      user.update()
+      return @_refuse(
+        user,
+        "The email to #{params["email"].to_s.trim} could not be sent: try again in a moment.",
+        503
+      )
+    end
+
+    MailDelivery.attempt("email change notice", fn() { AuthMailer.email_change_requested(user) })
+    flash(
+      "notice",
+      "A link is on its way to #{user.email_change_to}: follow it within a day to use that address."
+      + " Until then, your address is still #{user.email}."
+    )
+    redirect(app_account_path())
+  end
+
+  # POST /app/account/email/cancel — the change under way dropped: its link stops working
+  def cancel_email_change
+    user = current_user()
+    user.forget_email_change()
+    user.update()
+    flash("notice", "The change of address is cancelled: the link sent stops working.")
+    redirect(app_account_path())
+  end
+
+  # The account page again, saying why the change of address or the export
+  # was refused.
+  def _refuse(user, message, status)
+    @user = user
+    @title = "Account"
+    @description = "Your EUI Score account."
+    @error = ""
+    @email_error = message
+    @typed_email = params["email"].to_s.trim
+    render("app/account/show", {}, {"status": status})
+  end
+
   # The page that sets an authenticator app up: the QR code and the secret.
   def _show_enrolment(secret, error)
     @secret = secret

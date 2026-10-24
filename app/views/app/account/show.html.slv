@@ -124,6 +124,59 @@
     <button type="submit" class="btn btn-primary">Change the password</button>
   </form>
 
+  <h2 id="email">Change your email address</h2>
+  <% if locals["email_error"].present? %>
+    <p class="form-error" role="alert"><%= locals["email_error"] %></p>
+  <% end %>
+  <% if user.email_change_to.present? %>
+    <div class="account-pending">
+      <p>Waiting for <strong><%= user.email_change_to %></strong>: follow the link sent to it to use it. Until then you
+        sign in with <%= user.email %>.</p>
+      <form action="<%= app_account_email_cancel_path() %>" method="POST">
+        <%- csrf_field() %>
+        <button type="submit" class="btn btn-ghost">Cancel the change</button>
+      </form>
+    </div>
+  <% end %>
+  <p class="muted">A link goes to the new address, and the change is made when it is followed. Your current address
+    is told too.</p>
+  <form action="<%= app_account_email_path() %>" method="POST" class="auth-form">
+    <%- csrf_field() %>
+    <label class="field">New email address
+      <input id="new_email" name="email" type="email" required autocomplete="email" value="<%= locals["typed_email"].to_s %>">
+    </label>
+    <label class="field">Your password, to confirm
+      <input id="email_password" name="password" type="password" required autocomplete="current-password">
+    </label>
+    <% if user.two_step?() %>
+      <label class="field">A code from the app, or a backup code
+        <input id="email_code" name="code" type="text" required autocomplete="one-time-code" maxlength="12" spellcheck="false">
+      </label>
+    <% end %>
+    <button type="submit" class="btn btn-primary">Send the link</button>
+  </form>
+
+  <h2 id="export">Export all your data</h2>
+  <p class="muted">A zip with each of your scores as LilyPond (.ly) and every version kept of it, those in the trash
+    too; who each is shared with; your account details, with no password or secret; the comments and notifications; and the list of scores
+    others share with you.</p>
+  <% if locals["export_error"].present? %>
+    <p class="form-error" role="alert"><%= locals["export_error"] %></p>
+  <% end %>
+  <% export_parts = user.export_part_count() %>
+  <% if export_parts > 1 %>
+    <p class="muted">Your scores are many: they come in <%= export_parts %> zips, so that none is too big.</p>
+  <% end %>
+  <div class="account-export">
+    <% for part in range(1, export_parts + 1) %>
+      <form action="<%= app_account_export_path() %>" method="POST">
+        <%- csrf_field() %>
+        <input type="hidden" name="part" value="<%= part %>">
+        <button type="submit" class="btn btn-ghost"><%= export_parts > 1 ? "Download part #{part} of #{export_parts}" : "Download my data (.zip)" %></button>
+      </form>
+    <% end %>
+  </div>
+
   <h2>Sign out</h2>
   <%- button_to("Sign out", logout_path(), {"method": "delete", "class": "btn btn-ghost"}) %>
 

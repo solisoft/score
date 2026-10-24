@@ -149,6 +149,43 @@ class ScoreShare < Model
     true
   end
 
+  # `user` now reads at `new_email` what was shared with them at
+  # `old_email`. Where a score was already shared with the new address too,
+  # one share stays, with the stronger role ("write" over "read"); a share
+  # of their own score made to the new address goes, since they own it.
+  # Answers how many shares moved or merged.
+  static def move_address(old_email, new_email, user)
+    moving = []
+    waiting = []
+    grouped(fn() {
+      moving = ScoreShare.where({"email": old_email}).all
+      waiting = ScoreShare.where({"email": new_email}).all
+    })
+    waiting.filter do |share|
+      share.owner_id == user._key
+    end.each do |share|
+      share.delete
+    end
+    by_score = {}
+    waiting.each do |share|
+      by_score[share.score_id] = share
+    end
+    moving.each do |share|
+      already = by_score[share.score_id]
+      if already.nil? || already.owner_id == user._key
+        share.email = new_email
+        share.update()
+      else
+        if share.role == "write" && already.role != "write"
+          already.role = "write"
+          already.update()
+        end
+        share.delete
+      end
+    end
+    moving.length
+  end
+
   static def delete_all_for(score)
     ScoreShare.where({"score_id": score._key}).delete_all
   end

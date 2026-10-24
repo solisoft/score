@@ -16,6 +16,11 @@ const AUTH_MIN_PASSWORD_LENGTH = 12  # shortest password accepted at sign-up
 const TOTP_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"  # Base32, for the authenticator's secret
 const TOTP_BACKUP_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"  # backup codes: no 0/o, 1/l/i
 const TOTP_BACKUP_COUNT = 10
+# A link to confirm a new e-mail address lives 24 hours.
+const EMAIL_CHANGE_TTL = 86400
+# Changes of address one person may ask for in an hour, right or wrong
+# password: the form must not become a way to guess it.
+const EMAIL_CHANGES_PER_HOUR = 5
 
 # Per-IP throttle on the credential endpoints (login, sign-up, reset). The
 # per-account lockout above cannot see these two attacks: credential stuffing
@@ -207,6 +212,9 @@ class User < Model
     this.reset_token_digest = null
     this.reset_sent_at = null
     this.remember_token_digest = null
+    # A change of address under way is dropped too: the reset is what the
+    # owner does when the change was not theirs.
+    this.forget_email_change()
     this.failed_attempts = 0
     this.locked_at = null
     # Invalidate every session opened before this moment.
@@ -237,6 +245,7 @@ class User < Model
   def change_password(plaintext)
     this.set_password(plaintext)
     this.remember_token_digest = null
+    this.forget_email_change()
     this.session_version = (this.session_version ?? 0) + 1
     this.update()
   end
@@ -277,6 +286,113 @@ class User < Model
 
   def confirmed?
     !this.confirmed_at.nil?
+  end
+
+  # --- Change of e-mail address -----------------------------------------------
+  #
+  # The new address is kept aside (`email_change_to`) with the digest of a
+  # link's token, until the link mailed to it is followed: only then does
+  # the account change address. The old address is told when it is asked.
+
+  # Why the address cannot become `new_email`, or nil: the password (and,
+  # with two-step sign-in on, a code) must be right, the address one, not
+  # this account's, and not another account's.
+  def email_change_error(new_email, password, code)
+    address = new_email.to_s.trim.downcase
+    return "That is not your password: the address is unchanged." unless this.authenticate(password.to_s)
+    if this.two_step?() && !this.second_step?(code)
+      return "That code is not right: type the one your authenticator app shows now, or a backup code."
+    end
+
+    return "That is not an email address." unless Regex.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", address)
+    return "That is already your address." if address == this.email
+    return "That address belongs to another account." unless User.find_by("email", address).nil?
+
+    nil
+  end
+
+  # `new_email` kept aside until its link is followed: the link's token,
+  # which only the mail to that address carries (its digest is kept).
+  def start_email_change(new_email)
+    token = uuid_v4()
+    this.email_change_to = new_email.to_s.trim.downcase
+    this.email_change_digest = Crypto.sha256(token)
+    this.email_change_sent_at = DateTime.utc.to_unix
+    this.update()
+    token
+  end
+
+  def email_change_expired?
+    return true if this.email_change_sent_at.nil?
+
+    DateTime.utc.to_unix - this.email_change_sent_at > EMAIL_CHANGE_TTL
+  end
+
+  # The change under way dropped (not saved: the caller saves).
+  def forget_email_change
+    this.email_change_to = null
+    this.email_change_digest = null
+    this.email_change_sent_at = null
+    true
+  end
+
+  # Whether `user` may ask for one more change of address now: each asked
+  # for counts, refused or not.
+  static def email_change_allowed?(user)
+    RateLimiter("email-change:#{user._key}", EMAIL_CHANGES_PER_HOUR, 3600).allowed()
+  end
+
+  # What the link with `token` is: {"user", "state"}, the state "ready",
+  # "expired", "done" (followed already: the user is the account it
+  # changed) or "unknown" (no user).
+  static def email_change_for(token)
+    if token.to_s.blank?
+      return {"user": nil, "state": "unknown"}
+    end
+
+    digest = Crypto.sha256(token.to_s)
+    user = User.find_by("email_change_digest", digest)
+    unless user.nil?
+      return {"user": user, "state": user.email_change_expired?() ? "expired" : "ready"}
+    end
+
+    done = User.find_by("email_changed_digest", digest)
+    unless done.nil?
+      return {"user": done, "state": "done"}
+    end
+
+    {"user": nil, "state": "unknown"}
+  end
+
+  # The change confirmed: the account takes the new address (confirmed, as
+  # the link proves it is theirs), the shares made to the old one move with
+  # it, and every session and remembered browser is signed out. The old
+  # address, or nil when the new one has meanwhile become another
+  # account's: the change is then dropped, and nothing else changes.
+  def finish_email_change
+    address = this.email_change_to
+    unless User.find_by("email", address).nil?
+      this.forget_email_change()
+      this.update()
+      return nil
+    end
+
+    old = this.email
+    this.email = address
+    this.confirmed_at = DateTime.utc.to_unix
+    this.email_changed_digest = this.email_change_digest
+    this.forget_email_change()
+    this.remember_token_digest = null
+    this.session_version = (this.session_version ?? 0) + 1
+    this.update()
+    ScoreShare.move_address(old, address, this)
+    old
+  end
+
+  # How many zips "Export all my data" comes in (AccountExport): what the
+  # account page can ask, where the service is out of reach.
+  def export_part_count
+    AccountExport.parts(this).length
   end
 
   # --- Remember me ------------------------------------------------------------

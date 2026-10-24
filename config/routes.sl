@@ -68,6 +68,9 @@ middleware("require_app_database", fn() {
   get("/confirm_email", "confirmations#show", name: "confirm_email")
   get("/confirmation/resend", "confirmations#new", name: "confirmation_resend")
   post("/confirmation/resend", "confirmations#create")
+  # A change of address, from the link mailed to the new one: signed in or not.
+  get("/account/email", "email_changes#show", name: "confirm_email_change")
+  post("/account/email", "email_changes#update")
 
   middleware("require_login", fn() {
     get("/app/account", "app/account#show", name: "app_account")
@@ -78,6 +81,9 @@ middleware("require_app_database", fn() {
     post("/app/account/ai", "app/account#ai_key", name: "app_account_ai")
     post("/app/account/ai/remove", "app/account#forget_ai_key", name: "app_account_ai_remove")
     post("/app/account/notifications", "app/account#notifications", name: "app_account_notifications")
+    post("/app/account/export", "app/account#download_data", name: "app_account_export")
+    post("/app/account/email", "app/account#change_email", name: "app_account_email")
+    post("/app/account/email/cancel", "app/account#cancel_email_change", name: "app_account_email_cancel")
     delete("/app/account", "app/account#destroy")
 
     # What the app tells each person (#385): the bell, the list, read.

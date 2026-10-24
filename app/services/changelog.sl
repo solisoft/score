@@ -13,6 +13,20 @@ class Changelog
       {"date": "2026-10-24", "entries": [
         {
           "area": "site",
+          "title": "Export all your data, and change your email address",
+          "text": "The account page has two new parts. Export all your data downloads a zip: each of your scores "
+          + "as LilyPond, in a folder with every version kept of it (those in the trash too, in a trash folder), "
+          + "who each is shared with and with which role, your account details (no password or secret), and the "
+          + "list of scores others share with you; the comment threads on your scores, every comment you wrote "
+          + "and your notifications. A very big account comes in a few zips. Change your email address asks "
+          + "for your password (and a code, with two-step sign-in on) and sends a link to the new "
+          + "address; the change is made only when it is followed, within a day. Your current address is told, "
+          + "the scores shared with your old address follow you, and every other browser is signed out. The "
+          + "playground now says that the MIDI view and the AI features are in the app.",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "A file chosen on the start screen while it loads is no longer lost",
           "text": "On the app's start screen, a file chosen with Import in the first moments after the page "
           + "appeared could be dropped without a word, and the score never opened. The page now listens for "

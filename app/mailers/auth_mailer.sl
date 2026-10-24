@@ -18,6 +18,25 @@ class AuthMailer < Mailer
     this.mail(to: user.email, subject: "Confirm your email address")
   end
 
+  # To the new address of a change asked for on the account page: the link
+  # that makes the change. Only this mail carries it.
+  def confirm_new_email(user, token)
+    @user = user
+    @new_email = user.email_change_to
+    @hours = EMAIL_CHANGE_TTL / 3600
+    @confirm_url = auth_base_url() + "/account/email?token=" + token
+    this.mail(to: user.email_change_to, subject: "Confirm your new email address")
+  end
+
+  # To the old address, as the change is asked for: nothing changes until
+  # the new address confirms, and a new password stops it.
+  def email_change_requested(user)
+    @user = user
+    @new_email = user.email_change_to
+    @reset_url = auth_base_url() + "/password/reset"
+    this.mail(to: user.email, subject: "A change of your email address was asked for")
+  end
+
   # Sent once, when the lockout trips. The sign-in response deliberately says
   # nothing about the lock — telling the browser "this account is locked" also
   # tells whoever is guessing that they found the right password — so this is
