@@ -176,6 +176,40 @@ describe("AppScoresController") do
     assert_not(start.contains(">E♭ major</option>"), "no key without its minor")
   end
 
+  test("a score's headers, footers and systems a page open in its editor; a stranger sees none of it") do
+    owner = library_user()
+    footer = "\\markup \\fill-line { \"Practice copy\" \\fromproperty #'page:page-number-string }"
+    paper = "\\paper { systems-per-page = 3 oddFooterMarkup = #{footer} }"
+    header = "\\header { title = \"Paged\" piece = \"Allegro\" opus = \"Op. 3\" copyright = \"(c) 2026 Me\" }"
+    score = Score.start(owner, "#{paper}\n#{header}\n{ c'1 | d'1 }")
+    library_sign_in(owner)
+    response = get("/app/scores/#{score._key}")
+    assert_eq(res_status(response), 200)
+    page = res_body(response)
+    # Score properties: the header's piece, opus and copyright, the systems a page, the four lines.
+    for field in [
+      "piece",
+      "opus",
+      "copyright",
+      "systems-per-page",
+      "page-oddHeader",
+      "page-evenHeader",
+      "page-oddFooter",
+      "page-evenFooter"
+    ]
+      assert_contains(page, "data-field=\"#{field}\"")
+    end
+    # The engraving the editor opens on is drawn, the page settings passed over or printed.
+    assert_null(assigns()["figure"]["error"])
+    assert_contains(Score.find(score._key).source, "oddFooterMarkup")
+    stranger = library_user()
+    library_sign_in(stranger)
+    refused = get("/app/scores/#{score._key}")
+    assert_eq(res_status(refused), 403)
+    assert_not(res_body(refused).contains("Practice copy"))
+    assert_not(res_body(refused).contains("data-field=\"page-oddFooter\""))
+  end
+
   test("renames, copies, trashes, restores, then deletes for good") do
     owner = library_user()
     score = Score.start(owner, Score.blank_source("Prelude"))

@@ -125,7 +125,7 @@
         .then(function (all) {
           return all[2].text().then(function (src) {
             var M = all[1];
-            var read = M.fromParsed(JSON.parse(all[0].engine.score_json(src)));
+            var read = M.fromParsed(JSON.parse(all[0].engine.score_json(src)), src);
             return { E: all[0], M: M, score: read.score || null };
           });
         });

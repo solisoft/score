@@ -602,6 +602,9 @@
         <label class="tool-field">Title <input type="text" data-field="title"></label>
         <label class="tool-field">Subtitle <input type="text" data-field="subtitle"></label>
         <label class="tool-field">Composer <input type="text" data-field="composer"></label>
+        <label class="tool-field">Piece <input type="text" data-field="piece" placeholder="Allegro"></label>
+        <label class="tool-field">Opus <input type="text" data-field="opus" placeholder="Op. 36, No. 1"></label>
+        <label class="tool-field">Copyright <input type="text" data-field="copyright" placeholder="© 2026 …"></label>
         <label class="tool-field">Key
           <select data-field="key">
             <% for key_choice in editor_keys() %>
@@ -650,6 +653,24 @@
           </select>
         </label>
         <label class="tool-check"><input type="checkbox" data-field="even-pages"> Spread the lines evenly over the pages</label>
+        <label class="tool-field">Systems a page
+          <select data-field="systems-per-page">
+            <option value="">As many as fit</option>
+            <% for count in range(1, 11) %>
+              <option value="<%= count %>"><%= count %></option>
+            <% end %>
+          </select>
+        </label>
+        <fieldset class="studio-page-lines" data-page-lines>
+          <legend>Headers and footers</legend>
+          <label class="tool-field">Header <input type="text" data-field="page-oddHeader" placeholder="{title} | | {page}"></label>
+          <label class="tool-field">Header, even pages <input type="text" data-field="page-evenHeader" placeholder="Same as the header"></label>
+          <label class="tool-field">Footer <input type="text" data-field="page-oddFooter" placeholder="The title and the page, n / N"></label>
+          <label class="tool-field">Footer, even pages <input type="text" data-field="page-evenFooter" placeholder="Same as the footer"></label>
+          <p class="muted studio-properties-note">Left | centre | right: one item is centred, two stand at the ends.
+            {title}, {composer}, {piece}, {opus}, {copyright} and {page} are filled in. The copyright is printed at the
+            foot of the first page.</p>
+        </fieldset>
     <p class="muted studio-properties-note">Paper and staff size are the PDF's. Each staff's instrument, clef and name: select a note of it, then the toolbox's
       <strong>This staff</strong>.</p>
   </dialog>

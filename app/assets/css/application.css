@@ -278,6 +278,8 @@
   .studio-properties { width: min(520px, calc(100vw - 32px)); }
   .studio-properties .tool-field { margin-bottom: 10px; }
   .studio-properties-note { font-size: 13px; margin-top: 8px; }
+  .studio-page-lines { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px 10px; margin: 12px 0 0; min-width: 0; }
+  .studio-page-lines legend { font: 600 13px/1.3 var(--font-sans); color: var(--ink-soft); padding: 0 4px; }
   .studio-parts { width: min(640px, calc(100vw - 32px)); }
   .studio-parts-note { font-size: 13px; margin: 6px 0 10px; }
   .studio-parts-preview { background: #fff; color: #111; border: 1px solid var(--line); border-radius: 10px; padding: 10px; max-height: 50vh; overflow: auto; margin-bottom: 12px; }

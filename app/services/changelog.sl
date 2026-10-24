@@ -13,6 +13,21 @@ class Changelog
       {"date": "2026-10-24", "entries": [
         {
           "area": "site",
+          "title": "Headers and footers, systems a page, piece, opus and copyright",
+          "text": "File ▸ Score properties now sets the page around the music: a header and a footer, with "
+          + "different ones on even pages if you like, each with words at the left, the centre and the right, "
+          + "and {title}, {composer} or {page} filled in; how many systems go on a page; and the header's "
+          + "piece, opus and copyright. They are written into the score's \\paper and \\header as LilyPond "
+          + "reads them, and kept when you edit anything else; a LilyPond file that already sets "
+          + "oddHeaderMarkup, evenFooterMarkup or systems-per-page opens with them. The PDF prints them, with "
+          + "the copyright at the foot of the first page and the piece and opus over the first line, once the "
+          + "engraver that reads them is on the site; until then the score opens and saves with them "
+          + "unchanged. That engraver also makes the PDF's words text: the title, the lyrics and the marks "
+          + "can be selected, copied and searched.",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "Comments on a bar, and notifications",
           "text": "Select some bars or a note and choose Edit › Comment on the selection (or the 💬 beside the "
           + "selection, or Ctrl+Alt+M): the comment is kept on those bars of that staff, with a speech bubble over "

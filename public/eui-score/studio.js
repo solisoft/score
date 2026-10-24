@@ -316,7 +316,7 @@ export function startStudio(root, options = {}) {
     st.text = text;
     try {
       const parsed = JSON.parse(score_json(text));
-      const result = M.fromParsed(parsed);
+      const result = M.fromParsed(parsed, text);
       st.score = result.score ?? null;
       // The mixer, the velocities…: on the text's last line, a comment the engraver passes over.
       if (st.score) st.score.meta = M.readMeta(text);
@@ -2176,6 +2176,7 @@ export function startStudio(root, options = {}) {
     set("title", st.score.header.title);
     set("subtitle", st.score.header.subtitle);
     set("composer", st.score.header.composer);
+    for (const field of ["piece", "opus", "copyright"]) set(field, st.score.header[field]);
     set("key", String(st.score.key));
     set("time", M.timeText(st.score));
     fillPickup();
@@ -2188,6 +2189,8 @@ export function startStudio(root, options = {}) {
     set("staff-size", String(st.score.paper?.staffSize ?? 20));
     const even = root.querySelector('[data-field="even-pages"]');
     if (even) even.checked = st.score.paper?.evenPages === true;
+    set("systems-per-page", st.score.paper?.systemsPerPage ? String(st.score.paper.systemsPerPage) : "");
+    for (const [key] of M.PAGE_LINES) set(`page-${key}`, M.pageLineText(st.score.paper?.marks?.[key]));
     set("staff-name", staff.name);
     set("staff-short", staff.short);
     set("staff-clef", staff.clef);
@@ -2263,7 +2266,9 @@ export function startStudio(root, options = {}) {
     edit((score) => {
       const staff = score.staves[M.upperOf(score, staffOf())] ?? score.staves[0];
       switch (el.dataset.field) {
-        case "title": case "subtitle": case "composer": score.header[el.dataset.field] = value; break;
+        case "title": case "subtitle": case "composer": case "piece": case "opus": case "copyright": score.header[el.dataset.field] = value; break;
+        case "systems-per-page": M.setSystemsPerPage(score, value); break;
+        case "page-oddHeader": case "page-evenHeader": case "page-oddFooter": case "page-evenFooter": M.setPageLine(score, el.dataset.field.slice(5), value); break;
         case "key": M.setKey(score, Number(value)); break;
         case "time": M.setMetre(score, value); break;
         case "pickup": M.setPickup(score, M.pickupOf(value)); break;

@@ -2980,6 +2980,210 @@ function paperFrom(p) {
   const out = { size: p?.size ?? null, staffSize: p?.staff_size ?? null };
   for (const [field] of MARGINS) out[field] = p?.[field] ?? null;
   out.evenPages = p?.even_pages ?? null;
+  out.systemsPerPage = null;
+  out.marks = null;
+  return out;
+}
+
+// ---- Headers and footers, systems per page (#388) ------------------------------------------
+//
+// `score.paper.systemsPerPage` (null: as many as fit) and `score.paper.marks`
+// {oddHeader, evenHeader, oddFooter, evenFooter}, each null or a line: its
+// cells, as LilyPond's \\fill-line spreads them — one is centred, two stand
+// at the ends, three are left, centre and right — each cell words with
+// fields in braces, {title}, {composer}, {page}…; or `{ raw }`, a markup
+// this does not write, kept as the text says it. Written in \\paper as
+// LilyPond reads them (oddHeaderMarkup = \\markup \\fill-line { … }); an even
+// page with none takes the odd page's. Read back from the text (readPage),
+// so a source the engraver of the day passes over keeps them.
+
+/** The four lines, by the model's name and \\paper's. */
+export const PAGE_LINES = [["oddHeader", "oddHeaderMarkup"], ["evenHeader", "evenHeaderMarkup"], ["oddFooter", "oddFooterMarkup"], ["evenFooter", "evenFooterMarkup"]];
+/** The fields a header or a footer may name: the header's, and the page's number. */
+export const PAGE_FIELDS = ["title", "subtitle", "composer", "arranger", "poet", "piece", "opus", "instrument", "copyright", "page"];
+const MAX_SYSTEMS_PER_PAGE = 20;
+
+/** At most `count` systems on a page of the PDF; null, "" or 0 for as many as fit. */
+export function setSystemsPerPage(score, count) {
+  const n = count == null || count === "" ? 0 : Number(count);
+  if (!Number.isInteger(n) || n < 0 || n > MAX_SYSTEMS_PER_PAGE) throw new Error(`systems a page: 1 to ${MAX_SYSTEMS_PER_PAGE}, or as many as fit`);
+  score.paper = { ...(score.paper ?? paperFrom(null)), systemsPerPage: n || null };
+}
+
+/**
+ * A header or footer (`which`: oddHeader, evenHeader, oddFooter, evenFooter)
+ * from what the page settings say: "left | centre | right", "left | right",
+ * or one item, centred; {title}, {composer}, {page}… filled in. Empty: none
+ * (an even page then takes the odd page's). A text starting \\markup is kept
+ * as it is written.
+ */
+export function setPageLine(score, which, text) {
+  if (!PAGE_LINES.some(([key]) => key === which)) throw new Error(`no such header or footer: ${which}`);
+  const said = String(text ?? "").trim();
+  if (said.length > 300) throw new Error("a header or a footer is at most 300 characters");
+  let line = null;
+  if (said.startsWith("\\markup")) line = { raw: said };
+  else if (said) {
+    const cells = said.split("|").map((cell) => cell.trim());
+    if (cells.length > 3) throw new Error("a header or a footer has three places at most: left | centre | right");
+    for (const cell of cells) {
+      for (const [, name] of cell.matchAll(/\{([^{}]*)\}/g)) {
+        if (!PAGE_FIELDS.includes(name)) throw new Error(`{${name}} is not a field a page prints: ${PAGE_FIELDS.map((f) => `{${f}}`).join(", ")}`);
+      }
+    }
+    line = { cells };
+  }
+  const marks = { ...(score.paper?.marks ?? {}) };
+  if (line) marks[which] = line;
+  else delete marks[which];
+  score.paper = { ...(score.paper ?? paperFrom(null)), marks: Object.keys(marks).length ? marks : null };
+}
+
+/** A line as the page settings show it: "left | centre | right", one item alone, or its \\markup. */
+export function pageLineText(line) {
+  if (!line) return "";
+  if (line.raw) return line.raw;
+  return line.cells.length === 1 ? line.cells[0] : line.cells.join(" | ");
+}
+
+/** One cell as LilyPond markup: a string, a field, or the two \\concat'ed. */
+function cellText(cell) {
+  const items = [];
+  let at = 0;
+  for (const m of cell.matchAll(/\{([a-z]+)\}/g)) {
+    if (m.index > at) items.push(quote(cell.slice(at, m.index)));
+    items.push(m[1] === "page" ? "\\fromproperty #'page:page-number-string" : `\\fromproperty #'header:${m[1]}`);
+    at = m.index + m[0].length;
+  }
+  if (at < cell.length) items.push(quote(cell.slice(at)));
+  if (!items.length) return '""';
+  return items.length === 1 ? items[0] : `\\concat { ${items.join(" ")} }`;
+}
+
+/** A line as \\paper writes it. */
+function lineText(line) {
+  if (line.raw) return line.raw;
+  return `\\markup \\fill-line { ${line.cells.map(cellText).join(" ")} }`;
+}
+
+/** LilyPond's tokens: strings, braces, commands, Scheme (#'header:title, #4), words; comments skipped. */
+function markupTokens(text) {
+  const out = [];
+  const re = /%\{[\s\S]*?%\}|%[^\n]*|"((?:[^"\\]|\\.)*)"|([{}])|\\([A-Za-z-]+)|#'?([^\s{}"]*)|([^\s{}"\\#%]+)/g;
+  for (const m of text.matchAll(re)) {
+    const at = m.index;
+    const end = at + m[0].length;
+    if (m[1] != null) out.push({ t: "str", v: m[1].replace(/\\(.)/g, "$1"), at, end });
+    else if (m[2]) out.push({ t: m[2], at, end });
+    else if (m[3]) out.push({ t: "cmd", v: m[3], at, end });
+    else if (m[4] != null) out.push({ t: "scheme", v: m[4], at, end });
+    else if (m[5]) out.push({ t: "word", v: m[5], at, end });
+  }
+  return out;
+}
+
+/** Where the item at `i` ends (the index after it), read leniently. */
+function itemEnd(toks, i) {
+  const t = toks[i];
+  if (!t) return i;
+  if (t.t === "{") {
+    let depth = 0;
+    for (let j = i; j < toks.length; j++) {
+      if (toks[j].t === "{") depth++;
+      else if (toks[j].t === "}" && --depth === 0) return j + 1;
+    }
+    return toks.length;
+  }
+  if (t.t === "cmd") {
+    let j = i + 1;
+    while (toks[j]?.t === "scheme") j++;
+    // Those that take no markup after their Scheme.
+    if (["null", "fromproperty", "hspace", "vspace"].includes(t.v)) return j;
+    return toks[j] && toks[j].t !== "}" ? itemEnd(toks, j) : j;
+  }
+  return i + 1;
+}
+
+/** The item at `i` as a cell's words, or null when it says what the model does not write. */
+function cellOf(toks, i, end) {
+  const t = toks[i];
+  if (!t || i >= end) return null;
+  if (t.t === "str" || t.t === "word") return /[{}]/.test(t.v) ? null : t.v;
+  if (t.t === "cmd" && t.v === "null") return "";
+  if (t.t === "cmd" && t.v === "fromproperty") {
+    const [group, name] = String(toks[i + 1]?.v ?? "").split(":");
+    if (group === "page" && name === "page-number-string") return "{page}";
+    return group === "header" && PAGE_FIELDS.includes(name) && name !== "page" ? `{${name}}` : null;
+  }
+  const joined = (from, sep) => {
+    if (toks[from]?.t !== "{") return cellOf(toks, from, itemEnd(toks, from));
+    const parts = [];
+    for (let j = from + 1; j < itemEnd(toks, from) - 1; j = itemEnd(toks, j)) {
+      const part = cellOf(toks, j, itemEnd(toks, j));
+      if (part == null) return null;
+      parts.push(part);
+    }
+    return parts.join(sep);
+  };
+  if (t.t === "{") return joined(i, " ");
+  if (t.t === "cmd" && t.v === "concat") return joined(i + 1, "");
+  if (t.t === "cmd" && t.v === "line") return joined(i + 1, " ");
+  return null;
+}
+
+/** A \\markup's line from token `i` (after \\markup) to `end`, or null for one the model does not write. */
+function lineOf(toks, i, end) {
+  let at = i;
+  let close = end;
+  if (toks[at]?.t === "{" && toks[at + 1]?.t === "cmd" && toks[at + 1].v === "fill-line") {
+    at += 1;
+    close = end - 1;
+  }
+  if (toks[at]?.t !== "cmd" || toks[at].v !== "fill-line") {
+    const alone = cellOf(toks, i, end);
+    return alone == null ? null : { cells: [alone, "", ""] };
+  }
+  const from = at + 1;
+  if (toks[from]?.t !== "{") return null;
+  const cells = [];
+  for (let j = from + 1; j < itemEnd(toks, from) - 1 && j < close; j = itemEnd(toks, j)) {
+    const cell = cellOf(toks, j, itemEnd(toks, j));
+    if (cell == null) return null;
+    cells.push(cell);
+  }
+  return cells.length >= 1 && cells.length <= 3 ? { cells } : null;
+}
+
+/**
+ * What a source's \\paper says of the headers, the footers and the systems a
+ * page: `{ systemsPerPage, marks }` as `score.paper` keeps them.
+ */
+export function readPage(source) {
+  const text = String(source ?? "");
+  const out = { systemsPerPage: null, marks: null };
+  const toks = markupTokens(text);
+  const start = toks.findIndex((t, k) => t.t === "cmd" && t.v === "paper" && toks[k + 1]?.t === "{");
+  if (start < 0) return out;
+  const end = itemEnd(toks, start + 1);
+  const marks = {};
+  for (let k = start + 2; k < end - 1; k++) {
+    const t = toks[k];
+    if (t.t !== "word") continue;
+    const assigned = toks[k + 1]?.t === "word" && toks[k + 1].v === "=";
+    const name = assigned ? t.v : t.v.replace(/=$/, "");
+    const valueAt = assigned ? k + 2 : k + 1;
+    if (/^(max-)?systems-per-page$/.test(name)) {
+      const n = Number(String(toks[valueAt]?.v ?? "").replace(/^=/, ""));
+      if (Number.isInteger(n) && n >= 1) out.systemsPerPage = Math.min(n, MAX_SYSTEMS_PER_PAGE);
+      continue;
+    }
+    const which = PAGE_LINES.find(([, lily]) => lily === name)?.[0];
+    if (!which || toks[valueAt]?.t !== "cmd" || toks[valueAt].v !== "markup") continue;
+    const after = itemEnd(toks, valueAt + 1);
+    marks[which] = lineOf(toks, valueAt + 1, after) ?? { raw: text.slice(toks[valueAt].at, toks[after - 1].end) };
+    k = after - 1;
+  }
+  if (Object.keys(marks).length) out.marks = marks;
   return out;
 }
 
@@ -3056,6 +3260,8 @@ function pageText(score) {
   if (p.size && p.size !== "a4") inside.push(`#(set-paper-size ${quote(p.size)})`);
   for (const [field, name] of MARGINS) if (p[field] != null) inside.push(`${name} = ${p[field]}\\mm`);
   if (p.evenPages != null) inside.push(`page-breaking = #ly:${p.evenPages ? "optimal" : "minimal"}-breaking`);
+  if (p.systemsPerPage) inside.push(`systems-per-page = ${p.systemsPerPage}`);
+  for (const [key, name] of PAGE_LINES) if (p.marks?.[key]) inside.push(`${name} = ${lineText(p.marks[key])}`);
   if (inside.length) lines.push(`\\paper { ${inside.join(" ")} }`);
   return lines.length ? lines.join("\n") + "\n" : "";
 }
@@ -3506,6 +3712,8 @@ export function passedOver(warnings) {
   const names = new Set();
   for (const w of warnings ?? []) {
     if (/^movement \d|^the lyrics of movement/.test(w)) continue;
+    // Kept by the model (readPage) and written back, whether the engraver draws them or not.
+    if (/^\\paper's ((max-)?systems-per-page|(odd|even)(Header|Footer)Markup) /.test(w)) continue;
     names.add(w.replace(/:.*$/, "").replace(/ (is|are) not (drawn|read|engraved|set|words this prints).*$/, "").replace(/ outside the music$/, "").trim());
   }
   const list = [...names].filter(Boolean);
@@ -3519,7 +3727,7 @@ const CLEF_NAMES = { "G,-2,0": "treble", "G,-2,-1": "treble_8", "F,2,0": "bass",
  * what it uses that this model does not keep — so the page edits the text
  * instead of losing it.
  */
-export function fromParsed(parsed) {
+export function fromParsed(parsed, source = null) {
   const unsupported = new Set();
   // What the model reads and does not keep: the first edit writes the text without it.
   const lost = new Set();
@@ -3529,6 +3737,8 @@ export function fromParsed(parsed) {
   if ((parsed.warnings ?? []).some((w) => /^movement \d/.test(w))) unsupported.add(MOVEMENTS);
   const score = { header: { ...parsed.header }, key: 0, time: [4, 4], tempo: null, group: "none", groups: [], staves: [], repeats: [], changes: [] };
   score.paper = paperFrom(parsed.paper);
+  // The headers, the footers and the systems a page: read from the text, which keeps them.
+  if (source != null) Object.assign(score.paper, readPage(source));
   score.breaks = {};
   // Where the first staff's repeat signs fall, in bars: the score's repeats.
   const signs = [];
