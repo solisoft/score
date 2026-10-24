@@ -121,6 +121,8 @@
             <button type="button" role="menuitem" data-act="cross" data-dir="1">Notes on the staff below <kbd>Ctrl+Shift+↓</kbd></button>
             <button type="button" role="menuitem" data-act="lyrics">Lyrics <kbd>Ctrl+L</kbd></button>
             <button type="button" role="menuitem" data-act="chord">Chord symbol <kbd>Ctrl+K</kbd></button>
+            <button type="button" role="menuitem" data-act="figures">Figures (figured bass)</button>
+            <button type="button" role="menuitem" data-act="fret">Guitar chord diagram</button>
             <button type="button" role="menuitem" data-act="text">Staff text</button>
             <button type="button" role="menuitem" data-act="expression">Expression</button>
             <hr>
@@ -131,6 +133,7 @@
             <hr>
             <button type="button" role="menuitem" data-act="add-staff">A staff</button>
             <button type="button" role="menuitem" data-act="chord-line">A line of chord names over the staff</button>
+            <button type="button" role="menuitem" data-act="figure-line">A figured bass under the staff</button>
             <button type="button" role="menuitem" data-act="voice" data-voice="2">A second voice <kbd>Ctrl+Alt+2</kbd></button>
             <button type="button" role="menuitem" data-act="voice" data-voice="3">A third voice <kbd>Ctrl+Alt+3</kbd></button>
             <button type="button" role="menuitem" data-act="voice" data-voice="4">A fourth voice <kbd>Ctrl+Alt+4</kbd></button>
@@ -542,7 +545,7 @@
         <label class="tool-field">Clef
           <select data-field="staff-clef">
             <option value="treble">Treble</option><option value="bass">Bass</option><option value="alto">Alto</option>
-            <option value="tenor">Tenor</option><option value="treble_8">Treble 8 (guitar)</option><option value="bass_8">Bass 8</option>
+            <option value="tenor">Tenor</option><option value="treble_8">Treble 8 (guitar)</option><option value="bass_8">Bass 8</option><option value="treble^8">Treble 8 above (piccolo)</option><option value="bass^8">Bass 8 above</option>
           </select>
         </label>
         <label class="tool-field">Key
@@ -580,7 +583,7 @@
           <select data-field="change-clef">
             <option value="">As before</option>
             <option value="treble">Treble</option><option value="bass">Bass</option><option value="alto">Alto</option>
-            <option value="tenor">Tenor</option><option value="treble_8">Treble 8 (guitar)</option><option value="bass_8">Bass 8</option>
+            <option value="tenor">Tenor</option><option value="treble_8">Treble 8 (guitar)</option><option value="bass_8">Bass 8</option><option value="treble^8">Treble 8 above (piccolo)</option><option value="bass^8">Bass 8 above</option>
           </select>
         </label>
         <label class="tool-check"><input type="checkbox" data-field="change-double"> Double bar line before it</label>

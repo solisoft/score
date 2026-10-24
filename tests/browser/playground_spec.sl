@@ -335,6 +335,34 @@ describe("The playground, in a browser") do
     assert_no_page_errors()
   end
 
+  test("a figured bass and a guitar chord diagram are typed on the score (#375)") do
+    type_source("{ \\clef bass c2 g,2 | c1 }")
+    caret_on("c2")
+    evaluate("document.querySelector(\"[data-act='figure-line']\").click()")
+    sleep(0.4)
+    assert_contains(playground_text(), "\\new FiguredBass \\figuremode")
+    caret_on("c2")
+    evaluate("document.querySelector(\"[data-act='figures']\").click()")
+    sleep(0.3)
+    type_chord("6 4", " ")
+    type_chord("7+", "Enter")
+    assert_contains(playground_text(), "<6 4>4 <7+>2. | s1")
+    # A shape over a note, as six strings from the low E.
+    caret_on("g,2")
+    evaluate("document.querySelector(\"[data-act='fret']\").click()")
+    sleep(0.3)
+    type_chord("320003", "Enter")
+    assert_contains(playground_text(), "g,2^\\markup \\fret-diagram \"6-3;5-2;4-o;3-o;2-o;1-3;\"")
+    # One that is not a guitar chord is refused, and the score stays.
+    before = playground_text()
+    caret_on("c1")
+    evaluate("document.querySelector(\"[data-act='fret']\").click()")
+    sleep(0.3)
+    type_chord("x3201", "Enter")
+    assert_eq(playground_text(), before)
+    assert_no_page_errors()
+  end
+
   test("a real file's breaths, bowings, cis! and mid-bar clef are edited on the score; its settings are named") do
     type_source("{ \\override NoteHead.color = #red \\stemUp c''4\\upbow cis''!4 \\breathe \\clef bass e4 f4 | g1 }")
     assert_not(evaluate("document.querySelector('#studio').classList.contains('studio-text-only')"))

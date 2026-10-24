@@ -251,7 +251,7 @@ export function fromMusicXML(text) {
   const valid = groups.filter((g) => g.first <= g.last && g.last < blocks.length);
   const whole = valid.find((g) => g.first === 0 && g.last === blocks.length - 1 && g.first < g.last);
   // One staff whose words follow a voice: its Lyrics line beside it, inside << >>.
-  const body = blocks.length === 1 ? (/\\lyricsto/.test(blocks[0]) ? `<<\n${indent(blocks[0])}\n>>` : blocks[0]) : whole ? nest(0, blocks.length - 1, valid) : `<<\n${indent(nest(0, blocks.length - 1, valid))}\n>>`;
+  const body = blocks.length === 1 ? (/\\lyricsto|\\new FiguredBass/.test(blocks[0]) ? `<<\n${indent(blocks[0])}\n>>` : blocks[0]) : whole ? nest(0, blocks.length - 1, valid) : `<<\n${indent(nest(0, blocks.length - 1, valid))}\n>>`;
   // Bars of rest drawn as one (<multiple-rest>): gathered, as \\compressMMRests gathers them.
   const gathered = parts.some((part) => kids(part, "measure").some((m) => kids(m, "attributes").some((a) => kid(kid(a, "measure-style"), "multiple-rest"))));
   return { source: `${head}${gathered ? "\\compressMMRests " : ""}${body}\n`, warnings: [...warnings] };
@@ -285,6 +285,9 @@ function readPart(part, info, first, warnings) {
   // Each voice's staff (MusicXML numbers voices across the part), the staff
   // its last note was drawn on when another, and the staves notes cross to
   // or from: named, `\\new Staff = "P1s2"`.
+  // A figured bass's figures, each `{ at, text, length }` in quarters, and where the next one starts.
+  const figuresRead = [];
+  let figureNext = null;
   const voiceHome = new Map();
   const lastCross = new Map();
   const crossing = new Set();
@@ -339,7 +342,11 @@ function readPart(part, info, first, warnings) {
   }
 
   /** A grace note (or chord) as LilyPond writes it. */
-  const graceText = (g) => (g.pitches.length > 1 ? `<${g.pitches.join(" ")}>` : g.pitches[0]) + durationText(g.value);
+  // A grace note with its fingering, as a note's: c8-2, <c-1 e-3>16.
+  const graceText = (g) => {
+    const marks = g.marks ?? [];
+    return g.pitches.length > 1 ? `<${g.pitches.map((p, k) => p + (marks[k] ?? "")).join(" ")}>${durationText(g.value)}` : g.pitches[0] + durationText(g.value) + (marks[0] ?? "");
+  };
 
   /**
    * Grace notes after a note (\afterGrace). MusicXML has none of its own:
@@ -519,6 +526,13 @@ function readPart(part, info, first, warnings) {
         else if (el.attrs["new-system"] === "yes" && measureStart > 0) put(at(1), 0, cursor, "\\break");
       } else if (el.name === "note") {
         readNote(el);
+        if (!kid(el, "chord")) figureNext = null;
+      } else if (el.name === "figured-bass") {
+        // Before the note it starts on; one after another, each after the one before.
+        const at = figureNext ?? cursor;
+        const length = numberIn(el, "duration");
+        figuresRead.push({ at: at / divisions, text: figuresIn(el), length: length ? length / divisions : null });
+        figureNext = length ? at + length : null;
       }
     }
     // Grace notes ending the measure, after a note of their lane in it: that note's \afterGrace.
@@ -692,12 +706,17 @@ function readPart(part, info, first, warnings) {
       } else values = spell((duration / divisions) * (ratio ? ratio.n / ratio.d : 1));
       if (isGrace) {
         if (rest || isChord) {
-          if (isChord && graces.get(key)?.length) graces.get(key)[graces.get(key).length - 1].pitches.push(pitch);
+          if (isChord && graces.get(key)?.length) {
+            const g = graces.get(key)[graces.get(key).length - 1];
+            g.pitches.push(pitch);
+            g.marks.push(fingeringText(kids(note, "notations")));
+          }
           return;
         }
         const list = graces.get(key) ?? [];
         const grace = kid(note, "grace");
-        list.push({ pitches: [pitch], value: values[0], slash: grace.attrs.slash === "yes", steal: Number(grace.attrs["steal-time-previous"]) || 0 });
+        // With its fingering, as a note's.
+        list.push({ pitches: [pitch], marks: [fingeringText(kids(note, "notations"))], value: values[0], slash: grace.attrs.slash === "yes", steal: Number(grace.attrs["steal-time-previous"]) || 0 });
         graces.set(key, list);
         return;
       }
@@ -779,8 +798,10 @@ function readPart(part, info, first, warnings) {
       const after = pending?.length > 0 && (rest || pending.some((g) => g.steal > 0)) && graceAfter(key, pending);
       if (pending?.length && !after) {
         const written = pending.map(graceText);
+        // A fingered grace note is written in braces, where eui-score reads its fingering.
+        const fingered = pending.some((g) => g.marks.some(Boolean));
         const kind = pending.every((g) => g.slash) ? "acciaccatura" : "grace";
-        lane.push(`\\${kind} ${written.length === 1 ? written[0] : `{ ${written.join(" ")} }`}`);
+        lane.push(`\\${kind} ${written.length === 1 && !fingered ? written[0] : `{ ${written.join(" ")} }`}`);
         graces.set(key, []);
       }
       // The words and marks waiting for this staff's next note go on the first lane's.
@@ -902,7 +923,22 @@ function readPart(part, info, first, warnings) {
     return [`\\new Staff${id}${withBlock} { ${music} }`, ...verses].join("\n");
   };
   const blocks = lanes.map(staffText);
+  // The figured bass, under the part: each figure until the next, spacers between.
+  if (figuresRead.length) {
+    const words = [];
+    let t = 0;
+    const sorted = [...figuresRead].sort((x, y) => x.at - y.at);
+    sorted.forEach((f, n) => {
+      if (f.at > t + 1e-9) words.push(...spell(f.at - t).map((d) => `s${durationText(d)}`));
+      const room = (sorted[n + 1]?.at ?? Infinity) - f.at;
+      const length = Math.max(0, Math.min(room, f.length ?? (Number.isFinite(room) ? room : 1)));
+      spell(length).forEach((d, k) => words.push(k === 0 ? `<${f.text}>${durationText(d)}` : `s${durationText(d)}`));
+      t = f.at + length;
+    });
+    blocks.push(`\\new FiguredBass \\figuremode { ${words.join(" ")} }`);
+  }
   if (blocks.length === 1) return blocks[0];
+  if (lanes.length === 1) return blocks.join("\n");
   const props = [];
   if (info.name) props.push(`instrumentName = ${quoted(info.name)}`);
   if (info.short) props.push(`shortInstrumentName = ${quoted(info.short)}`);
@@ -932,7 +968,7 @@ const xml = (text) => String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").
 const ARTICULATIONS_OUT = { staccato: "staccato", accent: "accent", tenuto: "tenuto", marcato: "strong-accent", staccatissimo: "staccatissimo", portato: "detached-legato" };
 const ORNAMENTS_OUT = { trill: "trill-mark", prall: "inverted-mordent", mordent: "mordent", turn: "turn" };
 const CLEFS_OUT = {
-  treble: ["G", 2, 0], bass: ["F", 4, 0], alto: ["C", 3, 0], tenor: ["C", 4, 0], treble_8: ["G", 2, -1], bass_8: ["F", 4, -1], soprano: ["C", 1, 0], percussion: ["percussion", 0, 0],
+  treble: ["G", 2, 0], bass: ["F", 4, 0], alto: ["C", 3, 0], tenor: ["C", 4, 0], treble_8: ["G", 2, -1], bass_8: ["F", 4, -1], "treble^8": ["G", 2, 1], "bass^8": ["F", 4, 1], soprano: ["C", 1, 0], percussion: ["percussion", 0, 0],
 };
 const KIND_OF_CHORD = [
   [/^maj7|^Δ7?/, "major-seventh"], [/^m7b5|^ø/, "half-diminished"], [/^(m|min|-)7/, "minor-seventh"], [/^(dim|°)7/, "diminished-seventh"], [/^(m|min|-)/, "minor"],
@@ -981,7 +1017,7 @@ export function toMusicXML(score) {
   const braced = new Set();
   // A piano alone, its brace the score's own, is one too.
   // A line of chord names is no part: its chords go out as the chord symbols of the part under it.
-  const music = uppers.filter((u) => !score.staves[u].chords);
+  const music = uppers.filter((u) => !score.staves[u].chords && !score.staves[u].figures);
   const pianoAlone = score.group === "brace" && music.length === 2 && uppers.length === 2 ? [{ kind: "brace", first: 0, last: 1, name: "", short: "" }] : [];
   for (const g of [...pianoAlone, ...(score.groups ?? [])]) {
     if (g.kind === "brace" && g.last === g.first + 1 && !braced.has(g.first) && !braced.has(g.last)) {
@@ -990,13 +1026,18 @@ export function toMusicXML(score) {
     }
   }
   uppers.forEach((s, k) => {
-    if (!braced.has(k) && !score.staves[s].chords) parts.push({ staves: [s], name: score.staves[s].name || "", short: score.staves[s].short || "" });
+    if (!braced.has(k) && !score.staves[s].chords && !score.staves[s].figures) parts.push({ staves: [s], name: score.staves[s].name || "", short: score.staves[s].short || "" });
   });
   parts.sort((a, b) => a.staves[0] - b.staves[0]);
   // Each line of chord names goes with the part under it (the last part, when none is).
   for (const line of uppers.filter((u) => score.staves[u].chords)) {
     const under = parts.find((p) => p.staves[0] > line) ?? parts[parts.length - 1];
     if (under) (under.chordLines ??= []).push(line);
+  }
+  // A figured bass goes with the part over it: on its last staff's notes, as <figured-bass>.
+  for (const line of uppers.filter((u) => score.staves[u].figures)) {
+    const over = [...parts].reverse().find((p) => p.staves[0] < line) ?? parts[0];
+    if (over) over.figures = line;
   }
   parts.forEach((p, k) => {
     p.id = `P${k + 1}`;
@@ -1175,6 +1216,15 @@ export function toMusicXML(score) {
             // Keys first, then clefs, as MusicXML orders the attributes.
             if (due.length) out.push(`<attributes>${[...due.filter((m) => m.xml.startsWith("<key")), ...due.filter((m) => !m.xml.startsWith("<key"))].map((m) => m.xml).join("")}</attributes>`);
             for (const m of due) m.done = true;
+            // The figures of a figured bass under the part, before the note of its last staff they start on.
+            if (p.figures != null && v === 0 && k === p.staves.length - 1) {
+              const line = score.staves[p.figures];
+              const at = M.starts(line);
+              const end = item.t + M.ticksOf(item.ev);
+              line.events.forEach((ev, i) => {
+                if (ev.figure && at[i] >= item.t && at[i] < end) out.push(figuredBass(ev.figure, dur(M.ticksOf(ev))));
+              });
+            }
             // A note drawn on the part's other staff (\\change Staff) is that staff's <staff>, in its own voice.
             const crossed = staffNo ? p.staves.findIndex((u) => score.staves[u].id && score.staves[u].id === M.crossOf(score, item.lane, item.ev)) : -1;
             const sung = M.lyricsLane(score, item.lane) === item.lane;
@@ -1197,6 +1247,35 @@ export function toMusicXML(score) {
   }
   out.push("</score-partwise>");
   return out.join("\n") + "\n";
+}
+
+const FIGURE_SIGNS = { "+": "sharp", "-": "flat", "!": "natural", "\\": "backslash", "/": "slash" };
+
+/** Figures as `\figuremode` writes them ("6 4", "7+", "_") as a <figured-bass> lasting `duration`. */
+function figuredBass(figure, duration) {
+  const figures = figure.split(/\s+/).map((f) => {
+    if (f === "_") return "<figure><figure-number/></figure>";
+    const m = /^(\[?)(\d*)([-+!\\/]?)(\]?)$/.exec(f);
+    if (!m) return "";
+    const prefix = !m[2] && m[3] ? `<prefix>${FIGURE_SIGNS[m[3]]}</prefix>` : "";
+    const suffix = m[2] && m[3] ? `<suffix>${FIGURE_SIGNS[m[3]]}</suffix>` : "";
+    return `<figure>${prefix}${m[2] ? `<figure-number>${m[2]}</figure-number>` : ""}${suffix}</figure>`;
+  });
+  const parens = /\[/.test(figure) ? ' parentheses="yes"' : "";
+  return `<figured-bass${parens}>${figures.join("")}<duration>${duration}</duration></figured-bass>`;
+}
+
+/** A <figured-bass> read back as `\figuremode` writes it: "6 4", "7+", "_". */
+function figuresIn(el) {
+  const signs = Object.fromEntries(Object.entries(FIGURE_SIGNS).map(([sign, name]) => [name, sign]));
+  return kids(el, "figure")
+    .map((f) => {
+      const number = textIn(f, "figure-number") ?? "";
+      const prefix = signs[textIn(f, "prefix") ?? ""] ?? "";
+      const suffix = signs[textIn(f, "suffix") ?? ""] ?? "";
+      return number || prefix || suffix ? `${number ? "" : prefix}${number}${number ? suffix || prefix : ""}` : "_";
+    })
+    .join(" ");
 }
 
 /** A number of fifths spelled as a key: within six flats and five sharps… or six sharps, F♯. */
@@ -1275,7 +1354,10 @@ function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, 
   if (ev.graces.length && !ev.rest) {
     for (const g of ev.graces) {
       g.pitches.forEach((p, k) => {
-        out.push(`<note><grace${ev.grace === "acciaccatura" || ev.grace === "slashedGrace" ? ' slash="yes"' : ""}/>${k ? "<chord/>" : ""}${pitchXml(p)}<voice>${voice}</voice><type>${TYPE_OF[g.base] ?? "eighth"}</type>${"<dot/>".repeat(g.dots)}${staffTag}</note>`);
+        // Its fingering: on its note in a chord, else on its first.
+        const own = (g.fingers ?? []).filter((f) => (f.head == null ? k === 0 : f.head === p.d));
+        const tech = own.map((f) => (f.circled ? `<string>${f.text}</string>` : `<fingering${f.dir < 0 ? ' placement="above"' : f.dir > 0 ? ' placement="below"' : ""}>${f.text}</fingering>`)).join("");
+        out.push(`<note><grace${ev.grace === "acciaccatura" || ev.grace === "slashedGrace" ? ' slash="yes"' : ""}/>${k ? "<chord/>" : ""}${pitchXml(p)}<voice>${voice}</voice><type>${TYPE_OF[g.base] ?? "eighth"}</type>${"<dot/>".repeat(g.dots)}${staffTag}${tech ? `<notations><technical>${tech}</technical></notations>` : ""}</note>`);
       });
     }
   }

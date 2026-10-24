@@ -25,7 +25,7 @@ export const DEFAULT_BPM = 100;
 const NAMES = ["c", "d", "e", "f", "g", "a", "b"];
 const NATURAL = [0, 2, 4, 5, 7, 9, 11];
 const SHARPS = [3, 0, 4, 1, 5, 2, 6];
-const CLEFS = ["treble", "bass", "alto", "tenor", "treble_8", "bass_8", "soprano", "percussion"];
+const CLEFS = ["treble", "bass", "alto", "tenor", "treble_8", "bass_8", "treble^8", "bass^8", "soprano", "percussion"];
 const SCRIPTS = {
   staccato: "-.", accent: "->", tenuto: "--", marcato: "-^", staccatissimo: "-!", portato: "-_", fermata: "\\fermata",
   trill: "\\trill", prall: "\\prall", mordent: "\\mordent", turn: "\\turn",
@@ -439,8 +439,7 @@ export function transpose(score, { steps, semitones, s = null, a = 0, b = Infini
         followHeads(ev, ev.pitches, moved);
         ev.pitches = moved;
       }
-      for (const g of ev.graces) g.pitches = g.pitches.map((p) => transposePitch(p, steps, semitones));
-      for (const g of ev.afterGraces ?? []) g.pitches = g.pitches.map((p) => transposePitch(p, steps, semitones));
+      for (const g of [...ev.graces, ...(ev.afterGraces ?? [])]) moveGraceTo(g, g.pitches.map((p) => transposePitch(p, steps, semitones)));
       if (s == null && ev.chord && ev.chord !== "N.C.") ev.chord = transposeChord(ev.chord, steps, semitones);
       if (s == null && ev.chordmode && ev.chordmode !== "r") ev.chordmode = transposeChordmode(ev.chordmode, steps, semitones);
     });
@@ -665,8 +664,11 @@ function pieces(score, ev, at, ticks, role) {
       delete p.cautionary;
       delete p.repeatTie;
       delete p.hairpinWords;
-      // A chord of a line of chord names is named once, where it starts.
+      // A chord of a line of chord names is named once, where it starts; so is a figure, a chord diagram.
       delete p.chordmode;
+      delete p.figure;
+      delete p.fret;
+      delete p.fretBelow;
     }
     if (!(last && keepsEnd)) {
       delete p.beamEnd;
@@ -704,7 +706,7 @@ export function ensureLength(score, ticks) {
 export function write(score, s, t, ticks, content, { tidyUp = true } = {}) {
   const staff = score.staves[s];
   if (!staff) throw new Error("no such staff");
-  if (staff.chords && content.rest === false) throw new Error(CHORD_LINE_NOTES);
+  if ((staff.chords || staff.figures) && content.rest === false) throw new Error(staff.chords ? CHORD_LINE_NOTES : FIGURE_LINE_NOTES);
   if (!Number.isInteger(t) || t < 0 || !Number.isInteger(ticks) || ticks <= 0) throw new Error("nothing to write there");
   ensureLength(score, t + ticks);
   const from = cut(score, staff, t);
@@ -744,7 +746,7 @@ const sameNote = (a, b) => Boolean(a && b && !a.rest && !b.rest && a.pitches.len
 
 /** A rest with nothing on it (a spacer may be one): what tidy merges, and a bar of rest gathers. */
 export function isBareRest(ev) {
-  const marked = ev.ottava != null || ev.stemDir != null || ev.noAutoBeam != null || ev.breath || ev.spanStart != null || ev.spanEnd || ev.cross != null;
+  const marked = ev.ottava != null || ev.stemDir != null || ev.noAutoBeam != null || ev.breath || ev.spanStart != null || ev.spanEnd || ev.cross != null || ev.figure || ev.fret;
   return ev.rest && !ev.tuplet && !ev.dynamic && !ev.hairpin && !ev.hairpinEnd && !ev.texts.length && !ev.chord && !ev.arts.length && !ev.pedalOn && !ev.pedalOff && !ev.beamStart && !ev.beamEnd && !marked;
 }
 
@@ -804,7 +806,9 @@ export function previousPitch(score, s, i) {
   const events = score.staves[s].events;
   for (let k = i - 1; k >= 0; k--) if (!events[k].rest) return events[k].pitches[0].d;
   const clef = score.staves[upperOf(score, s)].clef;
-  return clef.startsWith("bass") ? 3 : clef === "alto" ? 7 : clef === "tenor" ? 5 : 13;
+  // The staff's middle line: an octave higher under a clef with an 8 above it.
+  const up = clef.endsWith("^8") ? 7 : 0;
+  return up + (clef.startsWith("bass") ? 3 : clef === "alto" ? 7 : clef === "tenor" ? 5 : 13);
 }
 
 /** Event `i` moved by step, semitone or octave — one head `head` of a chord, or all. */
@@ -892,6 +896,8 @@ export function remove(score, s, i, head = -1) {
   delete ev.lv;
   delete ev.repeatTie;
   delete ev.cross;
+  delete ev.fret;
+  delete ev.fretBelow;
   const prev = score.staves[s].events[i - 1];
   if (prev && prev.tie) prev.tie = false;
   tidy(score, score.staves[s]);
@@ -1040,7 +1046,7 @@ export function endOttava(score, s, i) {
 function laneRange(score, s, a, b) {
   const staff = score.staves[s];
   if (!staff) throw new Error("no such staff");
-  if (staff.chords) throw new Error(CHORD_LINE_NOTES);
+  if (staff.chords || staff.figures) throw new Error(staff.chords ? CHORD_LINE_NOTES : FIGURE_LINE_NOTES);
   const [from, to] = [Math.min(a, b), Math.max(a, b)];
   if (!staff.events[from] || !staff.events[to]) throw new Error("no such note");
   return [staff, from, to];
@@ -1381,7 +1387,32 @@ export function moveGrace(score, s, i, how, by) {
   const last = ev.graces[ev.graces.length - 1];
   const moved = last.pitches.map((p) => movePitch(p, how, by, keyOf(score, s, starts(score.staves[s])[i])));
   if (!moved.every(reachable)) throw new Error("that is as far as it goes");
-  last.pitches = sortPitches(moved);
+  moveGraceTo(last, moved);
+  last.pitches = sortPitches(last.pitches);
+}
+
+/** A grace note given the pitches `now` (head by head): its fingerings follow their notes. */
+function moveGraceTo(g, now) {
+  if (g.fingers) g.fingers = g.fingers.map((f) => (f.head == null ? f : { ...f, head: now[g.pitches.findIndex((p) => p.d === f.head)]?.d ?? f.head }));
+  g.pitches = now;
+}
+
+/**
+ * Finger `text` (1–5) on the last grace note before note `i` — on its
+ * top note when it is a chord; the same again takes it away.
+ */
+export function setGraceFingering(score, s, i, text) {
+  const ev = pitchedNote(score, s, i);
+  if (!ev.graces.length) throw new Error("this note has no grace note");
+  const figure = String(text);
+  if (!/^[1-5]$/.test(figure)) throw new Error("a finger is 1 to 5");
+  const g = ev.graces[ev.graces.length - 1];
+  const head = g.pitches.length > 1 ? g.pitches[g.pitches.length - 1].d : null;
+  const had = (g.fingers ?? []).find((f) => !f.circled && (f.head ?? null) === head);
+  const kept = (g.fingers ?? []).filter((f) => f !== had);
+  if (!(had && had.text === figure)) kept.push({ text: figure, dir: had?.dir ?? 0, head, circled: false });
+  if (kept.length) g.fingers = kept;
+  else delete g.fingers;
 }
 
 /** Note `i`'s grace notes taken away. */
@@ -1582,7 +1613,13 @@ export function copy(score, s, a, b) {
   const staff = score.staves[s];
   const events = staff.events.slice(Math.min(a, b), Math.max(a, b) + 1);
   if (events.some((ev) => ev.tuplet)) throw new Error("Triplets and other tuplets cannot be copied yet: leave them out of the selection.");
-  return events.map((ev) => ({ content: { ...structuredClone(ev), id: undefined }, ticks: ticksOf(ev) }));
+  const clip = events.map((ev) => ({ content: { ...structuredClone(ev), id: undefined }, ticks: ticksOf(ev) }));
+  // What holds where the copy starts (an ottava begun before it, the stems) goes with it.
+  for (const field of Object.keys(MARKERS)) {
+    const held = markerAt(staff, Math.min(a, b), field);
+    if (clip[0].content[field] == null && held !== MARKERS[field]) clip[0].content[field] = held;
+  }
+  return clip;
 }
 
 /** A clipboard as LilyPond, for another program or another page: its notes in absolute pitches. */
@@ -1614,11 +1651,35 @@ export function clipFromText(text, parse) {
 
 /** A clipboard written from `t` (ticks) on: answers the index of the last event written. */
 export function paste(score, s, t, clip) {
+  const staff = score.staves[s];
+  const from = t;
+  const end = t + clip.reduce((sum, piece) => sum + piece.ticks, 0);
+  // What holds where the paste ends, as it was: it holds there again after it.
+  ensureLength(score, end);
+  const before = starts(staff);
+  const then = Object.fromEntries(Object.keys(MARKERS).map((field) => [field, markerAt(staff, before.findLastIndex((x) => x < end), field)]));
   let last = -1;
+  const placed = [];
   for (const piece of clip) {
     const { base, dots, tuplet, ...content } = piece.content;
+    for (const field of Object.keys(MARKERS)) delete content[field];
     last = write(score, s, t, piece.ticks, content);
+    placed.push([t, piece.content]);
     t += piece.ticks;
+  }
+  // The markers inside are the clipboard's own; after it, what held there.
+  const at = starts(staff);
+  staff.events.forEach((ev, k) => {
+    if (at[k] >= from && at[k] < end) for (const field of Object.keys(MARKERS)) delete ev[field];
+  });
+  for (const [time, content] of placed) {
+    const ev = staff.events[eventAt(staff, time)];
+    for (const field of Object.keys(MARKERS)) if (ev && content[field] != null) ev[field] = content[field];
+  }
+  const next = staff.events[eventAt(staff, end)];
+  for (const field of Object.keys(MARKERS)) {
+    if (next && next[field] == null) next[field] = then[field];
+    tidyMarkers(staff, field);
   }
   return last;
 }
@@ -2254,7 +2315,15 @@ export function deleteBars(score, a, b) {
   const to = barStart(score, b + 1);
   for (const staff of score.staves) {
     const at = starts(staff);
+    // What holds after the bars (an ottava, the stems, the beaming) holds there still.
+    const last = at.findLastIndex((t) => t < to);
+    const then = Object.fromEntries(Object.keys(MARKERS).map((field) => [field, markerAt(staff, last, field)]));
     staff.events = staff.events.filter((_, k) => at[k] < from || at[k] >= to);
+    const next = staff.events[at.filter((t) => t < from).length];
+    for (const field of Object.keys(MARKERS)) {
+      if (next && next[field] == null) next[field] = then[field];
+      tidyMarkers(staff, field);
+    }
     mend(staff);
   }
   // The pickup gone, the piece starts on a full bar.
@@ -2348,11 +2417,19 @@ function eventText(ev, beam = "") {
   // Inside a chord, a note's string comes before its finger.
   const headMarks = (p) => onHead(p).sort((x, y) => Number(y.circled) - Number(x.circled)).map(fingerText).join("");
   const loose = fingers.filter((f) => !ev.pitches.some((p) => onHead(p).includes(f)));
+  // A grace note with its fingering: c8-2, <c-1 e-3>8 — in braces, \grace { c8-2 }.
+  const graceText = (g) => {
+    const marks = g.fingers ?? [];
+    const own = (p) => (g.pitches.length > 1 ? marks.filter((f) => f.head === p.d).map(fingerText).join("") : "");
+    const heads = g.pitches.length > 1 ? `<${g.pitches.map((p) => bare(p) + own(p)).join(" ")}>` : bare(g.pitches[0]);
+    const loose = marks.filter((f) => g.pitches.length === 1 || !g.pitches.some((p) => p.d === f.head));
+    return heads + g.base + ".".repeat(g.dots) + loose.map(fingerText).join("");
+  };
   if (ev.graces.length && !ev.rest) {
-    const graces = ev.graces.map((g) => notes(g.pitches, bare) + g.base + ".".repeat(g.dots));
-    out += `\\${ev.grace ?? "grace"} ${graces.length === 1 ? graces[0] : `{ ${graces.join(" ")} }`} `;
+    const graces = ev.graces.map(graceText);
+    out += `\\${ev.grace ?? "grace"} ${graces.length === 1 && !ev.graces[0].fingers?.length ? graces[0] : `{ ${graces.join(" ")} }`} `;
   }
-  const after = !ev.rest && ev.afterGraces?.length ? ev.afterGraces.map((g) => notes(g.pitches, bare) + g.base + ".".repeat(g.dots)) : null;
+  const after = !ev.rest && ev.afterGraces?.length ? ev.afterGraces.map(graceText) : null;
   if (after) out += `\\afterGrace ${ev.afterAt != null && ev.afterAt !== AFTER_GRACE_AT ? `${afterFraction(ev.afterAt)} ` : ""}`;
   out += ev.rest ? (ev.spacer ? "s" : "r") : ev.pitches.length > 1 ? `<${ev.pitches.map((p) => head(p) + headMarks(p)).join(" ")}>` : notes(ev.pitches);
   out += ev.base + ".".repeat(ev.dots);
@@ -2369,6 +2446,7 @@ function eventText(ev, beam = "") {
   for (const a of ev.arts) out += SCRIPTS[a] ?? "";
   out += loose.map(fingerText).join("");
   if (ev.chord) out += `^${quote(ev.chord)}`;
+  if (ev.fret && !ev.rest) out += `${ev.fretBelow ? "_" : "^"}\\markup \\fret-diagram ${quote(fretVerbose(ev.fret))}`;
   for (const t of ev.texts) out += `${t.dir > 0 ? "_" : "^"}${wordsText(t)}`;
   if (ev.arpeggio && !ev.rest) out += "\\arpeggio";
   if (ev.gliss && !ev.rest) out += "\\glissando";
@@ -2443,11 +2521,12 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
   const staves = staffLanes(score).map((s) => {
     const staff = score.staves[s];
     const upper = staffBars(score, staff, s);
-    if (staff.chords) {
-      // A line of chord names: its bars, the metre and the repeats left to the music's staves.
+    if (staff.chords || staff.figures) {
+      // A line of chord names or a figured bass: its bars, the metre and the repeats left to the music's staves.
       for (const bar of upper) items.push(...bar.items);
       const texts = upper.map((bar) => bar.text);
-      return `\\new ChordNames \\chordmode {\n  ${unfold ? playedOut(score, s, texts) : checked(texts)}\n}`;
+      const line = staff.chords ? "\\new ChordNames \\chordmode" : "\\new FiguredBass \\figuremode";
+      return `${line} {\n  ${unfold ? playedOut(score, s, texts) : checked(texts)}\n}`;
     }
     // The other voices, each its bars: a bar is written in voices up to the
     // last that sounds there (or that the page writes in), those before it as they are.
@@ -2632,7 +2711,7 @@ function restRuns(score, upper, voicesIn, repeats) {
   return runs;
 }
 
-const clefText = (clef) => (CLEFS.includes(clef) ? (clef.includes("_") ? `"${clef}"` : clef) : "treble");
+const clefText = (clef) => (CLEFS.includes(clef) ? (/[_^]/.test(clef) ? `"${clef}"` : clef) : "treble");
 const tempoText = (tempo) => `\\tempo ${tempo.text ? quote(tempo.text) + " " : ""}${tempo.bpm ? `${tempo.base} = ${tempo.bpm}` : ""}`.trimEnd();
 
 /** What staff `s` writes at the start of bar `b` for what changes there. */
@@ -2741,7 +2820,7 @@ export function handBeams(score, staff) {
  */
 function midChanges(score, s) {
   const staff = score.staves[s];
-  if (staff.voice || staff.drums || staff.chords) return [];
+  if (staff.voice || staff.drums || staff.chords || staff.figures) return [];
   const own = staff.key == null ? 0 : staff.key - score.key;
   const keys = (score.midKeys ?? []).map((m) => ({ bar: m.bar, pos: m.pos, order: 1, text: `\\key ${keyText(Math.max(-7, Math.min(7, m.key + own)), m.mode)}` }));
   const clefs = (staff.midClefs ?? []).map((c) => ({ bar: c.bar, pos: c.pos, order: 0, text: `\\clef ${clefText(c.clef)}` }));
@@ -2789,7 +2868,7 @@ function staffBars(score, staff, s) {
     const on = crossOf(score, s, ev);
     if (on !== drawnOn) change(on);
     drawnOn = on;
-    current.parts.push(staff.chords ? chordText(ev) : eventText(ev, beams[i]));
+    current.parts.push(staff.chords ? chordText(ev) : staff.figures ? figureText(ev) : eventText(ev, beams[i]));
     t += ticksOf(ev);
     if (Math.abs(t - barStart(score, bars.length + 1)) < 1e-6) close();
   });
@@ -3207,6 +3286,7 @@ export function isDrums(score, s) {
 function refuseDrums(score, s) {
   if (isDrums(score, s)) throw new Error("A drum staff has drums, not pitches: the drum buttons write and change them");
   if (isChords(score, s)) throw new Error(CHORD_LINE_NOTES);
+  if (isFigures(score, s)) throw new Error(FIGURE_LINE_NOTES);
 }
 
 // ---- Lines of chord names ---------------------------------------------------------
@@ -3227,7 +3307,7 @@ export function isChords(score, s) {
 
 /** The first staff of music (not a line of chord names): the one that writes the marks, the tempo and the breaks. */
 function firstMusic(score) {
-  return staffLanes(score).find((u) => !score.staves[u].chords) ?? 0;
+  return staffLanes(score).find((u) => !score.staves[u].chords && !score.staves[u].figures) ?? 0;
 }
 
 const CHORD_ALTERS = { "#": 1, "♯": 1, b: -1, "♭": -1, "": 0 };
@@ -3320,7 +3400,8 @@ export function nextBeat(score, t) {
 /** Whether an item of `toLilyPond` is drawn: a spacer is not, nor a beat of a line of chord names with no chord. */
 export function isDrawn(score, item) {
   const ev = score.staves[item.staff]?.events[item.index];
-  return Boolean(ev) && !ev.spacer && !(score.staves[item.staff].chords && !ev.chord);
+  const line = score.staves[item.staff];
+  return Boolean(ev) && !ev.spacer && !(line.chords && !ev.chord) && !(line.figures && !/[^_ ]/.test(ev.figure ?? ""));
 }
 
 /** The line of chord names right over the staff of lane `s` (or that lane itself when it is one), or −1. */
@@ -3345,6 +3426,134 @@ export function setChordAt(score, s, t, text) {
   if (cut(score, staff, t) !== t) throw new Error("a chord does not start inside a tuplet");
   setChordSymbol(score, s, eventAt(staff, t), symbol);
   tidy(score, staff);
+}
+
+// ---- A figured bass -------------------------------------------------------------------
+//
+// `\new FiguredBass \figuremode { <6 4>4 <7+> s2 }`: a line under the bass,
+// a lane of its own (`staff.figures`) whose events are rests as long as a
+// figure holds, each its figures as written between < > (`ev.figure`, "6 4").
+
+const FIGURE_LINE_NOTES = "A figured bass holds figures, not notes: select a beat and type them";
+
+/** Whether lane `s` is a figured bass. */
+export function isFigures(score, s) {
+  return Boolean(score.staves[upperOf(score, s)]?.figures);
+}
+
+/** Figures as `\figuremode` reads them between < >: "6 4", "7+", "6\\", "_ 5-", "[6]". */
+function figuresOf(text) {
+  const figures = String(text ?? "").trim().replace(/^<|>$/g, "").trim().split(/\s+/).filter(Boolean);
+  if (!figures.length || figures.length > 4 || !figures.every((f) => /^(_|\[?(\d{1,2})?[-+!]?[\\/]?\]?)$/.test(f) && f !== "[]" && f !== "")) {
+    throw new Error(`“${String(text ?? "").trim()}” is not figures a figured bass can write: try 6, 6 4, 7, 4 2, 7+, 5-, _ 6`);
+  }
+  return figures.join(" ");
+}
+
+/** What a figured bass writes for one of its events. */
+function figureText(ev) {
+  const value = ev.base + ".".repeat(ev.dots);
+  return ev.figure ? `<${ev.figure}>${value}` : `s${value}`;
+}
+
+/** The figured bass right under the staff of lane `s` (or that lane itself when it is one), or −1. */
+export function figureLineUnder(score, s) {
+  if (isFigures(score, s)) return upperOf(score, s);
+  const lanes = staffLanes(score);
+  const below = lanes[staffNumber(score, s) + 1];
+  return below != null && score.staves[below].figures ? below : -1;
+}
+
+/** The figures from `t` on lane `s`, a figured bass, the line cut there; empty text takes them away. */
+export function setFigureAt(score, s, t, text) {
+  const staff = score.staves[s];
+  if (!staff?.figures) throw new Error("not a figured bass");
+  if (t < 0 || t >= lengthOf(staff)) throw new Error("no beat there");
+  const figure = String(text ?? "").trim() ? figuresOf(text) : "";
+  if (cut(score, staff, t) !== t) throw new Error("figures do not start inside a tuplet");
+  const ev = staff.events[eventAt(staff, t)];
+  if (figure) ev.figure = figure;
+  else delete ev.figure;
+  tidy(score, staff);
+}
+
+/** A figured bass under the staff of lane `s`, empty: answers its lane. */
+export function addFigureStaff(score, s = 0) {
+  const u = upperOf(score, s);
+  if (!score.staves[u]) throw new Error("no such staff");
+  if (score.staves[u].figures || score.staves[u].chords) throw new Error("a figured bass goes under a staff of music");
+  if (figureLineUnder(score, u) >= 0) throw new Error("this staff has a figured bass already");
+  const at = u + voiceLanes(score, u).length;
+  const n = staffNumber(score, u) + 1;
+  score.staves.splice(at, 0, { name: "", short: "", instrument: "", clef: "bass", figures: true, events: rests(score, 0, lengthOf(score.staves[u])) });
+  score.groups = (score.groups ?? []).map((g) => ({ ...g, first: g.first >= n ? g.first + 1 : g.first, last: g.last >= n ? g.last + 1 : g.last }));
+  shiftMetaLanes(score.meta, at, 1);
+  return at;
+}
+
+/** A figured bass from its parse: each figure a rest as long as it holds, its figures as written. */
+function figureLine(score, staff, unsupported) {
+  const out = { name: "", short: "", instrument: "", clef: "bass", figures: true, events: [] };
+  for (const ev of staff.events) {
+    ev.unsupported.forEach((u) => unsupported.add(u));
+    if (ev.k !== "Note" && ev.k !== "Rest") continue;
+    if (ev.tuplet) unsupported.add("a tuplet in a figured bass");
+    const ticks = ev.ticks * Math.max(1, ev.count ?? 1);
+    const at = lengthOf(out);
+    let figure = "";
+    try {
+      figure = ev.figure_text ? figuresOf(ev.figure_text) : "";
+    } catch {
+      unsupported.add("figures this editor does not write");
+    }
+    const read = makeEvent({ base: ev.base, dots: ev.dots, ...(figure ? { figure } : {}) });
+    if (at + ticks > nextBarLine(score, at) + 1e-6 || notated(ev.base, ev.dots) !== ticks) out.events.push(...pieces(score, read, at, ticks, "whole"));
+    else out.events.push(read);
+  }
+  return out;
+}
+
+// ---- Chord diagrams ---------------------------------------------------------------------
+//
+// `^\markup \fret-diagram "6-x;5-3;4-2;3-o;2-1;1-o;"` over a note: `ev.fret`
+// is its shape as eui-score keeps it, each string from the low E ("x;3;2;o;1;o;"),
+// and a barre after it ("|6-1-1"); `ev.fretBelow` when it stands under the staff.
+
+const FRET_MARK = "\u0001fret:";
+
+/** A shape typed as "x32010", "x;3;2;0;1;0" or "x 3 2 0 1 0", low E first: its spec. */
+export function fretSpec(text) {
+  const typed = String(text ?? "").trim().toLowerCase();
+  const items = /^[xo0-9]{6}$/.test(typed) ? [...typed] : typed.split(/[;\s,]+/).filter(Boolean);
+  const ok = items.length === 6 && items.every((f) => /^(x|o|\d{1,2})$/.test(f) && (!/^\d+$/.test(f) || Number(f) <= 24));
+  if (!ok) throw new Error(`“${String(text ?? "").trim()}” is not a guitar chord: six strings from the low E, x not played, 0 open, as x32010 for C`);
+  return items.map((f) => (f === "0" ? "o" : f)).join(";") + ";";
+}
+
+/** A spec as people type it: "x32010" when every fret is one digit. */
+export function fretText(spec) {
+  const [frets, barre] = String(spec ?? "").split("|");
+  const items = frets.split(";").filter(Boolean).map((f) => (f === "o" ? "0" : f));
+  const typed = items.every((f) => f.length === 1) ? items.join("") : items.join(" ");
+  return barre ? `${typed} | barre ${barre}` : typed;
+}
+
+/** `\fret-diagram`'s own words for a spec: each string 6 to 1, and the barre. */
+function fretVerbose(spec) {
+  const [frets, barre] = String(spec).split("|");
+  const items = frets.split(";").filter(Boolean).map((f, k) => `${6 - k}-${f}`);
+  return (barre ? `c:${barre};` : "") + items.join(";") + ";";
+}
+
+/** A chord diagram over note `i` (a shape, see fretSpec); empty takes it away. */
+export function setFretDiagram(score, s, i, text) {
+  const ev = pitchedNote(score, s, i);
+  if (!String(text ?? "").trim()) {
+    delete ev.fret;
+    delete ev.fretBelow;
+    return;
+  }
+  ev.fret = fretSpec(text);
 }
 
 /** Lanes `at` and after moved by `by` in what the meta line keys by lane: velocities, curves, the mixer's tracks. */
@@ -4211,7 +4420,14 @@ export function passedOver(warnings) {
   return list.length > 6 ? [...list.slice(0, 5), `${list.length - 5} more`] : list;
 }
 
-const CLEF_NAMES = { "G,-2,0": "treble", "G,-2,-1": "treble_8", "F,2,0": "bass", "F,2,-1": "bass_8", "C,0,0": "alto", "C,2,0": "tenor", "C,-4,0": "soprano" };
+const CLEF_NAMES = { "G,-2,0": "treble", "G,-2,-1": "treble_8", "G,-2,1": "treble^8", "F,2,0": "bass", "F,2,-1": "bass_8", "F,2,1": "bass^8", "C,0,0": "alto", "C,2,0": "tenor", "C,-4,0": "soprano" };
+
+/** A grace note from the parse, `[pitches, value, dots, fingers]`, as the model keeps it. */
+function graceOf([pitches, base, dots, fingers]) {
+  const g = { pitches: pitches.map(([d, alter]) => ({ d, alter })), base, dots };
+  if (fingers?.length) g.fingers = fingers.map(([text, dir, head, circled]) => ({ text, dir, head: head ?? null, circled }));
+  return g;
+}
 
 /**
  * A line of chord names from its parse: each chord a rest as long as it
@@ -4276,15 +4492,16 @@ export function fromParsed(parsed, source = null) {
   // Each staff's lanes, in the source's order. Lines of chord names are read
   // after the music, whose metre, pickup and repeats they follow.
   const placed = [];
-  const order = parsed.staves.map((_, k) => k).sort((x, y) => Number(parsed.staves[x].kind === "ChordNames") - Number(parsed.staves[y].kind === "ChordNames"));
+  const isLine = (st) => st.kind === "ChordNames" || st.kind === "Figures";
+  const order = parsed.staves.map((_, k) => k).sort((x, y) => Number(isLine(parsed.staves[x])) - Number(isLine(parsed.staves[y])));
   for (const k of order) {
     const staff = parsed.staves[k];
-    if (staff.kind === "ChordNames") {
-      placed[k] = [chordLine(score, staff, unsupported)];
+    if (staff.kind === "ChordNames" || staff.kind === "Figures") {
+      placed[k] = [(staff.kind === "Figures" ? figureLine : chordLine)(score, staff, unsupported)];
       continue;
     }
     const drums = staff.kind === "Drums";
-    const kinds = { Tab: "tablature", Figures: "a figured bass", FretBoards: "guitar chord diagrams", Ossia: "an ossia" };
+    const kinds = { Tab: "tablature", FretBoards: "guitar chord diagrams", Ossia: "an ossia" };
     if (staff.kind !== "Notes" && !drums) unsupported.add(kinds[staff.kind] ?? "a staff of another kind");
     const out = { name: staff.name ?? "", short: staff.short ?? "", instrument: drums ? "" : staff.instrument ?? "", clef: drums ? "percussion" : "treble", events: [] };
     if (drums) out.drums = true;
@@ -4472,7 +4689,10 @@ export function fromParsed(parsed, source = null) {
           if (!tuplets.has(tid)) tuplets.set(tid, newId());
           tuplet = { id: tuplets.get(tid), n, d };
         }
-        const texts = ev.texts.map(([text, dir, italic, bold]) => ({ text, dir, ...(italic ? { italic: true } : {}), ...(bold ? { bold: true } : {}) }));
+        const all = ev.texts.map(([text, dir, italic, bold]) => ({ text, dir, ...(italic ? { italic: true } : {}), ...(bold ? { bold: true } : {}) }));
+        // A chord diagram (\fret-diagram) is its shape, not words.
+        const diagram = all.find((w) => w.text.startsWith(FRET_MARK));
+        const texts = all.filter((w) => w !== diagram);
         // A short word above a note that reads as a chord is its chord symbol.
         const chordAt = texts.findIndex((w) => w.dir < 0 && !w.bold && isChordSymbol(w.text));
         const chord = chordAt >= 0 ? texts.splice(chordAt, 1)[0].text : ev.chord_name || "";
@@ -4488,10 +4708,10 @@ export function fromParsed(parsed, source = null) {
           base: ev.base, dots: ev.dots, tuplet,
           tie: ev.tie, slurStart: ev.slur_on, slurEnd: ev.slur_off, dynamic: ev.dynamic ?? null,
           hairpin: ev.hairpin ?? null, hairpinEnd: ev.hairpin_end, arts, chord, texts,
-          graces: (ev.graces ?? []).map(([pitches, base, dots]) => ({ pitches: pitches.map(([d, alter]) => ({ d, alter })), base, dots })),
+          graces: (ev.graces ?? []).map(graceOf),
           grace: ev.grace ?? null, arpeggio: Boolean(ev.arpeggio), gliss: Boolean(ev.gliss), tremolo: ev.tremolo ?? 0,
           ...(ev.after_graces?.length
-            ? { afterGraces: ev.after_graces.map(([pitches, base, dots]) => ({ pitches: pitches.map(([d, alter]) => ({ d, alter })), base, dots })), afterAt: ev.after_at ?? AFTER_GRACE_AT }
+            ? { afterGraces: ev.after_graces.map(graceOf), afterAt: ev.after_at ?? AFTER_GRACE_AT }
             : {}),
           pedalOn: Boolean(ev.pedal_on), pedalOff: Boolean(ev.pedal_off),
           // A spacer, `s`: takes its time, drawn as nothing. Beams written by hand.
@@ -4514,6 +4734,7 @@ export function fromParsed(parsed, source = null) {
           ...(BREATHS_READ[ev.breath] ? { breath: BREATHS_READ[ev.breath] } : {}),
           // Drawn on another staff, `\change Staff = "down"`: that staff's id.
           ...(ev.cross ? { cross: ev.cross } : {}),
+          ...(diagram && k === "Note" ? { fret: diagram.text.slice(FRET_MARK.length), ...(diagram.dir > 0 ? { fretBelow: true } : {}) } : {}),
         });
         // \\stemUp and \\autoBeamOff hold until changed: written where the lane's notes change them.
         if (k === "Note") {

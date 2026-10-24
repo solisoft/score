@@ -101,6 +101,7 @@ test("shortcuts: what each key does, and what it leaves to the browser", () => {
     [press("j"), ["enharmonic", {}]],
     [press("∫", { alt: true, code: "KeyB" }), ["beam", {}]],
     [press("B", { alt: true, shift: true, code: "KeyB" }), ["beam-break", {}]],
+    [press("#", { alt: true, shift: true, code: "Digit3" }), ["grace-finger", { n: "3" }]],
     [press("ArrowUp", { ctrl: true }), ["move", { how: "octave", by: 1 }]],
     [press("£", { alt: true, code: "Digit3" }), ["finger", { n: "3" }]],
     [press(" "), ["play", {}]],

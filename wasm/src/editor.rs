@@ -719,17 +719,18 @@ pub fn score(src: &str) -> Result<Value, String> {
             } else if ev.size != 0 {
                 unsupported.push("notes set smaller");
             }
-            if ev.texts.iter().any(|w| w.runs.iter().any(|r| r.text.starts_with(eui_score::frets::FRET))) {
-                unsupported.push("a chord diagram");
+            // A chord diagram (`\\fret-diagram`) is kept alone in its markup, not among words.
+            if ev.texts.iter().any(|w| w.runs.len() > 1 && w.runs.iter().any(|r| r.text.starts_with(eui_score::frets::FRET))) {
+                unsupported.push("a chord diagram among words");
             }
-            // Grace notes the editor keeps are plain notes of one kind; a
-            // drum's (a flam) or one carrying anything more is not kept.
+            // Grace notes the editor keeps are plain notes of one kind, with
+            // their fingerings; a drum's (a flam) or one carrying more is not kept.
             let grace_kind = ev.graces.first().and_then(|g| g.grace);
-            if ev.graces.iter().any(|g| g.grace != grace_kind || !g.drums.is_empty() || g.tie || !g.scripts.is_empty() || !g.fingers.is_empty() || g.phrase_on || g.phrase_off || g.tremolo > 0 || g.dots > 2) {
+            if ev.graces.iter().any(|g| g.grace != grace_kind || !g.drums.is_empty() || g.tie || !g.scripts.is_empty() || g.phrase_on || g.phrase_off || g.tremolo > 0 || g.dots > 2) {
                 unsupported.push("grace notes");
             }
             // `\afterGrace`'s notes, kept as the grace notes before a note are.
-            if ev.after_graces.iter().any(|g| !g.drums.is_empty() || g.tie || !g.scripts.is_empty() || !g.fingers.is_empty() || g.phrase_on || g.phrase_off || g.tremolo > 0 || g.dots > 2) {
+            if ev.after_graces.iter().any(|g| !g.drums.is_empty() || g.tie || !g.scripts.is_empty() || g.phrase_on || g.phrase_off || g.tremolo > 0 || g.dots > 2) {
                 unsupported.push("grace notes after a note");
             }
             if ev.percent.is_some() {
@@ -786,8 +787,8 @@ pub fn score(src: &str) -> Result<Value, String> {
                 "cross": ev.cross,
                 "tempo": tempo,
                 "bar": ev.v,
-                // Its grace notes, each `[pitches, value, dots]`, and their kind.
-                "graces": ev.graces.iter().map(|g| json!([g.pitches.iter().map(|p| [p.d, p.alter]).collect::<Vec<_>>(), g.base, g.dots])).collect::<Vec<_>>(),
+                // Its grace notes, each `[pitches, value, dots, fingers]` (fingers as on a note), and their kind.
+                "graces": ev.graces.iter().map(|g| json!([g.pitches.iter().map(|p| [p.d, p.alter]).collect::<Vec<_>>(), g.base, g.dots, g.fingers.iter().map(|f| json!([f.text, f.dir, f.head, f.circled])).collect::<Vec<_>>()])).collect::<Vec<_>>(),
                 "grace": grace_kind.map(|k| match k {
                     GraceKind::Acciaccatura => "acciaccatura",
                     GraceKind::Appoggiatura => "appoggiatura",
@@ -795,7 +796,7 @@ pub fn score(src: &str) -> Result<Value, String> {
                     GraceKind::Plain => "grace",
                 }),
                 // `\afterGrace`'s notes, the same way, and where they start in the note (3/4 unless written).
-                "after_graces": ev.after_graces.iter().map(|g| json!([g.pitches.iter().map(|p| [p.d, p.alter]).collect::<Vec<_>>(), g.base, g.dots])).collect::<Vec<_>>(),
+                "after_graces": ev.after_graces.iter().map(|g| json!([g.pitches.iter().map(|p| [p.d, p.alter]).collect::<Vec<_>>(), g.base, g.dots, g.fingers.iter().map(|f| json!([f.text, f.dir, f.head, f.circled])).collect::<Vec<_>>()])).collect::<Vec<_>>(),
                 "after_at": ev.after_at,
                 "arpeggio": ev.arpeggio,
                 "gliss": ev.gliss,
@@ -841,6 +842,10 @@ pub fn score(src: &str) -> Result<Value, String> {
             // (`chord_name`, as ChordNames prints it) does not say back.
             event["chord_text"] = json!((!ev.chord_name.is_empty())
                 .then(|| bytes.get(ev.at).and_then(|&at| src.get(at..)).map(|rest| rest.split(|c: char| c.is_whitespace() || "|}>~".contains(c)).next().unwrap_or("").to_string()))
+                .flatten());
+            // A `\\figuremode` figure as it is written, `<6 4>4`, `<7+>`: on a FiguredBass line's notes.
+            event["figure_text"] = json!((staff.kind == parse::StaffKind::Figures && matches!(ev.k, Kind::Note | Kind::Rest))
+                .then(|| bytes.get(ev.at).and_then(|&at| src.get(at..)).filter(|rest| rest.starts_with('<')).and_then(|rest| rest.find('>').map(|end| rest[..=end].to_string())))
                 .flatten());
             // `\startTextSpan`, with the words before its line (empty: none), and `\stopTextSpan`.
             event["span_start"] = json!(ev.span_start.as_ref().map(|runs| runs.iter().filter(|r| !r.glyph).map(|r| r.text.as_str()).collect::<Vec<_>>().join(" ")));

@@ -31,6 +31,19 @@ class Changelog
         },
         {
           "area": "editor",
+          "title": "Figured bass, guitar chord diagrams, fingered grace notes, clefs with an 8 above",
+          "text": "Four more things open in the editor instead of as text only. A figured bass (\\figuremode): "
+          + "Insert › A figured bass under the staff, then Insert › Figures on a note and type 6 4, 7+ or _ 5-, "
+          + "Space for the next beat. A guitar chord diagram over a note (\\fret-diagram): Insert › Guitar chord "
+          + "diagram, typed from the low E as x32010. Grace notes that carry a fingering, set with Alt+Shift+1 "
+          + "to 5. And the treble and bass clefs with an 8 above them (a piccolo's). Each is kept by every edit "
+          + "and when two people edit other bars, and the figured bass and the fingered grace notes go to "
+          + "MusicXML and back. Taking bars away or pasting bars no longer loses an 8va line, or leaves one "
+          + "running on.",
+          "link": "playground"
+        },
+        {
+          "area": "editor",
           "title": "Stems, beams by hand, and C♯ spelled D♭",
           "text": "Three commands the editor lacked, in the Insert menu, the tools and the keyboard: stems up, down "
           + "or as the voice wants over the selected notes (X flips them), the selected eighths beamed by hand "

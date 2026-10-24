@@ -94,6 +94,11 @@ export const SHORTCUTS = [
   },
   { keys: "J", does: "spell the other way: C♯ ↔ D♭", match: (k) => (!k.mod && !k.altKey && lower(k) === "j" ? ["enharmonic"] : null) },
   {
+    keys: "Alt+Shift+1–5",
+    does: "fingering on the grace note before the note",
+    match: (k) => (!k.mod && k.altKey && k.shiftKey && /^(Digit|Numpad)[1-5]$/.test(k.code) ? ["grace-finger", { n: k.code.slice(-1) }] : null),
+  },
+  {
     keys: "Alt+1–5",
     does: "fingering (again to take it away)",
     match: (k) => (!k.mod && k.altKey && /^(Digit|Numpad)[1-5]$/.test(k.code) ? ["finger", { n: k.code.slice(-1) }] : null),

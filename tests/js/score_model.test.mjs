@@ -1358,9 +1358,11 @@ test("page: the lines spread evenly over the pages only when asked, and the choi
 
 test("reading: what the score tools do not write is engraved and named, not lost", () => {
   const named = (src) => M.fromParsed(JSON.parse(score_json(src))).unsupported ?? [];
-  assert.deepEqual(named("<< \\new Staff { c1 } \\new FiguredBass \\figuremode { <6>1 } >>"), ["a figured bass"]);
+  // A figured bass and a chord diagram are kept now (#375): figured_bass.test.mjs.
+  assert.deepEqual(named("<< \\new Staff { c1 } \\new FiguredBass \\figuremode { <6>1 } >>"), []);
   assert.deepEqual(named("<< \\new FretBoards \\chordmode { c1 } \\new Staff { e'1 } >>"), ["guitar chord diagrams"]);
-  assert.deepEqual(named("{ c''1^\\markup \\fret-diagram-terse \"x;3;2;o;1;o;\" }"), ["a chord diagram"]);
+  assert.deepEqual(named("{ c''1^\\markup \\fret-diagram-terse \"x;3;2;o;1;o;\" }"), []);
+  assert.deepEqual(named("{ c''1^\\markup { \\fret-diagram-terse \"x;3;2;o;1;o;\" C } }"), ["a chord diagram among words"]);
   assert.deepEqual(named("{ \\tiny c'1 }"), ["notes set smaller"]);
   assert.ok(named("\\addQuote \"f\" { e''1 } { \\cueDuring \"f\" #UP { R1 } }").includes("cue notes"));
   assert.ok(named("\\new Staff = \"m\" { << { c'1 } \\new Staff \\with { alignAboveContext = \"m\" } { e'1 } >> }").includes("an ossia"));

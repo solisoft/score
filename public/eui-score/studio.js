@@ -1194,6 +1194,9 @@ export function startStudio(root, options = {}) {
       });
       case "lyrics": return openWords("lyric");
       case "chord": return openWords("chord");
+      // Figures on the figured bass under the staff, beat by beat; a guitar chord diagram over a note.
+      case "figures": return openWords("figure");
+      case "fret": return openWords("fret");
       case "text": return openWords("text");
       case "expression": return openWords("expression");
       case "mark": return edit((score) => {
@@ -1265,6 +1268,17 @@ export function startStudio(root, options = {}) {
         M.addChordStaff(score, s);
         st.sel = { staff: s + 1, t0: 0, t1: 0, head: -1 };
         say("A line of chord names: select a note of the staff under it and press K, then Space for the next beat.");
+      });
+      // A figured bass under the selected staff: Figures on its notes then types them, beat by beat.
+      case "figure-line": return edit((score) => {
+        const s = staffOf();
+        M.addFigureStaff(score, s);
+        say("A figured bass: select a note of the staff over it, Insert › Figures, then Space for the next beat.");
+      });
+      // A finger (1–5) on the selected note's last grace note; again to take it away.
+      case "grace-finger": return edit((score) => {
+        const r = range() ?? (() => { throw new Error("Select the note after the grace note"); })();
+        M.setGraceFingering(score, r.s, r.a, data.n);
       });
       case "add-staff": return edit((score) => {
         const [k, clef] = root.querySelector('[data-field="new-staff"]').value.split("|");
@@ -1519,20 +1533,24 @@ export function startStudio(root, options = {}) {
         draw();
       }
     }
-    // A chord symbol over a staff under a line of chord names goes on the line, at that time.
+    if (kind === "fret" && st.score.staves[t.s].events[t.i].rest) return say("A chord diagram goes over a note: select a note", true);
+    // A chord symbol over a staff under a line of chord names goes on the line, at that time; figures on the figured bass under it.
     const time = M.starts(st.score.staves[t.s])[t.i];
-    const line = kind === "chord" ? M.chordLineOver(st.score, t.s) : -1;
+    const line = kind === "chord" ? M.chordLineOver(st.score, t.s) : kind === "figure" ? M.figureLineUnder(st.score, t.s) : -1;
+    if (kind === "figure" && line < 0) return say("Add a figured bass under the staff first: Insert › A figured bass under the staff", true);
     const lane = line >= 0 ? line : t.s;
     const at = M.eventAt(st.score.staves[lane], time);
     const ev = at >= 0 ? st.score.staves[lane].events[at] : null;
     const box = Object.assign(document.createElement("input"), { type: "text", className: `studio-words studio-words-${kind}` });
     box.value = ev ? wordsOf(ev, kind) : "";
-    box.placeholder = { lyric: "syllable", chord: "Am7", text: "solo", expression: "dolce" }[kind];
+    box.placeholder = { lyric: "syllable", chord: "Am7", text: "solo", expression: "dolce", figure: "6 4", fret: "x32010" }[kind];
     box.setAttribute("aria-label", {
       lyric: "Syllable — Space next note, - hyphen, Enter done",
       chord: "Chord symbol — Space next note, Enter done",
       text: "Staff text — Enter done",
       expression: "Expression, in italics — Enter done",
+      figure: "Figures, as 6 4 or 7+ — Space next beat, Enter done",
+      fret: "Guitar chord, low E first: x32010 — Enter done",
     }[kind]);
     sheet.appendChild(box);
     wordsBox = { box, kind, s: lane, t: time, anchor: t.s };
@@ -1549,7 +1567,7 @@ export function startStudio(root, options = {}) {
         commitWords();
         closeWords();
         sheet.focus();
-      } else if ((event.key === " " && (kind === "lyric" || kind === "chord")) || event.key === "Tab" || (event.key === "-" && kind === "lyric")) {
+      } else if ((event.key === " " && (kind === "lyric" || kind === "chord" || kind === "figure")) || event.key === "Tab" || (event.key === "-" && kind === "lyric")) {
         event.preventDefault();
         commitWords({ hyphen: event.key === "-", next: true });
         nextWords();
@@ -1572,6 +1590,8 @@ export function startStudio(root, options = {}) {
   function wordsOf(ev, kind) {
     if (kind === "lyric") return M.syllableOf(ev, verse())?.text ?? "";
     if (kind === "chord") return ev.chord ?? "";
+    if (kind === "figure") return ev.figure ?? "";
+    if (kind === "fret") return ev.fret ? M.fretText(ev.fret) : "";
     return M.textOf(ev, kind === "text" ? "staff" : "expression");
   }
 
@@ -1588,6 +1608,9 @@ export function startStudio(root, options = {}) {
         // On a line of chord names: from this beat on, the line cut there.
         if (value.trim() || i >= 0) M.setChordAt(score, s, t, value);
       } else if (kind === "chord") M.setChordSymbol(score, s, i, value);
+      else if (kind === "figure") {
+        if (value.trim() || i >= 0) M.setFigureAt(score, s, t, value);
+      } else if (kind === "fret") M.setFretDiagram(score, s, i, value);
       else M.setText(score, s, i, kind === "text" ? "staff" : "expression", value);
     });
   }
@@ -1597,7 +1620,7 @@ export function startStudio(root, options = {}) {
     const { kind, s, t } = wordsBox;
     const staff = st.score.staves[s];
     const at = M.starts(staff);
-    if (M.isChords(st.score, s)) {
+    if (M.isChords(st.score, s) || M.isFigures(st.score, s)) {
       // A line of chord names goes beat by beat, the staff under it selected where a note starts.
       const next = M.nextBeat(st.score, t);
       if (next >= M.lengthOf(staff)) return closeWords();
@@ -1663,7 +1686,7 @@ export function startStudio(root, options = {}) {
     const g = geometry();
     if (!item || !g) return;
     const [x0, y0, , y1] = item.box;
-    const below = wordsBox.kind === "lyric" || wordsBox.kind === "expression";
+    const below = wordsBox.kind === "lyric" || wordsBox.kind === "expression" || wordsBox.kind === "figure";
     const corner = g.at(x0, below ? y1 : y0);
     wordsBox.box.style.left = `${corner.x - 6}px`;
     // A later verse's box a line lower, as its words stand.
@@ -2836,7 +2859,7 @@ export function startStudio(root, options = {}) {
   root.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-act]");
     if (!button || button.disabled) return;
-    const typing = ["lyrics", "chord", "text", "expression"].includes(button.dataset.act);
+    const typing = ["lyrics", "chord", "text", "expression", "figures", "fret"].includes(button.dataset.act);
     const menu = button.closest(".studio-dropdown");
     if (menu) menu.open = false;
     if ((!button.closest(".studio-menubar") || menu) && !typing) sheet.focus({ preventScroll: true });

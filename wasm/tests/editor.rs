@@ -238,6 +238,18 @@ fn a_chord_name_says_how_it_is_written() {
 }
 
 #[test]
+fn figures_and_fingered_grace_notes_are_handed_over() {
+    let parsed = score("<< \\new Staff { \\clef bass \\grace { c'8-2 } d2 e2 } \\new FiguredBass \\figuremode { <6 4>2 <7+> } >>").unwrap();
+    let note = &parsed["staves"][0]["events"].as_array().unwrap().iter().find(|e| e["k"] == "Note").unwrap().clone();
+    assert_eq!(note["graces"][0][3], json!([["2", 0, null, false]]));
+    assert_eq!(note["unsupported"], json!([]));
+    let figures: Vec<_> = parsed["staves"][1]["events"].as_array().unwrap().iter().filter(|e| e["k"] == "Rest").map(|e| e["figure_text"].clone()).collect();
+    assert_eq!(figures, vec![json!("<6 4>"), json!("<7+>")]);
+    let diagram = score("{ c'1^\\markup \\fret-diagram-terse \"x;3;2;o;1;o;\" }").unwrap();
+    assert_eq!(diagram["staves"][0]["events"][0]["unsupported"], json!([]));
+}
+
+#[test]
 fn staves_and_voices_say_their_names() {
     let src = "\\new PianoStaff << \\new Staff = \"up\" << \\new Voice = \"sop\" { \\voiceOne c''1 } \\new Voice = \"alto\" { \\voiceTwo a'1 } >> \\new Lyrics \\lyricsto \"alto\" { la } \\new Staff = \"down\" { \\clef bass c4 \\change Staff = \"up\" e'4 d'2 } >>";
     let parsed = score(src).unwrap();
