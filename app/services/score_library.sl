@@ -363,8 +363,22 @@ class ScoreLibrary
   # What the engraver refuses, each with a source that shows it: the limits
   # page engraves them live, so the messages it prints are the engraver's own.
   # Only what is still refused: since Soli 2.28.5, layout settings (\stemUp,
-  # \override) and a forced accidental (cis!) are read.
+  # \override) and a forced accidental (cis!) are read. What the engraver on
+  # this server has come to read is left out by itself (\afterGrace, from
+  # the Soli release with eui #389).
   static def refusals
+    ScoreLibrary.known_refusals.filter do |refusal|
+      ScoreLibrary.refused?(refusal["src"])
+    end
+  end
+
+  # Whether the server's engraver refuses `src`.
+  static def refused?(src)
+    !eui_score_layout(src, 100, {})["error"].nil?
+  end
+
+  # Every limit the page has listed, each with a source that shows it.
+  static def known_refusals
     [
       {"what": "256th notes", "src": "{ c''256 }"},
       {"what": "Tuplets three deep", "src": "{ \\tuplet 3/2 { \\tuplet 3/2 { \\tuplet 3/2 { c'32 d' e' } } } }"},

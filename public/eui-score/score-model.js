@@ -440,6 +440,7 @@ export function transpose(score, { steps, semitones, s = null, a = 0, b = Infini
         ev.pitches = moved;
       }
       for (const g of ev.graces) g.pitches = g.pitches.map((p) => transposePitch(p, steps, semitones));
+      for (const g of ev.afterGraces ?? []) g.pitches = g.pitches.map((p) => transposePitch(p, steps, semitones));
       if (s == null && ev.chord) ev.chord = transposeChord(ev.chord, steps, semitones);
     });
   }
@@ -667,8 +668,10 @@ function pieces(score, ev, at, ticks, role) {
     if (!(last && keepsEnd)) {
       delete p.beamEnd;
       delete p.phraseEnd;
-      // A breath is taken, a tie let ring, a text span ended after the last piece.
+      // A breath is taken, a tie let ring, a text span ended after the last piece; \\afterGrace's notes follow it.
       delete p.breath;
+      delete p.afterGraces;
+      delete p.afterAt;
       delete p.lv;
       delete p.spanEnd;
     }
@@ -876,6 +879,8 @@ export function remove(score, s, i, head = -1) {
   Object.assign(ev, { rest: true, pitches: [], tie: false, slurStart: false, slurEnd: false, arts: [], lyric: null, graces: [], grace: null, arpeggio: false, gliss: false, tremolo: 0 });
   // A rest takes no fingering, and no phrasing slur starts or ends on it; no accidental, no tie let ring.
   delete ev.fingers;
+  delete ev.afterGraces;
+  delete ev.afterAt;
   delete ev.phraseStart;
   delete ev.phraseEnd;
   delete ev.forced;
@@ -2077,6 +2082,8 @@ function eventText(ev, beam = "") {
     const graces = ev.graces.map((g) => notes(g.pitches, bare) + g.base + ".".repeat(g.dots));
     out += `\\${ev.grace ?? "grace"} ${graces.length === 1 ? graces[0] : `{ ${graces.join(" ")} }`} `;
   }
+  const after = !ev.rest && ev.afterGraces?.length ? ev.afterGraces.map((g) => notes(g.pitches, bare) + g.base + ".".repeat(g.dots)) : null;
+  if (after) out += `\\afterGrace ${ev.afterAt != null && ev.afterAt !== AFTER_GRACE_AT ? `${afterFraction(ev.afterAt)} ` : ""}`;
   out += ev.rest ? (ev.spacer ? "s" : "r") : ev.pitches.length > 1 ? `<${ev.pitches.map((p) => head(p) + headMarks(p)).join(" ")}>` : notes(ev.pitches);
   out += ev.base + ".".repeat(ev.dots);
   if (ev.tremolo && !ev.rest) out += `:${ev.tremolo}`;
@@ -2103,6 +2110,7 @@ function eventText(ev, beam = "") {
   if (ev.repeatTie && !ev.rest) out += "\\repeatTie";
   if (ev.spanEnd) out += "\\stopTextSpan";
   if (ev.spanStart != null) out += "\\startTextSpan";
+  if (after) out += ` { ${after.join(" ")} }`;
   if (BREATHS.includes(ev.breath)) out += ` \\${ev.breath}`;
   return out;
 }
@@ -3187,6 +3195,19 @@ export function readPage(source) {
   return out;
 }
 
+/** Where \\afterGrace's notes start, as a part of their note: LilyPond's afterGraceFraction. */
+export const AFTER_GRACE_AT = 3 / 4;
+
+/** A part of a note as \\afterGrace writes it: 7/8, 15/16 — the nearest with a denominator to 64. */
+export function afterFraction(at) {
+  for (let d = 2; d <= 64; d *= 2) {
+    const n = Math.round(at * d);
+    if (Math.abs(n / d - at) < 1e-9) return `${n}/${d}`;
+  }
+  const d = 64;
+  return `${Math.min(d - 1, Math.max(1, Math.round(at * d)))}/${d}`;
+}
+
 /** The paper (A4 by default, "letter", "a3landscape"…) and the staff size, in points (20 by default). */
 export function setPaper(score, { size, staffSize }) {
   const name = String(size ?? "a4").toLowerCase();
@@ -3390,7 +3411,7 @@ export function playedSource(source, parse) {
   if (!/\\(repeat|jump)\b/.test(source)) return source;
   let read;
   try {
-    read = fromParsed(JSON.parse(parse(source)));
+    read = fromParsed(JSON.parse(parse(source)), source);
   } catch {
     return source;
   }
@@ -3699,6 +3720,8 @@ function playedOut(score, s, bars) {
 
 /** What the editor says of a piece of several movements (#359): engraved, edited in the text. */
 const MOVEMENTS = "several movements (one \\score after another): edit them one at a time in the text";
+/** What the editor says of \\afterGrace when the engraver does not hand its notes over. */
+const AFTER_GRACE_UNREAD = "grace notes after a note (\\afterGrace)";
 /** The parse's breath marks, by their glyph, as the model names them. */
 const BREATHS_READ = { breathMarkComma: "breathe", caesura: "caesura" };
 
@@ -3739,6 +3762,11 @@ export function fromParsed(parsed, source = null) {
   score.paper = paperFrom(parsed.paper);
   // The headers, the footers and the systems a page: read from the text, which keeps them.
   if (source != null) Object.assign(score.paper, readPage(source));
+  // An engraver that reads \\afterGrace but does not hand its notes over
+  // (a parse without `after_graces`): the text keeps them, the model would not.
+  if (source != null && /\\afterGrace\b/.test(source) && !parsed.staves.some((st) => st.events.some((ev) => "after_graces" in ev))) {
+    unsupported.add(AFTER_GRACE_UNREAD);
+  }
   score.breaks = {};
   // Where the first staff's repeat signs fall, in bars: the score's repeats.
   const signs = [];
@@ -3957,6 +3985,9 @@ export function fromParsed(parsed, source = null) {
           hairpin: ev.hairpin ?? null, hairpinEnd: ev.hairpin_end, arts, chord, texts,
           graces: (ev.graces ?? []).map(([pitches, base, dots]) => ({ pitches: pitches.map(([d, alter]) => ({ d, alter })), base, dots })),
           grace: ev.grace ?? null, arpeggio: Boolean(ev.arpeggio), gliss: Boolean(ev.gliss), tremolo: ev.tremolo ?? 0,
+          ...(ev.after_graces?.length
+            ? { afterGraces: ev.after_graces.map(([pitches, base, dots]) => ({ pitches: pitches.map(([d, alter]) => ({ d, alter })), base, dots })), afterAt: ev.after_at ?? AFTER_GRACE_AT }
+            : {}),
           pedalOn: Boolean(ev.pedal_on), pedalOff: Boolean(ev.pedal_off),
           // A spacer, `s`: takes its time, drawn as nothing. Beams written by hand.
           ...(k === "Rest" && ev.spacer ? { spacer: true } : {}),

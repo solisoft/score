@@ -12,6 +12,17 @@ class Changelog
     [
       {"date": "2026-10-24", "entries": [
         {
+          "area": "editor",
+          "title": "Grace notes after a note (\\afterGrace)",
+          "text": "A score that writes grace notes after a note, \\afterGrace d2 { e16 f }, is no longer refused "
+          + "once the engraver that reads it is on the site: the grace notes are drawn small after the note, just "
+          + "before the next one, and played in the last quarter of the note (or from the point written, "
+          + "\\afterGrace 7/8 …). The editor keeps them through every edit, moves them with a transposition and "
+          + "takes them away with their note. Until then such a score opens in its text, as before, and the Limits "
+          + "page lists them only while the engraver still refuses them.",
+          "app": true
+        },
+        {
           "area": "site",
           "title": "Export all your data, and change your email address",
           "text": "The account page has two new parts. Export all your data downloads a zip: each of your scores "

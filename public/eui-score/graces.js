@@ -12,8 +12,10 @@
 // - an appoggiatura (\appoggiatura) takes half of the note's value, two
 //   thirds when the note is dotted: the note starts that much later;
 // - after-grace notes (\afterGrace) are played in the last quarter of their
-//   note, from LilyPond's 3/4 point. eui-score does not read \afterGrace
-//   yet, so only `graceTiming` knows them;
+//   note, from LilyPond's 3/4 point (or the fraction written, \afterGrace
+//   7/8): eui-score plays them so itself since #389 — `graceTiming` says
+//   where, and `afterGraces` lists them from the score — so this leaves
+//   them as it wrote them;
 // - several grace notes share the group's time, as written (a group of
 //   short ones: a short value each).
 //
@@ -46,7 +48,7 @@ export const AFTER_GRACE = 3 / 4;
  * starts; `mainEnd` when it must end (after-grace), else null; `cut` when
  * the note before must end by (short ones before the beat), else null.
  */
-export function graceTiming({ kind, start, value, dotted = false, written, short, room = Infinity }) {
+export function graceTiming({ kind, start, value, dotted = false, written, short, room = Infinity, at = AFTER_GRACE }) {
   const n = written.length;
   const share = (from, length, weights) => {
     const total = weights.reduce((sum, w) => sum + w, 0) || n;
@@ -63,7 +65,7 @@ export function graceTiming({ kind, start, value, dotted = false, written, short
     return { graces: share(start, length, written), main: start + length, mainEnd: null, cut: null };
   }
   if (kind === "afterGrace") {
-    const from = start + value * AFTER_GRACE;
+    const from = start + value * at;
     return { graces: share(from, start + value - from, written), main: start, mainEnd: from, cut: null };
   }
   const even = written.map(() => 1);
@@ -72,6 +74,31 @@ export function graceTiming({ kind, start, value, dotted = false, written, short
   // Nothing before to take it from: from the note, half of it at most.
   const taken = Math.min(length, value / 2);
   return { graces: share(start, taken, even), main: start + taken, mainEnd: null, cut: null };
+}
+
+/**
+ * Each note with grace notes after it (\afterGrace), and where they sound
+ * in its time, in the score's ticks: [{ s, i, t, timing }], `timing` as
+ * `graceTiming` answers it — what eui-score's MIDI plays.
+ */
+export function afterGraces(score) {
+  const out = [];
+  score.staves.forEach((staff, s) => {
+    const at = M.starts(staff);
+    staff.events.forEach((ev, i) => {
+      if (ev.rest || !ev.afterGraces?.length) return;
+      const timing = graceTiming({
+        kind: "afterGrace",
+        start: at[i],
+        value: M.ticksOf(ev),
+        written: ev.afterGraces.map((g) => M.notated(g.base, g.dots)),
+        short: 0,
+        at: ev.afterAt ?? AFTER_GRACE,
+      });
+      out.push({ s, i, t: at[i], timing });
+    });
+  });
+  return out;
 }
 
 /** Pass `p`'s ticks a second, as played: its length over its time, the fermatas' holds counted. */

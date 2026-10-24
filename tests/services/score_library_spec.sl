@@ -99,6 +99,22 @@ describe("ScoreLibrary") do
       end
     end
 
+    test("grace notes after a note are listed while the engraver refuses them, not once it reads them") do
+      after_grace = ScoreLibrary.known_refusals.find do |refusal|
+        refusal["what"] == "Grace notes after a note"
+      end
+      assert_not_null(after_grace)
+      listed = ScoreLibrary.refusals.map(&:src).includes?(after_grace["src"])
+      reads = eui_score_layout(after_grace["src"], 100, {})["error"].nil?
+      assert_eq(listed, !reads)
+      assert_eq(ScoreLibrary.refused?(after_grace["src"]), !reads)
+      # A source it sets is never listed; one it refuses always is.
+      assert_not(ScoreLibrary.refused?("{ c''4 }"))
+      assert(ScoreLibrary.refused?("{ c''4 \\shiver d''4 }"))
+      assert(ScoreLibrary.refusals.length <= ScoreLibrary.known_refusals.length)
+      assert(ScoreLibrary.refusals.map(&:what).includes?("An unknown command"))
+    end
+
     test("no longer list what the engraver reads since Soli 2.28.5") do
       # Layout settings are passed over, a forced accidental is drawn.
       listed = ScoreLibrary.refusals.map(&:src)
