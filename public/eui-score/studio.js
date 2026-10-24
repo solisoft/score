@@ -1105,6 +1105,28 @@ export function startStudio(root, options = {}) {
         const r = range() ?? (() => { throw new Error("Select the note the line ends before"); })();
         M.endOttava(score, r.s, r.a);
       });
+      // Stems up, down or as the voice wants over the selection; X flips them: up, down, back.
+      case "stem": case "stem-flip": return edit((score) => {
+        const r = range() ?? (() => { throw new Error("Select the notes whose stems to turn"); })();
+        const now = M.stemAt(score, r.s, r.a);
+        const dir = name === "stem" ? Number(data.dir) : now > 0 ? -1 : now < 0 ? 0 : 1;
+        M.setStem(score, r.s, r.a, r.b, dir);
+        say(["Stems down", "Stems as the voice wants", "Stems up"][dir + 1]);
+      });
+      // A beam written by hand over the selection (again: none), or broken before the selected note.
+      case "beam": return edit((score) => {
+        const r = range() ?? (() => { throw new Error("Select the notes to beam: click the first, Shift+click the last"); })();
+        M.toggleBeam(score, r.s, r.a, r.b);
+      });
+      case "beam-break": return edit((score) => {
+        const r = range() ?? (() => { throw new Error("Select the note the beam breaks before"); })();
+        M.breakBeam(score, r.s, r.a);
+      });
+      // The selected notes spelled the other way: C♯ and D♭.
+      case "enharmonic": return edit((score) => {
+        const r = range() ?? (() => { throw new Error("Select the notes to spell the other way"); })();
+        M.enharmonic(score, r.s, r.a, r.b, r.a === r.b ? st.sel.head : -1);
+      });
       // The selected notes drawn on the staff above or below (\\change Staff), again to bring them back.
       case "cross": return edit((score) => {
         const r = range() ?? (() => { throw new Error("Select the notes to draw on the other staff"); })();

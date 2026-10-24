@@ -1034,6 +1034,147 @@ export function endOttava(score, s, i) {
   tidyOttavas(staff);
 }
 
+// ---- Stems, beams written by hand, enharmonic spelling ------------------------------
+
+/** The lane of `s` whose events `a`…`b` a command changes: refused on a line of chord names; first and last index. */
+function laneRange(score, s, a, b) {
+  const staff = score.staves[s];
+  if (!staff) throw new Error("no such staff");
+  if (staff.chords) throw new Error(CHORD_LINE_NOTES);
+  const [from, to] = [Math.min(a, b), Math.max(a, b)];
+  if (!staff.events[from] || !staff.events[to]) throw new Error("no such note");
+  return [staff, from, to];
+}
+
+/**
+ * The stems of events `a`…`b`: `dir` 1 up (\stemUp), -1 down (\stemDown), 0
+ * as the voice or the engraver wants (\stemNeutral). What follows keeps the
+ * stems it had.
+ */
+export function setStem(score, s, a, b, dir) {
+  if (![-1, 0, 1].includes(dir)) throw new Error("a stem goes up, down, or as the voice wants");
+  const [staff, from, to] = laneRange(score, s, a, b);
+  const after = markerAt(staff, to, "stemDir");
+  for (let k = from; k <= to; k++) delete staff.events[k].stemDir;
+  staff.events[from].stemDir = dir;
+  const next = staff.events[to + 1];
+  if (next && next.stemDir == null) next.stemDir = after;
+  tidyMarkers(staff, "stemDir");
+}
+
+/** The stem direction in force at event `i` of lane `s`: 1 up, -1 down, 0 the voice's. */
+export function stemAt(score, s, i) {
+  return markerAt(score.staves[s], i, "stemDir");
+}
+
+/** The beam written by hand event `i` is under, as `[first, last]`, or null. */
+export function handBeamAt(score, s, i) {
+  const staff = score.staves[s];
+  const marks = handBeams(score, staff);
+  let open = -1;
+  for (let k = 0; k < marks.length; k++) {
+    if (marks[k] === "[") open = k;
+    if (marks[k] === "]" && open >= 0) {
+      if (i >= open && i <= k) return [open, k];
+      open = -1;
+    }
+  }
+  return null;
+}
+
+/**
+ * Events `a`…`b` under one beam written by hand (`[ ]`): the beams by hand
+ * inside them joined; the same beam again takes it away. Its notes are an
+ * eighth or shorter, in one bar and one tuplet, its ends notes.
+ */
+export function toggleBeam(score, s, a, b) {
+  const [staff, a0, b0] = laneRange(score, s, a, b);
+  const same = handBeamAt(score, s, a0);
+  if (same && same[0] === a0 && same[1] === b0) {
+    delete staff.events[a0].beamStart;
+    delete staff.events[b0].beamEnd;
+    return;
+  }
+  // The hand beams it reaches into are joined into it.
+  const from = Math.min(a0, handBeamAt(score, s, a0)?.[0] ?? a0);
+  const to = Math.max(b0, handBeamAt(score, s, b0)?.[1] ?? b0);
+  if (from === to) throw new Error("a beam joins two notes or more: select them");
+  const events = staff.events.slice(from, to + 1);
+  const at = starts(staff);
+  if (staff.events[from].rest || staff.events[to].rest) throw new Error("a beam starts and ends on a note");
+  if (events.some((ev) => !ev.rest && ev.base < 8)) throw new Error("only eighths and shorter notes are beamed");
+  if (barAt(score, at[from]) !== barAt(score, at[to])) throw new Error("a beam stays in its bar");
+  if (events.some((ev) => ev.tuplet?.id !== events[0].tuplet?.id)) throw new Error("a beam stays in its tuplet");
+  for (const ev of events) {
+    delete ev.beamStart;
+    delete ev.beamEnd;
+  }
+  staff.events[from].beamStart = true;
+  staff.events[to].beamEnd = true;
+}
+
+/**
+ * The beam written by hand broken before note `i`: what is before it one
+ * beam, what is from it on another — a part of one note left unbeamed.
+ */
+export function breakBeam(score, s, i) {
+  const [staff] = laneRange(score, s, i, i);
+  const beam = handBeamAt(score, s, i);
+  if (!beam) throw new Error("this note's beam is the engraver's own: select the notes and beam them by hand (Alt+B) to break it");
+  if (beam[0] === i) throw new Error("the beam starts on this note: select a note inside it");
+  const [first, last] = beam;
+  delete staff.events[first].beamStart;
+  delete staff.events[last].beamEnd;
+  const notes = (a, b) => staff.events.slice(a, b + 1).filter((ev) => !ev.rest).length;
+  // Before it: up to the last note before it.
+  let end = i - 1;
+  while (end > first && staff.events[end].rest) end--;
+  if (notes(first, end) > 1) {
+    staff.events[first].beamStart = true;
+    staff.events[end].beamEnd = true;
+  }
+  let start = i;
+  while (start < last && staff.events[start].rest) start++;
+  if (notes(start, last) > 1) {
+    staff.events[start].beamStart = true;
+    staff.events[last].beamEnd = true;
+  }
+}
+
+/** The spellings of a pitch, the same key on the piano: C♯ and D♭, E, F♭ and D𝄪 — its own first. */
+export function spellings(p) {
+  const key = midiKey(p.d, p.alter);
+  const out = [{ ...p }];
+  for (const d of [p.d + 1, p.d - 1, p.d + 2, p.d - 2]) {
+    const alter = key - midiKey(d, 0);
+    if (Math.abs(alter) <= 2) out.push({ d, alter });
+  }
+  // The plainest first after its own: fewer sharps or flats.
+  return [out[0], ...out.slice(1).sort((x, y) => Math.abs(x.alter) - Math.abs(y.alter) || x.d - y.d)];
+}
+
+/** A pitch spelled the next way: C♯ is D♭, D♭ C♯; E is F♭, then D𝄪, then E. */
+export function respell(p) {
+  const all = spellings(p);
+  return all[1] ?? all[0];
+}
+
+/** Notes `a`…`b` of lane `s` spelled the other way (cis ↔ des) — head `head` of a chord, or every head — with the notes tied to them. */
+export function enharmonic(score, s, a, b, head = -1) {
+  const [staff, from, to] = laneRange(score, s, a, b);
+  refuseDrums(score, s);
+  let done = 0;
+  for (let i = from; i <= to; i++) {
+    const ev = staff.events[i];
+    if (ev.rest || (i > from && staff.events[i - 1].tie && sameNote(staff.events[i - 1], ev))) continue;
+    const now = ev.pitches.map((p, k) => (head < 0 || from !== to || k === head ? respell(p) : p));
+    followHeads(ev, ev.pitches, now);
+    setPitches(score, s, i, sortPitches(now));
+    done++;
+  }
+  if (!done) throw new Error("select the notes to spell the other way");
+}
+
 // ---- Notes drawn on the other staff -----------------------------------------------
 //
 // `\change Staff = "down"`: a note of one staff drawn on another — a piano's

@@ -314,6 +314,27 @@ describe("The playground, in a browser") do
     assert_no_page_errors()
   end
 
+  test("stems turned, a beam by hand and a note spelled the other way, from the keys (#375)") do
+    type_source("{ c''8 d'' e'' f'' cis''2 | g''1 }")
+    caret_on("cis''2")
+    evaluate("document.querySelector('.studio-sheet').focus()")
+    press("j")
+    sleep(0.4)
+    assert_contains(playground_text(), "des''2")
+    caret_on("des''2")
+    evaluate("document.querySelector('.studio-sheet').focus()")
+    press("x")
+    sleep(0.4)
+    assert_contains(playground_text(), "\\stemUp des''2")
+    # A beam by hand wants two notes: one alone is refused, and said.
+    caret_on("c''8")
+    evaluate("document.querySelector(\"[data-act='beam']\").click()")
+    sleep(0.4)
+    assert_contains(evaluate("document.querySelector('[data-status]').textContent"), "two notes or more")
+    assert_not(playground_text().includes?("["))
+    assert_no_page_errors()
+  end
+
   test("a real file's breaths, bowings, cis! and mid-bar clef are edited on the score; its settings are named") do
     type_source("{ \\override NoteHead.color = #red \\stemUp c''4\\upbow cis''!4 \\breathe \\clef bass e4 f4 | g1 }")
     assert_not(evaluate("document.querySelector('#studio').classList.contains('studio-text-only')"))

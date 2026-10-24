@@ -31,6 +31,17 @@ class Changelog
         },
         {
           "area": "editor",
+          "title": "Stems, beams by hand, and C♯ spelled D♭",
+          "text": "Three commands the editor lacked, in the Insert menu, the tools and the keyboard: stems up, down "
+          + "or as the voice wants over the selected notes (X flips them), the selected eighths beamed by hand "
+          + "(Alt+B, again to take the beam away; beams it reaches into are joined) and a beam broken before a "
+          + "note (Alt+Shift+B), and the selected notes spelled the other way, C♯ as D♭, E as F♭ (J), the notes "
+          + "tied to them with them. Each is written in the LilyPond (\\stemUp, [ ], des), kept by every edit "
+          + "and listed on the shortcuts sheet (?).",
+          "link": "playground"
+        },
+        {
+          "area": "editor",
           "title": "A line of chord names, edited beat by beat",
           "text": "A score with a line of chord names over its music (\\new ChordNames \\chordmode) now opens in "
           + "the editor, each chord written back as it was written. Insert › A line of chord names puts one over "

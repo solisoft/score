@@ -110,6 +110,13 @@
             <button type="button" role="menuitem" data-act="ottava" data-value="1">8va above the selection</button>
             <button type="button" role="menuitem" data-act="ottava" data-value="-1">8vb below the selection</button>
             <button type="button" role="menuitem" data-act="ottava-end">End the ottava line here</button>
+            <button type="button" role="menuitem" data-act="stem" data-dir="1">Stems up</button>
+            <button type="button" role="menuitem" data-act="stem" data-dir="-1">Stems down</button>
+            <button type="button" role="menuitem" data-act="stem" data-dir="0">Stems as the voice wants</button>
+            <button type="button" role="menuitem" data-act="stem-flip">Flip the stems <kbd>X</kbd></button>
+            <button type="button" role="menuitem" data-act="beam">Beam the selected notes <kbd>Alt+B</kbd></button>
+            <button type="button" role="menuitem" data-act="beam-break">Break the beam before the note <kbd>Alt+Shift+B</kbd></button>
+            <button type="button" role="menuitem" data-act="enharmonic">Spell the other way (C♯ ↔ D♭) <kbd>J</kbd></button>
             <button type="button" role="menuitem" data-act="cross" data-dir="-1">Notes on the staff above <kbd>Ctrl+Shift+↑</kbd></button>
             <button type="button" role="menuitem" data-act="cross" data-dir="1">Notes on the staff below <kbd>Ctrl+Shift+↓</kbd></button>
             <button type="button" role="menuitem" data-act="lyrics">Lyrics <kbd>Ctrl+L</kbd></button>
@@ -329,6 +336,14 @@
           <button type="button" class="tool tool-wide" data-act="ottava" data-value="1" title="8va: the selected notes drawn an octave lower, under a line; again to take it away">8va</button>
           <button type="button" class="tool tool-wide" data-act="ottava" data-value="-1" title="8vb: the selected notes drawn an octave higher, over a line; again to take it away">8vb</button>
           <button type="button" class="tool tool-wide" data-act="ottava-end" title="End the ottava line before the selected note">End 8va</button>
+        </div>
+        <div class="tool-row" aria-label="Stems and beams">
+          <button type="button" class="tool" data-act="stem" data-dir="1" title="Stems up over the selection">↑</button>
+          <button type="button" class="tool" data-act="stem" data-dir="-1" title="Stems down over the selection">↓</button>
+          <button type="button" class="tool" data-act="stem" data-dir="0" title="Stems as the voice wants">↕</button>
+          <button type="button" class="tool tool-wide" data-act="beam" title="Beam the selected notes by hand (Alt+B); again to take the beam away">⌐ Beam</button>
+          <button type="button" class="tool tool-wide" data-act="beam-break" title="Break the beam before the selected note (Alt+Shift+B)">Break</button>
+          <button type="button" class="tool tool-wide" data-act="enharmonic" title="Spell the selected notes the other way: C♯ ↔ D♭ (J)">♯↔♭</button>
         </div>
         <div class="tool-row" aria-label="Cross-staff">
           <button type="button" class="tool tool-wide" data-act="cross" data-dir="-1" title="Draw the selected notes on the staff above (Ctrl+Shift+↑); again to bring them back">↥ Staff above</button>

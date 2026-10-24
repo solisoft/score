@@ -86,6 +86,13 @@ export const SHORTCUTS = [
       return { t: ["tie"], s: ["slur"] }[lower(k)] ?? null;
     },
   },
+  { keys: "X", does: "flip the stems: up, down, as the voice wants", match: (k) => (!k.mod && !k.altKey && lower(k) === "x" ? ["stem-flip"] : null) },
+  {
+    keys: "Alt+B / Alt+Shift+B",
+    does: "beam the selection by hand (again: unbeamed) / break the beam here",
+    match: (k) => (!k.mod && k.altKey && (k.code === "KeyB" || lower(k) === "b") ? [k.shiftKey ? "beam-break" : "beam"] : null),
+  },
+  { keys: "J", does: "spell the other way: C♯ ↔ D♭", match: (k) => (!k.mod && !k.altKey && lower(k) === "j" ? ["enharmonic"] : null) },
   {
     keys: "Alt+1–5",
     does: "fingering (again to take it away)",

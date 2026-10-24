@@ -1305,6 +1305,9 @@ function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, 
     n.push(`<voice>${voice}</voice>`);
     if (!wholeBar) n.push(type);
     n.push(tm);
+    // A stem turned by \\stemUp or \\stemDown; the others as the reader draws them.
+    const stem = lane.slice(0, i + 1).findLast((x) => x.ev.stemDir != null)?.ev.stemDir ?? 0;
+    if (p && stem) n.push(`<stem>${stem > 0 ? "up" : "down"}</stem>`);
     if (staffNo) n.push(staffTag);
     if (item.beam && p) n.push(`<beam number="1">${item.beam}</beam>`);
     // Notations go on the first head only, but ties on each.
