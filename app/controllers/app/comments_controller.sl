@@ -13,6 +13,14 @@ class AppCommentsController < AppBaseController
     render_json({"threads": ScoreThread.listing(score)})
   end
 
+  # GET /app/scores/:id/people — {people: [{key, name, email}]}: who an @ may
+  # name in this score's comments (#392), its owner and those it is shared
+  # with; to those who may see it only
+  def people
+    score = @_score
+    render_json({"people": ScoreShare.mentionable(score)})
+  end
+
   # POST /app/scores/:id/comments — JSON {lane, bars: [first, last], label,
   # body, origin}: a new thread, 201 with it; 422 {error} with nothing written
   def create

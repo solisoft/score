@@ -13,6 +13,20 @@ class Changelog
       {"date": "2026-10-24", "entries": [
         {
           "area": "editor",
+          "title": "Comments follow their bars and are live on the read page; @ names; \\afterGrace in MusicXML",
+          "text": "A comment now stays on its bars when bars are put in or taken away before them, by you, by an "
+          + "Undo, or by someone else editing at the same time, and on its staff when a staff or a voice is added "
+          + "or removed; one whose bars or staff were all taken away is kept, and says so. On a score's read page, "
+          + "the people it is shared with see new comments as they are written and who else has it open; anyone "
+          + "reading it by its link is told when it changes. Typing @ in a comment lists the score's owner and the "
+          + "people it is shared with, filtered as you type: arrows and Enter choose. MusicXML now carries grace "
+          + "notes after a note, the way MuseScore and Finale write them: grace notes placed right after their "
+          + "note, each saying how much of it they take; on import, grace notes that end a bar, come before a "
+          + "rest or say they take from the note before become \\afterGrace.",
+          "app": true
+        },
+        {
+          "area": "editor",
           "title": "Grace notes after a note (\\afterGrace)",
           "text": "A score that writes grace notes after a note, \\afterGrace d2 { e16 f }, is no longer refused "
           + "once the engraver that reads it is on the site: the grace notes are drawn small after the note, just "

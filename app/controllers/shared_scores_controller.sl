@@ -19,6 +19,8 @@ class SharedScoresController < Controller
     # Its comments (#385), for those who may see it through their account:
     # the readers it is shared with comment here, the editors in the editor.
     @comments_url = @score.access_of(current_user()).nil? ? nil : app_score_comments_path(@score)
+    @people_url = @comments_url.nil? ? nil : app_score_people_path(@score)
+    @ticket_url = "#{shared_score_path(this.score.share_token)}/room_ticket"
     @me = current_user()&._key
     @eui_version = ScoreAssets.version
     @indexable = @score.visibility == "public"
@@ -60,6 +62,15 @@ class SharedScoresController < Controller
       "headers": headers.merge(caching),
       "body": document
     }
+  end
+
+  # GET /s/:token/room_ticket — JSON {ticket}: the read page's way into the
+  # score's room, to listen (#392; ScoreRoom): to anyone who may read it here,
+  # signed in or not. What they hear is decided at the door, and again each
+  # time: the room for the score's people, its lobby (saves only) for the others.
+  def room_ticket
+    score = @_readable_score
+    render_json({"ticket": ScoreRoom.ticket(score, current_user(), DateTime.utc.to_unix, "listen")})
   end
 
   private

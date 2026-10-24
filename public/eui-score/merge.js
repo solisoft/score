@@ -512,3 +512,116 @@ export function conflictLines(conflicts) {
   }
   return lines;
 }
+
+// ---- Where comments go when bars or staves move (#392) ----------------------
+//
+// A comment thread is anchored to a lane and some bars (comments.js). When a
+// save turns the text the server has (`base`) into a new one, the editor
+// sends with it where each of base's bars and lanes went, and the server
+// moves the threads in the same request (ScoreThread.follow): bars put in or
+// taken away, staves or voices added or removed, by this editor, by an Undo,
+// by a merge with someone else's changes — whatever happened between the two
+// texts. The two texts are lined up as the merge lines them up (a longest
+// common run of staves, then of bars); the bar operations this editor knows
+// it did since `base` (`ops`, from studio.js's `onBars`) decide first when
+// they account for the new bar count, since bars that read the same (a
+// pattern repeated, empty bars) cannot be told apart by their content.
+
+/** The texts last read for `anchorMap`: each save's new text is the next one's base. */
+const lastRead = new Map();
+function readKept(text, parse) {
+  if (!lastRead.has(text)) {
+    if (lastRead.size >= 2) lastRead.delete(lastRead.keys().next().value);
+    lastRead.set(text, read(text, parse));
+  }
+  return lastRead.get(text);
+}
+
+/** `ops` ({ at, removed, added }, in order) on `n` bars: each new bar's old one (null when new), or null. */
+export function barsByOps(n, ops) {
+  if (!Array.isArray(ops) || !ops.length) return null;
+  const bars = Array.from({ length: n }, (_, k) => k);
+  for (const op of ops) {
+    if (!op || !(op.at >= 0) || op.at > bars.length) return null;
+    bars.splice(op.at, op.removed ?? 0, ...Array.from({ length: op.added ?? 0 }, () => null));
+  }
+  return bars;
+}
+
+/** Old index to new, as runs `[from, to, length]`: what the server reads (an index in no run is gone). */
+export function runsOf(pairs) {
+  const runs = [];
+  for (const [from, to] of pairs) {
+    const last = runs[runs.length - 1];
+    if (last && last[0] + last[2] === from && last[1] + last[2] === to) last[2]++;
+    else runs.push([from, to, 1]);
+  }
+  return runs;
+}
+
+/**
+ * The staves of `ca` lined up with `cb`'s: `[{ base, side }]`, both set. By
+ * their settings and all their bars first (bars in the same count); the
+ * staves left over between two pairs, by their settings alone — a staff
+ * changed in the same save as another was added keeps its comments.
+ */
+function alignStaves(ca, cb, sameCount) {
+  const strict = align(ca.staves.length, cb.staves.length, (i, j) => key(ca.staves[i].props) === key(cb.staves[j].props) && (!sameCount || staffSignature(ca.staves[i]) === staffSignature(cb.staves[j])));
+  const pairs = [];
+  let gapA = [];
+  let gapB = [];
+  const flush = () => {
+    const loose = align(gapA.length, gapB.length, (i, j) => key(ca.staves[gapA[i]].props) === key(cb.staves[gapB[j]].props));
+    for (const x of loose) if (x.base != null && x.side != null) pairs.push({ base: gapA[x.base], side: gapB[x.side] });
+    gapA = [];
+    gapB = [];
+  };
+  for (const x of strict) {
+    if (x.base != null && x.side != null) {
+      flush();
+      pairs.push({ base: x.base, side: x.side });
+    } else if (x.base != null) gapA.push(x.base);
+    else gapB.push(x.side);
+  }
+  flush();
+  return pairs.sort((x, y) => x.base - y.base);
+}
+
+/**
+ * Where `base`'s bars and lanes are in `next`: `{ from, to, bars, lanes }`
+ * — `from` and `to` the bar counts, `bars` runs `[old, new, length]` (a bar
+ * in none was taken away), `lanes` each old lane's new one (−1: gone). Null
+ * when nothing moved, or when either text cannot be read into the model.
+ */
+export function anchorMap(base, next, { parse, ops = [] } = {}) {
+  if (base == null || next == null || base === next) return null;
+  const a = readKept(base, parse);
+  const b = readKept(next, parse);
+  if (!a || !b) return null;
+  const ca = cells(a);
+  const cb = cells(b);
+
+  // The staves, by their settings — and their bars too while those keep their count.
+  const sameCount = ca.bars === cb.bars;
+  const pairs = alignStaves(ca, cb, sameCount);
+  const lanes = Array.from({ length: a.staves.length }, () => -1);
+  for (const { base: i, side: j } of pairs) {
+    for (const lane of M.voiceLanes(a, ca.staves[i].lane)) {
+      const voice = M.voiceOf(a, lane);
+      lanes[lane] = M.laneOfVoice(b, cb.staves[j].lane, voice);
+    }
+  }
+
+  // The bars: by the operations, when they account for the new count; else by content, on the staves both have.
+  let barPairs;
+  const byOps = barsByOps(ca.bars, ops);
+  if (byOps && byOps.length === cb.bars) barPairs = byOps.map((old, k) => [old, k]).filter(([old]) => old != null);
+  else {
+    const column = (c, b, side) => [c.heads[b].key, ...pairs.flatMap((p) => Object.keys(c.staves[p[side]].voices).sort().map((v) => `${v}:${c.staves[p[side]].voices[v][b].key}`))].join("\n");
+    const lined = align(ca.bars, cb.bars, (i, j) => column(ca, i, "base") === column(cb, j, "side"));
+    barPairs = lined.filter((x) => x.base != null && x.side != null).map((x) => [x.base, x.side]);
+  }
+  const bars = runsOf(barPairs);
+  const still = sameCount && bars.length === 1 && bars[0][0] === 0 && bars[0][1] === 0 && bars[0][2] === ca.bars && lanes.every((lane, k) => lane === k) && a.staves.length === b.staves.length;
+  return still ? null : { from: ca.bars, to: cb.bars, bars, lanes };
+}

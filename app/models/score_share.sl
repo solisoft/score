@@ -103,6 +103,20 @@ class ScoreShare < Model
     ).limit(501).all
   end
 
+  # The people of `score` an @ may name in a comment (#392), as the comment
+  # boxes list them: [{"key", "name", "email"}], by name. Only the score's
+  # (`people_of`): its owner and those it is shared with who have an account.
+  static def mentionable(score)
+    people = ScoreShare.people_of(score).map do |person|
+      {
+        "key": person._key,
+        "name": person.name.to_s.trim,
+        "email": person.email
+      }
+    end
+    people.sort_by(fn(person) { (person["name"].blank? ? person["email"] : person["name"]).downcase })
+  end
+
   # The scores shared with `user`, out of the trash, each with the role, the
   # share (to leave it) and who shared it (their owner's name, or "" when
   # their account is gone): [{"score", "role", "share", "owner"}]. The

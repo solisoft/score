@@ -5,6 +5,9 @@
     <% if can_edit %>
       <p><a class="btn btn-ghost" href="<%= app_score_path(score) %>">Open in the editor</a></p>
     <% end %>
+    <%# Live (#392): who else has the score open, and a save made meanwhile. %>
+    <p class="read-room" data-read-room hidden></p>
+    <p class="read-updated" data-read-updated hidden role="status">This score was just changed. <a href="" data-read-reload>See it as it is now</a></p>
   </header>
   <%- score_figure(figure, {"name": file_name, "pdf": pdf_url, "title": score.title, "source": "closed"}) %>
   <%# The score in other programs' files, written in the browser from its
@@ -34,18 +37,91 @@
       <h2 id="read-comments-title">Comments</h2>
       <div class="studio-comments-body" data-read-comments></div>
     </section>
-    <script type="module">
+  <% end %>
+  <%# The score's room, listened to (#392; ScoreRoom): the people of the
+      score hear the comments as they are written and see who else is
+      there; anyone else the score is open to hears only that it changed.
+      Nothing is sent from here but the connection itself. %>
+  <script type="module">
+    const commentsUrl = <%- comments_url.nil? ? "null" : "\"" + comments_url + "\"" %>;
+    const origin = crypto.randomUUID?.() ?? String(Math.random()).slice(2);
+    let comments = null;
+    if (commentsUrl) {
       const { startComments } = await import("/eui-score/comments.js?v=<%= eui_version %>");
-      const panel = document.querySelector("[data-read-comments]");
-      const comments = startComments(panel, {
-        url: "<%= comments_url %>",
+      const panel = document.querySelector(".read-comments .studio-comments-body");
+      comments = startComments(panel, {
+        url: commentsUrl,
+        people: <%- people_url.nil? ? "null" : "\"" + people_url + "\"" %>,
         me: "<%= me %>",
-        origin: crypto.randomUUID?.() ?? String(Math.random()).slice(2),
+        origin,
         manual: true,
       });
       await comments.refresh();
       const asked = location.hash.match(/^#thread-(.+)$/)?.[1];
       if (asked) comments.open(decodeURIComponent(asked));
-    </script>
-  <% end %>
+    }
+
+    const roomBox = document.querySelector("[data-read-room]");
+    const updated = document.querySelector("[data-read-updated]");
+    const me = "<%= me %>";
+    let people = {};
+    const shortName = (name) => String(name ?? "").replace(/@.*$/, "") || "Someone";
+    const showPeople = () => {
+      const others = Object.entries(people).filter(([id]) => id !== me && id !== "guest");
+      roomBox.hidden = others.length === 0;
+      roomBox.textContent = others.length ? `Also here: ${others.map(([, p]) => shortName(p.metas[0].name) + (p.metas.every((meta) => meta.role === "listen") ? " (reading)" : " (editing)")).join(", ")}` : "";
+    };
+    updated.querySelector("[data-read-reload]").addEventListener("click", (event) => {
+      event.preventDefault();
+      location.reload();
+    });
+    let delay = 3000;
+    let revision = <%= score.revision %>;
+    async function listen() {
+      let ticket;
+      try {
+        const answer = await fetch("<%= ticket_url %>", { headers: { Accept: "application/json" }, credentials: "same-origin" });
+        // No longer open to this reader: nothing more to hear.
+        if ([401, 403, 404].includes(answer.status)) return;
+        if (!answer.ok) throw new Error(`ticket: ${answer.status}`);
+        ticket = (await answer.json()).ticket;
+      } catch (error) {
+        setTimeout(listen, delay);
+        return;
+      }
+      const scheme = location.protocol === "https:" ? "wss:" : "ws:";
+      const socket = new WebSocket(`${scheme}//${location.host}/ws/scores?ticket=${encodeURIComponent(ticket)}`);
+      socket.onopen = () => (delay = 3000);
+      socket.onmessage = (message) => {
+        let data;
+        try {
+          data = JSON.parse(message.data);
+        } catch (error) {
+          return;
+        }
+        if (data.event === "refused") {
+          delay = Math.min(delay * 2, 60000);
+          socket.close();
+        } else if (data.event === "presence_state") {
+          people = data.payload;
+          showPeople();
+        } else if (data.event === "presence_diff") {
+          Object.entries(data.payload.joins ?? {}).forEach(([id, p]) => (people[id] = p));
+          Object.keys(data.payload.leaves ?? {}).forEach((id) => delete people[id]);
+          showPeople();
+        } else if (data.event === "saved" && data.revision > revision) {
+          revision = data.revision;
+          updated.hidden = false;
+        } else if (data.event === "comments" && data.origin !== origin) {
+          comments?.take(data);
+        }
+      };
+      socket.onclose = () => {
+        people = {};
+        showPeople();
+        setTimeout(listen, delay);
+      };
+    }
+    listen();
+  </script>
 </div>

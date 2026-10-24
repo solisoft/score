@@ -292,6 +292,31 @@ function readPart(part, info, first, warnings) {
     staff.lanes[v].push(text);
   }
 
+  /** A grace note (or chord) as LilyPond writes it. */
+  const graceText = (g) => (g.pitches.length > 1 ? `<${g.pitches.join(" ")}>` : g.pitches[0]) + durationText(g.value);
+
+  /**
+   * Grace notes after a note (\afterGrace). MusicXML has none of its own:
+   * MuseScore and Finale write them as <grace/> notes after their note, and
+   * read them so when they end the measure. Here, the grace notes of lane
+   * `key` (`pending`) are its last note's after-grace notes when they come
+   * (a) at the end of the measure (or of the score), with a note of the lane
+   * before them in that measure; (b) before a rest, which takes no grace
+   * notes; or (c) marked steal-time-previous, the time they take from the
+   * note before: the part of it they start at (\afterGrace's fraction, 3/4
+   * when not said). Anywhere else, they are the next note's, as before.
+   * Answers whether they were taken.
+   */
+  function graceAfter(key, pending) {
+    const main = lastNote.get(key);
+    if (!main || main.rest || main.after) return false;
+    const steal = pending.find((g) => g.steal > 0)?.steal;
+    main.after = { written: pending.map(graceText), at: steal > 0 && steal < 100 ? Math.min(63, Math.max(1, Math.round((1 - steal / 100) * 64))) / 64 : M.AFTER_GRACE_AT };
+    main.render();
+    graces.set(key, []);
+    return true;
+  }
+
   /** What goes after the next note of a staff: dynamics, words, pedal, wedges. */
   function attach(staff, text) {
     staff.pending.push(text);
@@ -444,6 +469,8 @@ function readPart(part, info, first, warnings) {
         readNote(el);
       }
     }
+    // Grace notes ending the measure, after a note of their lane in it: that note's \afterGrace.
+    for (const [key, pending] of graces) if (pending.length && lastNote.get(key)?.start >= measureStart) graceAfter(key, pending);
 
     // The measure's length: the longest lane, or the metre's for an empty one.
     const metre = (4 * time[0] * divisions) / time[1];
@@ -602,7 +629,8 @@ function readPart(part, info, first, warnings) {
           return;
         }
         const list = graces.get(key) ?? [];
-        list.push({ pitches: [pitch], value: values[0], slash: kid(note, "grace").attrs.slash === "yes" });
+        const grace = kid(note, "grace");
+        list.push({ pitches: [pitch], value: values[0], slash: grace.attrs.slash === "yes", steal: Number(grace.attrs["steal-time-previous"]) || 0 });
         graces.set(key, list);
         return;
       }
@@ -680,22 +708,35 @@ function readPart(part, info, first, warnings) {
         tupletOpen.set(key, true);
       }
       const pending = graces.get(key);
-      if (pending?.length) {
-        const written = pending.map((g) => (g.pitches.length > 1 ? `<${g.pitches.join(" ")}>` : g.pitches[0]) + durationText(g.value));
+      // Grace notes that take their time from the note before them, or come before a rest: that note's \afterGrace.
+      const after = pending?.length > 0 && (rest || pending.some((g) => g.steal > 0)) && graceAfter(key, pending);
+      if (pending?.length && !after) {
+        const written = pending.map(graceText);
         const kind = pending.every((g) => g.slash) ? "acciaccatura" : "grace";
         lane.push(`\\${kind} ${written.length === 1 ? written[0] : `{ ${written.join(" ")} }`}`);
         graces.set(key, []);
       }
       // The words and marks waiting for this staff's next note go on the first lane's.
       const extra = v === 0 ? staff.pending.splice(0).join("") : "";
-      const entry = { pitches: rest ? [] : [pitch], marks: [marks], start, index: lane.length, render: null };
+      const entry = { pitches: rest ? [] : [pitch], marks: [marks], start, index: lane.length, rest: Boolean(rest), render: null, after: null };
       entry.render = () => {
         // A rest not printed (print-object="no") is a spacer.
         const chord = entry.pitches.length > 1;
         const head = rest ? (note.attrs["print-object"] === "no" ? "s" : kid(note, "rest").attrs.measure === "yes" && values.length === 1 && !ratio ? "R" : "r") : chord ? `<${entry.pitches.map((p, k) => p + entry.marks[k]).join(" ")}>` : entry.pitches[0];
         // A note's fingering on its first piece; a chord's on each of its notes.
         const pieces = values.map((value, k) => head + durationText(value) + (k === 0 && !chord ? entry.marks[0] : "") + (k < values.length - 1 && !rest ? "~" : ""));
-        lane[entry.index] = pieces.join(" ") + suffix + (entry.beam ?? "") + extra;
+        let tail = suffix;
+        if (entry.after) {
+          // \afterGrace on the note's last piece, its grace notes in { } right
+          // after the value (and a tremolo): the note's ties, slurs and marks
+          // follow them, which is where eui-score reads them.
+          const tremolo = /^:\d+/.exec(tail)?.[0] ?? "";
+          tail = tail.slice(tremolo.length);
+          const last = pieces.length - 1;
+          const fraction = Math.abs(entry.after.at - M.AFTER_GRACE_AT) > 1e-9 ? `${M.afterFraction(entry.after.at)} ` : "";
+          pieces[last] = `\\afterGrace ${fraction}${pieces[last]}${tremolo} { ${entry.after.written.join(" ")} }`;
+        }
+        lane[entry.index] = pieces.join(" ") + tail + (entry.beam ?? "") + extra;
       };
       lane.push("");
       // Kept within its measure, as the editor keeps it.
@@ -1183,6 +1224,21 @@ function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, 
     // A spacer takes its time and is not printed.
     out.push(`<note${ev.rest && ev.spacer ? ' print-object="no"' : ""}>${n.join("")}</note>`);
   });
+
+  // Grace notes after the note (\afterGrace): MusicXML has no element for
+  // them, so they are written as MuseScore and Finale write theirs — <grace/>
+  // notes right after their note, without a duration, so the measure's time
+  // is the note's alone — each saying the part of that note it takes
+  // (steal-time-previous: 25 for LilyPond's 3/4), which tells a reader they
+  // belong to the note before them even in the middle of a measure.
+  if (ev.afterGraces?.length && !ev.rest) {
+    const steal = Math.round((1 - (ev.afterAt ?? M.AFTER_GRACE_AT)) * 100);
+    for (const g of ev.afterGraces) {
+      g.pitches.forEach((p, k) => {
+        out.push(`<note><grace steal-time-previous="${Math.min(99, Math.max(1, steal))}"/>${k ? "<chord/>" : ""}${pitchXml(p)}<voice>${voice}</voice><type>${TYPE_OF[g.base] ?? "16th"}</type>${"<dot/>".repeat(g.dots)}${staffTag}</note>`);
+      });
+    }
+  }
   return out;
 }
 

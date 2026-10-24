@@ -888,6 +888,20 @@
   .comment-number input { width: 64px; padding: 4px 6px; border: 1px solid var(--line-strong); border-radius: 6px; }
   .comment-reply { display: flex; gap: 6px; align-items: flex-start; margin-top: 6px; }
   .comment-reply .btn { padding: 6px 10px; font-size: 13px; }
+  /* A thread whose bars or staff were taken away (#392): kept, said so. */
+  .comment-anchor.comment-detached { color: var(--ink-soft); background: var(--sheet); text-decoration: line-through; cursor: default; }
+  .comment-detached-note { margin: 0 0 6px; font-size: 12px; color: var(--ink-soft); }
+  /* The read page, live (#392): who else is there, and a save made meanwhile. */
+  .read-room { margin: 4px 0 0; font-size: 13.5px; color: var(--ink-soft); }
+  .read-updated { margin: 6px 0 0; padding: 6px 10px; font-size: 13.5px; background: #eaf0fb; border-radius: 8px; display: inline-block; }
+  .read-updated[hidden] { display: none; }
+  /* The @ list under a comment box (#392): the score's people. */
+  .comment-form, .comment-reply { position: relative; }
+  .comment-mentions { position: absolute; z-index: 30; left: 0; right: 0; top: 100%; margin: 2px 0 0; padding: 4px; list-style: none; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: 0 6px 18px rgb(29 25 20 / .16); max-height: 220px; overflow-y: auto; }
+  .comment-form .comment-mentions { top: auto; }
+  .comment-mentions li { display: flex; flex-direction: column; gap: 1px; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .comment-mentions li span { color: var(--muted); font-size: 12px; }
+  .comment-mentions li.active, .comment-mentions li:hover { background: #eaf0fb; }
   .studio-note-marker { position: absolute; pointer-events: none; }
   .studio-note-marker button { pointer-events: auto; display: inline-flex; align-items: center; gap: 1px; font: 600 11px/1 var(--font-sans); color: #5d4a22; background: #fff4cf; border: 1px solid #e3c766; border-radius: 9px 9px 9px 2px; padding: 3px 5px; cursor: pointer; box-shadow: 0 2px 6px rgb(29 25 20 / .15); }
   .studio-note-marker button:hover { background: #ffe9a3; }

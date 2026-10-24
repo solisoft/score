@@ -87,6 +87,9 @@ const PALETTE = [
  *   selection's 💬, Ctrl+Alt+M) hands it the selection's place, or null.
  *   Without it, comments are not offered (the playground).
  * - `onMarker(id)`: a click on a comment's bubble (`markers`) over the score.
+ * - `onBars(op)`: bars put in or taken away here, `{ at, removed, added }`,
+ *   or null after an Undo or a Redo (#392): the app sends them with the
+ *   save so the comments follow their bars (merge.js, anchorMap).
  * - `history`: the key the undo history is kept under in this browser
  *   (undo-history.js), or false for none; the playground's draft has one
  *   of its own. `historyAcross`: the score may have been changed by someone
@@ -430,6 +433,18 @@ export function startStudio(root, options = {}) {
     return true;
   }
 
+  /**
+   * `edit`, `fn` answering the bars it put in or took away (`{ at, removed,
+   * added }`), told to `onBars` once the edit went through (#392): the app
+   * sends them with the save, so the comments on later bars follow them.
+   */
+  function barsEdit(fn) {
+    let op = null;
+    const done = edit((score) => (op = fn(score)));
+    if (done === true && op) options.onBars?.(op);
+    return done;
+  }
+
   function undo() {
     undoStep(st.past, st.future, "Undo");
   }
@@ -466,6 +481,8 @@ export function startStudio(root, options = {}) {
     }
     now.after = st.text;
     to.push(now);
+    // What moved is no longer only what was done since the last save: the app lines the bars up by their content.
+    options.onBars?.(null);
     // The step now last leads to where it led, not to this text: around others' changes, Undo merges again.
     saveDraft({ pin: true });
     draw();
@@ -1179,22 +1196,32 @@ export function startStudio(root, options = {}) {
         M.addEndings(score, a, b);
       });
       case "unrepeat": return edit((score) => M.removeRepeat(score, selectedBars()[0]));
-      case "add-bar": return edit((score) => M.addBars(score, 1));
-      case "remove-bar": return edit((score) => M.removeLastBar(score));
-      case "insert-bar": return edit((score) => {
+      case "add-bar": return barsEdit((score) => {
+        const at = M.barsOf(score);
+        M.addBars(score, 1);
+        return { at, removed: 0, added: 1 };
+      });
+      case "remove-bar": return barsEdit((score) => {
+        const at = M.barsOf(score) - 1;
+        M.removeLastBar(score);
+        return { at, removed: 1, added: 0 };
+      });
+      case "insert-bar": return barsEdit((score) => {
         // Before the selected bars, or the cursor's; at the end with nothing selected.
         const at = st.sel || st.input.on ? selectedBars()[0] : M.barsOf(score);
         M.insertBars(score, at, 1);
         if (st.input.on) st.input.t = M.barStart(score, at);
         else if (st.sel) st.sel = { staff: st.sel.staff, t0: M.barStart(score, at), t1: M.barStart(score, at), head: -1 };
         say(`A bar put in as bar ${barNo(at)}`);
+        return { at, removed: 0, added: 1 };
       });
-      case "delete-bars": return edit((score) => {
+      case "delete-bars": return barsEdit((score) => {
         const [a, b] = selectedBars();
         M.deleteBars(score, a, b);
         st.sel = null;
         if (st.input.on) st.input = { ...st.input, t: Math.min(st.input.t, M.barStart(score, Math.min(a, M.barsOf(score) - 1))), last: null };
         say(a === b ? `Bar ${barNo(a)} taken away` : `Bars ${barNo(a)}–${barNo(b)} taken away`);
+        return { at: Math.min(a, b), removed: Math.abs(b - a) + 1, added: 0 };
       });
       case "add-staff": return edit((score) => {
         const [k, clef] = root.querySelector('[data-field="new-staff"]').value.split("|");
@@ -1371,9 +1398,10 @@ export function startStudio(root, options = {}) {
     const clip = await clipboard().catch(() => null);
     if (!clip?.section) return say("Copy bars first: select them (drag across them), then Ctrl+C", true);
     let skipped = 0;
-    edit((score) => {
+    barsEdit((score) => {
       skipped = M.insertSection(score, place.lane, place.bar, clip.section);
       selectSectionQuietly(score, place.bar, place.bar + clip.section.bars - 1, place.lane, clip.section);
+      return { at: place.bar, removed: 0, added: clip.section.bars };
     });
     const n = clip.section.bars;
     say(`${n === 1 ? "1 bar" : `${n} bars`} put in as bar${n === 1 ? "" : "s"} ${barNo(place.bar)}${n === 1 ? "" : `–${barNo(place.bar + n - 1)}`}${sectionSaid(skipped)}`);

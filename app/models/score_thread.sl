@@ -5,9 +5,12 @@
 # the score through their account (its owner, and everyone it is shared
 # with, to read or to change) may comment, reply, resolve and reopen.
 #
-# The anchor keeps the bar numbers it was given: bars inserted or taken away
-# later do not move it (the editor's changes are text, saved as a whole; a
-# thread on bars that are gone says so when it is clicked).
+# The anchor follows its bars and its staff (#392): each save of the editor
+# carries where the bars and lanes of the text it replaces went in the new
+# one (public/eui-score/merge.js, anchorMap), and the threads are moved by
+# it in the same request (`follow`), once the save went through. A thread
+# whose bars were all taken away, or whose staff was, is kept, marked
+# `detached` ("bars" or "staff"), on the bars it had.
 const SCORE_THREADS_KEPT = 500
 const SCORE_THREAD_LABEL_LENGTH = 120
 
@@ -104,6 +107,7 @@ class ScoreThread < Model
       "lane": @lane,
       "bars": @bars,
       "label": @label,
+      "detached": @detached,
       "resolved": @resolved == true,
       "resolved_by": @resolved_by.blank? ? nil : names[@resolved_by] ?? "someone",
       "created_at": @created_at,
@@ -141,6 +145,157 @@ class ScoreThread < Model
       thread.view(by_thread[thread._key] ?? [], names)
     end
     views.sort_by(fn(view) { (view["resolved"] ? 0 : 10000000000) + view["updated_at"].to_i }).reverse()
+  end
+
+  # ---- Following the bars (#392) ------------------------------------------
+
+  # Where a save's bars and lanes went, as the editor sends it with the save:
+  # {"from": the bars before, "to": the bars after, "bars": [[old, new,
+  # length], …] (a bar in no run was taken away), "lanes": [each old lane's
+  # new one, -1 for gone]}. Nil when it does not read as one: nothing moves.
+  static def moves_of(anchors)
+    return nil unless anchors.is_a?("hash")
+
+    count_before = anchors["from"]
+    count_after = anchors["to"]
+    return nil unless ScoreThread.count?(count_before, 0, 10000) && ScoreThread.count?(count_after, 0, 10000)
+
+    runs = anchors["bars"]
+    return nil unless runs.is_a?("array") && runs.length <= 10000
+
+    good_runs = runs.all? do |run|
+      ScoreThread.run?(run, count_before, count_after)
+    end
+    return nil unless good_runs
+
+    lanes = anchors["lanes"]
+    return nil unless lanes.nil? || ScoreThread.lanes?(lanes)
+
+    {
+      "from": count_before,
+      "to": count_after,
+      "bars": runs,
+      "lanes": lanes
+    }
+  end
+
+  # A whole number from `least` to `most`.
+  static def count?(value, least, most)
+    value.is_a?("int") && value >= least && value <= most
+  end
+
+  # [old, new, length]: bars that are there before (`before` bars) and after (`after`).
+  static def run?(run, before, after)
+    return false unless run.is_a?("array") && run.length == 3
+
+    numbers = run.all? do |number|
+      ScoreThread.count?(number, 0, 10000)
+    end
+    numbers && run[2] >= 1 && run[0] + run[2] <= before && run[1] + run[2] <= after
+  end
+
+  # Each old lane's new one: at most 64, each a lane or -1.
+  static def lanes?(lanes)
+    return false unless lanes.is_a?("array") && lanes.length <= 64
+
+    lanes.all? do |lane|
+      ScoreThread.count?(lane, -1, 63)
+    end
+  end
+
+  # `bars` [first, last] after `moves`: the first and the last of them still
+  # there, or nil when none is. Bars past the old end (a thread placed by
+  # hand beyond it) move with the end.
+  static def bars_after(bars, moves)
+    first = nil
+    last = nil
+    moves["bars"].each do |run|
+      lo = [bars[0], run[0]].max()
+      hi = [bars[1], run[0] + run[2] - 1].min()
+      if lo <= hi
+        start = run[1] + lo - run[0]
+        finish = run[1] + hi - run[0]
+        first = start if first.nil? || start < first
+        last = finish if last.nil? || finish > last
+      end
+    end
+    if bars[1] >= moves["from"]
+      shift = moves["to"] - moves["from"]
+      start = [bars[0], moves["from"]].max() + shift
+      first = start if first.nil? || start < first
+      last = [bars[1] + shift, 9999].min()
+    end
+    return nil if first.nil? || first > 9999
+
+    [first, last]
+  end
+
+  # `lane` after `moves`: nil when its staff was taken away.
+  static def lane_after(lane, moves)
+    lanes = moves["lanes"]
+    return lane if lanes.nil? || lane >= lanes.length
+
+    moved = lanes[lane]
+    moved < 0 ? nil : moved
+  end
+
+  # `label` as the editor said it ("Bars 3–5, Piano", "Bar 2, staff 1"),
+  # its numbers moved as the bars and the lane were: any other label as it is.
+  static def label_moved(label, old_bars, new_bars, old_lane, new_lane)
+    text = label.to_s
+    found = Regex.capture("^Bars? (?P<first>\\d+)(?:–(?P<last>\\d+))?(?P<rest>.*)$", text)
+    unless found.nil?
+      first = found["first"].to_i + new_bars[0] - old_bars[0]
+      last = (found["last"].blank? ? found["first"] : found["last"]).to_i + new_bars[1] - old_bars[1]
+      text = (first == last ? "Bar #{first}" : "Bars #{first}–#{last}") + found["rest"].to_s
+    end
+    staff = Regex.capture("^(?P<head>.*, [Ss]taff )(?P<number>\\d+)$", text)
+    text = staff["head"] + (staff["number"].to_i + new_lane - old_lane).to_s unless staff.nil?
+    text
+  end
+
+  # The thread moved by `moves`: true when it changed (moved, or detached
+  # from bars or a staff that are gone).
+  def follow_moves(moves)
+    return false unless @detached.blank?
+
+    lane = ScoreThread.lane_after(@lane, moves)
+    bars = lane.nil? ? nil : ScoreThread.bars_after(@bars, moves)
+    if bars.nil?
+      @detached = lane.nil? ? "staff" : "bars"
+      @save
+      return true
+    end
+    return false if lane == @lane && bars == @bars
+
+    @label = ScoreThread.label_moved(@label, @bars, bars, @lane, lane)
+    @lane = lane
+    @bars = bars
+    @save
+    true
+  end
+
+  # Every thread of `score` moved by the editor's `anchors` (`moves_of`),
+  # resolved ones too, so that a thread reopened later is on its bars.
+  # Answers the keys of those that changed.
+  static def follow(score, anchors)
+    moves = ScoreThread.moves_of(anchors)
+    return [] if moves.nil?
+
+    moved = []
+    ScoreThread.where({"score_id": score._key}).limit(SCORE_THREADS_KEPT).all.each do |thread|
+      moved = moved + [thread._key] if thread.follow_moves(moves)
+    end
+    moved
+  end
+
+  # The threads of `score` whose keys are `keys`, as `listing` shows them.
+  static def moved_views(score, keys)
+    return [] if keys.length == 0
+
+    ScoreThread.listing(score).filter do |view|
+      keys.includes?(view["id"])
+    end
   end
 
   # Gone with their score (Score#erase).

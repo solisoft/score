@@ -84,8 +84,9 @@ class AppScoresController < AppBaseController
     render_json({"ticket": ScoreRoom.ticket(score, current_user(), DateTime.utc.to_unix)})
   end
 
-  # PUT /app/scores/:id — the editor's autosave, JSON {source, revision}:
-  # 200 {revision, title}, or 409 with the score as it now stands when it
+  # PUT /app/scores/:id — the editor's autosave, JSON {source, revision,
+  # anchors}: 200 {revision, title, threads (the comments `anchors` moved,
+  # ScoreThread.follow)}, or 409 with the score as it now stands when it
   # was changed elsewhere since `revision` (see Score#save_from_editor);
   # 403 JSON for someone who may not (or no longer) change it
   def update
@@ -96,6 +97,12 @@ class AppScoresController < AppBaseController
     saved = score.save_from_editor(body["source"].to_s, body["revision"].to_s.to_i, current_user())
     if saved["status"] == 200
       ScoreRoom.tell_saved(score, body["origin"])
+      # The comments follow their bars (#392): moved by where the save says they went.
+      moved = ScoreThread.moved_views(score, ScoreThread.follow(score, body["anchors"]))
+      if moved.length > 0
+        ScoreRoom.tell_comments(score, ScoreRoom.moved_news(moved, body["origin"]))
+        saved["body"]["threads"] = moved
+      end
       # The others who may see it are told, once an hour (#385).
       UserNotification.changed(score, current_user())
     end

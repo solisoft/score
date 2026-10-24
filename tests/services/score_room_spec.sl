@@ -382,3 +382,141 @@ describe("ScoreRoom, where each person works") do
     assert_null(ScoreRoom.signed(ticket.replace(score._key, "other")))
   end
 end
+
+# A connection's arrival with a ticket for `user` (nil: signed out) as `role`.
+def listen_connect(score, user, role)
+  now = DateTime.utc.to_unix
+  ScoreRoom.on_event(
+    {
+      "type": "connect",
+      "connection_id": "c-#{role}",
+      "query": {"ticket": ScoreRoom.ticket(score, user, now, role)}
+    },
+    now
+  )
+end
+
+describe("ScoreRoom, listening from the read page (#392)") do
+  test("a reader is admitted to listen only: in the room, seen as listening") do
+    owner = room_user()
+    reader = room_user()
+    score = Score.start(owner, Score.blank_source("Listened"))
+    ScoreShare.invite(score, reader.email, "read")
+    joined = listen_connect(score, reader, "listen")
+    assert_eq(joined["join"], "score:#{score._key}")
+    assert_eq(joined["track"]["user_id"], reader._key)
+    assert_eq(joined["track"]["role"], "listen")
+    assert_eq(ScoreRoom.hearing(score, reader, "listen"), "all")
+    # As an editor, the same reader is refused: the role is the ticket's, the right the score's.
+    assert_contains(listen_connect(score, reader, "edit")["send"], "refused")
+  end
+
+  test("a listener relays no cursor, an editor reading from the read page included") do
+    owner = room_user()
+    score = Score.start(owner, Score.blank_source("Quiet"))
+    entered = ScoreRoom.signed(ScoreRoom.ticket(score, owner, DateTime.utc.to_unix, "listen"))
+    presences = [{"user_id": owner._key, "metas": [{
+      "connection_id": "read-tab",
+      "role": "listen"
+    }]}]
+    said = cursor_event(
+      "read-tab",
+      {
+        "event": "cursor",
+        "lane": 0,
+        "bars": [0, 1]
+      }
+    )
+    assert_eq(ScoreRoom.relay_cursor(said, entered, presences), {})
+    editing = ScoreRoom.signed(ScoreRoom.ticket(score, owner, DateTime.utc.to_unix))
+    assert_not_null(
+      ScoreRoom.relay_cursor(said, editing, presences)["broadcast_channel"],
+      "the same page as an editor's is relayed"
+    )
+  end
+
+  test("a guest with only the link of a private score is refused; once it is open by link, admitted to the lobby") do
+    owner = room_user()
+    stranger = room_user()
+    score = Score.start(owner, Score.blank_source("Private"))
+    assert_contains(listen_connect(score, nil, "listen")["send"], "refused")
+    assert_contains(listen_connect(score, stranger, "listen")["send"], "refused")
+    assert_contains(listen_connect(score, nil, "edit")["send"], "refused")
+    score.make_visible("link")
+    guest = listen_connect(score, nil, "listen")
+    assert_eq(guest["join"], "score:#{score._key}:lobby")
+    assert_eq(guest["track"]["user_id"], "guest")
+    assert_eq(guest["track"]["name"], "A reader", "nobody's address")
+    signed_in = listen_connect(score, stranger, "listen")
+    assert_eq(signed_in["join"], "score:#{score._key}:lobby", "outside the score, signed in or not: the lobby")
+    assert_eq(ScoreRoom.hearing(score, nil, "listen"), "saves")
+    score.make_visible("public")
+    assert_eq(listen_connect(score, nil, "listen")["join"], "score:#{score._key}:lobby")
+  end
+
+  test("a ticket for an account that is gone, or with a role made up, lets nobody in") do
+    owner = room_user()
+    score = Score.start(owner, Score.blank_source("Roles"))
+    score.make_visible("link")
+    ghost = room_user()
+    ticket = ScoreRoom.ticket(score, ghost, DateTime.utc.to_unix, "listen")
+    ghost.delete
+    assert_contains(ScoreRoom.on_event(
+      {"type": "connect", "query": {"ticket": ticket}},
+      DateTime.utc.to_unix
+    )["send"], "refused")
+    assert_null(ScoreRoom.signed(ScoreRoom.ticket(score, owner, DateTime.utc.to_unix, "admin")))
+    assert_null(ScoreRoom.hearing(score, owner, "admin"))
+    assert_null(ScoreRoom.hearing(nil, owner, "listen"))
+  end
+
+  test("a revoked reader is shown out of the room; the editors stay") do
+    owner = room_user()
+    reader = room_user()
+    score = Score.start(owner, Score.blank_source("Revoked"))
+    share = ScoreShare.invite(score, reader.email, "read")
+    presences = [
+      {"user_id": owner._key, "metas": [{
+        "connection_id": "owner-tab",
+        "role": "edit"
+      }]},
+      {"user_id": reader._key, "metas": [{
+        "connection_id": "reader-tab",
+        "role": "listen"
+      }]}
+    ]
+    assert_eq(ScoreRoom.delivery(score, presences)["send"], ["owner-tab", "reader-tab"])
+    share.delete
+    after = ScoreRoom.delivery(score, presences)
+    assert_eq(after["send"], ["owner-tab"])
+    assert_eq(after["close"], ["reader-tab"])
+    # Open by link, the former reader still may not stay in the room: the lobby is theirs.
+    score.make_visible("link")
+    assert_eq(ScoreRoom.delivery(score, presences)["close"], ["reader-tab"])
+  end
+
+  test("the lobby keeps its listeners while the link opens the score, and shows them out once private or trashed") do
+    owner = room_user()
+    score = Score.start(owner, Score.blank_source("Lobby"))
+    score.make_visible("link")
+    listeners = [{"user_id": "guest", "metas": [
+      {"connection_id": "guest-1", "role": "listen"},
+      {"connection_id": "guest-2", "role": "listen"}
+    ]}]
+    assert_eq(ScoreRoom.delivery(score, listeners, true)["send"], ["guest-1", "guest-2"])
+    # The room itself is not theirs.
+    assert_eq(ScoreRoom.delivery(score, listeners)["close"], ["guest-1", "guest-2"])
+    score.make_visible("private")
+    assert_eq(ScoreRoom.delivery(score, listeners, true)["close"], ["guest-1", "guest-2"])
+    score.make_visible("link")
+    score.move_to_trash
+    assert_eq(ScoreRoom.delivery(score, listeners, true)["send"], [])
+  end
+
+  test("comment threads moved by a save are news of their own, the editor that saved named") do
+    news = ScoreRoom.moved_news([{"id": "t1"}, {"id": "t2"}], "editor-9")
+    assert_eq(news["event"], "comments")
+    assert_eq(news["threads"].length, 2)
+    assert_eq(news["origin"], "editor-9")
+  end
+end

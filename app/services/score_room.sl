@@ -14,11 +14,26 @@
 # deleted, hears nothing more and is shown out. Tickets last an hour; the
 # editor asks for a fresh one (AppScoresController#room_ticket) each time it
 # (re)connects.
+#
+# Two roles (#392), named in the ticket: "edit", the editor's, and "listen",
+# the read page's (SharedScoresController#room_ticket). A listener relays no
+# cursor. Those who may see the score through their account (its owner and
+# the people it is shared with) listen in the room itself: the presence, the
+# others' cursors, the saves and the comments. Anyone else the score is
+# open to — by its link, or in public — listens from its lobby
+# (`lobby`): the saves only, with no presence of the room's people (their
+# addresses) and no comments, which are for the people of the score.
 const SCORE_ROOM_TICKET_SECONDS = 3600
+const SCORE_ROOM_ROLES = ["edit", "listen"]
 
 class ScoreRoom
   static def channel(score_key)
     "score:#{score_key}"
+  end
+
+  # Where those the score is open to by its link listen: saves only.
+  static def lobby(score_key)
+    "score:#{score_key}:lobby"
   end
 
   # The secret tickets are signed with: the server's own, never a value
@@ -34,8 +49,8 @@ class ScoreRoom
     throw "ScoreRoom: set SOLI_SESSION_SECRET (or APP_SECRET) to sign the room's tickets"
   end
 
-  # May `user` be in `score`'s room, and hear its saves? The editor's
-  # people: those who may change it, while it is out of the trash.
+  # May `user` be in `score`'s room as an editor, relay where they work and
+  # hear its saves? Those who may change it, while it is out of the trash.
   static def allowed?(score, user)
     return false if score.nil? || user.nil?
     return false if score.trashed?
@@ -43,35 +58,57 @@ class ScoreRoom
     score.writable_by?(user)
   end
 
-  # A ticket for `user` into `score`'s room, good until `now` +
-  # SCORE_ROOM_TICKET_SECONDS: "<score>.<user>.<until>.<signature>".
-  static def ticket(score, user, now)
-    body = "#{score._key}.#{user._key}.#{now + SCORE_ROOM_TICKET_SECONDS}"
+  # What `user` (nil for someone signed out), in as `role`, may still hear
+  # of `score`: "all" (the room: presence, cursors, saves, comments),
+  # "saves" (the lobby), or nil: shown out. An editor hears all while they
+  # may change it; a listener while they may see it through their account,
+  # the saves only while it is open to them by its link or in public.
+  static def hearing(score, user, role)
+    return nil if score.nil? || score.trashed?
+    return (ScoreRoom.allowed?(score, user) ? "all" : nil) if role == "edit"
+    return nil unless role == "listen"
+    return "all" unless score.access_of(user).nil?
+    return "saves" if score.readable_by?(user)
+
+    nil
+  end
+
+  # A ticket for `user` (nil: someone signed out, on a read page) into
+  # `score`'s room as `role`, good until `now` + SCORE_ROOM_TICKET_SECONDS:
+  # "<score>.<user>.<until>.<role>.<signature>".
+  static def ticket(score, user, now, role = "edit")
+    body = "#{score._key}.#{user&._key.to_s}.#{now + SCORE_ROOM_TICKET_SECONDS}.#{role}"
     body + "." + Crypto.hmac(body, ScoreRoom.secret)
   end
 
-  # {"score", "user", "until"} of a ticket signed here, run out or not; nil
-  # for one changed by hand or made up.
+  # {"score", "user" ("" for someone signed out), "until", "role"} of a
+  # ticket signed here, run out or not; nil for one changed by hand or made up.
   static def signed(ticket)
     parts = ticket.to_s.split(".")
-    return nil unless parts.length == 4
+    return nil unless parts.length == 5
 
-    body = parts[0] + "." + parts[1] + "." + parts[2]
-    return nil unless Crypto.secure_compare(Crypto.hmac(body, ScoreRoom.secret), parts[3])
+    body = parts.slice(0, 4).join(".")
+    return nil unless Crypto.secure_compare(Crypto.hmac(body, ScoreRoom.secret), parts[4])
+    return nil unless SCORE_ROOM_ROLES.includes?(parts[3])
 
     {
       "score": parts[0],
       "user": parts[1],
-      "until": parts[2].to_i
+      "until": parts[2].to_i,
+      "role": parts[3]
     }
   end
 
-  # {"score", "user"} the ticket lets in at `now`, or nil.
+  # {"score", "user", "role"} the ticket lets in at `now`, or nil.
   static def admit(ticket, now)
     parts = ScoreRoom.signed(ticket)
     return nil if parts.nil? || parts["until"] < now
 
-    {"score": parts["score"], "user": parts["user"]}
+    {
+      "score": parts["score"],
+      "user": parts["user"],
+      "role": parts["role"]
+    }
   end
 
   # The socket's events (app/controllers/score_room_controller.sl): on
@@ -103,18 +140,23 @@ class ScoreRoom
   end
 
   static def on_connect(event, now)
+    refused = {"send": {"event": "refused"}.to_json}
     admitted = ScoreRoom.admit((event["query"] ?? {})["ticket"], now)
-    return {"send": {"event": "refused"}.to_json} if admitted.nil?
+    return refused if admitted.nil?
 
-    user = User.find_by("_key", admitted["user"])
+    user = admitted["user"].blank? ? nil : User.find_by("_key", admitted["user"])
+    return refused if user.nil? && !admitted["user"].blank?
+
     score = Score.find_by("_key", admitted["score"])
-    return {"send": {"event": "refused"}.to_json} unless ScoreRoom.allowed?(score, user)
+    hearing = ScoreRoom.hearing(score, user, admitted["role"])
+    return refused if hearing.nil?
 
-    channel = ScoreRoom.channel(admitted["score"])
+    channel = hearing == "all" ? ScoreRoom.channel(admitted["score"]) : ScoreRoom.lobby(admitted["score"])
     {"join": channel, "track": {
       "channel": channel,
-      "user_id": user._key,
-      "name": user.email
+      "user_id": user&._key ?? "guest",
+      "name": user.nil? ? "A reader" : user.email,
+      "role": admitted["role"]
     }}
   end
 
@@ -136,6 +178,8 @@ class ScoreRoom
       end
     end
     return {} if present.nil? || present["user_id"].to_s != entered["user"]
+    # A listener (the read page) is in the room to hear, not to be seen working.
+    return {} unless entered["role"] == "edit"
 
     user = User.find_by("_key", entered["user"])
     return {} unless ScoreRoom.allowed?(Score.find_by("_key", entered["score"]), user)
@@ -199,30 +243,37 @@ class ScoreRoom
     }
   end
 
-  # Who in the room (`presences`, as ws_list_presence answers) still may
-  # hear `score`'s saves: {"send": [connection ids], "close": [connection ids]}.
-  static def delivery(score, presences)
+  # Who in the room (`presences`, as ws_list_presence answers; the lobby's
+  # when `lobby`) still may be there: {"send": [connection ids], "close":
+  # [connection ids]}. Each connection by its role (an editor's when its
+  # presence names none): in the room, those who still hear all
+  # (`hearing`); in the lobby, those who still may read the score.
+  static def delivery(score, presences, lobby = false)
     send_to = []
     close = []
     presences.each do |presence|
       user = User.find_by("_key", presence["user_id"].to_s)
-      ids = (presence["metas"] ?? []).map do |meta|
-        meta["connection_id"].to_s
-      end
-      if ScoreRoom.allowed?(score, user)
-        send_to = send_to + ids
-      else
-        close = close + ids
+      (presence["metas"] ?? []).each do |meta|
+        hearing = ScoreRoom.hearing(score, user, meta["role"] ?? "edit")
+        stays = lobby ? !hearing.nil? : hearing == "all"
+        if stays
+          send_to = send_to + [meta["connection_id"].to_s]
+        else
+          close = close + [meta["connection_id"].to_s]
+        end
       end
     end
     {"send": send_to, "close": close}
   end
 
-  # Each save, to the people of the room who still may hear it; the others
-  # are shown out.
+  # Each save, to the people of the room and of its lobby who still may hear
+  # it; the others are shown out.
   static def tell_saved(score, origin)
+    news = ScoreRoom.saved_news(score, origin).to_json
     presences = ws_list_presence(ScoreRoom.channel(score._key)) rescue []
-    ScoreRoom.deliver(ScoreRoom.delivery(score, presences), ScoreRoom.saved_news(score, origin).to_json)
+    ScoreRoom.deliver(ScoreRoom.delivery(score, presences), news)
+    listeners = ws_list_presence(ScoreRoom.lobby(score._key)) rescue []
+    ScoreRoom.deliver(ScoreRoom.delivery(score, listeners, true), news)
   end
 
   # What the room hears when a comment thread of the score changes (#385):
@@ -234,6 +285,16 @@ class ScoreRoom
       "event": "comments",
       "thread": thread_view,
       "gone": gone,
+      "origin": origin.to_s.substring(0, 64)
+    }
+  end
+
+  # Comment threads moved by a save (#392): their bars, or their staff,
+  # went elsewhere (ScoreThread.follow), each as the editor shows it.
+  static def moved_news(thread_views, origin)
+    {
+      "event": "comments",
+      "threads": thread_views,
       "origin": origin.to_s.substring(0, 64)
     }
   end

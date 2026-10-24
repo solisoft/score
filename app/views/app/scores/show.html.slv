@@ -89,7 +89,7 @@
     all-or-nothing choice above. %>
 <script type="module">
   const { startStudio } = await import("/eui-score/studio.js?v=<%= eui_version %>");
-  const { mergeScores, conflictLines } = await import("/eui-score/merge.js?v=<%= eui_version %>");
+  const { mergeScores, conflictLines, anchorMap } = await import("/eui-score/merge.js?v=<%= eui_version %>");
   const { startComments, markersOf } = await import("/eui-score/comments.js?v=<%= eui_version %>");
   const root = document.getElementById("studio");
   const url = "<%= app_score_path(score) %>";
@@ -105,6 +105,11 @@
   // This editor, for the room: its own saves come back to it, and are skipped.
   const origin = crypto.randomUUID?.() ?? String(Math.random()).slice(2);
   let applyingRemote = false;
+  // The bars put in or taken away here since `base` (#392), in order; null
+  // once an Undo or a Redo makes them not the whole story. Sent with each
+  // save as where `base`'s bars went (merge.js, anchorMap): the comments
+  // on them follow.
+  let barOps = [];
   const keepKey = "eui-score-pending:<%= score._key %>";
 
   const keepLocally = (text) => {
@@ -232,6 +237,8 @@
   conflictBox.querySelector("[data-conflict-mine]").addEventListener("click", () => {
     revision = theirs.revision;
     base = theirs.source;
+    // Mine over theirs, which may have moved bars too: lined up by content.
+    barOps = null;
     resolve();
     pending = studio.source();
     keepLocally(pending);
@@ -270,11 +277,18 @@
     pending = null;
     saving = true;
     show("Saving…", "busy");
+    const sentOps = barOps;
+    barOps = [];
+    let anchors = null;
+    try {
+      anchors = anchorMap(base, text, { parse: studio.parse, ops: sentOps ?? [] });
+    } catch (error) {}
+    let saved = false;
     try {
       const response = await fetch(url, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ source: text, revision, origin }),
+        body: JSON.stringify({ source: text, revision, origin, anchors }),
       });
       const json = (response.headers.get("Content-Type") || "").includes("application/json");
       // A sign-in page reached through a redirect answers 200 in HTML.
@@ -296,8 +310,11 @@
       } else if (!response.ok) {
         show(answer.error ?? "Not saved", "conflict");
       } else {
+        saved = true;
         revision = answer.revision;
         base = text;
+        // The comments the save moved (#392).
+        if (answer.threads?.length) comments.take({ threads: answer.threads });
         if (pending == null) forgetLocally();
         else keepLocally(pending);
         titleBox.textContent = answer.title;
@@ -311,6 +328,8 @@
       setTimeout(save, 5000);
     } finally {
       saving = false;
+      // Not saved: what was done since `base` still is.
+      if (!saved) barOps = sentOps == null || barOps == null ? null : [...sentOps, ...barOps];
       if (pending != null && !conflict && !stopped) schedule();
     }
   }
@@ -340,6 +359,8 @@
     // Comments (#385): see "Comments" below.
     onComment: (place) => commentOn(place),
     onMarker: (id) => openThread(id),
+    // Bars put in or taken away (#392), or null after an Undo: see `barOps`.
+    onBars: (op) => (barOps = op && barOps ? [...barOps, op] : null),
     // The undo history, kept in this browser per person and score: a reload can still undo.
     history: "score:<%= current_user()._key %>:<%= score._key %>",
     historyAcross: true,
@@ -386,7 +407,9 @@
     if (others.length) {
       roomBox.append("With");
       others.forEach(([id, p], k) => {
-        const chip = Object.assign(document.createElement("span"), { className: "app-room-person", textContent: shortName(p.metas[0].name) + (k < others.length - 1 ? "," : "") });
+        // Someone on the read page (#392) listens: said as reading.
+        const reading = p.metas.every((meta) => meta.role === "listen");
+        const chip = Object.assign(document.createElement("span"), { className: "app-room-person", textContent: shortName(p.metas[0].name) + (reading ? " (reading)" : "") + (k < others.length - 1 ? "," : "") });
         chip.style.setProperty("--peer", colourOf(id));
         chip.dataset.person = id;
         roomBox.append(chip);
@@ -535,6 +558,7 @@
   };
   const comments = startComments(commentsPanel.querySelector("[data-comments]"), {
     url: "<%= app_score_comments_path(score) %>",
+    people: "<%= app_score_people_path(score) %>",
     me,
     origin,
     onSelect: selectThread,
