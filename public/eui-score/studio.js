@@ -80,10 +80,16 @@ const PALETTE = [
  *
  * - `onPlace(place)`: where this person works, `{ lane, bars: [a, b] }` or
  *   null, each time it changes (the app tells the others in the room).
+ * - `onComment(place)`: "Comment on the selection" (Edit menu, the
+ *   selection's 💬, Ctrl+Alt+M) hands it the selection's place, or null.
+ *   Without it, comments are not offered (the playground).
+ * - `onMarker(id)`: a click on a comment's bubble (`markers`) over the score.
  *
  * Answers `{ state, ready, source(), load(text, message, { keep }), peers(list),
- * parse(text) }`: `ready` settles once the first score is drawn; `peers`
- * draws the others' places (see "Where the others work").
+ * parse(text), markers(list), selectPlace(place), placeLabel(place), place() }`:
+ * `ready` settles once the first score is drawn; `peers` draws the others'
+ * places (see "Where the others work"); `markers` the comments' bubbles
+ * (see "Comments").
  */
 export function startStudio(root, options = {}) {
   const $ = (selector) => root.querySelector(selector);
@@ -113,6 +119,13 @@ export function startStudio(root, options = {}) {
     const button = Object.assign(document.createElement("button"), { type: "button", textContent: sign, title });
     button.setAttribute("aria-label", title.replace(/\s*\(.*\)\s*$/, ""));
     Object.assign(button.dataset, { act, ...data });
+    palette.appendChild(button);
+  }
+  // Comments (the app's): the selected note's bars commented on from here too.
+  if (options.onComment) {
+    const button = Object.assign(document.createElement("button"), { type: "button", textContent: "💬", title: "Comment on the selection (Ctrl+Alt+M)" });
+    button.setAttribute("aria-label", "Comment on the selection");
+    button.dataset.act = "comment";
     palette.appendChild(button);
   }
   // A press on it is not a press on the score under it.
@@ -797,6 +810,10 @@ export function startStudio(root, options = {}) {
         return draw();
       }
       case "parts": return openParts();
+      case "comment": {
+        if (!options.onComment) return say("Comments are for scores saved in the app: open this one there to comment.", true);
+        return options.onComment(place());
+      }
       // Edit ▸ Drum grid…, Arpeggiate…, Chord track…: pattern-tools.js's dialogs.
       case "drum-grid": case "arpeggiate": case "chord-track":
         patterns ??= patternTools().then((T) => T.install({ root, st, M, P, edit, say, setLoop, togglePlay, stopPlay, range, selectedBarsOrNull, barNo }));
@@ -1568,6 +1585,69 @@ export function startStudio(root, options = {}) {
       const x1 = geo.x(M.barStart(st.score, peer.bars[1] + 1));
       return `<g class="roll-peer" data-peer="${esc(peer.id)}"><rect x="${x0}" y="${track.y + 1}" width="${x1 - x0}" height="${track.h - 2}" rx="3" fill="${esc(peer.colour)}" fill-opacity="0.12" stroke="${esc(peer.colour)}" stroke-width="2" stroke-dasharray="5 3"/><text x="${x0 + 4}" y="${track.y + 12}" fill="${esc(peer.colour)}" font-size="11" font-weight="600">${esc(peer.name)}</text></g>`;
     }).join("");
+  }
+
+  // ---- Comments (the app's) ----------------------------------------------------------
+  //
+  // The embedder hands the comments' anchors over with `markers([{ id, lane,
+  // bars, count, label }])`: a bubble over the first bar of each, on its
+  // staff, which `onMarker(id)` hears clicked. `selectPlace` selects a
+  // thread's bars; `placeLabel` names a place as the editor says it.
+
+  /** The comments' bubbles over the engraving. */
+  function placeMarkers(g, add) {
+    if (!st.score) return;
+    const bars = M.barsOf(st.score);
+    const space = 8 * st.zoom;
+    const seen = {};
+    for (const marker of st.markers ?? []) {
+      if (!st.score.staves[marker.lane] || marker.bars[0] >= bars) continue;
+      const box = st.view.bars?.find((b) => b.bar === marker.bars[0]);
+      const top = box?.staves?.[M.staffNumber(st.score, marker.lane)];
+      if (top == null) continue;
+      // Two threads on one bar of one staff: side by side.
+      const at = `${marker.lane}:${marker.bars[0]}`;
+      const nth = (seen[at] = (seen[at] ?? -1) + 1);
+      const x = box.box[0] + space * (0.5 + 3.4 * nth);
+      const el = add("studio-note-marker", x, top - 3.2 * space, x + 3 * space, top - 0.6 * space);
+      el.innerHTML = `<button type="button" title="">💬${marker.count > 1 ? `<span>${Number(marker.count)}</span>` : ""}</button>`;
+      el.firstChild.title = `${marker.label ?? placeLabel(marker)}: ${marker.count} message${marker.count === 1 ? "" : "s"}`;
+      el.dataset.thread = marker.id;
+    }
+  }
+
+  overlay.addEventListener("click", (event) => {
+    const marker = event.target.closest(".studio-note-marker");
+    if (marker) options.onMarker?.(marker.dataset.thread);
+  });
+
+  function setMarkers(list) {
+    st.markers = list ?? [];
+    if (st.score) placeOverlay();
+  }
+
+  /** A place said: "Bars 3–5, Piano". */
+  function placeLabel(where) {
+    if (!where?.bars) return "";
+    const [a, b] = where.bars;
+    const bars = a === b ? `Bar ${barNo(a)}` : `Bars ${barNo(a)}–${barNo(b)}`;
+    const lane = st.score ? R.laneNames(st.score)[where.lane] : null;
+    return lane ? `${bars}, ${lane}` : `${bars}, staff ${where.lane + 1}`;
+  }
+
+  /** A thread's bars selected and shown; false when the score no longer has them. */
+  function selectPlace(where) {
+    if (!st.score || !where?.bars || !st.score.staves[where.lane]) return false;
+    const bars = M.barsOf(st.score);
+    if (where.bars[0] >= bars) return false;
+    const to = Math.min(where.bars[1], bars - 1);
+    const end = M.barStart(st.score, to + 1);
+    const t0 = M.barStart(st.score, where.bars[0]);
+    const inside = M.starts(st.score.staves[where.lane]).filter((t) => t >= t0 && t < end);
+    st.input.on = false;
+    st.sel = { staff: where.lane, t0, t1: inside.length ? Math.max(...inside) : t0, head: -1, bars: [where.bars[0], to], lanes: [where.lane] };
+    draw().then(() => overlay.querySelector(".studio-bar-selected")?.scrollIntoView({ block: "center", behavior: "smooth" }));
+    return true;
   }
 
   /** The others' places, as the embedder hears them: drawn at once. */
@@ -2346,6 +2426,8 @@ export function startStudio(root, options = {}) {
 
   sheet.addEventListener("pointerdown", (event) => {
     if (event.target.closest(".studio-words")) return;
+    // A comment's bubble, or the selection's 💬: a click of their own, not a press on the score.
+    if (event.target.closest(".studio-note-marker, .studio-comment-here")) return;
     sheet.focus({ preventScroll: true });
     if (!st.score || !st.view) return;
     const p = point(event);
@@ -2983,11 +3065,18 @@ export function startStudio(root, options = {}) {
       return el;
     };
     placePeers(g, add);
+    placeMarkers(g, add);
     if (st.input.on) return;
     if (st.sel?.bars) {
       for (let bar = st.sel.bars[0]; bar <= st.sel.bars[1]; bar++) {
         const box = boxOf(bar);
         if (box) add("studio-bar-selected", box[0], box[1], box[2] + 3, box[3]);
+      }
+      // The selected bars' own way to comment on them (the app's).
+      const box = boxOf(st.sel.bars[1]);
+      if (box && options.onComment && !st.playing) {
+        const here = add("studio-comment-here", box[2] - 4 / g.scale, box[1], box[2] + 3, box[1] + 1 / g.scale);
+        here.innerHTML = `<button type="button" data-act="comment" title="Comment on the selection (Ctrl+Alt+M)">💬 Comment</button>`;
       }
     }
     (st.score.repeats ?? []).forEach((r, i) => {
@@ -3492,5 +3581,5 @@ export function startStudio(root, options = {}) {
     else say("Click a note to select it, or press N and type A–G to write.");
   });
   // `parse`: the engraver's reading of a text (score_json), for the app's merge.
-  return { state: st, ready, source: () => st.text, load, peers: setPeers, parse: (text) => score_json(text) };
+  return { state: st, ready, source: () => st.text, load, peers: setPeers, parse: (text) => score_json(text), markers: setMarkers, selectPlace, placeLabel, place };
 }

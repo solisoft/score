@@ -529,6 +529,25 @@ class User < Model
     AiClient.server_settings()
   end
 
+  # --- Notification e-mails (#385) ---------------------------------------------
+
+  # Whether `kind` (NOTIFICATION_KINDS) is e-mailed to them: each is, until
+  # they turn it off. The app lists every notification either way.
+  def mails?(kind)
+    (@mail_prefs ?? {})[kind] != false
+  end
+
+  # The e-mails they want: the kinds in `wanted`, the others off.
+  def keep_mail_prefs(wanted)
+    chosen = wanted ?? []
+    prefs = {}
+    NOTIFICATION_KINDS.each do |kind|
+      prefs[kind] = chosen.includes?(kind)
+    end
+    @mail_prefs = prefs
+    @save
+  end
+
   # The account gone, and all it left: its scores (trash, versions, shares
   # and the AI's suggestions included), what was shared with it, its photo
   # readings and the requests it made of the AI.
@@ -536,6 +555,7 @@ class User < Model
     Score.delete_all_of(this)
     ScoreReading.delete_all_of(this)
     ScoreSuggestion.delete_all_of(this)
+    UserNotification.delete_all_of(this)
     @delete
   end
 

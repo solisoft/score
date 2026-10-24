@@ -45,6 +45,20 @@
     <p class="muted">Not available on this server yet.</p>
   <% end %>
 
+  <%# The e-mails of notifications (#385): each kind on or off. The bell
+      lists them all either way. %>
+  <h2 id="notifications">E-mails</h2>
+  <p class="muted">The bell at the top lists everything. Choose what is also sent to <%= user.email %>:</p>
+  <form action="<%= app_account_notifications_path() %>" method="POST" class="auth-form account-mails" data-mail-prefs>
+    <%- csrf_field() %>
+    <input type="hidden" name="kinds[]" value="none">
+    <label class="tool-check"><input type="checkbox" name="kinds[]" value="shared"<%= user.mails?("shared") ? " checked" : "" %>> <span>A score shared with me <span class="muted">— the invitation</span></span></label>
+    <label class="tool-check"><input type="checkbox" name="kinds[]" value="reply"<%= user.mails?("reply") ? " checked" : "" %>> <span>A reply in a thread I wrote in</span></label>
+    <label class="tool-check"><input type="checkbox" name="kinds[]" value="mention"<%= user.mails?("mention") ? " checked" : "" %>> <span>A comment that mentions me <span class="muted">— @name or @e-mail</span></span></label>
+    <label class="tool-check"><input type="checkbox" name="kinds[]" value="changed"<%= user.mails?("changed") ? " checked" : "" %>> <span>Changes to the scores shared with me <span class="muted">— gathered in a digest, not an e-mail a save</span></span></label>
+    <button type="submit" class="btn btn-ghost">Save the e-mail settings</button>
+  </form>
+
   <h2 id="ai">AI for photos and the assistant</h2>
   <% if user.own_ai?() %>
     <p>Photos of scores are read, and the editor's assistant answers, with <strong><%= user.ai_provider_name() %></strong>, model

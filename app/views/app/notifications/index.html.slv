@@ -1,0 +1,43 @@
+<%# What the app tells the signed-in person (#385): the latest first, the
+    unread ones marked; each opens what it is about (and is read), or is
+    marked read where it is. %>
+<section class="app-notifications">
+  <header class="app-notifications-head">
+    <h1>Notifications</h1>
+    <% if unread > 0 %>
+      <form action="<%= app_notifications_read_all_path() %>" method="POST">
+        <%- csrf_field() %>
+        <button type="submit" class="btn btn-ghost" data-read-all>Mark all read</button>
+      </form>
+    <% end %>
+  </header>
+  <p class="muted">Shares, replies, mentions and changes to the scores you share. Which of them are also
+    e-mailed to you is up to you: <a href="<%= app_account_path() %>#notifications">e-mail settings</a>.</p>
+  <% if notifications.length == 0 %>
+    <p class="app-notifications-empty">Nothing yet. When someone shares a score with you, replies to you or
+      mentions you in a comment, it shows here.</p>
+  <% else %>
+    <ul class="app-notification-list">
+      <% for notification in notifications %>
+        <li class="app-notification<%= notification.read?() ? "" : " app-notification-unread" %>" data-notification="<%= notification._key %>">
+          <a class="app-notification-text" href="<%= app_notification_open_path(notification) %>">
+            <span class="app-notification-kind app-notification-<%= notification.kind %>" aria-hidden="true"></span>
+            <span>
+              <strong><%= notification.sentence() %></strong>
+              <% if notification.excerpt.present? %>
+                <span class="app-notification-excerpt">“<%= notification.excerpt %>”</span>
+              <% end %>
+              <time class="muted"><%= time_ago(notification.created_at) %></time>
+            </span>
+          </a>
+          <% unless notification.read?() %>
+            <form action="<%= app_notification_read_path(notification) %>" method="POST">
+              <%- csrf_field() %>
+              <button type="submit" class="btn btn-ghost app-notification-read" aria-label="Mark read">Mark read</button>
+            </form>
+          <% end %>
+        </li>
+      <% end %>
+    </ul>
+  <% end %>
+</section>

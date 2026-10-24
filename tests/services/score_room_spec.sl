@@ -143,8 +143,23 @@ describe("ScoreRoom") do
     assert_eq(trashed["close"].length, 4)
   end
 
-  # (tell_saved and deliver reach the socket runtime, which only the server
-  # has: they run in the controller specs' saves.)
+  test("a comment's news names its thread, or the thread gone, and the editor it came from") do
+    news = ScoreRoom.comments_news({
+      "id": "t1",
+      "messages": []
+    }, nil, "editor-2")
+    assert_eq(news["event"], "comments")
+    assert_eq(news["thread"]["id"], "t1")
+    assert_null(news["gone"])
+    assert_eq(news["origin"], "editor-2")
+    gone = ScoreRoom.comments_news(nil, "t1", "x" * 100)
+    assert_eq(gone["gone"], "t1")
+    assert_null(gone["thread"])
+    assert_eq(gone["origin"].length, 64, "an origin is kept short")
+  end
+
+  # (tell_saved, tell_comments and deliver reach the socket runtime, which
+  # only the server has: they run in the controller specs' saves and comments.)
   test("an empty room: nobody to tell, nobody to show out") do
     user = room_user()
     score = Score.start(user, Score.blank_source("Empty room"))

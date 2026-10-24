@@ -47,6 +47,7 @@
                 <span class="app-room" data-room hidden aria-live="polite"></span>
                 <button type="button" class="app-doc-action" data-keep-version>Keep a version</button>
                 <a class="app-doc-action" href="<%= app_score_versions_path(editing_score) %>">History</a>
+                <button type="button" class="app-doc-action" data-comments-toggle aria-expanded="false">Comments <span class="app-comments-count" data-comments-count></span></button>
                 <% if owner %>
                     <a class="app-doc-action" href="<%= app_score_share_path(editing_score) %>">Share</a>
                 <% end %>
@@ -57,6 +58,12 @@
             <% if signed_in?() %>
                 <a href="<%= app_scores_path() %>"<%- current_path.starts_with?("/app/scores") || current_path == app_trash_path() ? " aria-current=\"page\"" : "" %>>Your scores</a>
                 <a href="<%= app_account_path() %>"<%- current_path == app_account_path() ? " aria-current=\"page\"" : "" %>>Account</a>
+                <%# The bell (#385): how many notifications are unread, asked
+                    for by the page (below), so every screen shows it. %>
+                <a class="app-bell" href="<%= app_notifications_path() %>" data-bell aria-label="Notifications"<%- current_path == app_notifications_path() ? " aria-current=\"page\"" : "" %>>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+                    <span class="app-bell-count" data-bell-count hidden></span>
+                </a>
             <% else %>
                 <a href="<%= login_path() %>"<%- current_path == login_path() ? " aria-current=\"page\"" : "" %>>Sign in</a>
                 <a class="app-nav-cta" href="<%= signup_path() %>">Create account</a>
@@ -70,6 +77,23 @@
         <% end %>
         <%= yield %>
     </main>
+    <% if signed_in?() %>
+    <script data-bell-script>
+      // The bell's count, asked for on every page; the editor asks again
+      // when a comment comes in (window.euiBell).
+      window.euiBell = async () => {
+        const count = document.querySelector("[data-bell-count]");
+        if (!count) return;
+        try {
+          const answer = await (await fetch("<%= app_notifications_unread_path() %>", { headers: { Accept: "application/json" } })).json();
+          count.textContent = answer.count > 99 ? "99+" : String(answer.count);
+          count.hidden = !answer.count;
+          count.closest("[data-bell]").setAttribute("aria-label", answer.count ? `Notifications, ${answer.count} unread` : "Notifications");
+        } catch (error) {}
+      };
+      window.euiBell();
+    </script>
+    <% end %>
     <%# Installable, and open without a network: public/sw.js. %>
     <script>
       if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});

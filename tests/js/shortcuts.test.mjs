@@ -31,7 +31,11 @@ test("shortcuts: the keys the audit found missing are handled, and listed", () =
     [press("¡", { ctrl: true, alt: true, code: "Digit1" }), "voice", "Ctrl+Alt+1 – 4"],
     [press("™", { meta: true, alt: true, code: "Digit2" }), "voice", "Ctrl+Alt+1 – 4"],
     [press("V", { ctrl: true, shift: true }), "insert-copied", "Ctrl+Shift+V"],
+    // Comment on the selection (#385): on a Mac, Alt makes another letter of M; its code stays.
+    [press("µ", { meta: true, alt: true, code: "KeyM" }), "comment", "Ctrl+Alt+M"],
+    [press("m", { ctrl: true, alt: true, code: "KeyM" }), "comment", "Ctrl+Alt+M"],
   ];
+  assert.equal(resolveKey(press("m", { ctrl: true }))?.[0], undefined, "Ctrl+M alone is not a comment");
   for (const [event, act, keys] of cases) {
     assert.equal(resolveKey(event)?.[0], act, `${event.key} does ${act}`);
     assert.equal(entryOf(event)?.keys, keys, `${event.key} is listed as ${keys}`);

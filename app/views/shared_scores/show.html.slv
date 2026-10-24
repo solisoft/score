@@ -26,4 +26,26 @@
       <p class="read-exports-note muted" data-read-note role="status"></p>
     </section>
   <% end %>
+  <%# Comments (#385), for the people the score is shared with: read,
+      reply, resolve, and start a thread on a staff's bars, typed in (the
+      editor takes them from its selection). public/eui-score/comments.js. %>
+  <% unless comments_url.nil? %>
+    <section class="read-comments" aria-labelledby="read-comments-title">
+      <h2 id="read-comments-title">Comments</h2>
+      <div class="studio-comments-body" data-read-comments></div>
+    </section>
+    <script type="module">
+      const { startComments } = await import("/eui-score/comments.js?v=<%= eui_version %>");
+      const panel = document.querySelector("[data-read-comments]");
+      const comments = startComments(panel, {
+        url: "<%= comments_url %>",
+        me: "<%= me %>",
+        origin: crypto.randomUUID?.() ?? String(Math.random()).slice(2),
+        manual: true,
+      });
+      await comments.refresh();
+      const asked = location.hash.match(/^#thread-(.+)$/)?.[1];
+      if (asked) comments.open(decodeURIComponent(asked));
+    </script>
+  <% end %>
 </div>

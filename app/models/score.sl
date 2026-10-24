@@ -324,12 +324,14 @@ class Score < Model
   end
 
   # The score gone for good, with all that hangs off it: its versions, its
-  # shares, the AI suggestions asked of it. "Delete for good", the trash's
+  # shares, the AI suggestions asked of it, its comments and what was told of it. "Delete for good", the trash's
   # purge and a deleted account all go through here.
   def erase
     ScoreVersion.delete_all_for(this)
     ScoreShare.delete_all_for(this)
     ScoreSuggestion.delete_all_for(this)
+    ScoreThread.delete_all_for(this)
+    UserNotification.delete_all_for(this)
     @delete
   end
 

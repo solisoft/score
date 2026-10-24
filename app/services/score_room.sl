@@ -225,6 +225,27 @@ class ScoreRoom
     ScoreRoom.deliver(ScoreRoom.delivery(score, presences), ScoreRoom.saved_news(score, origin).to_json)
   end
 
+  # What the room hears when a comment thread of the score changes (#385):
+  # the thread as the editor shows it (ScoreThread#view), or the key of one
+  # gone ("gone"), with the editor (`origin`) that changed it, which skips
+  # its own news.
+  static def comments_news(thread_view, gone, origin)
+    {
+      "event": "comments",
+      "thread": thread_view,
+      "gone": gone,
+      "origin": origin.to_s.substring(0, 64)
+    }
+  end
+
+  # Each change to the comments, sent from the HTTP endpoint that made it
+  # (AppCommentsController) to the people of the room who still may be in
+  # it, as `tell_saved` sends a save; the others are shown out.
+  static def tell_comments(score, news)
+    presences = ws_list_presence(ScoreRoom.channel(score._key)) rescue []
+    ScoreRoom.deliver(ScoreRoom.delivery(score, presences), news.to_json)
+  end
+
   static def deliver(delivery, message)
     delivery["close"].each do |connection_id|
       ws_close(connection_id, "no longer shared") rescue nil

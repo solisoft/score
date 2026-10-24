@@ -17,4 +17,18 @@ class MailDelivery
       return false
     end
   end
+
+  # `mail`, a message as Mailer.deliver takes it ({"to", "subject", "html",
+  # "text"}), sent as `attempt` sends: the notifications' e-mails
+  # (NotificationMail), built here rather than by a mailer's view.
+  static def attempt_mail(purpose, mail)
+    MailDelivery.attempt(purpose, fn() { MailLetter.new({"mail": mail}) })
+  end
+end
+
+# A message already written, sent as a mailer's is.
+class MailLetter
+  def deliver_now
+    Mailer.deliver(@mail)
+  end
 end

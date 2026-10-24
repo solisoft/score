@@ -36,6 +36,7 @@ class ScoreAssets
       "merge.js",
       "channels.js",
       "graces.js",
+      "comments.js",
       "vendor/README.md",
       "eui_score_web.js",
       "wasm.version"

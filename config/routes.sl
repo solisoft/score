@@ -77,7 +77,15 @@ middleware("require_app_database", fn() {
     post("/app/account/two-step/stop", "app/account#stop_two_step", name: "app_account_two_step_stop")
     post("/app/account/ai", "app/account#ai_key", name: "app_account_ai")
     post("/app/account/ai/remove", "app/account#forget_ai_key", name: "app_account_ai_remove")
+    post("/app/account/notifications", "app/account#notifications", name: "app_account_notifications")
     delete("/app/account", "app/account#destroy")
+
+    # What the app tells each person (#385): the bell, the list, read.
+    get("/app/notifications", "app/notifications#index", name: "app_notifications")
+    get("/app/notifications/unread", "app/notifications#unread", name: "app_notifications_unread")
+    post("/app/notifications/read-all", "app/notifications#mark_all_read", name: "app_notifications_read_all")
+    get("/app/notifications/:id/open", "app/notifications#visit", name: "app_notification_open")
+    post("/app/notifications/:id/read", "app/notifications#mark_read", name: "app_notification_read")
 
     get("/app/scores", "app/scores#index", name: "app_scores")
     post("/app/scores", "app/scores#create")
@@ -111,5 +119,14 @@ middleware("require_app_database", fn() {
       name: "app_score_restore_version"
     )
     post("/app/scores/:id/versions/:version_id/copy", "app/scores#copy_version", name: "app_score_copy_version")
+
+    # Comments on a score's bars (#385), JSON: AppCommentsController.
+    get("/app/scores/:id/comments", "app/comments#index", name: "app_score_comments")
+    post("/app/scores/:id/comments", "app/comments#create")
+    post("/app/scores/:id/comments/:thread_id/replies", "app/comments#reply")
+    post("/app/scores/:id/comments/:thread_id/resolve", "app/comments#resolve")
+    post("/app/scores/:id/comments/:thread_id/reopen", "app/comments#reopen")
+    put("/app/scores/:id/comments/:thread_id/messages/:comment_id", "app/comments#update")
+    delete("/app/scores/:id/comments/:thread_id/messages/:comment_id", "app/comments#destroy")
   })
 })

@@ -16,6 +16,11 @@ class SharedScoresController < Controller
     # The downloads' name: the title's (score.pdf, score.mid… say nothing once saved).
     @file_name = @score.file_name
     @can_edit = @score.writable_by?(current_user())
+    # Its comments (#385), for those who may see it through their account:
+    # the readers it is shared with comment here, the editors in the editor.
+    @comments_url = @score.access_of(current_user()).nil? ? nil : app_score_comments_path(@score)
+    @me = current_user()&._key
+    @eui_version = ScoreAssets.version
     @indexable = @score.visibility == "public"
     @title = @score.title
     @description = "#{this.score.title}, engraved by EUI Score: play it, print it."

@@ -94,7 +94,11 @@ class AppScoresController < AppBaseController
 
     body = req["json"] ?? params
     saved = score.save_from_editor(body["source"].to_s, body["revision"].to_s.to_i, current_user())
-    ScoreRoom.tell_saved(score, body["origin"]) if saved["status"] == 200
+    if saved["status"] == 200
+      ScoreRoom.tell_saved(score, body["origin"])
+      # The others who may see it are told, once an hour (#385).
+      UserNotification.changed(score, current_user())
+    end
     render_json(saved["body"], saved["status"])
   end
 
@@ -257,7 +261,13 @@ class AppScoresController < AppBaseController
     end
 
     inviter = current_user().email
-    mailed = MailDelivery.attempt("invitation", fn() { ShareMailer.invited(share, @score, inviter) })
+    # Told in the app (#385); the invitation e-mail is the only one, unless
+    # the invitee turned the e-mails of shares off.
+    UserNotification.shared(share, @score, current_user())
+    mailed = true
+    if share.mail_wanted?
+      mailed = MailDelivery.attempt("invitation", fn() { ShareMailer.invited(share, @score, inviter) })
+    end
     flash("notice", ScoreShare.invited_notice(share, @score.title, mailed))
     redirect(app_score_share_path(@score))
   end

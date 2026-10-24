@@ -74,6 +74,13 @@ class ScoreShare < Model
     "#{may}, but the invitation email could not be sent: send them the link yourself."
   end
 
+  # Whether the invitation is e-mailed: always to an address without an
+  # account; to an account, unless its person turned share e-mails off (#385).
+  def mail_wanted?
+    user = User.find_by("email", @email)
+    user.nil? || user.mails?("shared")
+  end
+
   # What `user` may do with `score` through a share: "read", "write" or nil.
   static def role_for(score, user)
     return nil if user.nil?
@@ -84,6 +91,16 @@ class ScoreShare < Model
 
   static def of(score)
     ScoreShare.where({"score_id": score._key}).order("email", "asc").all
+  end
+
+  # The people who may see `score` through their account (#385): its owner,
+  # and those it is shared with who have one, as users, each once.
+  static def people_of(score)
+    emails = ScoreShare.where({"score_id": score._key}).limit(500).all.map(&:email)
+    User.where(
+      "doc._key == @owner OR doc.email IN @emails",
+      {"owner": score.user_id, "emails": emails}
+    ).limit(501).all
   end
 
   # The scores shared with `user`, out of the trash, each with the role, the

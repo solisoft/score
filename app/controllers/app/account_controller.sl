@@ -92,6 +92,18 @@ class AppAccountController < AppBaseController
     redirect(app_account_path())
   end
 
+  # POST /app/account/notifications — the e-mails wanted: `kinds[]` checked
+  # (NOTIFICATION_KINDS); those left out are not sent, and stay in the app
+  def notifications
+    wanted = params["kinds"] ?? []
+    wanted = [wanted] unless wanted.is_a?("array")
+    current_user().keep_mail_prefs(wanted.filter(&{ |kind|
+      NOTIFICATION_KINDS.includes?(kind)
+    }))
+    flash("notice", "Your e-mail settings are saved.")
+    redirect(app_account_path() + "#notifications")
+  end
+
   # DELETE /app/account — the password confirms it
   def destroy
     @user = current_user()

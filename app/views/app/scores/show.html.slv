@@ -1,5 +1,15 @@
 <%- partial("shared/studio", {"examples": examples, "figure": figure, "source": source, "app": true, "owner": owner}) %>
 
+<%# Comments on the score's bars (#385): the panel the editor's script
+    fills (public/eui-score/comments.js), beside the score. %>
+<aside class="studio-comments" data-comments-panel hidden aria-label="Comments">
+  <div class="studio-comments-head">
+    <h2>Comments</h2>
+    <button type="button" class="studio-menu" data-comments-close aria-label="Close the comments">×</button>
+  </div>
+  <div class="studio-comments-body" data-comments></div>
+</aside>
+
 <%# File › New, Open a file, Open an example and Open a photo make a new
     score in the library and open it: the score open here stays as it is.
     The conflict dialog's "Save mine as a copy" posts it too. %>
@@ -80,6 +90,7 @@
 <script type="module">
   const { startStudio } = await import("/eui-score/studio.js?v=<%= eui_version %>");
   const { mergeScores, conflictLines } = await import("/eui-score/merge.js?v=<%= eui_version %>");
+  const { startComments, markersOf } = await import("/eui-score/comments.js?v=<%= eui_version %>");
   const root = document.getElementById("studio");
   const url = "<%= app_score_path(score) %>";
   const saveState = document.querySelector("[data-save-state]");
@@ -326,6 +337,9 @@
     },
     onOpen: openAsNew,
     onPlace: (place) => tellPlace(place),
+    // Comments (#385): see "Comments" below.
+    onComment: (place) => commentOn(place),
+    onMarker: (id) => openThread(id),
   });
 
   // What New / Open bring becomes a score of its own, once this one's last
@@ -485,6 +499,10 @@
         forgetLocally();
         titleBox.textContent = data.title;
         show("Saved", "ok");
+      } else if (data.event === "comments" && data.origin !== origin) {
+        // A comment of someone else's (#385): in the panel and on the score; the bell may have news.
+        comments.take(data);
+        window.euiBell?.();
       }
     };
     socket.onclose = () => {
@@ -494,6 +512,52 @@
       setTimeout(joinRoom, roomDelay);
     };
   }
+
+  // ---- Comments (#385) ------------------------------------------------------
+  // The panel beside the score (public/eui-score/comments.js), opened from
+  // the header's Comments, Edit › Comment on the selection, the selection's
+  // 💬 or Ctrl+Alt+M; a bubble on each commented bar; the room's news of
+  // the others' comments taken in as they come (above).
+  const commentsPanel = document.querySelector("[data-comments-panel]");
+  const commentsToggle = document.querySelector("[data-comments-toggle]");
+  const commentsCount = document.querySelector("[data-comments-count]");
+  const showComments = (open) => {
+    commentsPanel.hidden = !open;
+    commentsToggle?.setAttribute("aria-expanded", String(open));
+  };
+  const selectThread = (thread) => {
+    if (!thread || studio.selectPlace(thread)) return;
+    root.querySelector("[data-status]").textContent = `${thread.label}: those bars are no longer in the score.`;
+  };
+  const comments = startComments(commentsPanel.querySelector("[data-comments]"), {
+    url: "<%= app_score_comments_path(score) %>",
+    me,
+    origin,
+    onSelect: selectThread,
+    onThreads: (threads) => {
+      studio.markers(markersOf(threads));
+      const open = threads.filter((thread) => !thread.resolved).length;
+      if (commentsCount) commentsCount.textContent = open ? String(open) : "";
+    },
+  });
+  function commentOn(place) {
+    showComments(true);
+    comments.compose(place, place ? studio.placeLabel(place) : "");
+  }
+  function openThread(id) {
+    showComments(true);
+    comments.open(id);
+    selectThread(comments.threads().find((thread) => thread.id === id));
+  }
+  commentsToggle?.addEventListener("click", () => showComments(commentsPanel.hidden));
+  commentsPanel.querySelector("[data-comments-close]").addEventListener("click", () => showComments(false));
+  studio.ready.then(async () => {
+    await comments.refresh();
+    // Opened from a notification: at its thread.
+    const asked = location.hash.match(/^#thread-(.+)$/)?.[1];
+    if (asked) openThread(decodeURIComponent(asked));
+  });
+
   joinRoom();
 
   // Changes kept in this browser by a visit that could not save them.

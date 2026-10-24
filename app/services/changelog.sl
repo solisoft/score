@@ -13,6 +13,21 @@ class Changelog
       {"date": "2026-10-24", "entries": [
         {
           "area": "site",
+          "title": "Comments on a bar, and notifications",
+          "text": "Select some bars or a note and choose Edit › Comment on the selection (or the 💬 beside the "
+          + "selection, or Ctrl+Alt+M): the comment is kept on those bars of that staff, with a speech bubble over "
+          + "them in the score. The Comments panel lists the threads, open ones first; click one to select its bars, "
+          + "reply, resolve it, show the resolved ones and reopen them, and change or delete your own messages. "
+          + "Everyone the score is shared with may comment: those who may only read it, on its read page. "
+          + "Comments reach the others in the editor as they are written. A comment keeps the bar numbers it "
+          + "was made on. The bell at the top counts what is new: a score shared with you, a reply in a thread "
+          + "you wrote in, a comment that names you with @, and changes others make to a score you share "
+          + "(one notice an hour a score). Each also comes by e-mail, the changes gathered in a digest; the "
+          + "account page turns each kind of e-mail on or off.",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "Grace notes played as their kind asks; more than fifteen staves each heard",
           "text": "Grace notes now sound the way they are written. An acciaccatura (the slashed one) or a "
           + "plain grace note is short, a thirty-second note or 60 milliseconds, whichever is shorter, and is "
