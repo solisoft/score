@@ -166,8 +166,11 @@ jobs:
       # Read only: the job queue and what the site last logged, secrets hidden.
       - name: Jobs
         if: inputs.action == 'jobs'
+        env:
+          PROXY_CONF: ${{ vars.DEPLOY_PROXY_CONF || '/home/rocky/proxy.conf' }}
+          APP: ${{ vars.DEPLOY_APP || 'score' }}
         run: |
-          ssh "$USER@$HOST" SITES_DIR="$SITES_DIR" DOMAIN="$DOMAIN" bash -s <<'REMOTE'
+          ssh "$USER@$HOST" SITES_DIR="$SITES_DIR" DOMAIN="$DOMAIN" PROXY_CONF="$PROXY_CONF" APP="$APP" bash -s <<'REMOTE'
           hide() { sed -E 's/((PASS|PASSWORD|SECRET|TOKEN|KEY)[A-Z_]*[=: ]+)[^ ,"]*/\1<hidden>/Ig; s/(sk-|x-api-key)[A-Za-z0-9_-]*/\1<hidden>/g'; }
           cd "$SITES_DIR/$DOMAIN"
           echo "== jobs"
@@ -188,6 +191,8 @@ jobs:
           echo "== the site's journal"
           journalctl --no-pager -n 60 2>/dev/null | grep -iE 'score|job|error' | hide | tail -40
           for f in *.log log/*.log logs/*.log; do [ -f "$f" ] && { echo "== $f"; tail -40 "$f" | hide; }; done
+          echo "== the app's own log (soli-proxy), jobs and errors"
+          timeout 20 soli-proxy logs -c "$PROXY_CONF" "$APP" 2>&1 | grep -iE 'job|claim|worker|cron|error|denied|forbidden|403' | hide | tail -40 || true
           REMOTE
 
       - name: A database user of its own
