@@ -107,7 +107,8 @@ export function mixerPanel({ root, tracks, mix, preview, commit, level }) {
   let frame = 0;
   let held = false;
 
-  const laneOf = (el) => (el.dataset.lane === "master" ? "master" : Number(el.dataset.lane));
+  // A staff's lane is a number; the master and an audio track (#390, "audio-1") go by name.
+  const laneOf = (el) => (/^\d+$/.test(el.dataset.lane) ? Number(el.dataset.lane) : el.dataset.lane);
 
   function render() {
     const rows = tracks();

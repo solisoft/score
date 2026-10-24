@@ -12,6 +12,24 @@ class Changelog
     [
       {"date": "2026-10-24", "entries": [
         {
+          "area": "site",
+          "title": "The microphone: audio tracks, their notes written down, a tuner, and practice",
+          "text": "Play ▸ Record from the microphone records a voice or an instrument onto an audio track of "
+          + "the score, after a bar of count-in, in time with it: the take plays back with the score, with a "
+          + "fader of its own in the mixer, and its waveform is drawn under the staves in the MIDI view. A "
+          + "score has four audio tracks, one take each (recording again replaces it, Delete takes it away), "
+          + "kept with the score on the server, up to about 2 min 45 s a take: its owner and editors record, "
+          + "everyone it is shared with listens, on its read page too, and Export all your data includes "
+          + "them. Audio tracks ▸ Write the notes turns a take of one voice or instrument into notes in the "
+          + "staff you choose, over the bars it covers, fitted to the Quantize grid, in one Undo — or while "
+          + "you record. Play ▸ Tuner names the note you play, its octave and how many cents off it is, "
+          + "against the A4 you set (440 Hz unless you change it). Play ▸ Practice with the microphone "
+          + "follows you through a staff as you play it, with no music playing: a wrong or a missed note is "
+          + "passed over, and after a jump a few notes find you again. The microphone is only opened when you "
+          + "ask, and a refusal says how to allow it. The tuner and practice work in the playground too.",
+          "app": true
+        },
+        {
           "area": "editor",
           "title": "Comments follow their bars and are live on the read page; @ names; \\afterGrace in MusicXML",
           "text": "A comment now stays on its bars when bars are put in or taken away before them, by you, by an "

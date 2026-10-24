@@ -8,6 +8,18 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as X from "../../public/eui-score/mixer.js";
 
+test("an audio track's settings (#390) sit beside the staves', by name: its solo silences the staves", () => {
+  let mix = X.patched({}, "audio-1", { volume: -6, solo: true });
+  assert.deepEqual(mix, { tracks: { "audio-1": { volume: -6, solo: true } } });
+  assert.deepEqual(X.lanesWith(mix, "solo"), ["audio-1"]);
+  assert.ok(X.audible(mix, "audio-1"));
+  assert.ok(!X.audible(mix, 0), "a staff, while an audio track is soloed");
+  mix = X.patched(mix, 0, { mute: true });
+  assert.deepEqual(X.lanesWith(mix, "mute"), [0]);
+  assert.equal(X.trackOf(mix, "audio-1").volume, -6);
+  assert.equal(X.patched(X.patched(mix, "audio-1", { volume: 0, solo: false }), 0, { mute: false }), null);
+});
+
 // ---- A fake AudioContext ----------------------------------------------------------------
 
 class Param {

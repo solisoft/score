@@ -4213,6 +4213,200 @@
     stroke: #b4373a;
     stroke-width: 2.5;
   }
+  .studio-waves {
+    border-top: 1px solid var(--line-strong);
+  }
+  .wave-strip {
+    display: block;
+  }
+  .wave-bg {
+    fill: var(--paper);
+  }
+  .wave-line {
+    stroke-width: 1;
+    fill: none;
+  }
+  .wave-label {
+    font-size: 11.5px;
+    font-weight: 600;
+    fill: var(--ink);
+  }
+  .wave-recording .wave-label {
+    fill: #b4373a;
+  }
+  .studio-audio, .studio-tuner, .studio-practice {
+    position: fixed;
+    z-index: 41;
+    inset: auto 16px 16px auto;
+    margin: 0;
+    width: min(calc(100vw - 32px), 560px);
+    max-height: min(80vh, 640px);
+    overflow: auto;
+    padding: 12px 14px;
+    border: 1px solid var(--line-strong);
+    border-radius: 12px;
+    background: var(--sheet);
+    color: var(--ink);
+    box-shadow: var(--shadow), 0 18px 40px -18px rgba(48, 36, 20, .35);
+    font-size: 13.5px;
+  }
+  .studio-tuner {
+    width: min(calc(100vw - 32px), 340px);
+  }
+  .studio-audio h4 {
+    font-size: 14px;
+    margin: 14px 0 6px;
+  }
+  .audio-note, .audio-hint {
+    color: var(--muted);
+    font-size: 12.5px;
+    margin: 0 0 10px;
+  }
+  .audio-tracks {
+    display: grid;
+    gap: 6px;
+  }
+  .audio-track {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    padding: 6px 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--paper);
+  }
+  .audio-name {
+    flex: 1 1 140px;
+    min-width: 0;
+    font: inherit;
+    padding: 4px 6px;
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+    background: var(--sheet);
+    color: var(--ink);
+  }
+  .audio-status {
+    flex: 1 1 120px;
+    font: 12px var(--font-mono);
+    color: var(--muted);
+  }
+  .audio-unsaved {
+    color: #b4373a;
+  }
+  .audio-track .studio-record.on {
+    background: #b4373a;
+    border-color: #b4373a;
+    color: #fff;
+  }
+  .audio-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 0;
+  }
+  .audio-row label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .audio-row select, .audio-row input[type="number"] {
+    font: inherit;
+    padding: 3px 5px;
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+    background: var(--sheet);
+    color: var(--ink);
+    max-width: 180px;
+  }
+  .audio-row input[type="number"] {
+    width: 72px;
+  }
+  .audio-check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+  }
+  .audio-more {
+    border-top: 1px solid var(--line);
+    padding-top: 10px;
+    margin-top: 12px;
+  }
+  .tuner-face {
+    display: grid;
+    justify-items: center;
+    gap: 2px;
+    margin: 4px 0 8px;
+  }
+  .tuner-dial {
+    width: 240px;
+    max-width: 100%;
+  }
+  .tuner-arc {
+    fill: none;
+    stroke: var(--line-strong);
+    stroke-width: 2;
+  }
+  .tuner-band {
+    fill: none;
+    stroke: #0f9d47;
+    stroke-width: 6;
+    stroke-linecap: round;
+    opacity: .55;
+  }
+  .tuner-tick {
+    stroke: var(--ink-soft);
+    stroke-width: 1.5;
+  }
+  .tuner-zero {
+    stroke-width: 2.5;
+  }
+  .tuner-scale {
+    font: 8px var(--font-mono);
+    fill: var(--muted);
+  }
+  .tuner-needle {
+    stroke: #b4373a;
+    stroke-width: 3;
+    stroke-linecap: round;
+    transition: transform .08s linear;
+  }
+  .tuner-in .tuner-needle {
+    stroke: #0f9d47;
+  }
+  .tuner-hub {
+    fill: var(--ink);
+  }
+  .tuner-note {
+    font: 600 44px/1 var(--font-serif);
+  }
+  .tuner-note sub {
+    font-size: 20px;
+    margin-left: 2px;
+  }
+  .tuner-cents {
+    font-size: 14px;
+    color: var(--ink-soft);
+  }
+  .tuner-freq {
+    font: 12px var(--font-mono);
+    color: var(--muted);
+    min-height: 1.2em;
+  }
+  .tuner-quiet .tuner-needle {
+    opacity: .3;
+  }
+  .practice-state {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--paper);
+    font-size: 13px;
+  }
   .studio-link {
     width: min(100%, 520px);
     font: 12.5px/1.4 var(--font-mono);
@@ -4878,6 +5072,30 @@
     font-size: 11.5px;
     text-align: center;
   }
+  .read-takes {
+    margin: 0 0 32px;
+  }
+  .read-takes h2 {
+    font: 700 12px/1 var(--font-sans);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 10px;
+  }
+  .read-take {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+    margin: 0 0 8px;
+  }
+  .read-take figcaption {
+    font-weight: 600;
+    min-width: 8em;
+  }
+  .read-take audio {
+    max-width: 100%;
+  }
   .read-comments {
     margin: 32px 0;
   }
@@ -5014,7 +5232,7 @@
     body {
       color: #000;
     }
-    .site-header, .site-footer, .app-header, .app-flash, .playground-banner, .page-head, .studio-menubar, .studio-progress, .studio-toolbox, .studio-source, .studio-notice, .studio-status, .studio-roll, .studio-overlay, .studio-palette, .studio-playhead, .studio-words, dialog, .score-actions, .score-source, .score-figure figcaption, .read-exports, .studio-comments, .read-comments {
+    .site-header, .site-footer, .app-header, .app-flash, .playground-banner, .page-head, .studio-menubar, .studio-progress, .studio-toolbox, .studio-source, .studio-notice, .studio-status, .studio-roll, .studio-overlay, .studio-palette, .studio-playhead, .studio-words, dialog, .score-actions, .score-source, .score-figure figcaption, .read-exports, .studio-comments, .read-comments, .read-takes {
       display: none !important;
     }
     .wrap, .app-main, .studio, .studio-body, .studio-canvas {

@@ -132,6 +132,11 @@
             <button type="button" role="menuitem" data-act="play">Play or pause <kbd>Space</kbd></button>
             <button type="button" role="menuitem" data-act="stop">Stop, back to the start</button>
             <button type="button" role="menuitem" data-act="record">Record from the MIDI keyboard <kbd>R</kbd></button>
+            <%# The microphone (#390): public/eui-score/audio-ui.js. %>
+            <button type="button" role="menuitem" data-act="mic-record">Record from the microphone <kbd>audio track</kbd></button>
+            <button type="button" role="menuitem" data-act="audio-tracks">Audio tracks… <kbd>takes, notes from a take</kbd></button>
+            <button type="button" role="menuitem" data-act="tuner">Tuner…</button>
+            <button type="button" role="menuitem" data-act="practice">Practice with the microphone… <kbd>the score follows you</kbd></button>
             <hr>
             <button type="button" role="menuitem" data-act="set-loop">Loop the selected bars <kbd>played and recorded</kbd></button>
             <button type="button" role="menuitem" data-act="clear-loop">No loop</button>

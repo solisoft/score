@@ -131,11 +131,11 @@ export function setMix(score, lane, patch) {
   return mix;
 }
 
-/** The lanes muted, or soloed (`field`): [lane]. */
+/** The lanes muted, or soloed (`field`): [lane] — a staff's a number, an audio track's its name ("audio-1", #390). */
 export function lanesWith(mix, field) {
   return Object.entries(mix?.tracks ?? {})
     .filter(([, t]) => t?.[field])
-    .map(([lane]) => Number(lane));
+    .map(([lane]) => (/^\d+$/.test(lane) ? Number(lane) : lane));
 }
 
 /** True when lane `lane` sounds: not muted, and soloed when any track is. */

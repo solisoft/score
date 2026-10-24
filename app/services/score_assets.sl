@@ -38,6 +38,12 @@ class ScoreAssets
       "graces.js",
       "comments.js",
       "undo-history.js",
+      "pitch.js",
+      "follow.js",
+      "takes.js",
+      "mic.js",
+      "mic-worklet.js",
+      "audio-ui.js",
       "vendor/README.md",
       "eui_score_web.js",
       "wasm.version"

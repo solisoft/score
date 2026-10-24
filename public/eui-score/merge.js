@@ -456,6 +456,11 @@ function layMeta(score, meta, side, staffMap, barMap, laneAt, out) {
   if (meta.mixer?.tracks && typeof meta.mixer.tracks === "object") {
     const tracks = {};
     for (const [lane, settings] of Object.entries(meta.mixer.tracks)) {
+      // An audio track's (#390, "audio-1") is not a staff's: it stays as it is.
+      if (!/^\d+$/.test(lane)) {
+        tracks[lane] = settings;
+        continue;
+      }
       const l = laneOf(lane);
       if (l.lane == null) dropped.push(`mixer ${l.where} ${JSON.stringify(settings)}`);
       else tracks[l.lane] = settings;

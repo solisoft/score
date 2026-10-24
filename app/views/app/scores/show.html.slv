@@ -364,6 +364,8 @@
     // The undo history, kept in this browser per person and score: a reload can still undo.
     history: "score:<%= current_user()._key %>:<%= score._key %>",
     historyAcross: true,
+    // Its audio tracks, recorded from the microphone (#390).
+    audio: { url: "<%= app_score_takes_path(score) %>", csrf: document.querySelector('input[name="_csrf_token"]')?.value ?? null },
   });
 
   // What New / Open bring becomes a score of its own, once this one's last

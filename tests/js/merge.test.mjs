@@ -249,6 +249,9 @@ test("a staff added before the others on one side: the other side's mixer and ve
   const meta = M.readMeta(out.text);
   assert.deepEqual(meta.mixer, { tracks: { 0: { pan: -0.5 }, 2: { volume: -6 } } });
   assert.deepEqual(meta.velocity, { "2:0:48": 70 });
+  // An audio track's fader (#390) is no staff's: it stays where it is.
+  const sung = merge(base, duet({ mixer: { tracks: { 1: { volume: -6 }, "audio-1": { volume: -12 } } } }), theirs);
+  assert.deepEqual(M.readMeta(sung.text).mixer, { tracks: { 0: { pan: -0.5 }, 2: { volume: -6 }, "audio-1": { volume: -12 } } });
   assert.equal(M.fromParsed(JSON.parse(score_json(out.text))).score.staves[2].name, "Bass");
 });
 

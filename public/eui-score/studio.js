@@ -29,6 +29,8 @@ const A = await import(`./automation.js${V}`);
 const Ch = await import(`./channels.js${V}`);
 const G = await import(`./graces.js${V}`);
 const { automationLane } = await import(`./automation-ui.js${V}`);
+// The microphone: audio tracks, their notes written down, a tuner, practice (#390).
+const { audioTracks } = await import(`./audio-ui.js${V}`);
 // The undo history kept in this browser, and Undo across others' changes (#387).
 const H = await import(`./undo-history.js${V}`);
 const { mergeScores, conflictLines } = await import(`./merge.js${V}`);
@@ -96,6 +98,9 @@ const PALETTE = [
  *   else since the history was kept (the app): it is kept all the same, and
  *   Undo merges back around their changes; without it, a history that ends
  *   at another text than the one opened is left.
+ *
+ * - `audio`: `{ url, csrf }`, where the score's audio tracks are kept (the
+ *   app's); without it, no audio tracks (the tuner and practice still are).
  *
  * Answers `{ state, ready, source(), load(text, message, { keep, remote }), peers(list),
  * parse(text), markers(list), selectPlace(place), placeLabel(place), place() }`:
@@ -963,6 +968,10 @@ export function startStudio(root, options = {}) {
         return mixCommit(lane, { [name]: !X.trackOf(X.mixOf(st.score), lane)[name] });
       }
       case "mixer": return st.mixer.toggle();
+      case "audio-tracks": return st.audio.toggle();
+      case "mic-record": return st.audio.record();
+      case "tuner": return st.audio.tuner();
+      case "practice": return st.audio.practice();
       case "keys": {
         const sheetOfKeys = root.querySelector("[data-keys]");
         if (sheetOfKeys.open) sheetOfKeys.close();
@@ -1857,7 +1866,8 @@ export function startStudio(root, options = {}) {
     const roll = R.drawRoll(st.score, { layout: st.rollLayout, zoom: st.zoom, sel: st.sel, lit, cursor, loop: st.loopBars, only: st.rollLayout === "keys" ? st.rollOnly : null });
     const end = roll.indexOf("</svg>");
     const peers = rollPeers();
-    rollScroll.innerHTML = (end >= 0 && peers ? roll.slice(0, end) + peers + roll.slice(end) : roll) + velocityStrip() + (st.automation?.html() ?? "");
+    // The audio tracks' waveforms under the staves (#390), then the velocities and the automation.
+    rollScroll.innerHTML = (end >= 0 && peers ? roll.slice(0, end) + peers + roll.slice(end) : roll) + (st.audio?.html() ?? "") + velocityStrip() + (st.automation?.html() ?? "");
     const only = rollHost.querySelector("[data-roll-only]");
     only.hidden = !(st.rollLayout === "keys" && st.rollOnly != null);
     if (!only.hidden) only.textContent = `${R.laneNames(st.score)[st.rollOnly] ?? ""} only`;
@@ -2982,6 +2992,8 @@ export function startStudio(root, options = {}) {
   async function togglePlay() {
     const playing = st.playing;
     if (playing?.handle) {
+      // A take being recorded is not paused: it ends.
+      if (st.taking) return stopPlay();
       if (playing.handle.paused) {
         playing.handle.resume();
         playing.next = null;
@@ -3000,14 +3012,15 @@ export function startStudio(root, options = {}) {
     // or Play › Loop), else the selected bars when Playback asks for it —
     // recorded into or not. Recorded into or looped, the score plays on past
     // its last note (M.padded).
-    const looping = Boolean(st.loopBars) || playOption("loop")?.checked;
+    // A take is recorded straight through, never looped.
+    const looping = !st.taking && (Boolean(st.loopBars) || playOption("loop")?.checked);
     const played = st.score && (st.recording || looping) ? M.padded(st.score) : st.score;
     // The staff recorded into is silent: in this browser it is muted, and a
     // MIDI device (Sound to) is not sent its old notes at all.
     if (st.recording) M.write(played, st.recording.lane, 0, M.barStart(played, M.barsOf(played)), { rest: true });
     const passes = played ? M.playback(played) : [];
     // From the selection's bar (its first pass), or from the start.
-    const loopBars = st.loopBars ?? (looping ? selectedBarsOrNull() : null);
+    const loopBars = st.taking ? null : (st.loopBars ?? (looping ? selectedBarsOrNull() : null));
     const loop = loopBars && st.score ? loopOf(passes, loopBars) : null;
     if (looping && !loop) say("Select the bars to loop: playing from the start.");
     if (st.recording) st.recording.loop = loop ? loopBars : null;
@@ -3028,7 +3041,7 @@ export function startStudio(root, options = {}) {
       await P.prepare(progress);
       if (st.playing !== state) return;
       // A recording always counts a bar in.
-      if ((st.recording || playOption("count-in")?.checked) && passes.length) await countIn(state, at);
+      if ((st.recording || st.taking || playOption("count-in")?.checked) && passes.length) await countIn(state, at);
       if (st.playing !== state) return;
       state.handle = await P.play(bytes, { at, onStop: () => st.playing === state && stopPlay() });
     } catch (error) {
@@ -3038,12 +3051,14 @@ export function startStudio(root, options = {}) {
     if (!state.handle || st.playing !== state) return;
     state.handle.rate = rate();
     applyMix();
+    // The audio tracks, in time with it.
+    st.audio?.startPlayback(state.handle);
     // The padding staff's note, silent.
     if (played !== st.score) {
       state.padChannel = M.channels(played).at(-1).channel;
       P.mute(state.padChannel, true);
     }
-    if (!st.recording) say(loop ? "Looping the selected bars — Space to pause" : "Playing — Space to pause");
+    if (!st.recording && !st.taking) say(loop ? "Looping the selected bars — Space to pause" : "Playing — Space to pause");
     showState();
     state.timer = setInterval(showProgress, 200);
     state.ticker = setInterval(tick, 25);
@@ -3085,6 +3100,8 @@ export function startStudio(root, options = {}) {
   function tick() {
     const state = st.playing;
     const handle = state?.handle;
+    // The audio tracks follow a seek, the loop's jump, a pause, a new speed.
+    if (handle) st.audio?.sync(handle);
     if (!handle || handle.paused) return;
     const now = handle.time;
     if (state.loop && now >= state.loop.end - 0.02) {
@@ -3129,10 +3146,15 @@ export function startStudio(root, options = {}) {
       else P.stop(); // still loading: it must not start after all
       if (playing.padChannel != null) P.mute(playing.padChannel, false);
     }
+    st.audio?.stopPlayback();
     progress.hidden = true;
     playhead.hidden = true;
     say("");
     if (st.recording) return finishRecording(reached);
+    if (st.taking) {
+      draw();
+      return st.audio.finishTake();
+    }
     draw();
   }
 
@@ -3315,6 +3337,7 @@ export function startStudio(root, options = {}) {
     const mix = mixHeard();
     for (const { lane, channel } of M.channels(st.score)) P.mute(channel, !X.audible(mix, lane));
     st.liveMixer?.apply(mix, M.channels(st.score));
+    st.audio?.applyMix(mix);
   }
 
   /** A track's (or the master's) settings changed: kept in the score, heard at once. */
@@ -3328,7 +3351,7 @@ export function startStudio(root, options = {}) {
 
   st.mixer = mixerPanel({
     root,
-    tracks: () => (st.score ? M.channels(st.score).map(({ lane, name }) => ({ lane, name, colour: R.laneColour(st.score, lane) })) : []),
+    tracks: () => (st.score ? [...M.channels(st.score).map(({ lane, name }) => ({ lane, name, colour: R.laneColour(st.score, lane) })), ...(st.audio?.mixerTracks() ?? [])] : []),
     mix: () => X.mixOf(st.score),
     preview: (mix) => {
       st.heardMix = mix;
@@ -3336,6 +3359,30 @@ export function startStudio(root, options = {}) {
     },
     commit: mixCommit,
     level: () => (st.playing?.handle && st.liveMixer ? st.liveMixer.level().peak : 0),
+  });
+
+  // The microphone (audio-ui.js, #390): what of the editor it works with.
+  st.audio = audioTracks({
+    root,
+    st,
+    options: options.audio ?? {},
+    studio: {
+      say,
+      edit,
+      draw,
+      play: () => togglePlay(),
+      stop: () => stopPlay(),
+      showPlace: (lane, tick) => {
+        keepOn(lane, tick);
+        draw();
+      },
+      changeBar,
+      laneName,
+      barNo,
+      grid: () => M.RECORDING_GRIDS[quantizeBox?.value] ?? M.RECORDING_GRIDS.sixteenth,
+      gridName: () => quantizeBox?.selectedOptions[0]?.textContent ?? "sixteenths",
+      mixHeard,
+    },
   });
 
   /** The Playback section's staves, a Mute and a Solo for each. */
