@@ -186,6 +186,7 @@ export function scheduleOf({ music, rate = 1, offset, takeRate = 1, duration, le
     from = 0;
   }
   if (from >= duration) return null;
+  // TIME-STRETCH (#391): the speed as playbackRate, the pitch with it; a time-stretch would keep it.
   return { delay, from, playbackRate: rate / takeRate };
 }
 

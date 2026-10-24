@@ -12,7 +12,7 @@
 // - `<lane>`: the staff's lane, as the mixer keys its tracks (a staff's
 //   first lane; its other voices play on its channel);
 // - `<controller>`: "1" modulation, "11" expression, "7" volume, "10" pan,
-//   "64" the sustain pedal, "bend" pitch bend;
+//   "64" the sustain pedal, "bend" pitch bend, "pressure" channel pressure;
 // - `tick`: score time (score-model.js WHOLE ticks to a whole note) from
 //   the start, as written: a repeat plays its bars' curve again;
 // - `value`: 0–127 for a controller (the pedal 0 or 127), −8192–8191 for
@@ -43,6 +43,8 @@ export const CONTROLLERS = [
   { id: "10", name: "Pan", number: 10, min: 0, max: 127 },
   { id: "64", name: "Sustain pedal", number: 64, min: 0, max: 127, step: true },
   { id: "bend", name: "Pitch bend", number: null, min: -8192, max: 8191 },
+  // Channel pressure (aftertouch): an MPE keyboard's, the hardest of its notes (mpe.js, #391).
+  { id: "pressure", name: "Pressure", number: null, min: 0, max: 127 },
 ];
 
 /** A controller by its id ("1", "bend"…); null for one not followed. */
@@ -52,7 +54,7 @@ export function controller(id) {
 
 /** A controller's id from a MIDI controller number; null for one not followed. */
 export function idOfNumber(number) {
-  return CONTROLLERS.find((c) => c.number === number)?.id ?? null;
+  return CONTROLLERS.find((c) => c.number != null && c.number === number)?.id ?? null;
 }
 
 /** On a ramp, a value every sixteenth. */
@@ -250,6 +252,7 @@ export function eventBytes(channel, id, value) {
     const v = Math.max(0, Math.min(16383, value + 8192));
     return [0xe0 | (channel & 15), v & 127, v >> 7];
   }
+  if (id === "pressure") return [0xd0 | (channel & 15), Math.max(0, Math.min(127, value))];
   // A second port's channel (16 and on) is written as its channel in the port.
   return [0xb0 | (channel & 15), controller(id).number, value];
 }

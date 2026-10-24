@@ -216,17 +216,46 @@
             <option value="">none</option><option value="find">find keyboards…</option>
           </select>
         </label>
+        <label class="tool-check" title="A keyboard that gives each note its own bend and pressure (MPE). Found by itself when the keyboard says so; tick it for one that does not"><input type="checkbox" data-mpe> MPE keyboard</label>
       </details>
 
       <details class="tool-section" data-section="playback" open>
         <summary><h3>Playback</h3></summary>
         <label class="tool-field">Speed
-          <select data-play="rate">
-            <option value="0.5">50 %</option><option value="0.75">75 %</option><option value="0.9">90 %</option>
+          <select data-play="rate" title="Slower or faster, at the same pitch">
+            <option value="0.25">25 %</option><option value="0.5">50 %</option><option value="0.75">75 %</option><option value="0.9">90 %</option>
             <option value="1" selected>100 %</option><option value="1.1">110 %</option><option value="1.25">125 %</option>
-            <option value="1.5">150 %</option>
+            <option value="1.5">150 %</option><option value="1.75">175 %</option><option value="2">200 %</option>
           </select>
         </label>
+        <%# Practice (public/eui-score/practice.js, #391), kept in this browser. %>
+        <label class="tool-field" title="The keys moved as they are played, not in the score: the same speed, another key">Play transposed
+          <select data-practice="transpose">
+            <option value="-12">−12 semitones</option><option value="-11">−11 semitones</option><option value="-10">−10 semitones</option>
+            <option value="-9">−9 semitones</option><option value="-8">−8 semitones</option><option value="-7">−7 semitones</option>
+            <option value="-6">−6 semitones</option><option value="-5">−5 semitones</option><option value="-4">−4 semitones</option>
+            <option value="-3">−3 semitones</option><option value="-2">−2 semitones</option><option value="-1">−1 semitone</option>
+            <option value="0" selected>as written</option><option value="1">+1 semitone</option><option value="2">+2 semitones</option>
+            <option value="3">+3 semitones</option><option value="4">+4 semitones</option><option value="5">+5 semitones</option>
+            <option value="6">+6 semitones</option><option value="7">+7 semitones</option><option value="8">+8 semitones</option>
+            <option value="9">+9 semitones</option><option value="10">+10 semitones</option><option value="11">+11 semitones</option>
+            <option value="12">+12 semitones</option>
+          </select>
+        </label>
+        <label class="tool-check" title="Save the sound and Save as MIDI at the speed and in the key chosen here, not as written"><input type="checkbox" data-practice="exports"> Saved files too</label>
+        <details class="tool-practice" data-practice-box>
+          <summary>Practice loop</summary>
+          <label class="tool-check" title="The loop played slow first, faster each time round"><input type="checkbox" data-practice="ramp"> Faster each pass</label>
+          <div class="tool-practice-row">
+            <label>From <input type="number" data-practice="from" min="25" max="200" step="1" value="70"> %</label>
+            <label>add <input type="number" data-practice="step" min="1" max="100" step="1" value="5"> %</label>
+            <label>to <input type="number" data-practice="to" min="25" max="200" step="1" value="100"> %</label>
+          </div>
+          <label class="tool-field">At the target
+            <select data-practice="at"><option value="stop">stop</option><option value="loop">keep looping</option></select>
+          </label>
+          <output class="tool-practice-now" data-practice-now aria-live="polite">Set a loop (Play ▸ Loop, or the MIDI view's ruler), then Play.</output>
+        </details>
         <label class="tool-check"><input type="checkbox" data-play="loop"> Loop the selected bars</label>
         <label class="tool-check"><input type="checkbox" data-play="metronome"> Metronome</label>
         <label class="tool-field">Clicks

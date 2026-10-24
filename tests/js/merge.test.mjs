@@ -265,3 +265,42 @@ test("a second voice added on one side: the other side's later staves' meta move
   // The bass is lane 2 now, after the melody's second voice.
   assert.deepEqual(M.readMeta(out.text).mixer, { tracks: { 2: { mute: true } } });
 });
+
+test("a staff's synthesizer and its own SoundFont (#391) follow their staff, and merge setting by setting", () => {
+  const duet = (meta) => canon(`\\header { title = "Duet" } << \\new Staff { \\time 4/4 ${BARS.join(" | ")} } \\new Staff \\with { instrumentName = "Bass" } { \\clef bass c1 | d1 | e1 | f1 } >>`, meta);
+  const trio = (meta) => canon(`\\header { title = "Duet" } << \\new Staff \\with { instrumentName = "Flute" } { \\time 4/4 c''1 | c''1 | c''1 | c''1 } \\new Staff { ${BARS.join(" | ")} } \\new Staff \\with { instrumentName = "Bass" } { \\clef bass c1 | d1 | e1 | f1 } >>`, meta);
+  const font = { name: "Pads.sf2", hash: "0123456789abcdef", bank: 0, program: 89, preset: "Warm Pad" };
+  const base = duet({ synth: { 1: { preset: "bass" } } });
+  // Mine: the bass's filter opened, the melody on my SoundFont.
+  const mine = duet({ synth: { 1: { preset: "bass", filter: { cutoff: 0.6 } } }, soundfont: { 0: font } });
+  // Theirs: a flute added first, on the lead; the bass's release longer.
+  const theirs = trio({ synth: { 0: { preset: "lead" }, 2: { preset: "bass", amp: { release: 0.5 } } } });
+  const out = merge(base, mine, theirs);
+  assert.deepEqual(out.conflicts, []);
+  const meta = M.readMeta(out.text);
+  assert.deepEqual(meta.synth, { 0: { preset: "lead" }, 2: { preset: "bass", filter: { cutoff: 0.6 }, amp: { release: 0.5 } } });
+  assert.deepEqual(meta.soundfont, { 1: font }, "the melody is lane 1 now");
+  // The same knob turned two ways: a conflict naming it, settled either way.
+  const a = duet({ synth: { 1: { preset: "bass", filter: { cutoff: 0.2 } } } });
+  const b = duet({ synth: { 1: { preset: "bass", filter: { cutoff: 0.9 } } } });
+  const clash = merge(base, a, b);
+  assert.equal(clash.text, null);
+  assert.deepEqual(clash.conflicts.map((c) => c.label), ["Synthesizer (1 › filter › cutoff)"]);
+  assert.equal(M.readMeta(merge(base, a, b, "theirs").text).synth[1].filter.cutoff, 0.9);
+  // A staff taken away on one side, its synthesizer untouched on the other: it goes with its staff.
+  const solo = canon(`\\header { title = "Duet" } \\new Staff { \\time 4/4 ${BARS.join(" | ")} }`, null);
+  assert.equal(M.readMeta(merge(base, base, solo).text).synth, undefined);
+});
+
+test("an audio track's lane (#390) in the synthesizer or SoundFont keys is no staff's: it goes, and nothing conflicts", () => {
+  const one = (meta) => canon(`\\header { title = "Duet" } \\new Staff { \\time 4/4 ${BARS.join(" | ")} }`, meta);
+  const base = one({ mixer: { tracks: { "audio-1": { volume: -3 } } } });
+  const mine = one({ mixer: { tracks: { "audio-1": { volume: -3 } } }, synth: { 0: { preset: "lead" }, "audio-1": { preset: "pad" } } });
+  const theirs = one({ mixer: { tracks: { "audio-1": { volume: -9 } } }, soundfont: { "audio-2": { name: "x.sf2", hash: "0123456789abcdef", bank: 0, program: 1 } } });
+  const out = merge(base, mine, theirs);
+  assert.deepEqual(out.conflicts, []);
+  const meta = M.readMeta(out.text);
+  assert.deepEqual(meta.synth, { 0: { preset: "lead" } });
+  assert.equal(meta.soundfont, undefined);
+  assert.deepEqual(meta.mixer, { tracks: { "audio-1": { volume: -9 } } }, "the audio track's own mixer settings kept");
+});

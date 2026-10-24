@@ -44,6 +44,11 @@ class ScoreAssets
       "mic.js",
       "mic-worklet.js",
       "audio-ui.js",
+      "practice.js",
+      "synth.js",
+      "soundbank.js",
+      "mpe.js",
+      "instruments-ui.js",
       "vendor/README.md",
       "eui_score_web.js",
       "wasm.version"

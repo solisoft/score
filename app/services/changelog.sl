@@ -12,6 +12,24 @@ class Changelog
     [
       {"date": "2026-10-24", "entries": [
         {
+          "area": "editor",
+          "title": "Practise: play transposed or slower, a loop that speeds up, a synthesizer, your own SoundFont",
+          "text": "Playback has Play transposed, up or down twelve semitones without changing the speed, and a Speed "
+          + "from 25 % to 200 % that keeps the pitch; Saved files too puts both in Save as MIDI and Save the sound, "
+          + "which otherwise stay as written. Practice loop plays the loop slower first and faster each pass (from, "
+          + "add and to, in percent), says the speed of the pass, and stops at the target or keeps looping there. "
+          + "In the mixer, each staff can play a synthesizer instead of its instrument: two oscillators (sine, "
+          + "square, saw, triangle) with their detune, a low-pass filter with its resonance and envelope, attack, "
+          + "decay, sustain and release, from four presets (pad, lead, bass, pluck), through the staff's own volume, "
+          + "pan, mute, solo and effects, on Play and in the WAV and MP3. Or a preset of an SF2 or SF3 file of your "
+          + "own (up to 100 MB), kept in your browser: the score keeps its name and preset, and plays the usual "
+          + "sounds, saying so, where the file is not. An MPE keyboard is recognised (or ticked by hand): each "
+          + "note's bend and pressure are heard on its own with the synthesizer, and recorded into the staff's "
+          + "Pitch bend and new Pressure curves. Audio takes keep their own pitch when the score is transposed, and "
+          + "follow the speed and the loop that speeds up, their pitch moving with it.",
+          "app": true
+        },
+        {
           "area": "site",
           "title": "The microphone: audio tracks, their notes written down, a tuner, and practice",
           "text": "Play ▸ Record from the microphone records a voice or an instrument onto an audio track of "

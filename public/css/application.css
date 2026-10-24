@@ -4060,6 +4060,45 @@
   .mixer-meter-clip {
     box-shadow: inset 0 3px 0 #ff3b3b;
   }
+  .mixer-inst b {
+    font-size: 11.5px;
+    color: var(--ink-soft);
+  }
+  .mixer-inst-missing {
+    margin: 4px 0 0;
+    font-size: 11.5px;
+    color: #a3471c;
+  }
+  .tool-practice {
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .tool-practice > summary {
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .tool-practice-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    margin-top: 6px;
+  }
+  .tool-practice-row input {
+    width: 52px;
+    font-size: 12.5px;
+    padding: 2px 4px;
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+    background: var(--sheet);
+    color: var(--ink);
+  }
+  .tool-practice-now {
+    display: block;
+    margin-top: 6px;
+    font: 12px var(--font-mono);
+    color: var(--muted);
+  }
   .studio-velocity {
     position: sticky;
     bottom: 0;

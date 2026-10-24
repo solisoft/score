@@ -23,6 +23,10 @@ const S = await import(`./midi-sync.js${V}`);
 const X = await import(`./mixer.js${V}`);
 const Vel = await import(`./velocity.js${V}`);
 const { mixerPanel } = await import(`./mixer-ui.js${V}`);
+// Practice, the synthesizer, your own SoundFonts and MPE (#391).
+const Pr = await import(`./practice.js${V}`);
+const Sy = await import(`./synth.js${V}`);
+const { installInstruments } = await import(`./instruments-ui.js${V}`);
 // Swing, humanize and the tempo's glides, put into the MIDI that is heard (#379).
 const F = await import(`./feel.js${V}`);
 const A = await import(`./automation.js${V}`);
@@ -1012,7 +1016,7 @@ export function startStudio(root, options = {}) {
         if (edit((score) => M.transpose(score, { ...by, s: r.s, a: r.a, b: r.b }))) say(`${r.b - r.a + 1} selected, ${words}.`);
         return;
       }
-      case "save-midi": return heardMidi(st.score, undefined, { mix: X.mixOf(st.score) }).then((m) => download(m, `${fileName()}.mid`, "audio/midi")).catch((e) => refuse(e));
+      case "save-midi": return heardMidi(st.score, undefined, { mix: X.mixOf(st.score), practice: exportPractice() }).then((m) => download(m, `${fileName()}.mid`, "audio/midi")).catch((e) => refuse(e));
       case "save-wav": return saveWav();
       case "save-mp3": return saveSound("mp3");
       case "save-stems": return saveSound("stems");
@@ -3032,9 +3036,10 @@ export function startStudio(root, options = {}) {
    * played (feel.js) — swung and humanized as the meta line asks, on top of
    * those velocities, its rit. and accel. gliding. Play, Save as MIDI and
    * Save the sound all play this; `mix` (Save as MIDI) writes the mixer's
-   * volume and pan in too.
+   * volume and pan in too; `practice` transposes it, and sets its speed (a
+   * saved file's, when asked: practice.js).
    */
-  const heardMidi = (score, passes = score ? M.playback(score) : [], { mix = null } = {}) =>
+  const heardMidi = (score, passes = score ? M.playback(score) : [], { mix = null, practice = null } = {}) =>
     engraved(score).then((bytes) => {
       const velocities = score ? Vel.applyVelocities(score, bytes) : bytes;
       // Past fifteen channels, two staves may go through one mixer strip: their volume and pan in the file (#389).
@@ -3042,7 +3047,8 @@ export function startStudio(root, options = {}) {
       const fileMix = mix ?? (shared.length ? mixHeard() : null);
       const curves = score ? A.applyAutomation(score, velocities, { passes, mix: fileMix, mixLanes: mix ? null : shared, volumeMin: X.VOLUME_MIN }) : velocities;
       const graced = score ? G.applyGraces(score, curves, { passes }) : curves;
-      return F.feel(graced, { score, passes, ...F.feelOf(score ? score.meta : M.readMeta(st.text)) });
+      const felt = F.feel(graced, { score, passes, ...F.feelOf(score ? score.meta : M.readMeta(st.text)) });
+      return practice ? Pr.applyPractice(felt, practice) : felt;
     });
 
   /** The engraver's MIDI of what is heard, each staff on its own channel (channels.js, #389). */
@@ -3075,6 +3081,54 @@ export function startStudio(root, options = {}) {
   });
   const rate = () => Number(playOption("rate")?.value) || 1;
 
+  // Practice (#391): Play transposed, saved files as practised, the loop
+  // faster each pass — kept in this browser, like the rest of Playback.
+  const PRACTICE = "eui-score-studio-practice";
+  const practiceOption = (name) => root.querySelector(`[data-practice="${name}"]`);
+  try {
+    const kept = JSON.parse(localStorage.getItem(PRACTICE) || "{}");
+    for (const [name, value] of Object.entries(kept)) {
+      const el = practiceOption(name);
+      if (el?.type === "checkbox") el.checked = Boolean(value);
+      else if (el) el.value = value;
+    }
+  } catch (error) {}
+  root.querySelector("[data-practice-box]")?.closest(".tool-section")?.addEventListener("change", (event) => {
+    const name = event.target.dataset?.practice;
+    if (!name) return;
+    // The audio takes (#390) are sound, not notes: they keep their pitch.
+    const takes = st.audio?.mixerTracks().length ? " The audio takes keep their own pitch." : "";
+    if (name === "transpose") say(`Play transposed: ${Pr.transposeText(transposeNow())}${st.playing ? ", heard from the next Play" : ""}.${takes}`);
+    try {
+      const all = Object.fromEntries([...root.querySelectorAll("[data-practice]")].map((el) => [el.dataset.practice, el.type === "checkbox" ? el.checked : el.value]));
+      localStorage.setItem(PRACTICE, JSON.stringify(all));
+    } catch (error) {}
+  });
+  const transposeNow = () => Pr.transposition(practiceOption("transpose")?.value);
+  const rampNow = () => Pr.rampOf({ from: practiceOption("from")?.value, step: practiceOption("step")?.value, to: practiceOption("to")?.value, atTarget: practiceOption("at")?.value });
+  /** The practice a saved file gets: the speed and the transposition, when Playback asks for it. */
+  const exportPractice = () => (practiceOption("exports")?.checked ? { transpose: transposeNow(), tempo: rate() } : null);
+  const showRamp = (text) => {
+    const out = root.querySelector("[data-practice-now]");
+    if (out) out.textContent = text;
+  };
+
+  /** A pass of the rising loop is over: the next a step faster, or the end at the target. */
+  function rampPass(state, handle) {
+    const next = Pr.rampAfter(state.ramp, state.pass);
+    if (next.done) {
+      stopPlay();
+      const text = `Practice loop: ${next.percent} % reached after ${state.pass + 1} passes.`;
+      showRamp(text);
+      return say(text);
+    }
+    state.pass = next.pass;
+    // The audio takes follow on the next tick (audio-ui.js `sync`: a new rate starts them again
+    // there). TIME-STRETCH: they follow by playbackRate, their pitch with it (takes.js `scheduleOf`).
+    handle.rate = next.percent / 100;
+    showRamp(Pr.rampText(state.ramp, state.pass));
+  }
+
   /** Play; pause; play on. A second press while the sounds load gives up. */
   async function togglePlay() {
     const playing = st.playing;
@@ -3087,6 +3141,7 @@ export function startStudio(root, options = {}) {
         say("Playing — Space to pause");
       } else {
         playing.handle.pause();
+        playing.voices?.silence();
         say("Paused — Space to play on, Stop to go back to the start");
       }
       return showState();
@@ -3114,12 +3169,24 @@ export function startStudio(root, options = {}) {
     const from = changeBar();
     const at = loop ? loop.start : from == null ? 0 : (passes.find((p) => p.bar === from)?.start ?? 0);
     let bytes;
+    let sound = null;
+    let notes = [];
     try {
-      bytes = await heardMidi(played, passes);
+      bytes = await heardMidi(played, passes, { practice: { transpose: transposeNow() } });
+      // The synthesizer's staves and the own SoundFonts' (#391): in this browser only, not to a MIDI device.
+      if (!P.outputPort()) {
+        sound = await st.instruments.prepare(played);
+        ({ bytes, notes } = st.instruments.forSound(bytes, sound));
+      }
     } catch (error) {
       return say(error.message ?? String(error), true);
     }
     const state = { handle: null, passes, times: noteTimes(passes), beats: played ? M.beats(played, passes, { subdivide: Number(playOption("subdivide")?.value) || 0 }) : [], loop, next: null, now: [], lit: -1, frame: 0, timer: 0, ticker: 0 };
+    // The loop faster each pass, from its first speed (#391).
+    if (practiceOption("ramp")?.checked) {
+      if (loop) Object.assign(state, { ramp: rampNow(), pass: 0 });
+      else state.unramped = true;
+    }
     st.playing = state;
     showState();
     const progress = (f) => st.playing === state && say(`Loading the sounds… ${Math.round(100 * f)} % (38 MB, once)`);
@@ -3136,7 +3203,16 @@ export function startStudio(root, options = {}) {
       return say("The sounds could not be loaded.", true);
     }
     if (!state.handle || st.playing !== state) return;
-    state.handle.rate = rate();
+    state.handle.rate = state.ramp ? Pr.rampPercent(state.ramp, 0) / 100 : rate();
+    if (state.ramp) showRamp(Pr.rampText(state.ramp, 0));
+    if (notes.length) {
+      state.voices = new Sy.Scheduler({
+        ctx: P.unlock(),
+        notes,
+        settingsOf: st.instruments.settingsFor(sound),
+        destinationOf: (channel) => st.liveMixer?.strips[channel % 16].input ?? P.unlock().destination,
+      });
+    }
     applyMix();
     // The audio tracks, in time with it.
     st.audio?.startPlayback(state.handle);
@@ -3145,7 +3221,8 @@ export function startStudio(root, options = {}) {
       state.padChannel = M.channels(played).at(-1).channel;
       P.mute(state.padChannel, true);
     }
-    if (!st.recording && !st.taking) say(loop ? "Looping the selected bars — Space to pause" : "Playing — Space to pause");
+    if (state.unramped) say("Faster each pass plays a loop: set one first (Play ▸ Loop, or the MIDI view's ruler). Playing from the start — Space to pause");
+    else if (!st.recording && !st.taking) say(loop ? "Looping the selected bars — Space to pause" : "Playing — Space to pause");
     showState();
     state.timer = setInterval(showProgress, 200);
     state.ticker = setInterval(tick, 25);
@@ -3176,7 +3253,7 @@ export function startStudio(root, options = {}) {
   function countIn(state, at) {
     const pass = M.passAt(state.passes, at);
     const [num, den] = M.timeAt(st.score, pass.bar);
-    const beat = ((M.WHOLE / den) / (M.WHOLE / pass.base)) * (60 / pass.bpm) / rate();
+    const beat = ((M.WHOLE / den) / (M.WHOLE / pass.base)) * (60 / pass.bpm) / (state.ramp ? Pr.rampPercent(state.ramp, 0) / 100 : rate());
     const t0 = P.audioTime() + 0.05;
     for (let k = 0; k < num; k++) P.click(t0 + k * beat, k === 0 && accent());
     say("One bar to come in…");
@@ -3194,8 +3271,10 @@ export function startStudio(root, options = {}) {
     if (state.loop && now >= state.loop.end - 0.02) {
       handle.time = state.loop.start;
       state.next = null;
+      if (state.ramp) rampPass(state, handle);
       return;
     }
+    state.voices?.tick(now, handle.rate);
     // A recording always has the metronome.
     if (!(st.recording || playOption("metronome")?.checked) || !state.beats.length) return;
     const beats = state.beats;
@@ -3229,6 +3308,7 @@ export function startStudio(root, options = {}) {
       clearInterval(playing.timer);
       clearInterval(playing.ticker);
       cancelAnimationFrame(playing.frame);
+      playing.voices?.silence();
       if (playing.handle) playing.handle.stop();
       else P.stop(); // still loading: it must not start after all
       if (playing.padChannel != null) P.mute(playing.padChannel, false);
@@ -3416,7 +3496,22 @@ export function startStudio(root, options = {}) {
     const graph = X.mixerGraph(ctx, synth, destination);
     graph.apply(mixHeard(), st.score ? M.channels(st.score) : []);
     if (!offline) st.liveMixer = graph;
+    // Save the sound: the synthesizer's notes, all scheduled, into their strips (#391).
+    else if (st.offlineNotes?.notes.length) Sy.scheduleAll(ctx, st.offlineNotes.notes, st.offlineNotes.settingsOf, (channel) => graph.strips[channel % 16].input);
   });
+
+  /**
+   * What Save the sound renders: the heard MIDI (practised, when Playback
+   * asks), its own SoundFonts' presets in, its synthesizer's notes out —
+   * those ready for the router to schedule.
+   */
+  async function soundMidi() {
+    const bytes = await heardMidi(st.score, undefined, { practice: exportPractice() });
+    const sound = await st.instruments.prepare(st.score);
+    const made = st.instruments.forSound(bytes, sound);
+    st.offlineNotes = { notes: made.notes, settingsOf: st.instruments.settingsFor(sound) };
+    return made.bytes;
+  }
 
   /** Each staff's channel as the mixer says: muted, or not soloed while another is; its level, pan and effects. */
   function applyMix() {
@@ -3436,8 +3531,10 @@ export function startStudio(root, options = {}) {
     renderMix();
   }
 
+  st.instruments = installInstruments({ root, st, M, P, edit, say });
   st.mixer = mixerPanel({
     root,
+    instrument: st.instruments,
     tracks: () => (st.score ? [...M.channels(st.score).map(({ lane, name }) => ({ lane, name, colour: R.laneColour(st.score, lane) })), ...(st.audio?.mixerTracks() ?? [])] : []),
     mix: () => X.mixOf(st.score),
     preview: (mix) => {
@@ -3475,6 +3572,7 @@ export function startStudio(root, options = {}) {
   /** The Playback section's staves, a Mute and a Solo for each. */
   function renderMix() {
     st.mixer?.refresh();
+    st.instruments?.check();
     const box = playOption("staves");
     if (!box) return;
     const rows = st.score ? M.channels(st.score) : [];
@@ -3505,7 +3603,7 @@ export function startStudio(root, options = {}) {
   async function saveWav() {
     let bytes;
     try {
-      bytes = await heardMidi(st.score);
+      bytes = await soundMidi();
     } catch (error) {
       return refuse(error);
     }
@@ -3524,7 +3622,7 @@ export function startStudio(root, options = {}) {
   async function saveSound(kind) {
     let bytes;
     try {
-      bytes = await heardMidi(st.score);
+      bytes = await soundMidi();
     } catch (error) {
       return refuse(error);
     }

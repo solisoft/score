@@ -179,6 +179,9 @@ export function automationLane({ rollHost, rollScroll, st, edit, say, redraw, re
     if (kind === 0xe0) {
       id = "bend";
       value = ((data[2] << 7) | data[1]) - 8192;
+    } else if (kind === 0xd0) {
+      id = "pressure";
+      value = data[1];
     } else if (kind === 0xb0) {
       id = A.idOfNumber(data[1]);
       value = data[2];

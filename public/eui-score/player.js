@@ -63,6 +63,41 @@ function route(ctx, synth, offline, destination = ctx.destination) {
   else synth.connect(destination);
 }
 
+// Your own SoundFonts (soundbank.js, #391): id → { buffer, offset }, each
+// a sound bank beside the default one, its banks moved up by `offset`.
+const banks = new Map();
+
+/**
+ * Adds SoundFont `buffer` (an ArrayBuffer) as sound bank `id`, its banks
+ * moved up by `offset` (a bank select of offset + bank picks its presets):
+ * for Play from now on, and for every file rendered. A copy is given to
+ * the synthesizer each time — its worklet takes what it is given.
+ */
+export async function useBank(id, buffer, offset) {
+  const was = banks.get(id);
+  if (was && was.offset === offset) return;
+  banks.set(id, { buffer, offset });
+  if (!engine?.done) return;
+  const { synth } = await engine.promise;
+  await synth.soundBankManager.addSoundBank(buffer.slice(0), id, offset);
+}
+
+/**
+ * The preset synthesizer channel `channel` plays, as SpessaSynth last said
+ * it (`{ program, bankMSB, name, … }`), or null before the first Play: what
+ * an own SoundFont's staff is heard with.
+ */
+export function patchOf(channel) {
+  if (!engine?.done) return null;
+  return lastSynth?.midiChannels?.[channel]?.patch ?? null;
+}
+let lastSynth = null;
+
+/** True when sound bank `id` is in use. */
+export function hasBank(id) {
+  return banks.has(id);
+}
+
 /** True once the synthesizer and its sounds are loaded: Play will start at once. */
 export function isReady() {
   return Boolean(engine?.done);
@@ -93,9 +128,12 @@ function start() {
     gain.connect(ctx.destination);
     route(ctx, synth, false, gain);
     await synth.soundBankManager.addSoundBank(bank, "main");
+    // Your own SoundFonts (#391), loaded before the first Play.
+    for (const [id, extra] of banks) await synth.soundBankManager.addSoundBank(extra.buffer.slice(0), id, extra.offset);
     await synth.isReady;
     // The score's first beat is at 0 s, a rest or not: the editor's timings count from there.
     const seq = new Sequencer(synth, { skipToFirstNoteOn: false });
+    lastSynth = synth;
     job.done = true;
     return { ctx, synth, seq, gain };
   })();
@@ -217,6 +255,11 @@ export async function play(midi, { at = 0, onStop, onProgress } = {}) {
       return seq.playbackRate;
     },
     set rate(value) {
+      // TIME-STRETCH: the MIDI follows the rate at its own pitch; the audio
+      // takes (#390) follow it with their playbackRate (takes.js
+      // `scheduleOf`, audio-ui.js `startPlayback`), so their pitch moves
+      // with the speed. A time-stretch (a phase vocoder or WSOLA worklet at
+      // this same rate) would go there instead.
       seq.playbackRate = value;
     },
     stop() {
@@ -249,7 +292,8 @@ export async function renderAudio(midi, { muted = [], onProgress } = {}) {
   await offline.audioWorklet.addModule(new URL(`vendor/spessasynth_processor.min.js${V}`, import.meta.url));
   const synth = new WorkletSynthesizer(offline);
   route(offline, synth, true);
-  await synth.startOfflineRender({ midiSequence: sequence, soundBankList: [{ soundBankBuffer: bank, bankOffset: 0 }], loopCount: 0, sequencerOptions: { skipToFirstNoteOn: false } });
+  const soundBankList = [{ soundBankBuffer: bank, bankOffset: 0 }, ...[...banks.values()].map((b) => ({ soundBankBuffer: b.buffer.slice(0), bankOffset: b.offset }))];
+  await synth.startOfflineRender({ midiSequence: sequence, soundBankList, loopCount: 0, sequencerOptions: { skipToFirstNoteOn: false } });
   for (const channel of muted) synth.midiChannels[channel]?.setSystemParameter?.("isMuted", true);
   return offline.startRendering();
 }
@@ -308,6 +352,28 @@ export async function midiInputs() {
 let input = null;
 const taps = new Set();
 const ears = new Set();
+const translators = new Set();
+
+/**
+ * Reads every message of the MIDI keyboard first, before anyone hears it:
+ * `fn(data, timeStamp)` answers the message as the others are to hear it
+ * (another, or the same), or null to keep it from them — an MPE keyboard's
+ * per-note bend folded into the staff's (#391). Answers the function that
+ * stops it.
+ */
+export function translate(fn) {
+  translators.add(fn);
+  return () => translators.delete(fn);
+}
+
+// Who sounds the keys of a staff that does not play the SoundFont (synth.js,
+// #391): `fn(channel, key, on, velocity)` answering true when it did.
+let voicer = null;
+
+/** Sets who sounds the keys of the staves this synthesizer does not play (null: none). */
+export function setVoicer(fn) {
+  voicer = fn;
+}
 
 /**
  * Hears every message of the MIDI keyboard listened to, before anything
@@ -341,7 +407,13 @@ export function listen(id, onKey, onRelease = null) {
   input = id && access ? access.inputs.get(id) ?? null : null;
   if (!input) return null;
   const down = new Set();
-  input.onmidimessage = ({ data, timeStamp }) => {
+  input.onmidimessage = (event) => {
+    let data = event.data;
+    const timeStamp = event.timeStamp;
+    for (const fn of translators) {
+      data = fn(data, timeStamp);
+      if (!data) return;
+    }
     for (const fn of ears) fn(data, timeStamp);
     for (const fn of taps) if (fn(data, timeStamp)) return;
     const [status, key, velocity] = data;
@@ -432,6 +504,13 @@ export function preview(keys, program = 0, { drums = false, channel = 0 } = {}) 
     }, 450);
     return true;
   }
+  if (!drums && voicer?.(channel, keys[0], true, 90)) {
+    for (const key of keys.slice(1)) voicer(channel, key, true, 90);
+    setTimeout(() => {
+      for (const key of keys) voicer(channel, key, false, 0);
+    }, 450);
+    return true;
+  }
   if (!engine?.done) {
     prepare().catch(() => {});
     return false;
@@ -460,6 +539,7 @@ export function hold(key, on, program = 0, { drums = false, velocity = 100, chan
     sendNote(drums ? 9 : channel, key, on, velocity);
     return true;
   }
+  if (!drums && voicer?.(channel, key, on, velocity)) return true;
   if (!engine?.done) return false;
   engine.promise.then(({ ctx, synth }) => {
     ctx.resume().catch(() => {});

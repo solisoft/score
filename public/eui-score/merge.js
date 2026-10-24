@@ -34,7 +34,7 @@ const SIDES = ["mine", "theirs"];
 const ABSENT = "∅";
 
 /** The names the meta line's keys are shown under. */
-const META_NAMES = { mixer: "Mixer", velocity: "Note velocities", swing: "Swing", humanize: "Humanize", cc: "Automation curves" };
+const META_NAMES = { mixer: "Mixer", velocity: "Note velocities", swing: "Swing", humanize: "Humanize", cc: "Automation curves", synth: "Synthesizer", soundfont: "Own SoundFont" };
 
 /** The names the score's fields are shown under. */
 const SCORE_NAMES = { key: "Key", mode: "Key", time: "Time signature", tempo: "Tempo", pickup: "Pickup", group: "Staff groups", groups: "Staff groups", repeats: "Repeats", paper: "Page layout", compress: "Bars of rest", timeParts: "Time signature" };
@@ -398,7 +398,8 @@ export function mergeScores(base, mine, theirs, { parse, prefer = null } = {}) {
  * merged score `out` is: a lane goes to its staff's (by `staffMap`) same
  * voice there, a tick to the same place in its bar's (by `barMap`). The
  * velocities (`"lane:tick:key"`), the curves (`{ lane: { controller:
- * [[tick, value]] } }`) and the mixer's tracks (by lane) move; the rest
+ * [[tick, value]] } }`), the mixer's tracks, the synthesizers and the own
+ * SoundFonts' presets (by lane) move; the rest
  * stays. Answers `{ meta, dropped }`: `dropped` what found no place, named
  * by staff, voice, bar and offset (the same on two sides of one shape).
  */
@@ -469,8 +470,20 @@ function layMeta(score, meta, side, staffMap, barMap, laneAt, out) {
     if (!Object.keys(tracks).length) delete laidOut.mixer.tracks;
     if (!Object.keys(laidOut.mixer).length) delete laidOut.mixer;
   }
+  // A staff's synthesizer and its own SoundFont's preset (#391): by lane, as the mixer's tracks.
+  for (const name of ["synth", "soundfont"]) {
+    if (!meta[name] || typeof meta[name] !== "object") continue;
+    laidOut[name] = {};
+    for (const [lane, settings] of Object.entries(meta[name])) {
+      // Only a staff plays one: an audio track's name ("audio-1", #390) is no lane of theirs, and goes.
+      if (!/^\d+$/.test(lane)) continue;
+      const l = laneOf(lane);
+      if (l.lane == null) dropped.push(`${name} ${l.where} ${JSON.stringify(settings)}`);
+      else laidOut[name][l.lane] = settings;
+    }
+  }
   // Emptied by what went: gone, as the editor leaves them.
-  for (const name of ["velocity", "cc"]) {
+  for (const name of ["velocity", "cc", "synth", "soundfont"]) {
     if (laidOut[name] && !Object.keys(laidOut[name]).length && Object.keys(meta[name]).length) delete laidOut[name];
   }
   return { meta: laidOut, dropped: dropped.sort() };

@@ -469,11 +469,11 @@ describe("The playground, in a browser") do
     assert_eq(kept["tempo"]["number"], 21)
     # Turned all the way up: the fastest speed; down: the slowest. Another knob does nothing.
     midi_in([176, 21, 127])
-    assert_eq(evaluate("document.querySelector('[data-play=\"rate\"]').value"), "1.5")
+    assert_eq(evaluate("document.querySelector('[data-play=\"rate\"]').value"), "2")
     midi_in([176, 21, 0])
-    assert_eq(evaluate("document.querySelector('[data-play=\"rate\"]').value"), "0.5")
+    assert_eq(evaluate("document.querySelector('[data-play=\"rate\"]').value"), "0.25")
     midi_in([176, 22, 127])
-    assert_eq(evaluate("document.querySelector('[data-play=\"rate\"]').value"), "0.5")
+    assert_eq(evaluate("document.querySelector('[data-play=\"rate\"]').value"), "0.25")
     click("[data-learn-clear=\"tempo\"]")
     sleep(0.2)
     assert_eq(text_of("[data-target=\"tempo\"] .midi-learn-control"), "—")
@@ -481,7 +481,7 @@ describe("The playground, in a browser") do
     midi_in([176, 21, 127])
     assert_eq(
       evaluate("document.querySelector('[data-play=\"rate\"]').value"),
-      "0.5",
+      "0.25",
       "forgotten: the knob moves nothing"
     )
     assert_no_page_errors()

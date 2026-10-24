@@ -7,6 +7,7 @@
 //   panel.refresh();       // after an edit: the staves and the settings again
 //
 // `tracks()` → [{ lane, name, colour }]; `mix()` → the score's mixer;
+// `instrument` (instruments-ui.js) → what each staff plays, in its strip;
 // `preview(mix)` while a control moves (heard, not kept); `commit(lane,
 // patch)` when it is let go (kept, one Undo away); `level()` → the master's
 // peak (0–1), or null while nothing plays.
@@ -57,8 +58,8 @@ function effects(lane, s) {
   </details>`;
 }
 
-/** A track's strip, as HTML. */
-export function trackHtml({ lane, name, colour }, s) {
+/** A track's strip, as HTML; `instrument` the part that says what it plays (instruments-ui.js, #391). */
+export function trackHtml({ lane, name, colour }, s, instrument = "") {
   return `<section class="mixer-strip" data-strip="${lane}" aria-label="${escape(name)}">
     <header><i style="background:${colour}"></i><span title="${escape(name)}">${escape(name)}</span></header>
     <div class="mixer-ms">
@@ -67,6 +68,7 @@ export function trackHtml({ lane, name, colour }, s) {
     </div>
     ${range(lane, "volume", s.volume, X.VOLUME_MIN, X.VOLUME_MAX, 0.5, "Volume", dbText(s.volume))}
     ${range(lane, "pan", s.pan, -1, 1, 0.05, "Pan", panText(s.pan))}
+    ${instrument}
     ${effects(lane, s)}
   </section>`;
 }
@@ -97,11 +99,12 @@ function shown(field, value) {
   return `${value} dB`;
 }
 
-export function mixerPanel({ root, tracks, mix, preview, commit, level }) {
+export function mixerPanel({ root, tracks, mix, preview, commit, level, instrument = null }) {
   const panel = Object.assign(document.createElement("dialog"), { className: "studio-mixer" });
   panel.setAttribute("aria-label", "Mixer");
   panel.innerHTML = `<div class="mixer-head"><h3>Mixer</h3><span class="mixer-note">Kept with the score; heard on Play and in Save the sound.</span><button type="button" class="tool" data-mixer-close aria-label="Close the mixer">✕</button></div><div class="mixer-strips" data-mixer-strips></div>`;
   root.append(panel);
+  instrument?.bind(panel);
   const strips = panel.querySelector("[data-mixer-strips]");
   let key = "";
   let frame = 0;
@@ -113,10 +116,11 @@ export function mixerPanel({ root, tracks, mix, preview, commit, level }) {
   function render() {
     const rows = tracks();
     const now = mix() ?? {};
-    const next = JSON.stringify([rows, now]);
+    const parts = rows.map((t) => instrument?.html(t.lane) ?? "");
+    const next = JSON.stringify([rows, now, parts]);
     if (next === key) return;
     key = next;
-    strips.innerHTML = rows.map((t) => trackHtml(t, X.trackOf(now, t.lane))).join("") + masterHtml(X.masterOf(now));
+    strips.innerHTML = rows.map((t, k) => trackHtml(t, X.trackOf(now, t.lane), parts[k])).join("") + masterHtml(X.masterOf(now));
   }
 
   function meter() {
