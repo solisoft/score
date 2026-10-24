@@ -13,6 +13,19 @@ class Changelog
       {"date": "2026-10-24", "entries": [
         {
           "area": "site",
+          "title": "Undo survives a reload, with no limit of 300 steps",
+          "text": "The score editor now keeps its undo history in your browser, for each score: reload the page, "
+          + "or open the score again another day, and Edit ▸ Undo still goes back through your changes, and "
+          + "Redo forward. The old limit of 300 steps is gone: the history is kept as the differences "
+          + "between one version and the next, a few megabytes per score, the oldest steps going first, for "
+          + "the twenty scores you opened last. When someone else has changed the score meanwhile, while you "
+          + "watched or while the page was closed, Undo takes back only your own changes and keeps theirs; "
+          + "where you both changed the same bar it stops and says so, rather than undo their work. In a "
+          + "private window, or with storage turned off, Undo works as before, for as long as the page is "
+          + "open."
+        },
+        {
+          "area": "site",
           "title": "Headers and footers, systems a page, piece, opus and copyright",
           "text": "File ▸ Score properties now sets the page around the music: a header and a footer, with "
           + "different ones on even pages if you like, each with words at the left, the centre and the right, "

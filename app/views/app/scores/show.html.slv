@@ -172,7 +172,7 @@
     if (text !== studio.source()) {
       applyingRemote = true;
       try {
-        studio.load(text, message, { keep: true });
+        studio.load(text, message, { keep: true, remote: true });
       } finally {
         applyingRemote = false;
       }
@@ -340,6 +340,9 @@
     // Comments (#385): see "Comments" below.
     onComment: (place) => commentOn(place),
     onMarker: (id) => openThread(id),
+    // The undo history, kept in this browser per person and score: a reload can still undo.
+    history: "score:<%= current_user()._key %>:<%= score._key %>",
+    historyAcross: true,
   });
 
   // What New / Open bring becomes a score of its own, once this one's last
@@ -492,7 +495,8 @@
         base = data.source;
         applyingRemote = true;
         try {
-          studio.load(data.source, "Updated: someone else saved this score.");
+          // Theirs, not a step of this person's: Undo takes back only this person's own, around it.
+          studio.load(data.source, "Updated: someone else saved this score.", { remote: true });
         } finally {
           applyingRemote = false;
         }

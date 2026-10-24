@@ -37,6 +37,7 @@ class ScoreAssets
       "channels.js",
       "graces.js",
       "comments.js",
+      "undo-history.js",
       "vendor/README.md",
       "eui_score_web.js",
       "wasm.version"

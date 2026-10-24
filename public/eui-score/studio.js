@@ -29,6 +29,9 @@ const A = await import(`./automation.js${V}`);
 const Ch = await import(`./channels.js${V}`);
 const G = await import(`./graces.js${V}`);
 const { automationLane } = await import(`./automation-ui.js${V}`);
+// The undo history kept in this browser, and Undo across others' changes (#387).
+const H = await import(`./undo-history.js${V}`);
+const { mergeScores, conflictLines } = await import(`./merge.js${V}`);
 /** The MP3 and the stems (audio-export.js), loaded the first time one is saved. */
 const audioExport = () => import(`./audio-export.js${V}`);
 const { editor_view_lit, score_json, source_spans } = engine;
@@ -84,8 +87,14 @@ const PALETTE = [
  *   selection's 💬, Ctrl+Alt+M) hands it the selection's place, or null.
  *   Without it, comments are not offered (the playground).
  * - `onMarker(id)`: a click on a comment's bubble (`markers`) over the score.
+ * - `history`: the key the undo history is kept under in this browser
+ *   (undo-history.js), or false for none; the playground's draft has one
+ *   of its own. `historyAcross`: the score may have been changed by someone
+ *   else since the history was kept (the app): it is kept all the same, and
+ *   Undo merges back around their changes; without it, a history that ends
+ *   at another text than the one opened is left.
  *
- * Answers `{ state, ready, source(), load(text, message, { keep }), peers(list),
+ * Answers `{ state, ready, source(), load(text, message, { keep, remote }), peers(list),
  * parse(text), markers(list), selectPlace(place), placeLabel(place), place() }`:
  * `ready` settles once the first score is drawn; `peers` draws the others'
  * places (see "Where the others work"); `markers` the comments' bubbles
@@ -413,7 +422,6 @@ export function startStudio(root, options = {}) {
       return say(M.plainRefusal(error.message ?? error), true);
     }
     st.past.push(before);
-    if (st.past.length > 300) st.past.shift();
     if (!keepFuture) st.future = [];
     if (status.dataset.fresh !== "1") say("");
     delete status.dataset.fresh;
@@ -423,24 +431,110 @@ export function startStudio(root, options = {}) {
   }
 
   function undo() {
-    if (!st.past.length) return;
-    st.future.push(snapshot());
-    restore(st.past.pop());
-    saveDraft();
-    draw();
+    undoStep(st.past, st.future, "Undo");
   }
 
   function redo() {
-    if (!st.future.length) return;
-    st.past.push(snapshot());
-    restore(st.future.pop());
-    saveDraft();
+    undoStep(st.future, st.past, "Redo");
+  }
+
+  /**
+   * Undo (`from` the past, `to` the future) or Redo (the other way). A step
+   * whose text is still the score's goes back as it was; one that someone
+   * else's changes have come over since is taken back by a three-way merge
+   * — its `after` to its `text`, on the score as it now stands — and, when
+   * they changed the same bars, not at all: theirs are never undone.
+   */
+  function undoStep(from, to, name) {
+    settleHistory();
+    const back = from.at(-1);
+    if (!back) return;
+    const now = H.stepOf(snapshot(), null);
+    if (back.after === st.text) {
+      from.pop();
+      if (back.snap) restore(back.snap);
+      else restoreText(back);
+    } else {
+      const merged = mergeScores(back.after, back.text, st.text, { parse: score_json });
+      if (merged.text == null) {
+        const where = merged.whole ? "" : `: ${conflictLines(merged.conflicts).join("; ")}`;
+        return say(`${name} stops here: the score was changed elsewhere since, where this step changed it too${where}. Those changes stay as they are.`, true);
+      }
+      from.pop();
+      replaceText(merged.text, { keep: true, at: back });
+      say(`${name}: done around the changes made elsewhere since; those stay.`);
+    }
+    now.after = st.text;
+    to.push(now);
+    // The step now last leads to where it led, not to this text: around others' changes, Undo merges again.
+    saveDraft({ pin: true });
     draw();
+  }
+
+  /** A step kept as its text only (an old one, or one brought back from the browser) put back. */
+  function restoreText(back) {
+    sourceBox.value = back.text;
+    readText(back.text);
+    adoptText();
+    st.sel = back.sel ?? null;
+    if (back.input) st.input = { ...st.input, ...back.input };
+    applyMix();
+  }
+
+  // ---- The undo history, kept in this browser (undo-history.js) -----------------
+
+  const historyKey = options.history === false ? null : (options.history ?? (draftKey ? `playground:${draftKey}` : null));
+  let historyKeeper = null;
+  let historyNote = "";
+
+  /**
+   * The steps just pushed (as snapshots) made steps, each with the text it
+   * led to; the history kept within its memory; and saved in the browser.
+   */
+  function settleHistory({ pin = false } = {}) {
+    for (const stack of [st.past, st.future]) {
+      for (let i = 0; i < stack.length; i++) if (typeof stack[i] === "string") stack[i] = H.stepOf(stack[i], st.text);
+    }
+    // The last step led to the text as it now is (rewritten as the model
+    // writes it, say) — unless someone else's change came over it: then it
+    // stays pinned to the text it led to, and Undo merges around theirs.
+    const last = st.past.at(-1);
+    if (last && pin) last.pinned = true;
+    else if (last && !last.pinned) last.after = st.text;
+    H.keepWithin(st.past, st.future);
+    historyKeeper?.save(() => ({ end: st.text, past: st.past, future: st.future }));
+  }
+
+  /** The history kept in this browser for this score, back: said in `historyNote`. */
+  async function restoreHistory() {
+    if (!historyKey) return;
+    const backend = await H.indexedDbBackend();
+    if (!backend) return;
+    const store = H.historyStore(backend);
+    historyKeeper = H.keeper(store, historyKey);
+    addEventListener("pagehide", () => historyKeeper.flush());
+    document.addEventListener("visibilitychange", () => document.hidden && historyKeeper.flush());
+    const kept = H.decode(await store.get(historyKey));
+    if (!kept || (!kept.past.length && !kept.future.length)) return;
+    const same = kept.end === st.text;
+    if (!same && !options.historyAcross) return;
+    // Steps taken while it was being read stay above it.
+    st.past = [...kept.past, ...st.past];
+    if (!st.future.length) st.future = kept.future;
+    // Changed since by someone else: the last step leads to the text as it was.
+    const last = st.past.at(-1);
+    if (last && last.after !== st.text) last.pinned = true;
+    H.keepWithin(st.past, st.future);
+    const steps = st.past.length;
+    historyNote = same
+      ? `Your undo history is back: Edit ▸ Undo goes back ${steps} step${steps === 1 ? "" : "s"}.`
+      : "Your undo history is back. The score was changed elsewhere since: Undo takes back your own steps around those changes, and stops where both changed the same bars.";
   }
 
   // Every change ends here: the browser's draft (the playground's), and
   // whoever embeds the editor (the app, which saves to the account).
-  function saveDraft() {
+  function saveDraft({ pin = false } = {}) {
+    settleHistory({ pin });
     if (draftKey) {
       try {
         localStorage.setItem(draftKey, st.text);
@@ -460,11 +554,23 @@ export function startStudio(root, options = {}) {
    * `text` in place of the score, one Undo away. `keep`: another person's
    * changes merged in (the app's co-editing) — the selection and the cursor
    * stay where they were while their staff and bars are still there.
+   * `remote`: those changes are someone else's, not a step of this
+   * person's: Undo leaves them, taking back this person's steps around them.
    */
-  function load(text, message, { keep = false } = {}) {
-    const { sel, input } = st;
-    st.past.push(snapshot());
-    st.future = [];
+  function load(text, message, { keep = false, remote = false } = {}) {
+    if (!remote) {
+      st.past.push(snapshot());
+      st.future = [];
+    }
+    replaceText(text, { keep });
+    saveDraft({ pin: remote });
+    draw();
+    if (message || st.passed.length) say(`${message ?? ""}${passedText()}`.trim());
+  }
+
+  /** `text` read in place of the score's; `keep` (or `at`, a step's) the selection and the cursor where they still fit. */
+  function replaceText(text, { keep = false, at = null } = {}) {
+    const { sel, input } = at ? { sel: at.sel, input: { ...st.input, ...(at.input ?? {}) } } : st;
     sourceBox.value = text;
     readText(text);
     adoptText();
@@ -474,11 +580,8 @@ export function startStudio(root, options = {}) {
       const end = M.barStart(st.score, M.barsOf(st.score));
       const fits = (lane, ...times) => st.score.staves[lane] && times.every((t) => t >= 0 && t < end);
       if (sel && fits(sel.staff, sel.t0, sel.t1) && (sel.lanes ?? []).every((lane) => st.score.staves[lane]) && (!sel.bars || sel.bars[1] < M.barsOf(st.score))) st.sel = sel;
-      if (input.on && fits(input.staff, input.t)) st.input = input;
+      if (input?.on && fits(input.staff, input.t)) st.input = input;
     }
-    saveDraft();
-    draw();
-    if (message || st.passed.length) say(`${message ?? ""}${passedText()}`.trim());
   }
 
   /** The settings the engraver passed over in the text read, briefly: " Passed over: \\override …", or "". */
@@ -3577,6 +3680,15 @@ export function startStudio(root, options = {}) {
     adoptText();
     if (sharedText != null) saveDraft();
     return draw().then(() => sharedText);
+  }).then(async (sharedText) => {
+    // The undo history kept in this browser: never in the way of the score opening.
+    try {
+      await restoreHistory();
+    } catch (error) {}
+    // For a test, or a console: the history is read ("back", or "none").
+    root.dataset.history = historyNote ? "back" : "none";
+    draw();
+    return sharedText;
   }).then((sharedText) => {
     if (st.passed.length) say(`${options.greeting ?? "Opened."}${passedText()}`);
     else if (options.greeting) say(options.greeting);
@@ -3584,6 +3696,8 @@ export function startStudio(root, options = {}) {
     else if (sharedText != null) say("A shared score. Your changes stay in this browser; Share makes a new link.");
     else if (!fromExample && start !== sourceBox.defaultValue) say("Your last score, kept in this browser. New starts afresh.");
     else say("Click a note to select it, or press N and type A–G to write.");
+    // After what was said on opening, not in its place.
+    if (historyNote) say(`${status.textContent} ${historyNote}`.trim(), status.classList.contains("studio-error"));
   });
   // `parse`: the engraver's reading of a text (score_json), for the app's merge.
   return { state: st, ready, source: () => st.text, load, peers: setPeers, parse: (text) => score_json(text), markers: setMarkers, selectPlace, placeLabel, place };
