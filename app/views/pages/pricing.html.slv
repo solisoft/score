@@ -1,0 +1,56 @@
+<div class="wrap-narrow">
+  <header class="page-head">
+    <span class="eyebrow">Pricing</span>
+    <h1>Free to write with. Pro for more.</h1>
+    <p class="lead">
+      Everything EUI Score does is on Free: the editor, playback, PDF and MIDI, versions, comments, sharing.
+      Pro reads more photos and answers more questions on the site's AI, records more audio, and shares a score
+      with anyone. With an AI key of your own, the AI is yours on either plan.
+    </p>
+  </header>
+
+  <div class="pricing-grid">
+    <% for plan in plans %>
+      <section class="pricing-plan<%= plan["slug"] == "pro" ? " pricing-pro" : "" %>" data-plan="<%= plan["slug"] %>">
+        <h2><%= plan["name"] %></h2>
+        <% if plan["slug"] == "pro" %>
+          <p class="pricing-price"><%= monthly["label"] %> <small>a <%= monthly["per"] %></small></p>
+          <p class="muted">or <%= annual["label"] %> a <%= annual["per"] %>, two months free.</p>
+        <% else %>
+          <p class="pricing-price">0 € <small>for good</small></p>
+          <p class="muted">No card, no time limit.</p>
+        <% end %>
+        <ul>
+          <li><%= plan["readings"] %> on the site's AI</li>
+          <li><%= plan["suggestions"] %></li>
+          <li><%= plan["tracks"] %></li>
+          <li><%= plan["storage"] %></li>
+          <li><%= plan["people"] %></li>
+        </ul>
+        <div class="pricing-actions">
+          <% if plan["slug"] == "pro" %>
+            <% if payments_open %>
+              <a class="btn btn-primary" href="<%= app_account_path() %>#plan">Upgrade from your account</a>
+            <% else %>
+              <p class="muted" data-payments-closed>Payments are not open yet: Pro will be on sale soon. Until then, everyone keeps what the site allows today, every audio track and as many people as you like included.</p>
+            <% end %>
+          <% elsif app_open?() %>
+            <a class="btn btn-ghost" href="<%= signup_path() %>">Start free</a>
+          <% else %>
+            <a class="btn btn-ghost" href="<%= playground_path() %>">Try the playground</a>
+          <% end %>
+        </div>
+      </section>
+    <% end %>
+  </div>
+
+  <div class="prose">
+    <h2>Questions</h2>
+    <h3>What happens to my work if I stop paying?</h3>
+    <p>Nothing is deleted. Your scores, audio takes and shares stay as they are; past a Free limit you can still open,
+      play and listen to everything, and only new recordings, new invitations and more AI that day wait for Pro.</p>
+    <h3>How is it paid?</h3>
+    <p>By card through Stripe: the site never sees your card. Manage billing, on your account page, changes the card,
+      moves between monthly and yearly, or cancels; a cancelled plan runs to the end of the period paid.</p>
+  </div>
+</div>

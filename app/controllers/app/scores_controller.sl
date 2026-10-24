@@ -264,6 +264,7 @@ class AppScoresController < AppBaseController
     if type(share) == "hash"
       @_share_page(@score)
       @error = share["error"]
+      @upgrade = share["upgrade"] ? pricing_path() : nil
       return render("app/scores/share", {}, {"status": share["limit"] ? 429 : 422})
     end
 

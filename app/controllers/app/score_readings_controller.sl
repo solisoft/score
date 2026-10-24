@@ -17,14 +17,10 @@ class AppScoreReadingsController < AppBaseController
     return render_json({"error": "That file is not a picture."}, 422) if picture.nil?
 
     refusal = ScoreReading.refusal(user)
-    unless refusal.nil?
-      return render_json({"error": @_refused(user, refusal)}, 429)
-    end
+    return @_refusal_json(user, refusal) unless refusal.nil?
 
     reading = ScoreReading.start(user, picture)
-    if type(reading) == "string"
-      return render_json({"error": @_refused(user, reading)}, 429)
-    end
+    return @_refusal_json(user, reading) if type(reading) == "string"
 
     render_json(
       {"id": reading._key, "state": reading.state},
@@ -52,13 +48,21 @@ class AppScoreReadingsController < AppBaseController
 
   private
 
-  # Why `user` may not read another photo today (`refusal`,
-  # ScoreReading.refusal); on the server's key, how to read more.
-  def _refused(user, refusal)
+  # The 429 refusing `user` one more photo today (`refusal`,
+  # ScoreReading.refusal): with the way to Pricing when Pro would give more.
+  def _refusal_json(user, refusal)
+    limits = Plan.limits(user)
+    answer = {"error": @_refused(user, refusal, limits)}
+    answer["upgrade"] = pricing_path() if refusal == "used_up" && !user.own_ai?() && limits["upgrade"]
+    render_json(answer, 429)
+  end
+
+  # Why `user` may not read another photo today (`refusal`, ScoreReading.refusal);
+  # on the server's key, how to read more.
+  def _refused(user, refusal, limits)
     return AI_SERVER_BUSY if refusal == "busy"
     return "You have read all of today's photos: try again tomorrow." if user.own_ai?()
 
-    "You have read the #{SCORE_READINGS_PER_DAY} photos a day the site's AI reads: try again tomorrow, "
-    + "or add your own AI key on your account page to read more."
+    ScoreReading.used_up_text(limits)
   end
 end

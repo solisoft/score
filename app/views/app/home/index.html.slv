@@ -238,8 +238,10 @@
       error.hidden = keep.hidden = true;
       reading.hidden = false;
       reading.scrollIntoView({ behavior: "smooth", block: "start" });
-      const fail = (message) => {
+      // `upgrade`: the Pricing page, linked when the Free plan's day is used up (#393).
+      const fail = (message, upgrade) => {
         error.textContent = message;
+        if (upgrade) error.append(" ", Object.assign(document.createElement("a"), { href: upgrade, textContent: "See the plans" }));
         error.hidden = false;
         status.textContent = "";
       };
@@ -256,7 +258,7 @@
         keep.hidden = false;
         keep.onclick = () => begin(answer.source, name);
       } catch (problem) {
-        fail(problem.message);
+        fail(problem.message, problem.upgrade);
       } finally {
         photoInput.value = "";
       }

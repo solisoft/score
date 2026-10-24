@@ -5,12 +5,17 @@
 # with to change it record and delete (ScorePolicy update?); those it is
 # shared with to read list and listen (show?).
 class AppTakesController < AppBaseController
-  # GET /app/scores/:id/takes — {takes, tracks, max_bytes, writable}
+  # GET /app/scores/:id/takes — {takes, tracks, tracks_allowed, pricing,
+  # max_bytes, writable}: the tracks a score records on are its owner's
+  # plan's (#393); the others keep what was recorded there
   def index
     score = @_score("show")
+    owner = User.find_by("_key", score.user_id)
     render_json({
       "takes": ScoreTake.of(score).map(&:shown),
       "tracks": SCORE_TAKE_TRACKS,
+      "tracks_allowed": Plan.limits(owner)["take_tracks"],
+      "pricing": pricing_path(),
       "max_bytes": SCORE_TAKE_MAX_BYTES,
       "writable": score.writable_by?(current_user())
     })
@@ -18,11 +23,16 @@ class AppTakesController < AppBaseController
 
   # POST /app/scores/:id/takes — multipart: `audio` (a WAV), `track`,
   # `name`, `offset`, `rate`, `duration`. 201 {take}, in place of the
-  # track's last take; 422 {error} with nothing written
+  # track's last take; 422 {error} with nothing written, and `upgrade` (the
+  # Pricing page) when it is a Free plan's limit
   def create
     score = @_score("update")
     recorded = ScoreTake.record(score, current_user(), params, find_uploaded_file(req, "audio"))
-    return render_json({"error": recorded["error"]}, 422) unless recorded["error"].nil?
+    unless recorded["error"].nil?
+      refused = {"error": recorded["error"]}
+      refused["upgrade"] = pricing_path() if recorded["upgrade"]
+      return render_json(refused, 422)
+    end
 
     render_json({"take": recorded["take"].shown}, 201)
   end

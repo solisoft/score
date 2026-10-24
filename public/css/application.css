@@ -2417,6 +2417,61 @@
     margin: 0 0 8px;
     overflow-wrap: anywhere;
   }
+  .pricing-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 20px;
+    margin: 8px 0 40px;
+  }
+  .pricing-plan {
+    background: var(--sheet);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 26px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .pricing-plan.pricing-pro {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent) inset;
+  }
+  .pricing-plan h2 {
+    font-size: 26px;
+    margin: 0;
+  }
+  .pricing-price {
+    font-family: var(--font-serif);
+    font-size: 30px;
+    color: var(--ink);
+    margin: 0;
+  }
+  .pricing-price small {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .pricing-plan ul {
+    margin: 0;
+    padding-left: 20px;
+    list-style: disc;
+    color: var(--ink-soft);
+  }
+  .pricing-plan li {
+    margin: 4px 0;
+  }
+  .pricing-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: auto;
+  }
+  .account-plan-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 10px 0;
+  }
   .account-export {
     display: flex;
     flex-wrap: wrap;

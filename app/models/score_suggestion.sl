@@ -3,7 +3,7 @@
 # its `explanation`, or "failed" with its `error`. The score itself does
 # not change: the editor applies the suggestion when the person says so.
 # A person may ask SCORE_SUGGESTIONS_PER_DAY in any 24 hours on the server's
-# key, SCORE_SUGGESTIONS_OWN_PER_DAY on a key of their own (as many as they
+# key on Free (Pro: Plan), SCORE_SUGGESTIONS_OWN_PER_DAY on a key of their own (as many as they
 # may read photos with it, ScoreReading).
 const SCORE_SUGGESTIONS_PER_DAY = 30
 const SCORE_SUGGESTIONS_OWN_PER_DAY = 200
@@ -67,8 +67,27 @@ class ScoreSuggestion < Model
     [ScoreSuggestion.limit_for(user) - ScoreSuggestion.used_today(user), 0].max()
   end
 
+  # What someone on `limits` (Plan.limits) reads once their day on the
+  # site's key is used up: on Free with payments open, the way to Pro.
+  static def used_up_text(limits)
+    day = limits["suggestions_per_day"]
+    more = "or add your own AI key on your account page to ask more."
+    if limits["upgrade"]
+      return "You have asked the #{day} questions a day the site's AI answers on Free: try again tomorrow, "
+      + "move to Pro for #{Plan.pro_limits["suggestions_per_day"]} a day, "
+      + more
+    end
+
+    if limits["plan"] == "pro"
+      return "You have asked the #{day} questions a day the site's AI answers on Pro: try again tomorrow, "
+      + more
+    end
+
+    "You have asked the #{day} questions a day the site's AI answers: try again tomorrow, " + more
+  end
+
   static def limit_for(user)
-    user.own_ai?() ? SCORE_SUGGESTIONS_OWN_PER_DAY : SCORE_SUGGESTIONS_PER_DAY
+    user.own_ai?() ? SCORE_SUGGESTIONS_OWN_PER_DAY : Plan.limits(user)["suggestions_per_day"]
   end
 
   # The suggestions `user` asked for in the last 24 hours.

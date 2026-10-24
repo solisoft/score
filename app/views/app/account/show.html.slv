@@ -59,6 +59,39 @@
     <button type="submit" class="btn btn-ghost">Save the e-mail settings</button>
   </form>
 
+  <%# The plan (#393): set by Stripe's webhook only; Upgrade and Manage
+      billing go to Stripe's own pages. %>
+  <h2 id="plan">Subscription</h2>
+  <% offer = user.plan_offer() %>
+  <% summary = user.plan_summary() %>
+  <p data-plan-name>You are on <strong><%= user.plan_name() %></strong>.<% unless summary.nil? %> <%= summary %><% end %></p>
+  <% unless user.pro?() %>
+    <p class="muted">Pro reads more photos and answers more questions on the site's AI, records on every audio track
+      with far more room for takes, and shares a score with anyone: <%= offer["monthly"]["label"] %> a
+      month or <%= offer["annual"]["label"] %> a year. <a href="<%= pricing_path() %>">Compare the plans</a></p>
+    <div class="account-plan-actions">
+      <form action="<%= app_billing_checkout_path() %>" method="POST">
+        <%- csrf_field() %>
+        <input type="hidden" name="interval" value="monthly">
+        <button type="submit" class="btn btn-primary">Upgrade: <%= offer["monthly"]["label"] %> a month</button>
+      </form>
+      <form action="<%= app_billing_checkout_path() %>" method="POST">
+        <%- csrf_field() %>
+        <input type="hidden" name="interval" value="annual">
+        <button type="submit" class="btn btn-ghost">Upgrade: <%= offer["annual"]["label"] %> a year</button>
+      </form>
+    </div>
+    <% unless offer["open"] %>
+      <p class="muted" data-payments-closed>Payments are not open yet: Pro will be on sale soon. Until then, everyone keeps what the site allows today, every audio track and as many people as you like included.</p>
+    <% end %>
+  <% end %>
+  <% if user.billed?() %>
+    <form action="<%= app_billing_portal_path() %>" method="POST" class="account-plan-actions">
+      <%- csrf_field() %>
+      <button type="submit" class="btn btn-ghost">Manage billing</button>
+    </form>
+  <% end %>
+
   <h2 id="ai">AI for photos and the assistant</h2>
   <% if user.own_ai?() %>
     <p>Photos of scores are read, and the editor's assistant answers, with <strong><%= user.ai_provider_name() %></strong>, model

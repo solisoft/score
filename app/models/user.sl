@@ -664,10 +664,74 @@ class User < Model
     @save
   end
 
+  # --- The plan (#393) --------------------------------------------------------
+  #
+  # Set by Stripe's webhook only (Billing): `plan`, `plan_status`,
+  # `current_period_end`, `cancel_at_period_end`, `stripe_customer_id`,
+  # `stripe_subscription_id`. What each plan allows is Plan's.
+
+  # Whether the account is on Pro now: a Pro subscription active or on
+  # trial, whose period paid for has not ended.
+  def pro?
+    @pro_at?(DateTime.utc.to_unix)
+  end
+
+  def pro_at?(now)
+    return false unless @plan == "pro"
+    return false unless ["active", "trialing"].includes?(@plan_status.to_s)
+    return false if @current_period_end.nil?
+
+    @current_period_end.to_s.to_i > now
+  end
+
+  # The plan's name, as the account page shows it.
+  def plan_name
+    @pro? ? "Pro" : "Free"
+  end
+
+  # What the account page says of the subscription at `now`, or nil on Free
+  # with nothing to say.
+  def plan_summary(now = nil)
+    at = now ?? DateTime.utc.to_unix
+    ends = @current_period_end.nil? ? "" : DateTime.from_unix(@current_period_end.to_s.to_i).format("%B %-d, %Y")
+    if @pro_at?(at)
+      return "Ends on #{ends}: it will not renew." if @cancel_at_period_end == true
+      return "On trial until #{ends}." if @plan_status == "trialing"
+
+      return "Renews on #{ends}."
+    end
+
+    if ["past_due", "unpaid"].includes?(@plan_status.to_s)
+      return "The last payment failed, so the account is on Free: Manage billing updates the card."
+    end
+
+    return "Pro ended on #{ends}." if @plan == "pro" && !ends.blank?
+
+    nil
+  end
+
+  # Whether there is a Stripe customer to manage (Manage billing).
+  def billed?
+    @stripe_customer_id.present?
+  end
+
+  # What the account page offers (Plan, Stripe): the prices, and whether
+  # payments are open. A page cannot reach those classes; it asks here.
+  def plan_offer
+    {
+      "monthly": Plan.price("monthly"),
+      "annual": Plan.price("annual"),
+      "open": Stripe.configured?
+    }
+  end
+
   # The account gone, and all it left: its scores (trash, versions, shares
   # and the AI's suggestions included), what was shared with it, its photo
-  # readings and the requests it made of the AI.
+  # readings and the requests it made of the AI. A subscription is
+  # cancelled first; if Stripe cannot be reached, that is logged and the
+  # account goes all the same.
   def erase_account
+    Billing.cancel_on_leaving(this)
     Score.delete_all_of(this)
     ScoreReading.delete_all_of(this)
     ScoreSuggestion.delete_all_of(this)

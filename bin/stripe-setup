@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+# Sets up Stripe for EUI Score's Pro plan (#393), in the Stripe account whose
+# secret key is in STRIPE_SECRET_KEY, and hands what the site needs to the
+# GitHub repository's "production" environment as secrets, for the
+# "production database" workflow's `stripe` action to put on the server.
+#
+#   STRIPE_SECRET_KEY=sk_live_… bin/stripe-setup [--set-key] [--recreate-webhook]
+#
+# Makes, or finds again (it may be run any number of times):
+#   - the Product "EUI Score Pro" (metadata app=score);
+#   - its recurring EUR Prices: 600 a month and 6000 a year (app/services/plan.sl
+#     shows the same amounts: change both together);
+#   - the webhook endpoint https://score.solisoft.net/webhooks/stripe, for the
+#     events the site handles (app/services/billing.sl, BILLING_EVENTS).
+# Sets the secrets STRIPE_PRICE_PRO_MONTHLY, STRIPE_PRICE_PRO_ANNUAL and, when
+# the endpoint is made, STRIPE_WEBHOOK_SECRET; with --set-key, STRIPE_SECRET_KEY
+# too (from the environment). Stripe shows an endpoint's signing secret only
+# when it makes it: it goes straight from Stripe's answer to `gh secret set`,
+# never on the screen. An endpoint found again keeps its secret (set when it was
+# made); --recreate-webhook deletes it and makes a new one, with a new secret.
+#
+# Prints only ids (prod_…, price_…, we_…) and the names of the secrets set.
+# Needs curl, jq, and gh signed in with access to the repository.
+set -euo pipefail
+
+REPO="${REPO:-solisoft/score}"
+ENVIRONMENT="${ENVIRONMENT:-production}"
+WEBHOOK_URL="${WEBHOOK_URL:-https://score.solisoft.net/webhooks/stripe}"
+PRODUCT_NAME="EUI Score Pro"
+API="https://api.stripe.com/v1"
+# The API version of the events the endpoint receives (app/services/stripe.sl
+# asks with the same one).
+API_VERSION="2024-06-20"
+EVENTS=(
+  checkout.session.completed
+  customer.subscription.created
+  customer.subscription.updated
+  customer.subscription.deleted
+  invoice.payment_failed
+)
+
+set_key=0
+recreate=0
+for arg in "$@"; do
+  case "$arg" in
+    --set-key) set_key=1 ;;
+    --recreate-webhook) recreate=1 ;;
+    -h|--help) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "unknown option: $arg" >&2; exit 2 ;;
+  esac
+done
+
+for tool in curl jq gh; do
+  command -v "$tool" >/dev/null || { echo "$tool is needed" >&2; exit 1; }
+done
+case "${STRIPE_SECRET_KEY:-}" in
+  sk_live_*|rk_live_*) echo "Stripe account: live mode" ;;
+  sk_test_*|rk_test_*) echo "Stripe account: test mode" ;;
+  *) echo "STRIPE_SECRET_KEY is not set, or is not a secret key (sk_… or rk_…)" >&2; exit 1 ;;
+esac
+gh auth status >/dev/null 2>&1 || { echo "gh is not signed in: gh auth login" >&2; exit 1; }
+gh api "repos/$REPO/environments/$ENVIRONMENT" --silent \
+  || { echo "no environment \"$ENVIRONMENT\" in $REPO" >&2; exit 1; }
+
+# A request to Stripe: `stripe METHOD PATH [curl -d/--data-urlencode …]`. The
+# key is handed to curl on its standard input (-K -), so it is in no command
+# line. Stops on an error, saying Stripe's message (which holds no secret).
+stripe() {
+  local method="$1" path="$2"
+  shift 2
+  local answer
+  answer="$(printf 'user = "%s:"\n' "$STRIPE_SECRET_KEY" \
+    | curl -sS -K - -X "$method" -H "Stripe-Version: $API_VERSION" "$API/$path" "$@")"
+  if [ "$(printf '%s' "$answer" | jq -r 'has("error")')" = "true" ]; then
+    echo "Stripe refused $method /$path: $(printf '%s' "$answer" | jq -r '.error.message')" >&2
+    exit 1
+  fi
+  printf '%s' "$answer"
+}
+
+# A secret of the environment, from standard input (never an argument).
+secret() {
+  gh secret set "$1" --env "$ENVIRONMENT" --repo "$REPO" >/dev/null
+  echo "secret set: $1 ($ENVIRONMENT)"
+}
+
+# --- The product ------------------------------------------------------------------
+product="$(stripe GET "products?active=true&limit=100" \
+  | jq -r '[.data[] | select(.metadata.app == "score" and .metadata.plan == "pro")][0].id // empty')"
+if [ -z "$product" ]; then
+  product="$(stripe POST products \
+    --data-urlencode "name=$PRODUCT_NAME" \
+    -d "metadata[app]=score" -d "metadata[plan]=pro" | jq -r .id)"
+  echo "product made: $product"
+else
+  echo "product found: $product"
+fi
+
+# --- Its prices ---------------------------------------------------------------------
+# `price INTERVAL CENTS LOOKUP`: the active EUR price of the product recurring
+# every INTERVAL for CENTS, found or made.
+price() {
+  local interval="$1" cents="$2" lookup="$3" id
+  id="$(stripe GET "prices?product=$product&active=true&limit=100" \
+    | jq -r --arg i "$interval" --argjson c "$cents" \
+      '[.data[] | select(.currency == "eur" and .unit_amount == $c and .recurring.interval == $i)][0].id // empty')"
+  if [ -z "$id" ]; then
+    id="$(stripe POST prices \
+      -d "product=$product" -d "currency=eur" -d "unit_amount=$cents" \
+      -d "recurring[interval]=$interval" -d "lookup_key=$lookup" -d "transfer_lookup_key=true" \
+      -d "metadata[app]=score" -d "metadata[plan]=pro" | jq -r .id)"
+    echo "price made: $id ($interval)" >&2
+  else
+    echo "price found: $id ($interval)" >&2
+  fi
+  printf '%s' "$id"
+}
+monthly="$(price month 600 score_pro_monthly)"
+annual="$(price year 6000 score_pro_annual)"
+printf '%s' "$monthly" | secret STRIPE_PRICE_PRO_MONTHLY
+printf '%s' "$annual" | secret STRIPE_PRICE_PRO_ANNUAL
+
+# --- The webhook endpoint -----------------------------------------------------------
+events=()
+for event in "${EVENTS[@]}"; do events+=(-d "enabled_events[]=$event"); done
+endpoint="$(stripe GET "webhook_endpoints?limit=100" \
+  | jq -r --arg u "$WEBHOOK_URL" '[.data[] | select(.url == $u)][0].id // empty')"
+if [ -n "$endpoint" ] && [ "$recreate" = "1" ]; then
+  stripe DELETE "webhook_endpoints/$endpoint" >/dev/null
+  echo "webhook endpoint deleted: $endpoint"
+  endpoint=""
+fi
+if [ -z "$endpoint" ]; then
+  made="$(stripe POST webhook_endpoints \
+    --data-urlencode "url=$WEBHOOK_URL" -d "api_version=$API_VERSION" \
+    --data-urlencode "description=EUI Score: the Pro plan (#393)" -d "metadata[app]=score" "${events[@]}")"
+  # The signing secret, shown by Stripe this once: from its answer to gh, unseen.
+  printf '%s' "$made" | jq -j .secret | secret STRIPE_WEBHOOK_SECRET
+  endpoint="$(printf '%s' "$made" | jq -r .id)"
+  unset made
+  echo "webhook endpoint made: $endpoint"
+else
+  stripe POST "webhook_endpoints/$endpoint" -d "disabled=false" "${events[@]}" >/dev/null
+  echo "webhook endpoint found: $endpoint (its events brought up to date; its secret is the one set when it was made)"
+fi
+
+if [ "$set_key" = "1" ]; then
+  printf '%s' "$STRIPE_SECRET_KEY" | secret STRIPE_SECRET_KEY
+fi
+
+echo "done. Next: the \"production database\" workflow, action stripe, puts these on the server."

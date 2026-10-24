@@ -36,12 +36,16 @@ class ScoreShare < Model
   # Share `score` as `invite` does, on `user`'s say: refused, with nothing
   # written or mailed, once they have sent the day's invitations. Each
   # invitation sent (a new share, or a role changed, which mails again)
-  # counts for 24 hours, even once the share is gone.
-  static def invite_by(user, score, email, role)
+  # counts for 24 hours, even once the share is gone. `open`: whether
+  # payments are open (Plan.limits); nil asks Stripe's settings.
+  static def invite_by(user, score, email, role, open = nil)
     if ScoreShare.invitations_left(user) <= 0
       used_up = "You have sent the #{SCORE_INVITATIONS_PER_DAY} invitations a day allows: try again tomorrow."
       return {"error": used_up, "limit": true}
     end
+
+    full = ScoreShare.plan_refusal(score, email, open)
+    return full unless full.nil?
 
     share = ScoreShare.invite(score, email, role)
     return share if type(share) == "hash"
@@ -49,6 +53,26 @@ class ScoreShare < Model
     user.invitations_sent = ScoreShare.sent_today(user) + [DateTime.utc.to_unix]
     user.update()
     share
+  end
+
+  # Why `email` may not be one more person `score` is shared with, under its
+  # owner's plan (#393, Plan: three people on Free), or nil. Only a new
+  # person counts: a role changed is not refused, and the shares made
+  # before a limit applied keep working.
+  static def plan_refusal(score, email, open = nil)
+    owner = User.find_by("_key", score.user_id)
+    most = Plan.limits(owner, open)["people_per_score"]
+    return nil if most.nil?
+
+    address = email.to_s.trim.downcase
+    if ScoreShare.where({"score_id": score._key, "email": address}).count > 0
+      return nil
+    end
+
+    return nil if ScoreShare.where({"score_id": score._key}).count < most
+
+    full = "On the Free plan a score is shared with #{most} people at most: Pro shares it with as many as you like."
+    {"error": full, "upgrade": true}
   end
 
   # How many more invitations `user` may send now.

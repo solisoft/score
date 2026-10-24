@@ -165,6 +165,8 @@ describe("AppScoreSuggestionsController") do
       "You have asked the 30 questions a day the site's AI answers: try again tomorrow, "
       + "or add your own AI key on your account page to ask more."
     )
+    # Payments not open (#393): nothing to buy, so no way to Pricing.
+    assert_null(res_json(refused)["upgrade"])
     assert_eq(suggestions_of(user), SCORE_SUGGESTIONS_PER_DAY + 1)
     assert_eq(queued_suggestion_jobs(), jobs_before + 1)
   end

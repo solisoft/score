@@ -72,13 +72,17 @@ export function waveSvg(geo, peaks, { offset, takeRate = 1, step = 0.01, tickAt,
 
 export function audioTracks({ root, st, studio, options = {} }) {
   const url = options.url ?? null;
-  const say = (text, error = false) => studio.say(text, error);
+  const say = (text, error = false, link = null) => studio.say(text, error, link);
   st.taking = null;
   // Track → { take, samples, rate, peaks, unsaved?, wav? }.
   const takes = new Map();
   let trackCount = T.TRACKS;
   let maxBytes = T.MAX_BYTES;
   let writable = Boolean(url);
+  // The tracks this score's plan records on (#393), and the Pricing page.
+  let tracksAllowed = T.TRACKS;
+  let pricing = null;
+  const plans = (href) => (href ? { href, text: "See the plans" } : null);
   let sources = [];
   let anchor = null;
   const strips = new Map();
@@ -137,7 +141,7 @@ export function audioTracks({ root, st, studio, options = {} }) {
     for (let track = 1; track <= trackCount; track++) {
       const t = takes.get(track);
       const taking = st.taking?.track === track;
-      const status = taking ? "● Recording…" : t?.unsaved ? `Not saved: ${t.unsaved}` : t ? `${clock(t.samples.length / t.rate)} · ${T.sizeText(t.take.size ?? 0)}` : "Empty";
+      const status = taking ? "● Recording…" : t?.unsaved ? `Not saved: ${t.unsaved}` : t ? `${clock(t.samples.length / t.rate)} · ${T.sizeText(t.take.size ?? 0)}` : track > tracksAllowed ? "With Pro" : "Empty";
       rows.push(`<div class="audio-track" data-track="${track}">
         <input class="audio-name" data-audio-name="${track}" value="${escape(nameOf(track))}" maxlength="60" aria-label="The name of audio track ${track}"${writable ? "" : " disabled"}>
         <span class="audio-status${t?.unsaved ? " audio-unsaved" : ""}">${escape(status)}</span>
@@ -173,7 +177,7 @@ export function audioTracks({ root, st, studio, options = {} }) {
     if (options.csrf && init.method && init.method !== "GET") headers["X-CSRF-Token"] = options.csrf;
     const response = await fetch(`${url}${path}`, { credentials: "same-origin", ...init, headers });
     const json = (response.headers.get("Content-Type") || "").includes("application/json") ? await response.json() : null;
-    if (!response.ok) throw new Error(json?.error ?? (response.status === 403 ? "You may not change this score's audio." : response.status === 413 ? "That take is too big to send." : `The server answered ${response.status}.`));
+    if (!response.ok) throw Object.assign(new Error(json?.error ?? (response.status === 403 ? "You may not change this score's audio." : response.status === 413 ? "That take is too big to send." : `The server answered ${response.status}.`)), { upgrade: json?.upgrade });
     return json;
   }
 
@@ -188,6 +192,8 @@ export function audioTracks({ root, st, studio, options = {} }) {
     }
     trackCount = listed.tracks ?? T.TRACKS;
     maxBytes = listed.max_bytes ?? T.MAX_BYTES;
+    tracksAllowed = listed.tracks_allowed ?? trackCount;
+    pricing = listed.pricing ?? null;
     writable = Boolean(listed.writable);
     await Promise.all(listed.takes.map(async (take) => {
       try {
@@ -237,6 +243,7 @@ export function audioTracks({ root, st, studio, options = {} }) {
     if (st.taking) return studio.stop();
     if (!url) return say("Audio tracks are kept with the score in the app: sign up to record them.", true);
     if (!writable) return say("This score is shared with you to read: its audio tracks are its editors'.", true);
+    if (track > tracksAllowed) return say(`On the Free plan a score has ${tracksAllowed} audio track${tracksAllowed === 1 ? "" : "s"}: Pro records on ${trackCount}.`, true, plans(pricing));
     if (!st.score) return say("Recording needs the score tools: this piece is edited in its text.", true);
     if (st.recording) return say("A MIDI recording is under way: stop it first.", true);
     if (practising || tuning) stopListening();
@@ -360,7 +367,7 @@ export function audioTracks({ root, st, studio, options = {} }) {
     } catch (error) {
       t.unsaved = error.message;
       render();
-      say(`The take was not saved: ${error.message} It is kept in this window: Audio tracks… › Save again.`, true);
+      say(`The take was not saved: ${error.message} It is kept in this window: Audio tracks… › Save again.`, true, plans(error.upgrade));
       return false;
     }
   }
@@ -778,7 +785,7 @@ export function audioTracks({ root, st, studio, options = {} }) {
       }
       this.open();
       let track = 1;
-      while (track < trackCount && takes.has(track)) track++;
+      while (track < Math.min(trackCount, tracksAllowed) && takes.has(track)) track++;
       return recordTake(track);
     },
     refresh() {

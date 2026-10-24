@@ -84,6 +84,9 @@ class ScoreTake < Model
     end
 
     track = fields["track"].to_s.to_i
+    refused = ScoreTake.plan_refusal(score, user, track, file["size"].to_s.to_i)
+    return refused unless refused.nil?
+
     take = ScoreTake.create({
       "score_id": score._key,
       "user_id": user._key,
@@ -112,6 +115,58 @@ class ScoreTake < Model
       old.remove
     end
     {"take": take}
+  end
+
+  # What the plans (#393, Plan) refuse of a take of `bytes` by `user` onto
+  # `score`'s `track`: {"error", "upgrade"} or nil. The tracks a score has
+  # are its owner's plan's; the room the takes take, the recorder's own,
+  # counting all they recorded on any score, less the take this one
+  # replaces. Takes kept past a limit (on Pro once) still play. `open`:
+  # whether payments are open (Plan.limits); nil asks Stripe's settings.
+  static def plan_refusal(score, user, track, bytes, open = nil)
+    owner = score.user_id == user._key ? user : User.find_by("_key", score.user_id)
+    tracks = Plan.limits(owner, open)["take_tracks"]
+    if track > tracks
+      fewer = "On the Free plan a score has #{tracks} audio track: Pro records on #{SCORE_TAKE_TRACKS}."
+      return {"error": fewer, "upgrade": true}
+    end
+
+    limits = Plan.limits(user, open)
+    return nil if limits["take_bytes"].nil?
+
+    total = ScoreTake.bytes_of(user) - ScoreTake.replaced_bytes(score, user, track) + bytes
+    return nil if total <= limits["take_bytes"]
+
+    room = Plan.size_text(limits["take_bytes"])
+    return {"error": "Your takes would pass the #{room} your plan keeps: delete some first."} unless limits["upgrade"]
+
+    {
+      "error": "Your takes would pass the #{room} the Free plan keeps: delete some, "
+      + "or move to Pro for #{Plan.size_text(Plan.pro_limits["take_bytes"])}.",
+      "upgrade": true
+    }
+  end
+
+  # The bytes of every take `user` recorded.
+  static def bytes_of(user)
+    ScoreTake.total_size(ScoreTake.where({"user_id": user._key}))
+  end
+
+  # The bytes of `user`'s take on `score`'s `track`, which a new one replaces.
+  static def replaced_bytes(score, user, track)
+    ScoreTake.total_size(ScoreTake.where({
+      "score_id": score._key,
+      "track": track,
+      "user_id": user._key
+    }))
+  end
+
+  # The bytes of the takes `query` finds: 0 for none.
+  static def total_size(query)
+    row = query.aggregate({"total": ["sum", "size"]}).first
+    return 0 if row.nil?
+
+    (row["total"] ?? 0).to_s.to_i
   end
 
   # The track's name as typed, trimmed and cut short; "Audio <track>" when

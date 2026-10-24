@@ -68,6 +68,11 @@
 # Don't reach for this on a cookie-authenticated app — it disables the
 # session-replay defence entirely.
 
+# Stripe posts its events server to server, with no Origin header and no
+# CSRF token: WebhooksController#stripe proves each by its Stripe-Signature
+# (HMAC-SHA256, Billing.receive) instead.
+skip_csrf("/webhooks/stripe")
+
 # ---------------------------------------------------------------------
 # set_max_body_size — request body cap.
 # ---------------------------------------------------------------------

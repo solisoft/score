@@ -40,6 +40,17 @@ class PagesController < Controller
     end
   end
 
+  # GET /pricing — the plans, Free and Pro (#393), each limit read from Plan
+  def pricing
+    @monthly = Plan.price("monthly")
+    @title = "Pricing"
+    @description = "EUI Score is free to write with. Pro, #{this.monthly["label"]} a month, reads more photos, "
+    + "records more audio and shares with anyone."
+    @plans = Plan.catalog
+    @annual = Plan.price("annual")
+    @payments_open = Stripe.configured?
+  end
+
   # GET /changelog — what changed lately, on the site and in the engraver
   def changelog
     @title = "Changelog"
@@ -47,6 +58,7 @@ class PagesController < Controller
     pages = {
       "playground": playground_path(),
       "limits": limits_path(),
+      "pricing": pricing_path(),
       "app": app_home_path()
     }
     @days = Changelog.shown(AppSetup.ready?).map do |day|

@@ -2575,11 +2575,13 @@ export function startStudio(root, options = {}) {
     return false;
   }
 
-  function say(message, error = false) {
+  function say(message, error = false, link = null) {
     // Said during an edit: it outlives the edit's own clearing.
     status.dataset.fresh = "1";
     queueMicrotask(() => delete status.dataset.fresh);
     status.textContent = message;
+    // `link`: { href, text }, a way on after the message (the Pricing page, #393).
+    if (link?.href) status.append(" ", Object.assign(document.createElement("a"), { href: link.href, textContent: link.text }));
     status.classList.toggle("studio-error", error);
     return false;
   }

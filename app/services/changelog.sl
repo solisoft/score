@@ -12,6 +12,22 @@ class Changelog
     [
       {"date": "2026-10-24", "entries": [
         {
+          "area": "site",
+          "title": "Pro: more AI, every audio track, a score shared with anyone",
+          "text": "Everything the site does stays free. A Pricing page sets the two plans side by side. Once "
+          + "payments open, Free reads 20 photos and answers 30 questions a day on the site's AI, records on one "
+          + "audio track a score with 50 MB of takes, and shares a score with up to three people; Pro, 6 € a "
+          + "month or 60 € a year, reads and answers five times as much, records on all four tracks with 2 GB of "
+          + "takes, and shares with anyone. Until then nothing changes: every audio track, and as many people as "
+          + "you like. An AI key of your own stays yours on either plan, and nothing is taken away past a "
+          + "limit: older takes still play, and people a score was shared with keep it. Your account has a "
+          + "Subscription section: the plan, when it renews or ends, Upgrade (monthly or yearly, paid by card "
+          + "through Stripe) and Manage billing to change the card or cancel. Deleting the account cancels "
+          + "the subscription, and Export all your data includes the plan.",
+          "link": "pricing",
+          "app": true
+        },
+        {
           "area": "editor",
           "title": "Practise: play transposed or slower, a loop that speeds up, a synthesizer, your own SoundFont",
           "text": "Playback has Play transposed, up or down twelve semitones without changing the speed, and a Speed "

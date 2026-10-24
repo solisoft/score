@@ -4,7 +4,8 @@
     <a class="btn btn-ghost" href="<%= app_score_path(score) %>">Back to the score</a>
   </header>
   <% if error.present? %>
-    <p class="form-error" role="alert"><%= error %></p>
+    <p class="form-error" role="alert"><%= error %>
+      <% if locals["upgrade"].present? %><a href="<%= locals["upgrade"] %>" data-upgrade>See the plans</a><% end %></p>
   <% end %>
 
   <div class="start-card">

@@ -91,6 +91,8 @@ describe("AppScoreReadingsController") do
       "You have read the 20 photos a day the site's AI reads: try again tomorrow, "
       + "or add your own AI key on your account page to read more."
     )
+    # Payments not open (#393): nothing to buy, so no way to Pricing.
+    assert_null(res_json(response)["upgrade"])
     assert_eq(readings_of(user), SCORE_READINGS_PER_DAY)
     assert_contains(res_body(get("/app")), "data-photo hidden disabled")
   end

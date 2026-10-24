@@ -36,7 +36,8 @@
 </head>
 <body>
     <% nav_items = [["Guide", guide_path()], ["Syntax", syntax_path()], ["Examples", examples_path()],
-                    ["Embed", embed_path()], ["Limits", limits_path()], ["Changelog", changelog_path()]] %>
+                    ["Embed", embed_path()], ["Limits", limits_path()], ["Pricing", pricing_path()],
+                    ["Changelog", changelog_path()]] %>
     <header class="site-header">
         <div class="wrap">
             <a class="brand" href="<%= root_path() %>" aria-label="EUI Score, home">

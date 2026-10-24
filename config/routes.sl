@@ -29,6 +29,8 @@ get("/syntax", "pages#syntax", name: "syntax")
 get("/embed", "pages#embed", name: "embed")
 get("/limits", "pages#limits", name: "limits")
 get("/changelog", "pages#changelog", name: "changelog")
+# The plans, Free and Pro (#393): what each allows, read from Plan.
+get("/pricing", "pages#pricing", name: "pricing")
 
 get("/examples", "examples#index", name: "examples")
 get("/examples/:category", "examples#category", name: "example_category")
@@ -47,6 +49,10 @@ router_websocket("/ws/scores", "score_room#handle")
 get("/app/setup", "app_setup#show", name: "app_setup")
 middleware("require_app_database", fn() {
   get("/app", "app/home#index", name: "app_home")
+
+  # Stripe's events (#393): public, proven by their signature, not by CSRF
+  # (config/application.sl). They alone set the plan.
+  post("/webhooks/stripe", "webhooks#stripe", name: "stripe_webhook")
 
   # A score's read page, by its link (SharedScoresController).
   get("/s/:token", "shared_scores#show", name: "shared_score")
@@ -87,6 +93,10 @@ middleware("require_app_database", fn() {
     post("/app/account/email", "app/account#change_email", name: "app_account_email")
     post("/app/account/email/cancel", "app/account#cancel_email_change", name: "app_account_email_cancel")
     delete("/app/account", "app/account#destroy")
+    # Paying for Pro (#393): to Stripe's Checkout and customer portal.
+    post("/app/billing/checkout", "app/billing#checkout", name: "app_billing_checkout")
+    post("/app/billing/portal", "app/billing#portal", name: "app_billing_portal")
+    get("/app/billing/done", "app/billing#done", name: "app_billing_done")
 
     # What the app tells each person (#385): the bell, the list, read.
     get("/app/notifications", "app/notifications#index", name: "app_notifications")

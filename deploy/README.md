@@ -157,6 +157,28 @@ these are set (`<set>` / `<unset>`, never their values).
 | `SSH_DEPLOY_KEY` | secret | a private key allowed to log in as the deploy user |
 | `SSH_KNOWN_HOSTS` | secret | `ssh-keyscan <host>` output |
 | `DEPLOY_USER`, `DEPLOY_SITES_DIR`, `DEPLOY_PROXY_CONF`, `DEPLOY_DOMAIN`, `DEPLOY_APP` | variables | only if the defaults (`rocky`, `/home/rocky/sites`, `/home/rocky/proxy.conf`, `score.solisoft.net`, `score`) are wrong |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PRO_MONTHLY`, `STRIPE_PRICE_PRO_ANNUAL` | `production` secrets | the Pro plan's payments (#393): `bin/stripe-setup` makes the product, prices and webhook in Stripe and sets these (the key with `--set-key`); Actions › production database › `stripe` puts them in the server's `.env` |
+
+## Payments (the Pro plan)
+
+Without `STRIPE_SECRET_KEY` and both prices the site works as before: the
+Pricing page and the account show the plans, and Upgrade says payments are not
+open yet. In order:
+
+1. `STRIPE_SECRET_KEY=sk_live_… bin/stripe-setup --set-key` (from a checkout,
+   with `gh` signed in): prints only `prod_…`, `price_…` and `we_…` ids, and
+   sets the four secrets above. Run it again any time: it finds what it made.
+   `--recreate-webhook` replaces the endpoint, and its secret, if that secret
+   is lost.
+2. Actions › production database › Run workflow › `stripe`: the four values go
+   to the server's `.env` over SSH's input, the site restarts, and the step
+   checks `/health/deep` and that `/webhooks/stripe` refuses an unsigned event.
+3. In Stripe's dashboard: turn on the customer portal (Settings › Billing ›
+   Customer portal), allowing cancellation and the switch between the two
+   prices.
+
+The prices shown on the site are in `app/services/plan.sl` (`PLAN_PRICES`),
+the amounts Stripe charges in `bin/stripe-setup`: change both together.
 
 ## The browser engraver
 

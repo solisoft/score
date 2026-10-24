@@ -628,7 +628,11 @@
       await openAsNew(answer.source);
     } catch (problem) {
       show("Photo not read", "conflict");
-      alert(problem.message);
+      // Past the Free plan's day (#393): the Pricing page, if they want it.
+      if (problem.upgrade && confirm(`${problem.message}
+
+See the plans?`)) location.href = problem.upgrade;
+      else if (!problem.upgrade) alert(problem.message);
     } finally {
       event.target.value = "";
     }
@@ -670,9 +674,11 @@
   aiPart("again").addEventListener("click", aiReset);
   aiPart("form").addEventListener("submit", async (event) => {
     event.preventDefault();
-    const fail = (message) => {
+    // `upgrade`: the Pricing page, linked when the Free plan's day is used up (#393).
+    const fail = (message, upgrade) => {
       aiPart("status").hidden = true;
       aiPart("error").textContent = message;
+      if (upgrade) aiPart("error").append(" ", Object.assign(document.createElement("a"), { href: upgrade, textContent: "See the plans" }));
       aiPart("error").hidden = false;
       aiPart("send").disabled = false;
       aiPart("request").disabled = false;
@@ -689,7 +695,7 @@
         body: JSON.stringify({ action: aiAction, request: aiPart("request").value, source: studio.source() }),
       });
       const started = await sent.json();
-      if (sent.status !== 202) return fail(started.error);
+      if (sent.status !== 202) return fail(started.error, started.upgrade);
       const left = aiPart("left");
       if (left) left.textContent = Math.max(0, Number(left.textContent) - 1);
       // Five minutes, then the page stops waiting.

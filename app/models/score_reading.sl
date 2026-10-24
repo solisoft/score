@@ -2,7 +2,7 @@
 # in a job (ScoreReadingJob): "reading", then "done" with its `source` or
 # "failed" with its `error`. The picture is kept only while it is read.
 # A person may start SCORE_READINGS_PER_DAY in any 24 hours on the server's
-# key, SCORE_READINGS_OWN_PER_DAY on a key of their own.
+# key on Free (Pro: Plan), SCORE_READINGS_OWN_PER_DAY on a key of their own.
 const SCORE_READINGS_PER_DAY = 20
 const SCORE_READINGS_OWN_PER_DAY = 200
 # A reading or a suggestion still at work after this many seconds was cut off
@@ -57,8 +57,26 @@ class ScoreReading < Model
     [ScoreReading.limit_for(user) - ScoreReading.used_today(user), 0].max()
   end
 
+  # What someone on `limits` (Plan.limits) reads once their day on the
+  # site's key is used up: on Free with payments open, the way to Pro.
+  static def used_up_text(limits)
+    day = limits["readings_per_day"]
+    more = "or add your own AI key on your account page to read more."
+    if limits["upgrade"]
+      return "You have read the #{day} photos a day the site's AI reads on Free: try again tomorrow, "
+      + "move to Pro for #{Plan.pro_limits["readings_per_day"]} a day, "
+      + more
+    end
+
+    if limits["plan"] == "pro"
+      return "You have read the #{day} photos a day the site's AI reads on Pro: try again tomorrow, " + more
+    end
+
+    "You have read the #{day} photos a day the site's AI reads: try again tomorrow, " + more
+  end
+
   static def limit_for(user)
-    user.own_ai?() ? SCORE_READINGS_OWN_PER_DAY : SCORE_READINGS_PER_DAY
+    user.own_ai?() ? SCORE_READINGS_OWN_PER_DAY : Plan.limits(user)["readings_per_day"]
   end
 
   # The readings `user` started in the last 24 hours.

@@ -279,6 +279,15 @@ class AccountExport
         "model": user.ai_model
       } : nil,
       "notification_emails": AccountExport.mail_prefs(user),
+      "plan": {
+        "plan": user.plan ?? "free",
+        "pro_now": user.pro?,
+        "status": user.plan_status,
+        "current_period_end": AccountExport.iso(user.current_period_end),
+        "cancel_at_period_end": user.cancel_at_period_end == true,
+        "stripe_customer_id": user.stripe_customer_id,
+        "stripe_subscription_id": user.stripe_subscription_id
+      },
       "exported_at": AccountExport.iso(at)
     }
   end
@@ -382,7 +391,7 @@ class AccountExport
     + "               who it is shared with and with which role, its versions, and the\n"
     + "               comment threads on it, with every message, and its audio takes:\n"
     + "               where each starts in the score, and the part that holds it.\n"
-    + "account.json   your account. No password, secret or token is in it.\n"
+    + "account.json   your account, and its plan. No password, secret or token is in it.\n"
     + "shared-with-me.json  the scores others share with you, and your role: listed, not\n"
     + "               copied, since they are their owners' (each can export their own).\n"
     + "comments.json  every comment you wrote, on your scores or on others'.\n"

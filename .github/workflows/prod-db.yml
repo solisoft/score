@@ -34,17 +34,26 @@
 #             line or in a log), SOLI_ADMIN_TOKEN (made on the server if the
 #             .env has none) and SOLI_NOTIFY_EMAILS (input). The site restarts;
 #             /__soli/errors must refuse a visitor and open to the admin.
+#   stripe  — the Pro plan's payments (#393): STRIPE_SECRET_KEY,
+#             STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_PRO_MONTHLY and
+#             STRIPE_PRICE_PRO_ANNUAL, the production environment's secrets
+#             of those names (bin/stripe-setup sets all but the key), sent over
+#             the SSH connection's input, never on a command line or in a log,
+#             in place of the .env's lines of those names (kept beside as
+#             .env.before-stripe). The site restarts, must answer /health/deep
+#             with "ok", and /webhooks/stripe must refuse an unsigned event
+#             with 400 (503 would mean no secret read); or the old .env comes back.
 name: production database
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: "inspect, setup, encryption-key, jobs, own-user, own-user-undo, or admin"
+        description: "inspect, setup, encryption-key, jobs, own-user, own-user-undo, admin, or stripe"
         required: true
         default: inspect
         type: choice
-        options: [inspect, setup, encryption-key, jobs, own-user, own-user-undo, admin]
+        options: [inspect, setup, encryption-key, jobs, own-user, own-user-undo, admin, stripe]
       admin_user:
         description: "admin: the user name for /__soli/errors"
         required: false
@@ -109,6 +118,10 @@ jobs:
           done
           echo "== this site's client addresses, for the per-address limits (deploy/README.md)"
           for k in SOLI_TRUST_PROXY SOLI_TRUSTED_PROXIES SOLI_CLIENT_IP_HEADER; do
+            if grep -qE "^$k=.+" "$SITES_DIR/$DOMAIN/.env" 2>/dev/null; then echo "$k=<set>"; else echo "$k=<unset>"; fi
+          done
+          echo "== this site's payments, the Pro plan (#393)"
+          for k in STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STRIPE_PRICE_PRO_MONTHLY STRIPE_PRICE_PRO_ANNUAL; do
             if grep -qE "^$k=.+" "$SITES_DIR/$DOMAIN/.env" 2>/dev/null; then echo "$k=<set>"; else echo "$k=<unset>"; fi
           done
           REMOTE
@@ -304,6 +317,68 @@ jobs:
           exit 1
           REMOTE
           } | ssh "$USER@$HOST" SITES_DIR="$SITES_DIR" DOMAIN="$DOMAIN" PROXY_CONF="$PROXY_CONF" APP="$APP" ADMIN_USER="$ADMIN_USER" NOTIFY="$NOTIFY" bash -s
+
+      - name: Stripe
+        if: inputs.action == 'stripe'
+        env:
+          PROXY_CONF: ${{ vars.DEPLOY_PROXY_CONF || '/home/rocky/proxy.conf' }}
+          APP: ${{ vars.DEPLOY_APP || 'score' }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          STRIPE_PRICE_PRO_MONTHLY: ${{ secrets.STRIPE_PRICE_PRO_MONTHLY }}
+          STRIPE_PRICE_PRO_ANNUAL: ${{ secrets.STRIPE_PRICE_PRO_ANNUAL }}
+        run: |
+          set -euo pipefail
+          # Each value checked by its shape, never shown: one line, no space or quote.
+          check() {
+            case "$2" in
+              "") echo "no $1 secret in the production environment" >&2; exit 1 ;;
+              *[[:space:]\'\"\$\`\\]*) echo "$1 holds a space, a quote, \$ or \\: not a Stripe value" >&2; exit 1 ;;
+            esac
+            case "$2" in $3) ;; *) echo "$1 does not look like ${3%\*}…" >&2; exit 1 ;; esac
+          }
+          check STRIPE_SECRET_KEY "$STRIPE_SECRET_KEY" "[sr]k_*"
+          check STRIPE_WEBHOOK_SECRET "$STRIPE_WEBHOOK_SECRET" "whsec_*"
+          check STRIPE_PRICE_PRO_MONTHLY "$STRIPE_PRICE_PRO_MONTHLY" "price_*"
+          check STRIPE_PRICE_PRO_ANNUAL "$STRIPE_PRICE_PRO_ANNUAL" "price_*"
+          # The script reads the four values from the lines after its first.
+          { echo 'IFS= read -r key; IFS= read -r whsec; IFS= read -r monthly; IFS= read -r annual'
+            printf '%s\n' "$STRIPE_SECRET_KEY" "$STRIPE_WEBHOOK_SECRET" "$STRIPE_PRICE_PRO_MONTHLY" "$STRIPE_PRICE_PRO_ANNUAL"
+            cat <<'REMOTE'
+          set -euo pipefail
+          cd "$SITES_DIR/$DOMAIN"
+          cp -p .env .env.before-stripe
+          grep -vE '^(# The Pro plan.s payments|(STRIPE_SECRET_KEY|STRIPE_PUBLISHABLE_KEY|STRIPE_WEBHOOK_SECRET|STRIPE_PRICE_PRO_MONTHLY|STRIPE_PRICE_PRO_ANNUAL)=)' .env.before-stripe > .env.next || true
+          {
+            echo "# The Pro plan's payments (#393): Stripe's key, the webhook's secret, Pro's two Prices."
+            printf 'STRIPE_SECRET_KEY=%s\n' "$key"
+            printf 'STRIPE_WEBHOOK_SECRET=%s\n' "$whsec"
+            printf 'STRIPE_PRICE_PRO_MONTHLY=%s\n' "$monthly"
+            printf 'STRIPE_PRICE_PRO_ANNUAL=%s\n' "$annual"
+          } >> .env.next
+          chmod 600 .env.next && mv .env.next .env
+          soli-proxy restart -c "$PROXY_CONF" "$APP" >/dev/null 2>&1 || true
+          ready=""
+          for attempt in 1 2 3 4 5 6; do
+            sleep 5
+            ready="$(curl -sk -m 8 --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/health/deep" || true)"
+            echo "$ready" | grep -q '"status":"ok"' && break
+          done
+          # Unsigned: 400 once the secret is read (503 while there is none).
+          webhook="$(curl -sk -m 8 --resolve "$DOMAIN:443:127.0.0.1" -o /dev/null -w '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' -d '{}' "https://$DOMAIN/webhooks/stripe" || true)"
+          echo "ready: $ready | unsigned webhook: $webhook"
+          if echo "$ready" | grep -q '"status":"ok"' && [ "$webhook" = "400" ]; then
+            echo "done: the names now set, without their values:"
+            grep -E '^STRIPE_' .env | cut -d= -f1 | tr '\n' ' '; echo
+            exit 0
+          fi
+          echo "not as expected: the old .env comes back" >&2
+          cp -p .env.before-stripe .env
+          soli-proxy restart -c "$PROXY_CONF" "$APP" >/dev/null 2>&1 || true
+          exit 1
+          REMOTE
+          } | ssh "$USER@$HOST" SITES_DIR="$SITES_DIR" DOMAIN="$DOMAIN" PROXY_CONF="$PROXY_CONF" APP="$APP" bash -s
 
       - name: Back to the server's admin user
         if: inputs.action == 'own-user-undo'

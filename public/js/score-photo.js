@@ -17,7 +17,8 @@ export async function shrunk(file) {
 }
 
 // Sends `file`, calls `started()` once the server took it, and resolves to
-// {source, svg}; rejects with an Error whose message the page can show.
+// {source, svg}; rejects with an Error whose message the page can show (and,
+// past the Free plan's day, its `upgrade`: the Pricing page to link to).
 export async function readPhoto(file, { readings = "/app/readings", started = () => {} } = {}) {
   let sent;
   try {
@@ -30,7 +31,8 @@ export async function readPhoto(file, { readings = "/app/readings", started = ()
     throw new Error("The photo could not be sent. Check your connection and try again.");
   }
   const answer = await sent.json();
-  if (sent.status !== 202) throw new Error(answer.error);
+  // `upgrade`: the Pricing page, when it is the Free plan's day that is used up (#393).
+  if (sent.status !== 202) throw Object.assign(new Error(answer.error), { upgrade: answer.upgrade });
   started();
   // Five minutes, then the page stops waiting.
   for (let tries = 0; tries < 100; tries++) {

@@ -31,14 +31,10 @@ class AppScoreSuggestionsController < AppBaseController
     return render_json({"error": "This score is too long for the assistant."}, 422) if too_long
 
     refusal = ScoreSuggestion.refusal(user)
-    unless refusal.nil?
-      return render_json({"error": @_refused(user, refusal)}, 429)
-    end
+    return @_refusal_json(user, refusal) unless refusal.nil?
 
     suggestion = ScoreSuggestion.start(user, score, action, request, source)
-    if type(suggestion) == "string"
-      return render_json({"error": @_refused(user, suggestion)}, 429)
-    end
+    return @_refusal_json(user, suggestion) if type(suggestion) == "string"
 
     render_json(
       {"id": suggestion._key, "state": suggestion.state},
@@ -67,13 +63,21 @@ class AppScoreSuggestionsController < AppBaseController
 
   private
 
+  # The 429 refusing `user` one more question today (`refusal`,
+  # ScoreSuggestion.refusal): with the way to Pricing when Pro would give more.
+  def _refusal_json(user, refusal)
+    limits = Plan.limits(user)
+    answer = {"error": @_refused(user, refusal, limits)}
+    answer["upgrade"] = pricing_path() if refusal == "used_up" && !user.own_ai?() && limits["upgrade"]
+    render_json(answer, 429)
+  end
+
   # Why `user` may not ask again today (`refusal`, ScoreSuggestion.refusal);
   # on the server's key, how to ask more.
-  def _refused(user, refusal)
+  def _refused(user, refusal, limits)
     return AI_SERVER_BUSY if refusal == "busy"
     return "You have asked all of today's questions: try again tomorrow." if user.own_ai?()
 
-    "You have asked the #{SCORE_SUGGESTIONS_PER_DAY} questions a day the site's AI answers: try again tomorrow, "
-    + "or add your own AI key on your account page to ask more."
+    ScoreSuggestion.used_up_text(limits)
   end
 end
