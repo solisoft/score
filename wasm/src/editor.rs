@@ -817,6 +817,22 @@ pub fn score(src: &str) -> Result<Value, String> {
             // What the parse keeps as fifths alone: the key's mode, and a repeat's count.
             event["mode"] = json!((ev.k == Kind::Key).then(|| key_mode(src, &bytes, ev.at)));
             event["times"] = json!((ev.k == Kind::RepeatStart).then(|| repeat_times(src, &bytes, ev.at)).flatten());
+            // `cis!` and `cis?`: the diatonic numbers of the pitches whose
+            // accidental is printed whatever the key says, and in parentheses.
+            event["forced"] = json!(ev.forced);
+            event["cautionary"] = json!(ev.cautionary);
+            // `\stemUp` (1), `\stemDown` (-1) in force, and `\autoBeamOff`.
+            event["stem"] = json!(ev.stem_dir);
+            event["no_autobeam"] = json!(ev.no_autobeam);
+            // `\breathe` ("breathMarkComma") or `\caesura` after it.
+            event["breath"] = json!(ev.breath);
+            event["lv"] = json!(ev.lv);
+            event["repeat_tie"] = json!(ev.repeat_tie);
+            // `\cresc`, `\dim`, `\decresc`: the hairpin it starts, as words.
+            event["hairpin_text"] = json!(ev.hairpin_text);
+            // `\startTextSpan`, with the words before its line (empty: none), and `\stopTextSpan`.
+            event["span_start"] = json!(ev.span_start.as_ref().map(|runs| runs.iter().filter(|r| !r.glyph).map(|r| r.text.as_str()).collect::<Vec<_>>().join(" ")));
+            event["span_stop"] = json!(ev.span_stop);
             events.push(event);
         }
         let words = |syl: &[parse::Syllable]| syl.iter().map(|s| json!({ "text": s.text, "hyphen": s.hyphen, "extend": s.extend })).collect::<Vec<_>>();
@@ -837,5 +853,7 @@ pub fn score(src: &str) -> Result<Value, String> {
     // The page it asks for: \paper's size and margins (mm), the staff size (pt).
     let p = &parsed.paper;
     let paper = json!({ "size": p.size, "staff_size": p.staff_size, "left": p.left, "right": p.right, "top": p.top, "bottom": p.bottom, "indent": p.indent, "even_pages": p.even_pages });
-    Ok(json!({ "header": header, "paper": paper, "groups": groups, "staves": staves }))
+    // What the source says that the engraver reads and passes over (`\\override`, …).
+    let warnings: Vec<&str> = parsed.warnings.iter().map(|w| w.message.as_str()).collect();
+    Ok(json!({ "header": header, "paper": paper, "groups": groups, "staves": staves, "warnings": warnings }))
 }

@@ -249,7 +249,9 @@ export function fromMusicXML(text) {
   const valid = groups.filter((g) => g.first <= g.last && g.last < blocks.length);
   const whole = valid.find((g) => g.first === 0 && g.last === blocks.length - 1 && g.first < g.last);
   const body = blocks.length === 1 ? blocks[0] : whole ? nest(0, blocks.length - 1, valid) : `<<\n${indent(nest(0, blocks.length - 1, valid))}\n>>`;
-  return { source: `${head}${body}\n`, warnings: [...warnings] };
+  // Bars of rest drawn as one (<multiple-rest>): gathered, as \\compressMMRests gathers them.
+  const gathered = parts.some((part) => kids(part, "measure").some((m) => kids(m, "attributes").some((a) => kid(kid(a, "measure-style"), "multiple-rest"))));
+  return { source: `${head}${gathered ? "\\compressMMRests " : ""}${body}\n`, warnings: [...warnings] };
 }
 
 /** One part's staves, as LilyPond. */
@@ -953,6 +955,17 @@ export function toMusicXML(score) {
     });
     const interval = writtenInterval(score.staves[p.staves[0]]);
     const drums = Boolean(score.staves[p.staves[0]].drums);
+    // Under \\compressMMRests, the bars of rest side by side: <multiple-rest> on the first of each run.
+    const gathered = {};
+    if (score.compress) {
+      const resting = (b) => !(b === 0 && score.pickup > 0) && lanesOf.every((lanes) => lanes.every((lane) => lane.filter((x) => x.bar === b).every((x) => M.isBareRest(x.ev) && !x.ev.spacer)));
+      for (let b = 0; b < bars; b++) {
+        let n = 0;
+        while (b + n < bars && resting(b + n)) n++;
+        if (n > 1) gathered[b] = n;
+        b += n;
+      }
+    }
     for (let b = 0; b < bars; b++) {
       const change = M.changeAt(score, b);
       const brk = score.breaks?.[b - 1];
@@ -978,6 +991,7 @@ export function toMusicXML(score) {
         attrs.push(`<clef${p.staves.length > 1 ? ` number="${k + 1}"` : ""}><sign>${sign}</sign>${lineNo ? `<line>${lineNo}</line>` : ""}${octave ? `<clef-octave-change>${octave}</clef-octave-change>` : ""}</clef>`);
       });
       if (b === 0 && interval) attrs.push(`<transpose><diatonic>${-(interval.diatonic % 7)}</diatonic><chromatic>${-(interval.chromatic % 12)}</chromatic>${Math.trunc(interval.diatonic / 7) ? `<octave-change>${-Math.trunc(interval.diatonic / 7)}</octave-change>` : ""}</transpose>`);
+      if (gathered[b]) attrs.push(`<measure-style><multiple-rest>${gathered[b]}</multiple-rest></measure-style>`);
       if (attrs.length) out.push(`<attributes>${attrs.join("")}</attributes>`);
       // The bar's marks and tempo, over the first staff.
       if (p === parts[0]) {

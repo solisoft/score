@@ -22,8 +22,9 @@ function engrave(score) {
     throw new Error(`${e.message ?? e}\n${source}`);
   }
   // Every event of a staff's first voice is an item; another voice's, in the bars it is written in.
+  // (Bars of rest gathered by \compressMMRests are one item: their first rest — see gathered.test.mjs.)
   const upper = score.staves.reduce((n, st) => n + (st.voice ? 0 : st.events.length), 0);
-  assert.equal(items.filter((it) => !score.staves[it.staff].voice).length, upper, "one item per event");
+  if (!score.compress) assert.equal(items.filter((it) => !score.staves[it.staff].voice).length, upper, "one item per event");
   assert.ok(items.every((it) => score.staves[it.staff].events[it.index]), "every item is an event");
   assert.equal(new Set(items.map((it) => `${it.staff}:${it.index}`)).size, items.length, "no event twice");
   assert.equal(view.items.length, items.length, `the engraver sees every item\n${source}`);
@@ -852,13 +853,14 @@ test("a refusal points at its line: the brace left open, or the engraver's own p
   // A brace inside a string or a comment is not one.
   assert.equal(M.refusalPlace("score: a '{' that is never closed (at character 0)", '% {\n"{" { c4').line, 2);
   // The engraver's own place, counted in characters past accented letters.
-  const typo = '\\header { title = "Éé" }\n\\new Staff {\n  c\'4 d\'4\n} { e\'4 f\'4\n';
+  // (A second { … } is a second movement since Soli 2.28.5: notes cannot follow the music.)
+  const typo = '\\header { title = "Éé" }\n\\new Staff {\n  c\'4 d\'4\n} e\'4 f\'4\n';
   const bad = refusal(typo);
   assert.ok(bad, "refused");
   assert.match(bad, /after the end of the music/);
   const where = M.refusalPlace(bad, typo);
   assert.equal(where.line, 4);
-  assert.equal(typo.slice(where.at, where.at + 1), "{");
+  assert.equal(typo.slice(where.at, where.at + 1), "e");
   // No place named: nothing to point at.
   assert.equal(M.refusalPlace("score: something went wrong", "c4"), null);
 });

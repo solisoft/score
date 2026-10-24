@@ -201,3 +201,30 @@ fn a_redraw_of_the_same_source_lights_anew_and_an_edit_draws_anew() {
     assert_ne!(other["items"][1]["box"], none["items"][1]["box"]);
     assert_ne!(view_lit(TUNE, 300.0, 8.0, &json!({})).unwrap()["width"], none["width"], "and at another width, its own drawing");
 }
+
+#[test]
+fn the_parse_hands_over_what_real_files_write() {
+    let src = "{ \\stemUp \\autoBeamOff cis''!8 d''?8 \\breathe e''4\\upbow\\laissezVibrer \\stemNeutral f''4\\cresc \\override TextSpanner.bound-details.left.text = \"rit.\" g''4\\startTextSpan a''4\\stopTextSpan\\repeatTie \\override NoteHead.color = #red b''2 }";
+    let parsed = score(src).unwrap();
+    let notes: Vec<_> = parsed["staves"][0]["events"].as_array().unwrap().iter().filter(|e| e["k"] == "Note").cloned().collect();
+    assert_eq!(notes[0]["forced"], json!([14]));
+    assert_eq!(notes[1]["cautionary"], json!([15]));
+    assert_eq!(notes[0]["stem"], json!(1));
+    assert_eq!(notes[0]["no_autobeam"], json!(true));
+    assert_eq!(notes[1]["breath"], json!("breathMarkComma"));
+    assert_eq!(notes[2]["lv"], json!(true));
+    assert_eq!(notes[2]["scripts"], json!([["upbow", 0]]));
+    assert_eq!(notes[3]["stem"], json!(0));
+    assert_eq!(notes[3]["hairpin_text"], json!("cresc."));
+    assert_eq!(notes[4]["span_start"], json!("rit."));
+    assert_eq!(notes[5]["span_stop"], json!(true));
+    assert_eq!(notes[5]["repeat_tie"], json!(true));
+    assert_eq!(parsed["warnings"], json!(["\\override NoteHead.color is not drawn"]));
+}
+
+#[test]
+fn several_scores_are_movements() {
+    let parsed = score("\\score { { c''1 } } \\score { \\header { piece = \"II\" } { d''1 } }").unwrap();
+    let kinds: Vec<_> = parsed["staves"][0]["events"].as_array().unwrap().iter().map(|e| e["k"].as_str().unwrap().to_string()).collect();
+    assert!(kinds.contains(&"Movement".to_string()), "{kinds:?}");
+}

@@ -11,8 +11,10 @@ const ENGRAVING_DAYS = 3
 const ENGRAVINGS_KEPT = 2000
 # Part of every engraving's key (ScoreSvg.digest): one more, and every kept
 # engraving is drawn anew — for a change of drawing or of engraver (2: Soli
-# 2.28.4, the browser's engraver on the server; 3: data-breaks for printing).
-const ENGRAVING_FORMAT = 3
+# 2.28.4, the browser's engraver on the server; 3: data-breaks for printing;
+# 4: Soli 2.28.5, the engine with movements, mid-bar changes and gathered
+# rests).
+const ENGRAVING_FORMAT = 4
 
 class Engraving < Model
   # The engraving kept under `digest`, as `ScoreSvg.engrave` answers it

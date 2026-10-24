@@ -10,6 +10,15 @@
 class Changelog
   static def days
     [
+      {"date": "2026-10-24", "entries": [{
+        "area": "engine",
+        "title": "Parts gather their bars of rest",
+        "text": "A printed part now shows a long rest as one bar with its count over it, as players expect, "
+        + "instead of every empty bar one after another. In your own scores, \\compressMMRests gathers bars "
+        + "of rest written R1*8, and the editor keeps it through every edit; \\compressFullBarRests and "
+        + "skipBars work too.",
+        "link": "playground"
+      }]},
       {"date": "2026-10-23", "entries": [
         {
           "area": "site",

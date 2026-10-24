@@ -693,6 +693,11 @@ export function write(score, s, t, ticks, content, { tidyUp = true } = {}) {
 
 const sameNote = (a, b) => Boolean(a && b && !a.rest && !b.rest && a.pitches.length === b.pitches.length && a.pitches.every((p, k) => p.d === b.pitches[k].d && p.alter === b.pitches[k].alter));
 
+/** A rest with nothing on it (a spacer may be one): what tidy merges, and a bar of rest gathers. */
+export function isBareRest(ev) {
+  return ev.rest && !ev.tuplet && !ev.dynamic && !ev.hairpin && !ev.hairpinEnd && !ev.texts.length && !ev.chord && !ev.arts.length && !ev.pedalOn && !ev.pedalOff && !ev.beamStart && !ev.beamEnd && ev.ottava == null;
+}
+
 /** Rests side by side in a bar, with nothing on them, written as few as can be. */
 export function tidy(score, staff) {
   const at = starts(staff);
@@ -704,7 +709,7 @@ export function tidy(score, staff) {
     run = null;
   };
   staff.events.forEach((ev, i) => {
-    const plain = ev.rest && !ev.tuplet && !ev.dynamic && !ev.hairpin && !ev.hairpinEnd && !ev.texts.length && !ev.chord && !ev.arts.length && !ev.pedalOn && !ev.pedalOff && !ev.beamStart && !ev.beamEnd && ev.ottava == null;
+    const plain = isBareRest(ev);
     // Spacers run with spacers, drawn rests with drawn rests.
     const sameBar = run && barAt(score, at[i]) === barAt(score, run.start) && run.spacer === Boolean(ev.spacer);
     if (plain && sameBar) {
@@ -2033,14 +2038,26 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
     // The other voices, each its bars: a bar is written in voices up to the
     // last that sounds there (or that the page writes in), those before it as they are.
     const others = voiceLanes(score, s).slice(1).map((lane) => ({ lane, bars: staffBars(score, score.staves[lane], lane) }));
-    const bars = upper.map((bar, b) => {
+    const voicesIn = (b) => {
       const shown = (o) => o.bars[b] && (sounding(o.bars[b].events) || open.some((x) => x.staff === o.lane && x.bar === b));
       let last = others.length - 1;
       while (last >= 0 && !shown(others[last])) last--;
-      const voices = others.slice(0, last + 1).map((o) => o.bars[b]);
-      items.push(...bar.items, ...voices.flatMap((v) => v.items));
-      const top = staffNumber(score, s) === 0;
+      return others.slice(0, last + 1).map((o) => o.bars[b]);
+    };
+    const top = staffNumber(score, s) === 0;
+    // Under \compressMMRests, bars of rest side by side are written R1*n: gathered.
+    const gathered = !unfold && score.compress ? restRuns(score, upper, voicesIn, repeats) : [];
+    const bars = upper.map((bar, b) => {
       const broken = top && b > 0 ? { line: "\\break ", page: "\\pageBreak " }[(score.breaks ?? {})[b - 1]] ?? "" : "";
+      const run = gathered[b];
+      if (run === null) return null;
+      if (run) {
+        // One item: the run's first rest.
+        items.push(bar.items[0]);
+        return broken + changesText(score, s, b) + (top ? markText(score, b) : "") + run.text + (top ? jumpText(score, b + run.bars - 1) : "");
+      }
+      const voices = voicesIn(b);
+      items.push(...bar.items, ...voices.flatMap((v) => v.items));
       // A voice drawn as nothing in the bar (spacers) is not counted among the voices:
       // past two, each then says which it is, so voice 3 stays voice 3.
       const named = voices.length > 1 && voices.some((v) => v.events.every((ev) => ev.rest && ev.spacer));
@@ -2095,7 +2112,49 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
   const groups = (score.groups ?? []).filter((g) => kinds[g.kind] && g.first <= g.last && g.last < staves.length);
   const group = kinds[score.group] ?? "";
   const body = staves.length > 1 || group ? `${group ? group + " " : ""}<<\n${indent(nest(0, staves.length - 1, groups))}\n>>` : staves[0];
-  return { source: pageText(score) + (header ? `\\header { ${header} }\n` : "") + body + "\n", items };
+  // Bars of rest gathered on every staff: a part's long rests, as one bar.
+  const gathering = score.compress ? "\\compressMMRests " : "";
+  return { source: pageText(score) + (header ? `\\header { ${header} }\n` : "") + gathering + body + "\n", items };
+}
+
+/**
+ * The runs of bars of rest a lane gathers under \\compressMMRests: `runs[b]`
+ * is `{ text: "R1*4", bars: 4 }` on a run's first bar, null on the bars after
+ * it, undefined elsewhere. A bar of rest is a bar of bare rests, no voice
+ * beside them, whose length is one value (R1, R2.); a run stops where
+ * something is written at a bar line — a change, a mark, a break, a jump, a
+ * repeat's edge — and never gathers a pickup.
+ */
+function restRuns(score, upper, voicesIn, repeats) {
+  const edges = new Set();
+  for (const r of repeats) {
+    let next = r.to + 1;
+    edges.add(r.from).add(next);
+    for (const len of r.endings) edges.add((next += len));
+  }
+  const restOf = (b) => {
+    if ((b === 0 && score.pickup > 0) || voicesIn(b).length) return null;
+    const events = upper[b].events;
+    if (!events.length || !events.every((ev) => isBareRest(ev) && !ev.spacer)) return null;
+    const value = spellDuration(barLength(score, b));
+    return value.length === 1 ? `R${value[0].base}${".".repeat(value[0].dots)}` : null;
+  };
+  const quiet = (b) => !edges.has(b) && !score.staves.some((_, s) => changesText(score, s, b)) && !markText(score, b) && !(score.breaks ?? {})[b - 1] && !jumpText(score, b - 1);
+  const runs = [];
+  let b = 0;
+  while (b < upper.length) {
+    const rest = restOf(b);
+    if (!rest) {
+      b++;
+      continue;
+    }
+    let n = 1;
+    while (b + n < upper.length && restOf(b + n) === rest && quiet(b + n)) n++;
+    runs[b] = { text: n > 1 ? `${rest}*${n}` : rest, bars: n };
+    for (let k = 1; k < n; k++) runs[b + k] = null;
+    b += n;
+  }
+  return runs;
 }
 
 const clefText = (clef) => (CLEFS.includes(clef) ? (clef.includes("_") ? `"${clef}"` : clef) : "treble");
@@ -2234,6 +2293,9 @@ function staffBars(score, staff, s) {
   return bars;
 }
 
+/** Bars joined with bar checks; a bar gathered into the one before it (null) is not written. */
+const checked = (bars) => bars.filter((bar) => bar !== null).join(" | ");
+
 /** The bars joined with bar checks, each repeat around its bars and its endings after it. */
 function withRepeats(bars, repeats) {
   const groups = [];
@@ -2245,11 +2307,11 @@ function withRepeats(bars, repeats) {
       b++;
       continue;
     }
-    let text = `\\repeat volta ${Math.max(r.times ?? 2, r.endings.length)} { ${bars.slice(r.from, r.to + 1).join(" | ")} }`;
+    let text = `\\repeat volta ${Math.max(r.times ?? 2, r.endings.length)} { ${checked(bars.slice(r.from, r.to + 1))} }`;
     let next = r.to + 1;
     if (r.endings.length) {
       const alts = r.endings.map((len) => {
-        const ending = bars.slice(next, next + len).join(" | ");
+        const ending = checked(bars.slice(next, next + len));
         next += len;
         return `{ ${ending} }`;
       });
@@ -2258,7 +2320,7 @@ function withRepeats(bars, repeats) {
     groups.push(text);
     b = next;
   }
-  return groups.map((g, k) => (k > 0 && k % 4 === 0 ? "\n    " : "") + g).join(" | ").replace(/ \| \n {4}/g, " |\n    ");
+  return groups.filter((g) => g !== null).map((g, k) => (k > 0 && k % 4 === 0 ? "\n    " : "") + g).join(" | ").replace(/ \| \n {4}/g, " |\n    ");
 }
 
 // ---- Repeats ---------------------------------------------------------------------------------
@@ -2875,6 +2937,8 @@ export function partOf(score, s) {
   part.header = { ...part.header, instrument: staff.name || INSTRUMENTS[instrumentOf(score, upper)]?.name || "" };
   // The staff's name is the part's heading: not repeated before each line.
   part.staves[0] = { ...part.staves[0], name: "", short: "" };
+  // A player counts the bars it rests: they are gathered, R1*12 as one bar.
+  part.compress = true;
   return part;
 }
 
@@ -3235,7 +3299,8 @@ export function fromParsed(parsed) {
         else if (own) setChange(score, bar, "mark", own);
         else unsupported.add("a mark this editor does not name");
       } else if (k === "Compress") {
-        lost.add("\\compressEmptyMeasures (empty bars gathered into one)");
+        // \\compressMMRests (or \\compressEmptyMeasures, skipBars): bars of rest gathered.
+        score.compress = true;
       } else if (k === "Voices") {
         if (voices) unsupported.add("voices inside voices");
         voices = 1;
