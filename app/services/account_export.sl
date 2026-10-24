@@ -15,8 +15,10 @@ const EXPORT_WINDOW_SECONDS = 3600
 
 class AccountExport
   # The parts `user`'s export comes in: each a list of their scores' keys,
-  # the oldest score first. Always at least one part, empty when they have
-  # no score. Two queries, which read the sizes and not the sources.
+  # the oldest score first, then the audio takes of their scores (#390),
+  # each "take:<key>" and counted by its bytes. Always at least one part,
+  # empty when they have no score. Three queries, which read the sizes and
+  # not the sources.
   static def parts(user)
     owner = user._key
     scores = @sdbql{
@@ -40,6 +42,15 @@ class AccountExport
         "key": row["key"],
         "size": row["size"] + (versions[row["key"]] ?? 0)
       }
+    end
+    takes = @sdbql{
+      FOR t IN score_takes
+      FILTER t.score_id IN (FOR s IN scores FILTER s.user_id == #{owner} RETURN s._key)
+      SORT t.score_id ASC, t.track ASC
+      RETURN {"key": t._key, "size": t.size}
+    }
+    AccountExport.rows(takes).each do |row|
+      sizes.push({"key": "take:#{row["key"]}", "size": row["size"] ?? 0})
     end
     AccountExport.packed(sizes, EXPORT_PART_CHARACTERS)
   end
@@ -97,6 +108,9 @@ class AccountExport
     end
     authors = ScoreVersion.authors_of(versions)
     threads = AccountExport.threads_on(keys)
+    takes = AccountExport.read(fn() {
+      ScoreTake.where("doc.score_id IN @keys", {"keys": scores.map(&:_key)}).order("track", "asc").all
+    })
     part_of = {}
     parts.each_with_index do |part, i|
       part.each do |key|
@@ -109,6 +123,17 @@ class AccountExport
     ]
     listed = scores.map do |score|
       entry = AccountExport.listing(score, part_of[score._key], shares)
+      own_takes = takes.filter do |take|
+        take.score_id == score._key
+      end
+      entry["takes"] = own_takes.map do |take|
+        AccountExport.take_listing(take, part_of["take:#{take._key}"])
+      end
+      own_takes.each do |take|
+        if keys.includes?("take:#{take._key}")
+          files.push({"name": "#{entry["folder"]}/#{AccountExport.take_file(take)}", "bytes": take.audio_bytes})
+        end
+      end
       if keys.includes?(score._key)
         own_versions = versions.filter do |version|
           version.score_id == score._key
@@ -293,6 +318,24 @@ class AccountExport
     }
   end
 
+  # One audio take in scores.json: its track, its file, the part that file
+  # is in, where it starts in the score's playback and how long it lasts.
+  static def take_listing(take, part)
+    {
+      "track": take.track,
+      "name": take.name,
+      "file": AccountExport.take_file(take),
+      "part": part,
+      "starts_at_second": take.offset,
+      "seconds": take.duration,
+      "recorded_at": AccountExport.iso(take.created_at)
+    }
+  end
+
+  static def take_file(take)
+    "takes/track-#{take.track}.wav"
+  end
+
   # A score's folder: under trash/ when it is in the trash, its name then
   # its key, so two scores of one title never share one.
   static def folder(score)
@@ -332,11 +375,13 @@ class AccountExport
     part = count > 1 ? "This is part #{number} of #{count}: the scores are split so that no download is too big.\n" : ""
     "EUI Score: everything in the account #{user.email}, exported #{AccountExport.iso(at)}.\n\n" + part
     + "scores/        your scores, one folder each: the score as it is now (.ly, LilyPond),\n"
-    + "               and versions/, every version kept of it, the oldest first.\n"
+    + "               and versions/, every version kept of it, the oldest first;\n"
+    + "               takes/, the audio recorded onto its tracks (WAV, one per track).\n"
     + "trash/         the scores in your trash, the same way.\n"
     + "scores.json    every score: its folder, the part it is in, whether it is in the trash,\n"
     + "               who it is shared with and with which role, its versions, and the\n"
-    + "               comment threads on it, with every message.\n"
+    + "               comment threads on it, with every message, and its audio takes:\n"
+    + "               where each starts in the score, and the part that holds it.\n"
     + "account.json   your account. No password, secret or token is in it.\n"
     + "shared-with-me.json  the scores others share with you, and your role: listed, not\n"
     + "               copied, since they are their owners' (each can export their own).\n"

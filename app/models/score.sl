@@ -331,6 +331,7 @@ class Score < Model
     ScoreShare.delete_all_for(this)
     ScoreSuggestion.delete_all_for(this)
     ScoreThread.delete_all_for(this)
+    ScoreTake.delete_all_for(this)
     UserNotification.delete_all_for(this)
     @delete
   end

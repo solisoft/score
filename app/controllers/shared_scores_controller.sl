@@ -22,6 +22,10 @@ class SharedScoresController < Controller
     @people_url = @comments_url.nil? ? nil : app_score_people_path(@score)
     @ticket_url = "#{shared_score_path(this.score.share_token)}/room_ticket"
     @me = current_user()&._key
+    # Its audio takes (#390), to listen to, for the same people.
+    @takes = @comments_url.nil? ? [] : ScoreTake.of(@score).map do |take|
+      {"name": take.name, "url": app_score_take_audio_path(@score._key, take._key)}
+    end
     @eui_version = ScoreAssets.version
     @indexable = @score.visibility == "public"
     @title = @score.title

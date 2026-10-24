@@ -47,7 +47,8 @@ def zip_spec_read(bytes)
     data = bytes.slice(data_at, data_at + size)
     files.push({
       "name": Encoding.decode(bytes.slice(at + 46, at + 46 + name_length), "utf-8"),
-      "text": Encoding.decode(data, "utf-8"),
+      "text": Encoding.decode(data, "utf-8") rescue nil,
+      "bytes": data,
       "crc": zip_spec_number(bytes, at + 16, 4),
       "real_crc": ZipArchive.crc32(data),
       "flags": zip_spec_number(bytes, at + 8, 2),
@@ -101,6 +102,17 @@ describe("ZipArchive") do
         assert_eq(file["method"], 0, "stored")
         assert_eq(file["flags"], 2048, "UTF-8 names")
       end
+    end
+
+    test("keeps a file given as bytes as they are: an audio take, not UTF-8") do
+      sound = [82, 73, 70, 70, 0, 255, 128, 7, 254]
+      read = zip_spec_read(ZipArchive.build([
+        {"name": "takes/track-1.wav", "bytes": sound},
+        {"name": "a.txt", "text": "é"}
+      ], 1792700073))
+      assert_eq(read[0]["bytes"], sound)
+      assert_eq(read[0]["crc"], read[0]["real_crc"])
+      assert_eq(read[1]["text"], "é")
     end
 
     test("an empty zip is just its end record") do

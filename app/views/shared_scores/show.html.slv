@@ -29,6 +29,19 @@
       <p class="read-exports-note muted" data-read-note role="status"></p>
     </section>
   <% end %>
+  <%# The audio recorded onto it in the editor (#390), for the people it is
+      shared with: each take on its own, not played with the score here. %>
+  <% if takes.length > 0 %>
+    <section class="read-takes" aria-labelledby="read-takes-title">
+      <h2 id="read-takes-title">Recorded audio</h2>
+      <% for take in takes %>
+        <figure class="read-take">
+          <figcaption><%= take["name"] %></figcaption>
+          <audio controls preload="none" src="<%= take["url"] %>"></audio>
+        </figure>
+      <% end %>
+    </section>
+  <% end %>
   <%# Comments (#385), for the people the score is shared with: read,
       reply, resolve, and start a thread on a staff's bars, typed in (the
       editor takes them from its selection). public/eui-score/comments.js. %>

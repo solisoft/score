@@ -128,6 +128,12 @@ middleware("require_app_database", fn() {
     )
     post("/app/scores/:id/versions/:version_id/copy", "app/scores#copy_version", name: "app_score_copy_version")
 
+    # The audio tracks recorded from the microphone (#390), JSON and WAV: AppTakesController.
+    get("/app/scores/:id/takes", "app/takes#index", name: "app_score_takes")
+    post("/app/scores/:id/takes", "app/takes#create")
+    get("/app/scores/:id/takes/:take_id/audio", "app/takes#audio", name: "app_score_take_audio")
+    delete("/app/scores/:id/takes/:take_id", "app/takes#destroy")
+
     # Comments on a score's bars (#385), JSON: AppCommentsController.
     get("/app/scores/:id/comments", "app/comments#index", name: "app_score_comments")
     get("/app/scores/:id/people", "app/comments#people", name: "app_score_people")

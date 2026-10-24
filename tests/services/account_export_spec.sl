@@ -265,6 +265,45 @@ describe("AccountExport") do
     end
   end
 
+  describe("audio takes (#390)") do
+    test("each take is a part's entry of its own, counted by its bytes, after the scores") do
+      user = export_user("takes")
+      score = Score.start(user, Score.blank_source("Sung"))
+      take = ScoreTake.create({
+        "score_id": score._key,
+        "user_id": user._key,
+        "track": 2,
+        "name": "Voice",
+        "offset": 1.5,
+        "duration": 4.0,
+        "size": 5000000,
+        "created_at": 1792700000
+      })
+      other = Score.start(export_user("other"), Score.blank_source("Not mine"))
+      ScoreTake.create({
+        "score_id": other._key,
+        "user_id": user._key,
+        "track": 1,
+        "name": "Elsewhere",
+        "size": 10,
+        "created_at": 1792700000
+      })
+      assert_eq(AccountExport.parts(user), [[score._key], ["take:#{take._key}"]])
+      listed = JSON.parse(AccountExport.files(user, AccountExport.parts(user), 1, 1792700073).find(&{ |file|
+        file["name"] == "scores.json"
+      })["text"])
+      assert_eq(listed[0]["takes"], [{
+        "track": 2,
+        "name": "Voice",
+        "file": "takes/track-2.wav",
+        "part": 2,
+        "starts_at_second": 1.5,
+        "seconds": 4.0,
+        "recorded_at": "2026-10-22T20:13:20+00:00"
+      }])
+    end
+  end
+
   describe("a collection never written to") do
     test("reads as no rows; any other error is raised, not swallowed") do
       assert_eq(AccountExport.read(fn() {

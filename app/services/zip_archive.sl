@@ -93,7 +93,8 @@ class ZipArchive
     directory = []
     files.each do |file|
       name = Encoding.encode(file["name"].to_s, "utf-8")
-      data = Encoding.encode(file["text"].to_s, "utf-8")
+      # A file's bytes as they are (an audio take), or its text in UTF-8.
+      data = file["bytes"] ?? Encoding.encode(file["text"].to_s, "utf-8")
       crc = ZipArchive.crc32(data)
       offset = out.length
       # Local file header: version 2.0, UTF-8 names, stored.
