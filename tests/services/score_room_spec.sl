@@ -62,6 +62,8 @@ describe("ScoreRoom") do
     assert_eq(news["revision"], score.revision)
     assert_eq(news["origin"], "editor-1")
     assert_contains(news["source"], "News")
+    # Who saved it, by key: the editors name them from the room's presence.
+    assert_eq(news["saved_by"], user._key)
   end
 
   test("a ticket lasts an hour, and an expired one is refused at the door") do
@@ -162,5 +164,206 @@ describe("ScoreRoom") do
     assert_raises("set SOLI_SESSION_SECRET") do
       ScoreRoom.secret_from(nil, nil)
     end
+  end
+end
+
+# A page's message over the socket, from connection `connection_id`.
+def cursor_event(connection_id, said)
+  {
+    "type": "message",
+    "connection_id": connection_id,
+    "message": said.to_json
+  }
+end
+
+describe("ScoreRoom, where each person works") do
+  test("a cursor from an admitted connection is relayed to the room, named from its presence") do
+    owner = room_user()
+    score = Score.start(owner, Score.blank_source("Cursors"))
+    entered = ScoreRoom.signed(ScoreRoom.ticket(score, owner, DateTime.utc.to_unix))
+    presences = [{"user_id": owner._key, "metas": [{
+      "connection_id": "conn-a",
+      "name": "Olivia"
+    }]}]
+    said = {
+      "event": "cursor",
+      "origin": "editor-1",
+      "lane": 1,
+      "bars": [3, 5],
+      "user_id": "forged",
+      "name": "Mallory"
+    }
+    relayed = ScoreRoom.relay_cursor(cursor_event("conn-a", said), entered, presences)
+    assert_eq(relayed["broadcast_channel"]["channel"], "score:#{score._key}")
+    news = JSON.parse(relayed["broadcast_channel"]["message"])
+    assert_eq(news["event"], "cursor")
+    # Who it is comes from the room, never from the page.
+    assert_eq(news["user_id"], owner._key)
+    assert_eq(news["name"], "Olivia")
+    assert_eq(news["connection_id"], "conn-a")
+    assert_eq(news["origin"], "editor-1")
+    assert_eq(news["lane"], 1)
+    assert_eq(news["bars"], [3, 5])
+  end
+
+  test("nothing is relayed from a connection the room did not admit, or under someone else's ticket") do
+    owner = room_user()
+    friend = room_user()
+    score = Score.start(owner, Score.blank_source("Strangers"))
+    ScoreShare.invite(score, friend.email, "write")
+    entered = ScoreRoom.signed(ScoreRoom.ticket(score, owner, DateTime.utc.to_unix))
+    said = {
+      "event": "cursor",
+      "lane": 0,
+      "bars": [0, 0]
+    }
+    presences = [{"user_id": friend._key, "metas": [{"connection_id": "friend-tab"}]}]
+    # Not in the room at all.
+    assert_eq(ScoreRoom.relay_cursor(cursor_event("unknown-tab", said), entered, presences), {})
+    assert_eq(ScoreRoom.relay_cursor(cursor_event("unknown-tab", said), entered, []), {})
+    # In the room, but as another person than the ticket's.
+    assert_eq(ScoreRoom.relay_cursor(cursor_event("friend-tab", said), entered, presences), {})
+  end
+
+  test("nothing is relayed once the person may no longer change the score") do
+    owner = room_user()
+    friend = room_user()
+    score = Score.start(owner, Score.blank_source("Leaving"))
+    share = ScoreShare.invite(score, friend.email, "write")
+    entered = ScoreRoom.signed(ScoreRoom.ticket(score, friend, DateTime.utc.to_unix))
+    presences = [{"user_id": friend._key, "metas": [{"connection_id": "friend-tab"}]}]
+    event = cursor_event(
+      "friend-tab",
+      {
+        "event": "cursor",
+        "lane": 0,
+        "bars": [1, 2]
+      }
+    )
+    assert_not_null(ScoreRoom.relay_cursor(event, entered, presences)["broadcast_channel"])
+    share.delete
+    assert_eq(ScoreRoom.relay_cursor(event, entered, presences), {})
+    owners = ScoreRoom.signed(ScoreRoom.ticket(score, owner, DateTime.utc.to_unix))
+    mine = [{"user_id": owner._key, "metas": [{"connection_id": "owner-tab"}]}]
+    owner_event = cursor_event(
+      "owner-tab",
+      {
+        "event": "cursor",
+        "lane": 0,
+        "bars": [1, 2]
+      }
+    )
+    assert_not_null(ScoreRoom.relay_cursor(owner_event, owners, mine)["broadcast_channel"])
+    score.move_to_trash
+    assert_eq(ScoreRoom.relay_cursor(owner_event, owners, mine), {})
+  end
+
+  test("only cursors are relayed: other messages, and text that is not JSON, are dropped") do
+    owner = room_user()
+    score = Score.start(owner, Score.blank_source("Chatter"))
+    entered = ScoreRoom.signed(ScoreRoom.ticket(score, owner, DateTime.utc.to_unix))
+    presences = [{"user_id": owner._key, "metas": [{"connection_id": "tab"}]}]
+    assert_eq(ScoreRoom.relay_cursor(cursor_event(
+      "tab",
+      {"event": "saved", "source": "x"}
+    ), entered, presences), {})
+    assert_eq(ScoreRoom.relay_cursor({
+      "type": "message",
+      "connection_id": "tab",
+      "message": "hello"
+    }, entered, presences), {})
+    assert_eq(ScoreRoom.relay_cursor(cursor_event("tab", [1, 2]), entered, presences), {})
+    # A cursor with no place: relayed as none (the selection let go).
+    relayed = ScoreRoom.relay_cursor(cursor_event("tab", {"event": "cursor"}), entered, presences)
+    news = JSON.parse(relayed["broadcast_channel"]["message"])
+    assert_null(news["lane"])
+    assert_null(news["bars"])
+    assert_eq(news["name"], owner.email)
+  end
+
+  test("a place that does not read as one is no place") do
+    assert_eq(
+      ScoreRoom.place(2, [4, 7]),
+      {"lane": 2, "bars": [4, 7]}
+    )
+    assert_eq(
+      ScoreRoom.place(0, [0, 0]),
+      {"lane": 0, "bars": [0, 0]}
+    )
+    nowhere = {"lane": nil, "bars": nil}
+    assert_eq(ScoreRoom.place(nil, nil), nowhere)
+    assert_eq(ScoreRoom.place(-1, [0, 1]), nowhere)
+    assert_eq(ScoreRoom.place(64, [0, 1]), nowhere)
+    assert_eq(ScoreRoom.place("1", [0, 1]), nowhere)
+    assert_eq(ScoreRoom.place(1, [5, 4]), nowhere)
+    assert_eq(ScoreRoom.place(1, [0]), nowhere)
+    assert_eq(ScoreRoom.place(1, [0, 10000]), nowhere)
+    assert_eq(ScoreRoom.place(1, ["a", 2]), nowhere)
+    assert_eq(ScoreRoom.place(1, "0-2"), nowhere)
+  end
+
+  test("a page that goes takes its cursor away from the others") do
+    owner = room_user()
+    score = Score.start(owner, Score.blank_source("Goodbye"))
+    ticket = ScoreRoom.ticket(score, owner, DateTime.utc.to_unix)
+    gone = ScoreRoom.on_event(
+      {
+        "type": "disconnect",
+        "connection_id": "conn-z",
+        "query": {"ticket": ticket}
+      },
+      DateTime.utc.to_unix
+    )
+    assert_eq(gone["broadcast_channel"]["channel"], "score:#{score._key}")
+    news = JSON.parse(gone["broadcast_channel"]["message"])
+    assert_eq(news["connection_id"], "conn-z")
+    assert_eq(news["gone"], true)
+    assert_null(news["bars"])
+  end
+
+  test("messages under a forged ticket, or none, are dropped; outside the server, nobody is in the room") do
+    owner = room_user()
+    score = Score.start(owner, Score.blank_source("Forged"))
+    now = DateTime.utc.to_unix
+    said = {
+      "event": "cursor",
+      "lane": 0,
+      "bars": [0, 1]
+    }.to_json
+    assert_eq(ScoreRoom.on_event(
+      {
+        "type": "message",
+        "connection_id": "c",
+        "message": said,
+        "query": {"ticket": "forged"}
+      },
+      now
+    ), {})
+    assert_eq(ScoreRoom.on_event(
+      {
+        "type": "disconnect",
+        "connection_id": "c",
+        "query": {}
+      },
+      now
+    ), {})
+    ticket = ScoreRoom.ticket(score, owner, now)
+    # A well-signed ticket: what is not a cursor is dropped before the room is asked.
+    assert_eq(ScoreRoom.on_event(
+      {
+        "type": "message",
+        "connection_id": "c",
+        "message": "hello",
+        "query": {"ticket": ticket}
+      },
+      now
+    ), {})
+    assert_eq(ScoreRoom.on_event(
+      {"type": "ping", "query": {"ticket": ticket}},
+      now
+    ), {})
+    # Run out, a ticket still names its room once its connection is in.
+    assert_eq(ScoreRoom.signed(ticket)["score"], score._key)
+    assert_null(ScoreRoom.signed(ticket.replace(score._key, "other")))
   end
 end

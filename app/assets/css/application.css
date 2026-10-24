@@ -385,7 +385,10 @@
      may wrap rather than be cut. */
   .app-save[data-kind="signed-out"] { white-space: normal; line-height: 1.35; }
   .app-save a { color: inherit; font-weight: 600; }
-  .app-room { font-size: 13px; padding: 3px 9px; border-radius: 999px; background: #eaf0fb; color: #23468a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+  .app-room { font-size: 13px; padding: 3px 9px; border-radius: 999px; background: #eaf0fb; color: #23468a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
+  /* Each person with their colour, the one their selection is drawn in. */
+  .app-room-person { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; }
+  .app-room-person::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--peer); box-shadow: 0 0 0 1.5px #fff; }
   .app-doc-action { font: 500 13px/1 var(--font-sans); color: var(--ink-soft); background: none; border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; cursor: pointer; white-space: nowrap; }
   .app-doc-action:hover { border-color: var(--ink); color: var(--ink); text-decoration: none; }
   @media (max-width: 760px) {
@@ -579,6 +582,8 @@
   .studio-conflict-actions { display: grid; gap: 8px; margin-top: 14px; }
   .studio-conflict-actions .tool { display: grid; gap: 2px; justify-items: start; text-align: left; padding: 9px 12px; height: auto; }
   .studio-conflict-actions small { font-size: 12px; opacity: .75; font-weight: 400; }
+  .studio-conflict-bars { margin: 10px 0 0; padding-left: 20px; font-size: 13.5px; max-height: 160px; overflow: auto; }
+  .studio-conflict-bars li { margin: 2px 0; }
   .tool-primary { background: #2563c9; border-color: #2563c9; color: #fff; }
 
   .studio-canvas { min-width: 0; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
@@ -628,6 +633,10 @@
   .studio-svg { position: relative; z-index: 1; }
   .studio-overlay { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
   .studio-bar-selected { position: absolute; background: rgba(37, 99, 201, .1); box-shadow: inset 0 0 0 1.5px rgba(37, 99, 201, .45); border-radius: 4px; }
+  /* Where another person works (#384): their colour, dashed, their name on it. */
+  .studio-peer { position: absolute; border: 2px dashed var(--peer); border-radius: 5px; }
+  .studio-peer::after { content: ""; position: absolute; inset: 0; background: var(--peer); opacity: .1; border-radius: 3px; }
+  .studio-peer-name { position: absolute; left: -2px; bottom: 100%; margin-bottom: 1px; font: 600 11px/1.5 var(--font-sans); color: #fff; background: var(--peer); border-radius: 4px; padding: 0 6px; white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
   .studio-grip {
     position: absolute; pointer-events: auto; cursor: ew-resize; border-radius: 6px;
     background: linear-gradient(to right, transparent 40%, rgba(37, 99, 201, .55) 40%, rgba(37, 99, 201, .55) 60%, transparent 60%);

@@ -76,8 +76,12 @@ const PALETTE = [
  * - `scoreUrl`: without `shareUrl`, the link Share copies (the score's page
  *   in the app, which opens for those it is shared with).
  *
- * Answers `{ state, ready, source(), load(text, message) }`: `ready` settles
- * once the first score is drawn.
+ * - `onPlace(place)`: where this person works, `{ lane, bars: [a, b] }` or
+ *   null, each time it changes (the app tells the others in the room).
+ *
+ * Answers `{ state, ready, source(), load(text, message, { keep }), peers(list),
+ * parse(text) }`: `ready` settles once the first score is drawn; `peers`
+ * draws the others' places (see "Where the others work").
  */
 export function startStudio(root, options = {}) {
   const $ = (selector) => root.querySelector(selector);
@@ -437,7 +441,13 @@ export function startStudio(root, options = {}) {
     load(text, message);
   }
 
-  function load(text, message) {
+  /**
+   * `text` in place of the score, one Undo away. `keep`: another person's
+   * changes merged in (the app's co-editing) — the selection and the cursor
+   * stay where they were while their staff and bars are still there.
+   */
+  function load(text, message, { keep = false } = {}) {
+    const { sel, input } = st;
     st.past.push(snapshot());
     st.future = [];
     sourceBox.value = text;
@@ -445,6 +455,12 @@ export function startStudio(root, options = {}) {
     adoptText();
     st.sel = null;
     st.input = { ...st.input, on: false, t: 0, staff: 0, last: null };
+    if (keep && st.score) {
+      const end = M.barStart(st.score, M.barsOf(st.score));
+      const fits = (lane, ...times) => st.score.staves[lane] && times.every((t) => t >= 0 && t < end);
+      if (sel && fits(sel.staff, sel.t0, sel.t1) && (sel.lanes ?? []).every((lane) => st.score.staves[lane]) && (!sel.bars || sel.bars[1] < M.barsOf(st.score))) st.sel = sel;
+      if (input.on && fits(input.staff, input.t)) st.input = input;
+    }
     saveDraft();
     draw();
     if (message || st.passed.length) say(`${message ?? ""}${passedText()}`.trim());
@@ -1479,6 +1495,85 @@ export function startStudio(root, options = {}) {
     drawRoll();
     showState();
     if (!st.playing) showInText(false);
+    tellPlace();
+  }
+
+  // ---- Where the others work (the app's co-editing) ----------------------------------
+  //
+  // The embedder hears where this person works — `onPlace({ lane, bars })`,
+  // or null — each time it changes, and hands back the others' places with
+  // `peers([{ id, name, colour, lane, bars }])`: a band in their colour over
+  // those bars of that staff, their name on it, in the score and the MIDI view.
+
+  /** Where this person works: the staff and the bars of the selection or the cursor, or null. */
+  function place() {
+    if (!st.score) return null;
+    const last = M.barsOf(st.score) - 1;
+    const barOf = (t) => Math.max(0, Math.min(M.barAt(st.score, t), last));
+    if (st.input.on) return { lane: st.input.staff, bars: [barOf(st.input.t), barOf(st.input.t)] };
+    if (!st.sel) return null;
+    const bars = st.sel.bars ?? [barOf(Math.min(st.sel.t0, st.sel.t1)), barOf(Math.max(st.sel.t0, st.sel.t1))];
+    return { lane: st.sel.staff, bars: [bars[0], bars[1]] };
+  }
+
+  let told = "null";
+  function tellPlace() {
+    const now = JSON.stringify(place());
+    if (now === told) return;
+    told = now;
+    options.onPlace?.(JSON.parse(now));
+  }
+
+  /** The others' places that fit this score. */
+  function peersHere() {
+    if (!st.score) return [];
+    const bars = M.barsOf(st.score);
+    return (st.peers ?? []).filter((p) => p.bars && st.score.staves[p.lane] && p.bars[0] < bars).map((p) => ({ ...p, bars: [p.bars[0], Math.min(p.bars[1], bars - 1)] }));
+  }
+
+  /** The others' bands over the engraving: one per bar, their name on the first of each line. */
+  function placePeers(g, add) {
+    const space = 8 * st.zoom;
+    for (const peer of peersHere()) {
+      const n = M.staffNumber(st.score, peer.lane);
+      let line = null;
+      for (let bar = peer.bars[0]; bar <= peer.bars[1]; bar++) {
+        const box = st.view.bars?.find((b) => b.bar === bar);
+        const top = box?.staves?.[n];
+        if (top == null) continue;
+        const el = add("studio-peer", box.box[0], top - space, box.box[2] + 3, top + 5 * space);
+        el.style.setProperty("--peer", peer.colour);
+        el.dataset.peer = peer.id;
+        if (box.system !== line) {
+          line = box.system;
+          const label = Object.assign(document.createElement("span"), { className: "studio-peer-name", textContent: peer.name });
+          el.appendChild(label);
+        }
+      }
+    }
+  }
+
+  /** The others' bands over the MIDI view's roll, as SVG. */
+  function rollPeers() {
+    const peers = peersHere();
+    if (!peers.length) return "";
+    const geo = R.rollLayout(st.score, { layout: st.rollLayout, zoom: st.zoom, only: st.rollLayout === "keys" ? st.rollOnly : null });
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    return peers.map((peer) => {
+      const track = geo.layout === "tracks" ? geo.tracks.find((t) => t.lane === peer.lane) : geo.tracks[0];
+      if (!track) return "";
+      const x0 = geo.x(M.barStart(st.score, peer.bars[0]));
+      const x1 = geo.x(M.barStart(st.score, peer.bars[1] + 1));
+      return `<g class="roll-peer" data-peer="${esc(peer.id)}"><rect x="${x0}" y="${track.y + 1}" width="${x1 - x0}" height="${track.h - 2}" rx="3" fill="${esc(peer.colour)}" fill-opacity="0.12" stroke="${esc(peer.colour)}" stroke-width="2" stroke-dasharray="5 3"/><text x="${x0 + 4}" y="${track.y + 12}" fill="${esc(peer.colour)}" font-size="11" font-weight="600">${esc(peer.name)}</text></g>`;
+    }).join("");
+  }
+
+  /** The others' places, as the embedder hears them: drawn at once. */
+  function setPeers(list) {
+    st.peers = list ?? [];
+    if (!st.score) return;
+    placeOverlay();
+    drawRoll();
   }
 
   // ---- Printing (Ctrl/Cmd+P) --------------------------------------------------------
@@ -1545,7 +1640,11 @@ export function startStudio(root, options = {}) {
       cursor = cursor == null ? t : Math.min(cursor, t);
     }
     const left = rollScroll.scrollLeft;
-    rollScroll.innerHTML = R.drawRoll(st.score, { layout: st.rollLayout, zoom: st.zoom, sel: st.sel, lit, cursor, loop: st.loopBars, only: st.rollLayout === "keys" ? st.rollOnly : null }) + velocityStrip() + (st.automation?.html() ?? "");
+    // The others' bands go over the roll's notes, inside its picture.
+    const roll = R.drawRoll(st.score, { layout: st.rollLayout, zoom: st.zoom, sel: st.sel, lit, cursor, loop: st.loopBars, only: st.rollLayout === "keys" ? st.rollOnly : null });
+    const end = roll.indexOf("</svg>");
+    const peers = rollPeers();
+    rollScroll.innerHTML = (end >= 0 && peers ? roll.slice(0, end) + peers + roll.slice(end) : roll) + velocityStrip() + (st.automation?.html() ?? "");
     const only = rollHost.querySelector("[data-roll-only]");
     only.hidden = !(st.rollLayout === "keys" && st.rollOnly != null);
     if (!only.hidden) only.textContent = `${R.laneNames(st.score)[st.rollOnly] ?? ""} only`;
@@ -2862,7 +2961,7 @@ export function startStudio(root, options = {}) {
     placePalette();
     overlay.innerHTML = "";
     const g = geometry();
-    if (!g || !st.score || st.input.on) return;
+    if (!g || !st.score) return;
     const boxOf = (bar) => st.view.bars?.find((b) => b.bar === bar)?.box;
     const add = (className, x0, y0, x1, y1, props = {}) => {
       const a = g.at(x0, y0);
@@ -2872,6 +2971,8 @@ export function startStudio(root, options = {}) {
       overlay.appendChild(el);
       return el;
     };
+    placePeers(g, add);
+    if (st.input.on) return;
     if (st.sel?.bars) {
       for (let bar = st.sel.bars[0]; bar <= st.sel.bars[1]; bar++) {
         const box = boxOf(bar);
@@ -3379,5 +3480,6 @@ export function startStudio(root, options = {}) {
     else if (!fromExample && start !== sourceBox.defaultValue) say("Your last score, kept in this browser. New starts afresh.");
     else say("Click a note to select it, or press N and type A–G to write.");
   });
-  return { state: st, ready, source: () => st.text, load };
+  // `parse`: the engraver's reading of a text (score_json), for the app's merge.
+  return { state: st, ready, source: () => st.text, load, peers: setPeers, parse: (text) => score_json(text) };
 }

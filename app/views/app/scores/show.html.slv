@@ -44,7 +44,16 @@
   <%# Who saved it: the 409 names them ("saved_by"), or nobody when it was
       this person, from another window. %>
   <p class="studio-parts-note"><span data-conflict-who>This score was saved from another window</span> since you opened it. Your changes are not lost: they are kept here and in the score's history.</p>
+  <%# The bars changed both here and there (#384): everything else is merged,
+      and these are taken from one side or the other. Hidden when the score
+      could not be merged by bar: then it is all mine or all theirs. %>
+  <div data-conflict-merge hidden>
+    <p class="studio-parts-note">Everything else is merged. These were changed both here and there:</p>
+    <ul class="studio-conflict-bars" data-conflict-bars></ul>
+  </div>
   <div class="studio-conflict-actions">
+    <button type="button" class="tool tool-wide tool-primary" data-conflict-bars-mine hidden>Keep mine for these <small>their other changes merged in</small></button>
+    <button type="button" class="tool tool-wide" data-conflict-bars-theirs hidden>Take theirs for these <small>my other changes kept</small></button>
     <button type="button" class="tool tool-wide tool-primary" data-conflict-mine>Keep mine <small>replace what was saved elsewhere</small></button>
     <button type="button" class="tool tool-wide" data-conflict-theirs>Load theirs <small>drop my changes here</small></button>
     <button type="button" class="tool tool-wide" data-conflict-copy>Save mine as a copy <small>a new score, this one left as saved elsewhere</small></button>
@@ -61,14 +70,23 @@
     is reloaded, and says so; the text stays kept here.
     Offline, each change is also kept in this browser (localStorage, with
     the revision it was typed over) until a save goes through: a page
-    closed before then gives it back the next time it opens, and sends it. %>
+    closed before then gives it back the next time it opens, and sends it.
+    Two people at once (#384): a save from elsewhere, met while this editor
+    has changes of its own (live from the room, or as a 409), is merged with
+    them bar by bar (public/eui-score/merge.js) from `base`, the text both
+    last had in common, and the merge is saved. Only the bars changed both
+    ways are asked about; a score that cannot be merged by bar gets the
+    all-or-nothing choice above. %>
 <script type="module">
   const { startStudio } = await import("/eui-score/studio.js?v=<%= eui_version %>");
+  const { mergeScores, conflictLines } = await import("/eui-score/merge.js?v=<%= eui_version %>");
   const root = document.getElementById("studio");
   const url = "<%= app_score_path(score) %>";
   const saveState = document.querySelector("[data-save-state]");
   const titleBox = document.querySelector("[data-doc-title]");
   let revision = <%= score.revision %>;
+  // The text at `revision`, as this editor and the server both have it: what a merge starts from.
+  let base = root.querySelector("[data-source]").value;
   let pending = null;
   let saving = false;
   let conflict = false;
@@ -121,10 +139,56 @@
   const conflictBox = document.querySelector("[data-conflict]");
   let theirs = null;
   const conflictWho = conflictBox.querySelector("[data-conflict-who]");
+  const conflictPart = (name) => conflictBox.querySelector(`[data-conflict-${name}]`);
+
+  // This editor's text merged with `answer` (the score as saved elsewhere),
+  // from `base`: { text, conflicts, whole }; `prefer` settles the bars
+  // changed both ways. Without a base (a text kept from an older visit), no merge.
+  const mergeWith = (answer, prefer = null) => {
+    if (base == null) return { text: null, conflicts: [], whole: true };
+    return mergeScores(base, studio.source(), answer.source, { parse: studio.parse, prefer });
+  };
+
+  // The merge put in place of this editor's text, its selection kept, and
+  // sent: the score is now `answer`'s revision plus what was merged in.
+  // Said in the header once the merge is saved: "Saved, merged with …".
+  let mergeNote = null;
+  const applyMerged = (text, answer, message, note = null) => {
+    mergeNote = note;
+    revision = answer.revision;
+    base = answer.source;
+    titleBox.textContent = answer.title;
+    if (text !== studio.source()) {
+      applyingRemote = true;
+      try {
+        studio.load(text, message, { keep: true });
+      } finally {
+        applyingRemote = false;
+      }
+    } else if (message) root.querySelector("[data-status]").textContent = message;
+    if (text === answer.source) {
+      pending = null;
+      forgetLocally();
+      show(mergeNote ? `Saved, ${mergeNote}` : "Saved", "ok");
+      mergeNote = null;
+      return;
+    }
+    pending = text;
+    keepLocally(pending);
+    save();
+  };
+
   const openConflict = () => {
-    const by = theirs?.saved_by;
+    const by = theirs?.saved_by ? shortName(theirs.saved_by) : null;
     conflictWho.textContent = by ? `${by} saved this score` : "This score was saved from another window";
     show(by ? `Changed by ${by}: choose what to keep` : "Changed elsewhere: choose what to keep", "conflict");
+    // What the merge leaves to choose: some bars, or (not mergeable by bar) the whole score.
+    const merged = mergeWith(theirs);
+    const byBar = !merged.whole && merged.conflicts.length > 0;
+    conflictPart("merge").hidden = !byBar;
+    for (const name of ["bars-mine", "bars-theirs"]) conflictPart(name).hidden = !byBar;
+    for (const name of ["mine", "theirs"]) conflictPart(name).hidden = byBar;
+    conflictPart("bars").replaceChildren(...(byBar ? conflictLines(merged.conflicts) : []).map((line) => Object.assign(document.createElement("li"), { textContent: line })));
     if (!conflictBox.open) conflictBox.showModal();
   };
   const resolve = () => {
@@ -132,10 +196,31 @@
     theirs = null;
     conflictBox.close();
   };
+
+  // Met with the score as saved elsewhere (`answer`), this editor having
+  // changes of its own: merged and saved when no bar was changed both ways;
+  // else the conflict dialog. Answers whether it merged.
+  const meet = (answer, by) => {
+    const merged = mergeWith(answer);
+    if (merged.text == null) return false;
+    const note = by ? `merged with ${shortName(by)}'s changes` : "merged with your other window";
+    applyMerged(merged.text, answer, by ? `Merged with ${shortName(by)}'s changes.` : "Merged with the changes from your other window.", note);
+    return true;
+  };
   conflictBox.querySelector("[data-conflict-close]").addEventListener("click", () => conflictBox.close());
   saveState.addEventListener("click", () => conflict && openConflict());
+  for (const prefer of ["mine", "theirs"]) {
+    conflictPart(`bars-${prefer}`).addEventListener("click", () => {
+      const answer = theirs;
+      const merged = mergeWith(answer, prefer);
+      if (merged.text == null) return openConflict();
+      resolve();
+      applyMerged(merged.text, answer, prefer === "mine" ? "Merged: your version of those bars kept." : "Merged: their version of those bars taken.");
+    });
+  }
   conflictBox.querySelector("[data-conflict-mine]").addEventListener("click", () => {
     revision = theirs.revision;
+    base = theirs.source;
     resolve();
     pending = studio.source();
     keepLocally(pending);
@@ -145,6 +230,7 @@
     const answer = theirs;
     resolve();
     revision = answer.revision;
+    base = answer.source;
     applyingRemote = true;
     try {
       studio.load(answer.source, "The score as it was saved elsewhere. Your changes are in its history.");
@@ -189,20 +275,24 @@
       }
       const answer = await response.json();
       if (response.status === 409) {
+        pending ??= text;
+        // Saved elsewhere since: merged by bar when it can be, else asked.
+        if (meet(answer, answer.saved_by)) return;
         conflict = true;
         theirs = answer;
-        pending ??= text;
         keepLocally(studio.source());
         openConflict();
       } else if (!response.ok) {
         show(answer.error ?? "Not saved", "conflict");
       } else {
         revision = answer.revision;
+        base = text;
         if (pending == null) forgetLocally();
         else keepLocally(pending);
         titleBox.textContent = answer.title;
         document.title = `${answer.title} · EUI Score`;
-        show(pending == null ? "Saved" : "Unsaved changes", pending == null ? "ok" : "dirty");
+        show(pending == null ? (mergeNote ? `Saved, ${mergeNote}` : "Saved") : "Unsaved changes", pending == null ? "ok" : "dirty");
+        if (pending == null) mergeNote = null;
       }
     } catch (error) {
       pending ??= text;
@@ -235,6 +325,7 @@
       schedule();
     },
     onOpen: openAsNew,
+    onPlace: (place) => tellPlace(place),
   });
 
   // What New / Open bring becomes a score of its own, once this one's last
@@ -257,11 +348,61 @@
   const roomBox = document.querySelector("[data-room]");
   const me = "<%= current_user()._key %>";
   let people = {};
+  // Where each of the others works, by connection: { user_id, name, lane, bars }.
+  let cursors = {};
+  // A colour per person, told apart without red and green (Okabe–Ito); this
+  // person's other windows in grey.
+  const COLOURS = ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00", "#56B4E9"];
+  const colourOf = (id) => {
+    if (id === me) return "#5b6475";
+    // By everyone's place in the room, this person's included: each has the same colour on every screen.
+    const at = Object.keys(people).sort().indexOf(id);
+    const k = at >= 0 ? at : [...id].reduce((sum, c) => sum + c.charCodeAt(0), 0);
+    return COLOURS[k % COLOURS.length];
+  };
+  const shortName = (name) => String(name ?? "").replace(/@.*$/, "") || "Someone";
+  const nameOf = (id) => people[id]?.metas?.[0]?.name;
   const showPeople = () => {
-    const others = Object.entries(people).filter(([id]) => id !== me).map(([, p]) => p.metas[0].name);
+    const others = Object.entries(people).filter(([id]) => id !== me);
     roomBox.hidden = others.length === 0;
-    roomBox.textContent = others.length ? `With ${others.join(", ")}` : "";
-    roomBox.title = others.length ? `Also editing: ${others.join(", ")}` : "";
+    roomBox.replaceChildren();
+    if (others.length) {
+      roomBox.append("With");
+      others.forEach(([id, p], k) => {
+        const chip = Object.assign(document.createElement("span"), { className: "app-room-person", textContent: shortName(p.metas[0].name) + (k < others.length - 1 ? "," : "") });
+        chip.style.setProperty("--peer", colourOf(id));
+        chip.dataset.person = id;
+        roomBox.append(chip);
+      });
+    }
+    roomBox.title = others.length ? `Also editing: ${others.map(([, p]) => p.metas[0].name).join(", ")}` : "";
+    showCursors();
+  };
+  const showCursors = () => {
+    studio.peers(Object.entries(cursors).map(([id, c]) => ({
+      id,
+      name: c.user_id === me ? "You, in another window" : shortName(c.name),
+      colour: colourOf(c.user_id),
+      lane: c.lane,
+      bars: c.bars,
+    })));
+  };
+
+  // Where this person works, told to the room: at most four times a second.
+  let socket = null;
+  let placeNow = null;
+  let placeTimer = 0;
+  let placeSent = 0;
+  const sendPlace = () => {
+    placeTimer = 0;
+    placeSent = Date.now();
+    if (socket?.readyState !== WebSocket.OPEN) return;
+    socket.send(JSON.stringify({ event: "cursor", origin, lane: placeNow?.lane ?? null, bars: placeNow?.bars ?? null }));
+  };
+  const tellPlace = (place) => {
+    placeNow = place;
+    if (placeTimer) return;
+    placeTimer = setTimeout(sendPlace, Math.max(0, 250 - (Date.now() - placeSent)));
   };
   // Each (re)connect asks for a fresh ticket (they last an hour): once the
   // score is no longer shared with this person, or is in the trash, none
@@ -286,8 +427,11 @@
       return;
     }
     const scheme = location.protocol === "https:" ? "wss:" : "ws:";
-    const socket = new WebSocket(`${scheme}//${location.host}/ws/scores?ticket=${encodeURIComponent(ticket)}`);
-    socket.onopen = () => (roomDelay = 3000);
+    socket = new WebSocket(`${scheme}//${location.host}/ws/scores?ticket=${encodeURIComponent(ticket)}`);
+    socket.onopen = () => {
+      roomDelay = 3000;
+      sendPlace();
+    };
     socket.onmessage = (message) => {
       let data;
       try {
@@ -304,14 +448,34 @@
         showPeople();
       } else if (data.event === "presence_diff") {
         Object.entries(data.payload.joins ?? {}).forEach(([id, p]) => (people[id] = p));
-        Object.keys(data.payload.leaves ?? {}).forEach((id) => delete people[id]);
+        Object.keys(data.payload.leaves ?? {}).forEach((id) => {
+          delete people[id];
+          for (const [connection, c] of Object.entries(cursors)) if (c.user_id === id) delete cursors[connection];
+        });
         showPeople();
+        // Someone came in: they see where this person works.
+        if (Object.keys(data.payload.joins ?? {}).length) sendPlace();
+      } else if (data.event === "cursor") {
+        if (data.origin === origin && !data.gone) return;
+        if (data.gone || !data.bars) delete cursors[data.connection_id];
+        else cursors[data.connection_id] = { user_id: data.user_id, name: data.name, lane: data.lane, bars: data.bars };
+        showCursors();
       } else if (data.event === "saved" && data.origin !== origin && data.revision > revision) {
-        if (pending != null || saving || conflict) {
+        // This editor's own save on its way, or a choice open: that save meets the 409, which merges.
+        if (saving || conflict) {
           show("Changed in another window", "conflict");
           return;
         }
+        if (pending != null) {
+          const by = data.saved_by === me ? null : shortName(nameOf(data.saved_by) ?? "someone");
+          clearTimeout(timer);
+          // Bars changed both ways: sent now, the save meets the 409, which keeps
+          // this text in the score's history and opens the choice.
+          if (!meet(data, by)) save();
+          return;
+        }
         revision = data.revision;
+        base = data.source;
         applyingRemote = true;
         try {
           studio.load(data.source, "Updated: someone else saved this score.");
@@ -325,6 +489,7 @@
     };
     socket.onclose = () => {
       people = {};
+      cursors = {};
       showPeople();
       setTimeout(joinRoom, roomDelay);
     };
@@ -339,6 +504,8 @@
   if (kept?.text) {
     studio.ready.then(() => {
       if (kept.text === studio.source()) return forgetLocally();
+      // Typed over another revision than this page's: what both had in common is not known here.
+      if (kept.revision !== revision) base = null;
       revision = kept.revision;
       studio.load(kept.text, "Your changes made without a network are back, and being saved.");
     });

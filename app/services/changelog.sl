@@ -13,6 +13,21 @@ class Changelog
       {"date": "2026-10-24", "entries": [
         {
           "area": "site",
+          "title": "Two people edit one score: bars merge, and each sees where the other works",
+          "text": "When someone else saves a score you are changing too, their changes are now merged with yours "
+          + "bar by bar instead of asking you to choose one version: a bar, a staff's settings, the title or a "
+          + "mixer setting changed by only one of you is kept, and the merge is saved for everyone, with a word "
+          + "saying whose changes came in. Bars or staves added or taken away on one side are lined up with the other, "
+          + "the velocities, automation curves and mixer settings moving with their bars and staves. "
+          + "Only the bars both of you changed differently are asked about, by name (\"Bar 12, Piano right "
+          + "hand\"): keep yours for those, take theirs, or save yours as a copy; nothing is ever lost, the "
+          + "refused text stays in the score's history. Each person in the score has a colour: their selection "
+          + "is drawn as a dashed band with their name over those bars of that staff, in the score and in the "
+          + "MIDI view, and the \"With …\" names at the top show the same colours.",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "Automation curves, the stems and MP3",
           "text": "Under the MIDI view, below the velocities, a lane draws how a staff's modulation, expression, "
           + "volume, pan, sustain pedal or pitch bend moves while it plays: choose the staff and the curve, click "
