@@ -165,7 +165,11 @@ export function install(ctx) {
     if (lane < 0) {
       // Voices of rests (voice 3 brings voice 2): nothing in the text changes, so no step to undo.
       const had = M.voiceLanes(st.score, upper).length;
-      lane = M.addVoice(st.score, upper, voice);
+      try {
+        lane = M.addVoice(st.score, upper, voice);
+      } catch (error) {
+        return say(error.message ?? String(error), true);
+      }
       const added = M.voiceLanes(st.score, upper).length - had;
       if (st.input.on && st.input.staff >= upper + had) st.input.staff += added;
     }
@@ -180,7 +184,9 @@ export function install(ctx) {
     } else {
       st.sel = { staff: lane, t0: 0, t1: 0, head: -1 };
     }
-    say(VOICE_SAID[voice] ?? "Voice 1");
+    // A \\partCombine staff's voices are its parts.
+    if (M.isCombined(st.score, lane)) say(voice === 1 ? "Part I: its notes are drawn with part II's, stems up where they part" : "Part II: its notes are drawn with part I's, stems down where they part");
+    else say(VOICE_SAID[voice] ?? "Voice 1");
     draw();
   }
 

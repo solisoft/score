@@ -1313,6 +1313,8 @@ export function crossOf(score, s, ev) {
  */
 export function setCross(score, s, a, b, dir) {
   refuseDrums(score, s);
+  if (isAutoChange(score, s)) throw new Error(AUTO_CROSS);
+  if (isCombined(score, s)) throw new Error(COMBINE_CROSS);
   const lanes = staffLanes(score);
   const other = lanes[staffNumber(score, s) + Math.sign(dir)];
   if (other == null) throw new Error(dir < 0 ? "there is no staff above to draw the notes on" : "there is no staff below to draw the notes on");
@@ -1400,6 +1402,11 @@ export function toggleArticulation(score, s, i, name) {
   if (ev.artDirs?.[name] != null && !ev.arts.includes(name)) {
     delete ev.artDirs[name];
     if (!Object.keys(ev.artDirs).length) delete ev.artDirs;
+  }
+  // Its \\tweak goes with it.
+  if (!ev.arts.includes(name) && ev.tweaks) {
+    ev.tweaks = ev.tweaks.filter((x) => x.on !== `art:${name}`);
+    if (!ev.tweaks.length) delete ev.tweaks;
   }
 }
 
@@ -1597,6 +1604,7 @@ export function setLyric(score, s, i, text, hyphen = false, extend = false, vers
   if (!Number.isInteger(verse) || verse < 1 || verse > MAX_VERSES) throw new Error(`a verse is 1 to ${MAX_VERSES}`);
   const ev = noteOf(score, s, i);
   if (ev.rest) throw new Error("a syllable goes under a note");
+  if (isCombined(score, s) || isAutoChange(score, s)) throw new Error(COMBINE_WORDS);
   const voice = voiceOf(score, s);
   const sung = lyricsVoiceOf(score, s);
   if (voice !== sung) {
@@ -2186,6 +2194,8 @@ export function keyOf(score, s, t = 0) {
  */
 export function addVoice(score, s, voice = 2) {
   refuseRaw(score, s);
+  if (isCombined(score, s) && voice > 2) throw new Error(COMBINE_VOICES);
+  if (isAutoChange(score, s)) throw new Error(AUTO_VOICES);
   const u = upperOf(score, s);
   if (!score.staves[u]) throw new Error("no such staff");
   if (!Number.isInteger(voice) || voice < 2 || voice > MAX_VOICES) throw new Error(`a staff holds ${MAX_VOICES} voices at most`);
@@ -2203,6 +2213,7 @@ export function addVoice(score, s, voice = 2) {
  */
 export function removeVoice(score, s, voice = null) {
   refuseRaw(score, s);
+  if (isCombined(score, s)) throw new Error(COMBINE_VOICES);
   const lanes = voiceLanes(score, s);
   if (lanes.length < 2) throw new Error("this staff has one voice");
   const v = voice ?? (isLower(score, s) ? voiceOf(score, s) : lanes.length);
@@ -2398,6 +2409,7 @@ export function setClefAt(score, s, b, clef) {
   if (!staff) throw new Error("no such staff");
   if (staff.tab) throw new Error("a tablature has no clef: its lines are the strings");
   refuseRaw(score, s);
+  if (staff.autoChange) throw new Error(AUTO_CLEFS);
   if (clef != null && !CLEFS.includes(clef)) throw new Error("no such clef");
   if (b <= 0) {
     if (clef) staff.clef = clef;
@@ -2602,6 +2614,12 @@ function eventText(ev, beam = "") {
   // Fingerings and string numbers: a chord's in it, by its note; the others after the value.
   const fingers = ev.rest || ev.pitches.some((p) => p.drum) ? [] : ev.fingers ?? [];
   const fingerText = (f) => (f.circled ? `\\${f.text}` : `${f.dir < 0 ? "^" : f.dir > 0 ? "_" : "-"}${f.text}`);
+  // A post-event written with its \\tweak, as the text wrote it: -\\tweak color #red ->.
+  const tw = (on, text) => {
+    const t = (ev.tweaks ?? []).find((x) => x.on === on);
+    if (!t) return text;
+    return `${t.lead}${t.text} ${t.lead !== "-" && /^[-^_]/.test(text) ? text.slice(1) : text}`;
+  };
   const onHead = (p) => (ev.pitches.length > 1 ? fingers.filter((f) => f.head === p.d && ev.pitches.find((q) => q.d === f.head) === p) : []);
   // Inside a chord, a note's string comes before its finger.
   const headMarks = (p) => onHead(p).sort((x, y) => Number(y.circled) - Number(x.circled)).map(fingerText).join("");
@@ -2624,34 +2642,34 @@ function eventText(ev, beam = "") {
   out += ev.base + ".".repeat(ev.dots);
   if (ev.tremolo && !ev.rest) out += `:${ev.tremolo}`;
   out += beam;
-  if (ev.tie && !ev.rest) out += "~";
-  if (ev.slurStart) out += "(";
+  if (ev.tie && !ev.rest) out += tw("tie", "~");
+  if (ev.slurStart) out += tw("slur", "(");
   if (ev.slurEnd) out += ")";
   if (ev.phraseEnd && !ev.rest) out += "\\)";
-  if (ev.phraseStart && !ev.rest) out += "\\(";
-  if (ev.dynamic) out += `\\${ev.dynamic}`;
-  if (ev.hairpinEnd) out += "\\!";
-  if (ev.hairpin) out += HAIRPIN_WORDS.includes(ev.hairpinWords) ? `\\${ev.hairpinWords}` : ev.hairpin === "<" ? "\\<" : "\\>";
+  if (ev.phraseStart && !ev.rest) out += tw("phrase", "\\(");
+  if (ev.dynamic) out += tw("dynamic", `\\${ev.dynamic}`);
+  if (ev.hairpinEnd) out += tw("hairpinEnd", "\\!");
+  if (ev.hairpin) out += tw("hairpin", HAIRPIN_WORDS.includes(ev.hairpinWords) ? `\\${ev.hairpinWords}` : ev.hairpin === "<" ? "\\<" : "\\>");
   // Each above (^) or below (_) when it was written so, else where the engraver puts it.
   for (const a of ev.arts) {
     const text = SCRIPTS[a] ?? "";
     const dir = ev.artDirs?.[a];
-    out += !text || !dir ? text : `${dir < 0 ? "^" : "_"}${text.startsWith("-") ? text.slice(1) : text}`;
+    out += tw(`art:${a}`, !text || !dir ? text : `${dir < 0 ? "^" : "_"}${text.startsWith("-") ? text.slice(1) : text}`);
   }
-  out += loose.map(fingerText).join("");
-  if (ev.chord) out += `^${quote(ev.chord)}`;
+  out += loose.map((f) => (f.circled ? fingerText(f) : tw(`finger:${f.text}`, fingerText(f)))).join("");
+  if (ev.chord) out += tw(`text:${ev.chord}`, `^${quote(ev.chord)}`);
   if (ev.fret && !ev.rest) out += `${ev.fretBelow ? "_" : "^"}\\markup \\fret-diagram ${quote(fretVerbose(ev.fret))}`;
-  for (const t of ev.texts) out += `${t.dir > 0 ? "_" : "^"}${wordsText(t)}`;
-  if (ev.arpeggio && !ev.rest) out += "\\arpeggio";
-  if (ev.gliss && !ev.rest) out += "\\glissando";
+  for (const t of ev.texts) out += tw(`text:${t.text}`, `${t.dir > 0 ? "_" : "^"}${wordsText(t)}`);
+  if (ev.arpeggio && !ev.rest) out += tw("arpeggio", "\\arpeggio");
+  if (ev.gliss && !ev.rest) out += tw("gliss", "\\glissando");
   // Let go before pressed again, when a note has both.
-  if (ev.pedalOff) out += "\\sustainOff";
-  if (ev.pedalOn) out += "\\sustainOn";
+  if (ev.pedalOff) out += tw("pedalOff", "\\sustainOff");
+  if (ev.pedalOn) out += tw("pedalOn", "\\sustainOn");
   // What LilyPond reads as commands after the note: a tie let ring or repeated, a text span, a breath.
-  if (ev.lv && !ev.rest) out += "\\laissezVibrer";
-  if (ev.repeatTie && !ev.rest) out += "\\repeatTie";
+  if (ev.lv && !ev.rest) out += tw("lv", "\\laissezVibrer");
+  if (ev.repeatTie && !ev.rest) out += tw("repeatTie", "\\repeatTie");
   if (ev.spanEnd) out += "\\stopTextSpan";
-  if (ev.spanStart != null) out += "\\startTextSpan";
+  if (ev.spanStart != null) out += tw("spanStart", "\\startTextSpan");
   if (after) out += ` { ${after.join(" ")} }`;
   if (BREATHS.includes(ev.breath)) out += ` \\${ev.breath}`;
   return out;
@@ -2711,6 +2729,8 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
   const repeats = score.repeats ?? [];
   // A staff's words sung to a lower voice: a Lyrics line beside the staves, so inside << >>.
   let lyricsTo = false;
+  // The music of the variables a \\partCombine names, written before the score.
+  const partDefs = [];
   const music0 = firstMusic(score);
   const staves = staffLanes(score).map((s) => {
     const staff = score.staves[s];
@@ -2731,7 +2751,9 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
     }
     // The other voices, each its bars: a bar is written in voices up to the
     // last that sounds there (or that the page writes in), those before it as they are.
-    const others = voiceLanes(score, s).slice(1).map((lane) => ({ lane, bars: staffBars(score, score.staves[lane], lane) }));
+    // Two parts on one staff: part II is written after part I, whole (see below).
+    const partII = staff.combine ? laneOfVoice(score, s, 2) : -1;
+    const others = partII >= 0 ? [] : voiceLanes(score, s).slice(1).map((lane) => ({ lane, bars: staffBars(score, score.staves[lane], lane) }));
     const voicesIn = (b) => {
       // A bar of cue notes keeps the rests of the part beside them.
       const cueBar = upper[b]?.events.length > 0 && upper[b].events.every((ev) => ev.cue);
@@ -2744,10 +2766,12 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
     // Words sung to a lower voice (\lyricsto): the staff's voices are written
     // whole, side by side, that voice named — LilyPond's lyrics follow one voice.
     const sungLane = lyricsLane(score, s);
-    const toVoice = !unfold && sungLane > s && versesOf(score.staves[sungLane]) > 0;
+    const spread = Boolean(staff.combine || staff.autoChange);
+    const toVoice = !spread && !unfold && sungLane > s && versesOf(score.staves[sungLane]) > 0;
     if (toVoice) lyricsTo = true;
     // Under \compressMMRests, bars of rest side by side are written R1*n: gathered.
-    const gathered = !toVoice && !unfold && score.compress ? restRuns(score, upper, voicesIn, repeats, (b) => (staff.ossias ?? []).some((o) => b >= o.bar && b < o.bar + o.bars)) : [];
+    const gathered = !toVoice && !spread && !unfold && score.compress ? restRuns(score, upper, voicesIn, repeats, (b) => (staff.ossias ?? []).some((o) => b >= o.bar && b < o.bar + o.bars)) : [];
+    const fromItem = items.length;
     const bars = upper.map((bar, b) => {
       const broken = top && b > 0 ? { line: "\\break ", page: "\\pageBreak " }[(score.breaks ?? {})[b - 1]] ?? "" : "";
       const run = gathered[b];
@@ -2775,6 +2799,24 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
       return broken + ossiaStarts.map(() => "<< { ").join("") + bodyText + ossiaEnds.map((o) => ` } ${ossiaText(o)} >>`).join("");
     });
     let music = unfold ? playedOut(score, s, bars) : withRepeats(bars, repeats);
+    if (partII >= 0) {
+      // \\partCombine { part I } { part II }, or the variables it named, their music before the score.
+      const middle = items.length;
+      const lower = staffBars(score, score.staves[partII], partII);
+      for (const bar of lower) items.push(...bar.items);
+      markParts(score, items, fromItem, middle);
+      const texts = lower.map((bar) => bar.text);
+      const names = staff.combine.names ?? [];
+      const part = (text, name) => {
+        if (!name || unfold) return `{ ${text} }`;
+        partDefs.push(`${name} = {\n  ${text.replace(/\n {4}/g, "\n  ")}\n}`);
+        return `\\${name}`;
+      };
+      const [one, two] = [part(music, names[0]), part(unfold ? playedOut(score, partII, texts) : checked(texts), names[1])];
+      music = `\\partCombine ${one}${one.startsWith("{") ? "\n    " : " "}${two}`;
+    }
+    // One voice over a piano's two staves: the lower staff's rests numbered after its notes.
+    if (staff.autoChange) items.push(...echoItems(score, s));
     if (toVoice) {
       // The first voice keeps the bar's changes and the repeats; the others are its bars, one after another.
       const lower = others.map((o) => {
@@ -2801,7 +2843,11 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
     const moved = written ? transpositionOf(staff) : null;
     const brace = moved ? `\\transpose c ${moved} {` : "{";
     // A drum staff: its strokes in \\drummode, with no clef and no key.
-    const opening = staff.drums
+    const auto = staff.autoChange;
+    const piano = auto && (auto.piano || settings) ? `\\new PianoStaff ${settings ? `\\with { ${settings}} ` : ""}` : "";
+    const opening = auto
+      ? `${piano}\\autoChange ${auto.split ? `${auto.split} ` : ""}{\n  \\key ${keyText(keyOf(score, s), staffKeyAt(score, s, 0).mode)} \\time ${timeText(score, time)}${partial}${tempo}`
+      : staff.drums
       ? `\\new DrumStaff ${settings ? `\\with { ${settings}} ` : ""}\\drummode {\n  \\time ${timeText(score, time)}${partial}${tempo}`
       : `\\new ${staff.tab ? "TabStaff" : "Staff"} ${staff.id ? `= ${quote(staff.id)} ` : ""}${settings ? `\\with { ${settings}} ` : ""}${brace}\n  ${staff.tab ? "" : `\\clef ${clef} `}\\key ${keyText(keyOf(score, s), staffKeyAt(score, s, 0).mode)} \\time ${timeText(score, time)}${partial}${tempo}`;
     let out = `${opening}\n  ${music.replace(/\n {4}/g, "\n  ")}${ending}\n}`;
@@ -2809,7 +2855,7 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
     if (toVoice) {
       const sung = score.staves[sungLane];
       for (let verse = 1; verse <= versesOf(sung); verse++) out += `\n\\new Lyrics \\lyricsto ${quote(lyricsName(score, s))} { ${lyricText(sung, verse)} }`;
-    } else if (sungLane === s) {
+    } else if (sungLane === s && !spread) {
       for (let verse = 1; verse <= versesOf(staff); verse++) out += `\n\\addlyrics { ${lyricText(staff, verse)} }`;
     }
     return out;
@@ -2841,7 +2887,8 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
   // Bars of rest gathered on every staff: a part's long rests, as one bar.
   const gathering = score.compress ? "\\compressMMRests " : "";
   // The variables a staff kept as written uses, as they were written.
-  const defs = score.defs?.length ? `${score.defs.join("\n")}\n` : "";
+  const allDefs = [...(score.defs ?? []), ...partDefs];
+  const defs = allDefs.length ? `${allDefs.join("\n")}\n` : "";
   const source = pageText(score) + defs + (header ? `\\header { ${header} }\n` : "") + gathering + body + "\n";
   // What is not notation (the mixer, the notes' velocities…) rides along at the end, as a comment.
   return { source: unfold || !score.meta ? source : writeMeta(source, score.meta), items };
@@ -3718,6 +3765,8 @@ export function nextBeat(score, t) {
 export function isDrawn(score, item) {
   // A note of what is kept as written (an ossia's): drawn unless a spacer.
   if (item.kept) return !item.spacer;
+  // A part's note drawn once for both parts, an \\autoChange's rest where its note is.
+  if (item.hidden) return false;
   const ev = score.staves[item.staff]?.events[item.index];
   const line = score.staves[item.staff];
   return Boolean(ev) && !ev.spacer && !(line.chords && !ev.chord) && !(line.figures && !ev.figureRaw && !/[^_ ]/.test(ev.figure ?? ""));
@@ -4869,7 +4918,8 @@ function pathEnd(src, i) {
   else while (k < src.length && /[A-Za-z0-9.\-]/.test(src[k])) k++;
   for (;;) {
     const next = skipBlank(src, k);
-    if (src.startsWith("#'", next)) k = schemeEnd(src, next);
+    // An old #'symbol of the path; #'(0 . 1) is a value.
+    if (src.startsWith("#'", next) && /[A-Za-z]/.test(src[next + 2] ?? "")) k = schemeEnd(src, next);
     else return k;
   }
 }
@@ -4963,6 +5013,97 @@ export function keptCommands(source, spans) {
       } else k++;
     }
     if (kept.length) out.set(i, kept);
+  });
+  return out;
+}
+
+// A \\tweak written on what follows a note — an articulation, a dynamic,
+// words, a slur — `c4-\\tweak color #red ->`, `-\\tweak extra-offset #'(0 . 1)
+// ^"x"`: kept on the note, `ev.tweaks` [{ on, lead, text }], `on` what it
+// tweaks (see postEventAt), `lead` the -, ^ or _ written before it, `text`
+// the \\tweak (or the several written one after another). It is written
+// again before what it tweaks as long as the note has that.
+
+/** The articulations written with a sign: -> -. -- -^ -! -_ -+. */
+const SCRIPT_SIGNS = { ">": "accent", ".": "staccato", "-": "tenuto", "^": "marcato", "!": "staccatissimo", _: "portato", "+": "stopped" };
+/** The commands written after a note, by what of the note they are. */
+const POST_COMMANDS = { glissando: "gliss", arpeggio: "arpeggio", laissezVibrer: "lv", repeatTie: "repeatTie", sustainOn: "pedalOn", sustainOff: "pedalOff", startTextSpan: "spanStart" };
+
+/** What the post-event at `i` is, for a \\tweak before it: { on, end }, or null. */
+function postEventAt(src, i) {
+  let k = i;
+  if ("-^_".includes(src[k] ?? "")) {
+    if (SCRIPT_SIGNS[src[k + 1]]) return { on: `art:${SCRIPT_SIGNS[src[k + 1]]}`, end: k + 2 };
+    k++;
+  }
+  const digits = /^\d+/.exec(src.slice(k, k + 4))?.[0];
+  if (digits) return { on: `finger:${digits}`, end: k + digits.length };
+  if (src[k] === '"') {
+    const end = stringEnd(src, k);
+    return { on: `text:${src.slice(k + 1, end - 1).replace(/\\(.)/g, "$1")}`, end };
+  }
+  if (src[k] === "(") return { on: "slur", end: k + 1 };
+  if (src[k] === "~") return { on: "tie", end: k + 1 };
+  if (src.startsWith("\\(", k)) return { on: "phrase", end: k + 2 };
+  if (src.startsWith("\\<", k) || src.startsWith("\\>", k)) return { on: "hairpin", end: k + 2 };
+  if (src.startsWith("\\!", k)) return { on: "hairpinEnd", end: k + 2 };
+  const name = commandAt(src, k);
+  if (!name) return null;
+  const end = k + 1 + name.length;
+  if (name === "markup") {
+    // Words in \\markup: by their text, as the engraver reads it.
+    const to = markupEnd(src, end);
+    const inner = src.slice(end, to);
+    const quoted = /"((?:[^"\\]|\\.)*)"/.exec(inner)?.[1];
+    const words = quoted != null ? quoted.replace(/\\(.)/g, "$1") : inner.replace(/\\[A-Za-z-]+|[{}]/g, " ").trim().replace(/\s+/g, " ");
+    return { on: `text:${words}`, end: to };
+  }
+  if (DYNAMICS.includes(name)) return { on: "dynamic", end };
+  if (HAIRPIN_WORDS.includes(name)) return { on: "hairpin", end };
+  if (SCRIPTS[name]) return { on: `art:${name}`, end };
+  if (POST_COMMANDS[name]) return { on: POST_COMMANDS[name], end };
+  return null;
+}
+
+/**
+ * The \\tweak written on each note's post-events in `source`, by the
+ * engraver's number for the note: Map i → [{ on, lead, text }]. `spans` are
+ * `source_spans`.
+ */
+export function postTweaks(source, spans) {
+  const out = new Map();
+  if (!source || !Array.isArray(spans)) return out;
+  const order = spans.map((sp, i) => (sp ? i : -1)).filter((i) => i >= 0).sort((x, y) => spans[x][0] - spans[y][0] || x - y);
+  order.forEach((i, n) => {
+    // A note numbered twice (written once): the first number's.
+    if (n > 0 && spans[order[n - 1]][0] === spans[i][0]) return;
+    const from = spans[i][1];
+    const next = order.slice(n + 1).find((j) => spans[j][0] > spans[i][0]);
+    const to = next == null ? source.length : spans[next][0];
+    const found = [];
+    let k = from;
+    while (k < to) {
+      const c = source[k];
+      if (c === '"') k = stringEnd(source, k);
+      else if (c === "%") k = skipBlank(source, k);
+      else if (c === "#") k = schemeEnd(source, k);
+      else if ("-^_".includes(c) && commandAt(source, skipBlank(source, k + 1)) === "tweak") {
+        const texts = [];
+        let j = skipBlank(source, k + 1);
+        while (commandAt(source, j) === "tweak") {
+          const command = keptCommandAt(source, j);
+          if (!command) break;
+          texts.push(command.text);
+          j = skipBlank(source, command.end);
+        }
+        const target = texts.length ? postEventAt(source, j) : null;
+        if (target && target.end <= to) {
+          found.push({ on: target.on, lead: c, text: texts.join(" ") });
+          k = target.end;
+        } else k = j + 1;
+      } else k++;
+    }
+    if (found.length) out.set(i, found);
   });
   return out;
 }
@@ -5169,14 +5310,17 @@ function ossiasAfterDelete(staff, a, b, count) {
 // ---- Staves kept as written: \partCombine, \autoChange --------------------------------------
 //
 // Two parts set on one staff (`\partCombine \a \b`) or one part spread over
-// a piano's two staves (`\new PianoStaff \autoChange { … }`): the engraver
-// decides where each note goes, so the model keeps the staff's text as
-// written — `staff.raw` on its first staff, `rawPart` on the others it makes
+// a piano's two staves (`\new PianoStaff \autoChange { … }`) are edited on
+// the score (see "Two parts on one staff" below). What that cannot take
+// apart — `\partCombineUp`, a part saying how the parts are combined, music
+// beside the command on its staff — or a reading without the engraver at
+// hand: the engraver decides where each note goes, so the model keeps the
+// staff's text as written — `staff.raw` on its first staff, `rawPart` on the others it makes
 // — with the variables it names (`score.defs`). Its notes are read, shown
 // and played; they are edited in the text, the other staves on the score.
 
 /** The commands that make a staff the model keeps as written. */
-const RAW_COMMANDS = ["partCombine", "partcombine", "autoChange", "autochange"];
+const RAW_COMMANDS = ["partCombine", "partcombine", "partCombineUp", "partCombineDown", "autoChange", "autochange"];
 
 /** Where a pitch written at `i` ends: c, fis'', bes,! … */
 function pitchEnd(src, i) {
@@ -5248,6 +5392,8 @@ function musicEnd(src, i, depth = 0) {
       return j;
     case "partCombine":
     case "partcombine":
+    case "partCombineUp":
+    case "partCombineDown":
       next(2);
       return j;
     case "autoChange":
@@ -5416,8 +5562,329 @@ function refuseRawBars(score) {
   if (score.staves.some((staff) => staff.raw != null || staff.rawPart)) throw new Error(RAW_BARS_REFUSAL);
 }
 
-const RAW_REFUSAL = "This staff is kept as LilyPond wrote it (\\partCombine, \\autoChange): edit its notes in the text below";
-const RAW_BARS_REFUSAL = "A staff is kept as LilyPond wrote it (\\partCombine, \\autoChange): put bars in or take them away in the text below";
+const RAW_WHY = "a \\partCombine or \\autoChange the score editor cannot take apart: \\partCombineUp, \\partCombineApart and the like, music beside it on its staff";
+const RAW_REFUSAL = `This staff is kept as LilyPond wrote it (${RAW_WHY}): edit its notes in the text below`;
+const RAW_BARS_REFUSAL = `A staff is kept as LilyPond wrote it (${RAW_WHY}): put bars in or take them away in the text below`;
+
+// ---- Two parts on one staff (\partCombine), one voice over two (\autoChange) ----------------
+//
+// Both are edited on the score (#413). The engraver decides where each note
+// goes; the model holds the music as written:
+//
+// - `\partCombine A B`: a staff of two voices, `staff.combine` on its first
+//   lane — voice 1 is part I (A), voice 2 part II (B), each every note and
+//   rest of its part. It is written back `\partCombine { … } { … }`, or with
+//   the variables the source named (`combine.names`: `\partCombine \hornI
+//   \hornII`, their music written as `hornI = { … }`). The engraver draws
+//   one note for both where they play it together ("a2"), a chord where they
+//   move in the same rhythm, "Solo" where one rests: `combinedShown` says
+//   which of each part's notes it draws, so that a click on a note drawn
+//   once selects part I's, and part II's is lit through it.
+// - `\autoChange M`, in a `\new PianoStaff` (or a GrandStaff, or alone): a
+//   staff of one voice, `staff.autoChange` ({ split, piano }), drawn by the
+//   engraver over the piano's two staves — every note under the split
+//   (middle C) on the lower one. The lower staff's rests are numbered after
+//   the voice's notes, one for each: `echo` items, its event's.
+//
+// To read them the model asks the engraver for a text that says the same in
+// the model's terms (`splitCombined`: `<< A \\ B >>`, `\new Staff M`).
+// What still cannot be held — a `\partCombineUp`, a part that changes how
+// the parts are combined, music beside the command on its staff — stays kept
+// as written (see above).
+
+/** The commands read this way: every one, and whether a text holds one. */
+const COMBINE_RE = /\\(partCombine|partcombine|autoChange|autochange)(?![A-Za-z])/g;
+const COMBINE_ONE = new RegExp(COMBINE_RE.source);
+/** What the parts may say that the model cannot hold: how they are combined, two voices in one. */
+const COMBINE_MODES = /\\(partCombine[A-Z][A-Za-z]*|partcombine[A-Z][A-Za-z]*|voiceOne|voiceTwo|change)\b|\\\\/;
+
+/** Where `text` is music, not a string or a comment: a flag per place. */
+function codeMask(text) {
+  const mask = new Uint8Array(text.length + 1);
+  let k = 0;
+  while (k < text.length) {
+    if (text[k] === '"') k = stringEnd(text, k);
+    else if (text[k] === "%") k = skipBlank(text, k);
+    else mask[k++] = 1;
+  }
+  return mask;
+}
+
+/** Whether `at` is at the top of the file, or right inside a \\score (\\book, \\bookpart), or among staves in << >>. */
+function amongStaves(text, mask, at) {
+  const open = [];
+  for (let k = 0; k < at; k++) {
+    if (!mask[k]) continue;
+    if (text[k] === "{") open.push(k);
+    else if (text[k] === "}") open.pop();
+  }
+  const inner = open.at(-1);
+  return inner == null || /\\(score|book|bookpart)\s*$/.test(text.slice(Math.max(0, inner - 16), inner));
+}
+
+/** The `\\new PianoStaff` (GrandStaff) whose music starts at `at`: where its kind is written, or null. */
+function pianoAround(text, at) {
+  for (const m of [...text.slice(0, at).matchAll(/\\new\s+(PianoStaff|GrandStaff)\b/g)].reverse()) {
+    let k = skipBlank(text, m.index + m[0].length);
+    if (text[k] === "=") k = skipBlank(text, valueEnd(text, k + 1));
+    if (commandAt(text, k) === "with") k = skipBlank(text, blockEnd(text, k + 5));
+    if (k === at) return { at: m.index + m[0].length - m[1].length, kind: m[1] };
+  }
+  return null;
+}
+
+/**
+ * `source` as the model reads its \\partCombine and \\autoChange: each it can
+ * hold written out (see above). Answers { text, found: [{ kind, places,
+ * names, split, piano }] }, `places` the stretches of `text` (the new one)
+ * its notes are written in.
+ */
+function splitCombined(source) {
+  const text = String(source ?? "");
+  const mask = codeMask(text);
+  const defs = definitions(text);
+  const defAt = (p) => [...defs.entries()].find(([, d]) => p >= d.at && p < d.end);
+  const usesOf = (name) => [...text.matchAll(new RegExp(`\\\\${name}(?![A-Za-z])`, "g"))].filter((m) => mask[m.index] && !defAt(m.index)).map((m) => m.index);
+  const edits = [];
+  const found = [];
+  const taken = [];
+  for (const m of text.matchAll(COMBINE_RE)) {
+    const p = m.index;
+    if (!mask[p] || taken.some(([a, b]) => p >= a && p < b)) continue;
+    // In a variable: where it is used, once, is where its staff is.
+    const def = defAt(p);
+    let site = p;
+    if (def) {
+      const uses = usesOf(def[0]);
+      if (uses.length !== 1) continue;
+      site = uses[0];
+    }
+    const combine = /^partc/i.test(m[1]);
+    let k = skipBlank(text, p + m[0].length);
+    if (combine) {
+      const a = [k, musicEnd(text, k)];
+      const b = [skipBlank(text, a[1]), 0];
+      b[1] = musicEnd(text, b[0]);
+      if (a[1] <= a[0] || b[1] <= b[0]) continue;
+      // The music of each part, its variables' too: nothing in it the model cannot hold.
+      const parts = [a, b].map(([x, y]) => text.slice(x, y));
+      const used = usedDefinitions(parts.join(" "), defs);
+      if ([...parts, ...used.map((name) => defs.get(name).text)].some((t) => COMBINE_MODES.test(t) || COMBINE_ONE.test(t))) continue;
+      const nameOf = ([x, y]) => {
+        const name = commandAt(text, x);
+        return name && defs.has(name) && y === x + 1 + name.length ? name : null;
+      };
+      const names = [nameOf(a), nameOf(b)];
+      edits.push({ from: p, to: a[0], insert: "<< " }, { from: a[1], to: b[0], insert: " \\\\ " }, { from: b[1], to: b[1], insert: " >>" });
+      found.push({ kind: "combine", places: [a, b, ...used.map((name) => [defs.get(name).at, defs.get(name).end])], ...(names.some(Boolean) ? { names } : {}) });
+      taken.push([p, b[1]]);
+    } else {
+      // \\autoChange [pitch] music: below that pitch (middle C), the lower staff.
+      let split = null;
+      const word = /^[a-z]+[',]*/.exec(text.slice(k, k + 16))?.[0];
+      if (word && /^[a-g]/.test(word) && commandAt(text, k) == null) {
+        const after = skipBlank(text, k + word.length);
+        if ("{<\\".includes(text[after] ?? "")) {
+          split = word;
+          k = after;
+        }
+      }
+      const music = [k, musicEnd(text, k)];
+      if (music[1] <= music[0]) continue;
+      const used = usedDefinitions(text.slice(...music), defs);
+      if ([text.slice(...music), ...used.map((name) => defs.get(name).text)].some((t) => COMBINE_MODES.test(t) || COMBINE_ONE.test(t))) continue;
+      const piano = pianoAround(text, site);
+      if (!piano && !amongStaves(text, mask, site)) continue;
+      edits.push({ from: p, to: k, insert: "" });
+      // In a piano staff: a staff of its own, the piano's \\with on it; alone: a staff.
+      if (piano) edits.push({ from: piano.at, to: piano.at + piano.kind.length, insert: "Staff" });
+      else edits.push({ from: site, to: site, insert: "\\new Staff " });
+      found.push({ kind: "auto", places: [music, ...used.map((name) => [defs.get(name).at, defs.get(name).end])], split, piano: Boolean(piano) });
+      taken.push([p, music[1]]);
+    }
+  }
+  if (!found.length) return { text, found };
+  edits.sort((x, y) => x.from - y.from || x.to - y.to);
+  let out = "";
+  let at = 0;
+  for (const e of edits) {
+    out += text.slice(at, e.from) + e.insert;
+    at = e.to;
+  }
+  out += text.slice(at);
+  // A place of the source, in the new text: a start after what is put in there, an end before it.
+  const moved = (x, end) => x + edits.filter((e) => e.to < x || (e.to === x && !(end && e.from === x))).reduce((sum, e) => sum + e.insert.length - (e.to - e.from), 0);
+  for (const f of found) f.places = f.places.map(([x, y]) => [moved(x, false), moved(y, true)]);
+  return { text: out, found };
+}
+
+/**
+ * The staves `found` made marked (see above), in `placed`, each found by its
+ * notes: false when one cannot be — the text is read otherwise then.
+ */
+function markCombined(score, parsed, placed, spans, found) {
+  const notes = (st) => st.events.filter((ev) => ev.k === "Note" || ev.k === "Rest");
+  for (const f of found) {
+    const inside = (ev) => spans?.[ev.i] && f.places.some(([x, y]) => spans[ev.i][0] >= x && spans[ev.i][0] < y);
+    const ks = parsed.staves.map((st, k) => k).filter((k) => parsed.staves[k].kind === "Notes" && notes(parsed.staves[k]).some(inside));
+    // One staff, all of whose notes it writes.
+    if (ks.length !== 1 || !notes(parsed.staves[ks[0]]).every(inside) || parsed.staves[ks[0]].lyrics) return false;
+    const lanes = placed[ks[0]];
+    const head = lanes[0];
+    if (!head || head.ossias || head.raw != null || head.rawPart) return false;
+    if (f.kind === "combine") {
+      if (lanes.length > 2) return false;
+      if (lanes.length === 1) lanes.push({ voice: 2, events: rests(score, 0, lengthOf(head)) });
+      head.combine = f.names ? { names: f.names } : {};
+    } else {
+      if (lanes.length > 1 || head.events.some((ev) => ev.cross)) return false;
+      head.autoChange = { ...(f.split ? { split: f.split } : {}), ...(f.piano ? { piano: true } : {}) };
+      delete head.id;
+    }
+  }
+  return true;
+}
+
+/** Whether lane `s` is on a staff of two parts, `\\partCombine`. */
+export function isCombined(score, s) {
+  return Boolean(score.staves[upperOf(score, s)]?.combine);
+}
+
+/** Whether lane `s` is one voice spread over a piano's two staves, `\\autoChange`. */
+export function isAutoChange(score, s) {
+  return Boolean(score.staves[upperOf(score, s)]?.autoChange);
+}
+
+/** The part lane `s` is on a \\partCombine staff: 1 or 2; 0 on any other. */
+export function partOfLane(score, s) {
+  return isCombined(score, s) ? voiceOf(score, s) : 0;
+}
+
+const COMBINE_VOICES = "A \\partCombine staff holds its two parts, part I and part II: no other voice";
+const AUTO_VOICES = "\\autoChange spreads one voice over the piano's two staves: it holds no other voice";
+const AUTO_CLEFS = "\\autoChange keeps its staves' clefs, treble over bass";
+const AUTO_CROSS = "\\autoChange sends its notes from one staff to the other itself";
+const COMBINE_CROSS = "The parts of \\partCombine stay on their staff";
+const COMBINE_WORDS = "Words go under a staff of one part: not under \\partCombine or \\autoChange";
+
+/** Starts of a lane's events, and where it ends. */
+function eventTimes(events) {
+  const at = [];
+  let t = 0;
+  for (const ev of events) {
+    at.push(t);
+    t += ticksOf(ev);
+  }
+  return { at, end: t };
+}
+
+/**
+ * Which notes and rests of two parts the engraver draws when it combines
+ * them, as its part combiner does (eui-score's combine.rs): [shownI, shownII],
+ * a flag per event. The parts are cut where both start something; a stretch
+ * is set apart (both drawn), as one note or one chord (part I's drawn), as
+ * a solo (the part playing drawn), or as rests (part I's, or part II's where
+ * part I's are spacers and its own are not).
+ */
+export function combinedShown(partI, partII) {
+  const a = eventTimes(partI);
+  const b = eventTimes(partII);
+  const cuts = [...new Set([0, Math.max(a.end, b.end), ...[...a.at, a.end].filter((t) => b.at.includes(t) || t >= b.end), ...[...b.at, b.end].filter((t) => t >= a.end)])].sort((x, y) => x - y);
+  const shownI = partI.map(() => false);
+  const shownII = partII.map(() => false);
+  const allRests = (list, events) => list.every((i) => events[i].rest);
+  const sorted = (ev) => [...new Set(ev.pitches.map((p) => `${p.d}:${p.alter}`))].sort().join(" ");
+  for (let n = 0; n + 1 < cuts.length; n++) {
+    const [t0, t1] = [cuts[n], cuts[n + 1]];
+    const ia = a.at.map((t, i) => i).filter((i) => a.at[i] >= t0 && a.at[i] < t1);
+    const ib = b.at.map((t, i) => i).filter((i) => b.at[i] >= t0 && b.at[i] < t1);
+    const show = (list, flags) => list.forEach((i) => (flags[i] = true));
+    let state;
+    if (!ib.length && !allRests(ia, partI)) state = "soloI";
+    else if (!ia.length && !allRests(ib, partII)) state = "soloII";
+    else if (!ia.length || !ib.length) state = "rests";
+    else if (allRests(ia, partI) && allRests(ib, partII)) state = "rests";
+    else if (allRests(ib, partII)) state = "soloI";
+    else if (allRests(ia, partI)) state = "soloII";
+    else if (ia.length !== 1 || ib.length !== 1 || ticksOf(partI[ia[0]]) !== ticksOf(partII[ib[0]]) || partI[ia[0]].rest || partII[ib[0]].rest) state = "apart";
+    else {
+      const [x, y] = [partI[ia[0]], partII[ib[0]]];
+      const ds = (ev) => ev.pitches.map((p) => p.d);
+      const chords = Math.min(...ds(x)) >= Math.max(...ds(y)) && Math.max(...ds(x)) - Math.min(...ds(y)) <= 8 && Boolean(x.tie) === Boolean(y.tie) && Boolean(x.tuplet) === Boolean(y.tuplet);
+      state = sorted(x) === sorted(y) ? "one" : chords ? "one" : "apart";
+    }
+    if (state === "apart") {
+      show(ia, shownI);
+      show(ib, shownII);
+    } else if (state === "soloII") show(ib, shownII);
+    else if (state === "rests") {
+      const spacers = (list, events) => list.every((i) => events[i].spacer);
+      if (spacers(ia, partI) && !spacers(ib, partII)) show(ib, shownII);
+      else show(ia, shownI);
+    } else show(ia, shownI);
+  }
+  // A spacer is never drawn.
+  return [shownI.map((x, i) => x && !partI[i].spacer), shownII.map((x, i) => x && !partII[i].spacer)];
+}
+
+/**
+ * The items of a \\partCombine staff's two parts marked: one the engraver does
+ * not draw is `hidden`, and `partner` is the item drawn for it — the other
+ * part's at the same moment (or the one sounding then).
+ */
+function markParts(score, items, from, middle) {
+  const first = items[from]?.staff;
+  const second = items[middle]?.staff;
+  if (first == null || second == null) return;
+  const [laneI, laneII] = [score.staves[first], score.staves[second]];
+  const [shownI, shownII] = combinedShown(laneI.events, laneII.events);
+  const atI = eventTimes(laneI.events).at;
+  const atII = eventTimes(laneII.events).at;
+  const itemI = new Map();
+  const itemII = new Map();
+  for (let k = from; k < items.length; k++) (k < middle ? itemI : itemII).set(items[k].index, k);
+  const partner = (at, t, shown, item) => {
+    let best = -1;
+    at.forEach((x, i) => {
+      if (x <= t && shown[i] && item.has(i)) best = i;
+    });
+    return best >= 0 ? item.get(best) : null;
+  };
+  for (let k = from; k < items.length; k++) {
+    const it = items[k];
+    const one = k < middle;
+    if ((one ? shownI : shownII)[it.index] ?? true) continue;
+    it.hidden = true;
+    const t = (one ? atI : atII)[it.index];
+    const other = one ? partner(atII, t, shownII, itemII) : partner(atI, t, shownI, itemI);
+    if (other != null) it.partner = other;
+  }
+}
+
+/** The item drawn for item `k` of `toLilyPond`: itself, or the one a note drawn once for both parts stands for. */
+export function drawnItem(items, k) {
+  const it = items[k];
+  return it?.hidden && it.partner != null ? it.partner : k;
+}
+
+/** The lower staff's rest for each of an \\autoChange voice's events: drawn where its note is not there. */
+function echoItems(score, s) {
+  const split = midiOfPitchName(score.staves[s].autoChange?.split) ?? 60;
+  return score.staves[s].events.map((ev, index) => {
+    const low = ev.rest ? null : Math.min(...ev.pitches.map((p) => midiKey(p.d, p.alter)));
+    const drawn = ev.rest ? !ev.spacer : low >= split;
+    return { staff: s, index, echo: true, ...(drawn ? {} : { hidden: true }) };
+  });
+}
+
+/** The MIDI key of a LilyPond pitch name (c', fis, bes,,), or null. */
+function midiOfPitchName(name) {
+  const m = /^([a-g])((?:is|es|s)*)([',]*)$/.exec(String(name ?? ""));
+  if (!m) return null;
+  const alter = (m[2].match(/is/g) ?? []).length - (m[2].match(/es|(?<![ei])s/g) ?? []).length;
+  const octave = (m[3].match(/'/g) ?? []).length - (m[3].match(/,/g) ?? []).length;
+  return 48 + NATURAL[NAMES.indexOf(m[1])] + alter + 12 * octave;
+}
 
 // ---- Reading eui-score's parse back ---------------------------------------------------------
 
@@ -5521,12 +5988,28 @@ function chordLine(score, staff, unsupported) {
  * what it uses that this model does not keep — so the page edits the text
  * instead of losing it.
  */
-export function fromParsed(parsed, source = null, { spans = parsed.spans ?? null } = {}) {
+export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? null, parse = null, combined = null } = {}) {
+  // \\partCombine and \\autoChange: read from the text the engraver answers for them in
+  // the model's terms (see splitCombined), when `parse` (score_json, with the spans) is at hand.
+  if (parse && !combined && source != null && COMBINE_ONE.test(source)) {
+    const split = splitCombined(source);
+    if (split.found.length) {
+      try {
+        const inner = parse(split.text);
+        const read = fromParsed(inner, split.text, { spans: inner.spans ?? null, combined: split.found });
+        if (!read.missed) return read;
+      } catch {}
+    }
+  }
+  // A text the engraver could not read (`name = \\partCombine …`, which only the model's reading gets through).
+  if (!parsed) return { unsupported: ["a text the engraver cannot read"] };
   const unsupported = new Set();
   // What the model reads and does not keep: the first edit writes the text without it.
   const lost = new Set();
   // The commands written before each note that the model keeps as written (\\override, \\set …).
   const before = keptCommands(source, spans);
+  // The \\tweak written on what follows a note (an articulation, words…), with it.
+  const tweaked = postTweaks(source, spans);
   // Sizes set by a command the model keeps (\\tiny, \\small …): the notes after it are kept as they are.
   const keptSizes = [...before.values()].flat().some((text) => KEPT_SIZES.includes(text.slice(1)));
   if ((parsed.warnings ?? []).some((w) => /^movement \d/.test(w))) unsupported.add(MOVEMENTS);
@@ -5884,6 +6367,7 @@ export function fromParsed(parsed, source = null, { spans = parsed.spans ?? null
           ...(ev.unsupported.includes("cue notes") ? { cue: true } : {}),
           // The \\override, \\set, \\tweak … written before it, as written.
           ...(before.get(ev.i)?.length ? { before: [...before.get(ev.i)] } : {}),
+          ...(tweaked.get(ev.i)?.length ? { tweaks: tweaked.get(ev.i).map((x) => ({ ...x })) } : {}),
         });
         // \\stemUp and \\autoBeamOff hold until changed: written where the lane's notes change them.
         if (k === "Note") {
@@ -5951,6 +6435,8 @@ export function fromParsed(parsed, source = null, { spans = parsed.spans ?? null
     const shift = (at) => at - ossias.filter((k) => k < at).length;
     score.groups = score.groups.map((g) => ({ ...g, first: shift(g.first), last: shift(g.last) })).filter((g) => g.last >= g.first);
   }
+  // Two parts on one staff, one voice over two: their staves marked, or the text read otherwise.
+  if (combined && !markCombined(score, parsed, placed, spans, combined)) return { missed: true };
   // A staff kept as written (\\partCombine, \\autoChange): its text, the variables it uses, its notes shown.
   if (source != null && new RegExp(`\\\\(${RAW_COMMANDS.join("|")})\\b`).test(source)) keepRaw(score, parsed, placed, source, spans, unsupported);
   score.staves = placed.flat();
@@ -5979,7 +6465,7 @@ export function fromParsed(parsed, source = null, { spans = parsed.spans ?? null
   if (paper.length) score.paper.more = paper;
   // The layout settings the engraver passes over (\\override, \\set, \\with …) and the model does not keep.
   const held = {
-    commands: placed.flat().flatMap((lane) => lane.events.flatMap((ev) => ev.before ?? [])),
+    commands: placed.flat().flatMap((lane) => lane.events.flatMap((ev) => [...(ev.before ?? []), ...(ev.tweaks ?? []).map((x) => x.text)])),
     withs: withs.length === plainStaves.length ? more : [],
     layout,
     paper,

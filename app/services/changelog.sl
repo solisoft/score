@@ -12,6 +12,21 @@ class Changelog
     [
       {"date": "2026-10-25", "entries": [
         {
+          "area": "editor",
+          "title": "\\partCombine and \\autoChange edited on the score",
+          "text": "Two parts set on one staff by \\partCombine are now edited on the score: each part is a voice of "
+          + "the staff, part I and part II, and everything that works on a voice works on each part — notes "
+          + "typed, deleted, copied and pasted, moved in the MIDI view, transposed, bars put in or taken away, a "
+          + "new metre. The staff is still drawn as LilyPond draws it, with a2, Solo and chords: a click on a note "
+          + "drawn once for both parts selects part I's, and Ctrl+Alt+2 goes to part II's. The text keeps "
+          + "\\partCombine, and the variables it names (\\partCombine \\hornI \\hornII), their music "
+          + "written as edited. A piano staff made by \\autoChange is one voice: a click on a note on either "
+          + "staff selects it, and an edit rewrites the music inside \\autoChange, each note going to the "
+          + "staff its pitch sends it to. Both work used inside a variable too. A \\tweak written on an "
+          + "articulation, words, a dynamic, a fingering or a slur (c4-\\tweak color #red ->) now stays with "
+          + "it through every edit instead of being dropped."
+        },
+        {
           "area": "engine",
           "title": "The piano's two staves crossed: beams, slurs and ties from one hand to the other",
           "text": "Notes moved to the other staff with \\change Staff now share one beam drawn between the staves, "
@@ -72,9 +87,10 @@ class Changelog
         },
         {
           "area": "editor",
-          "title": "Two parts on one staff, or one part over a piano's two staves: kept as written",
-          "text": "A staff made by \\partCombine, or a piano staff made by \\autoChange, is kept exactly as "
-          + "its text writes it, with the variables it uses: its notes are shown and played, and edited in the "
+          "title": "Two pairs of parts on one staff, or parts that say how they combine: kept as written",
+          "text": "A staff made by \\partCombineUp and \\partCombineDown, or by a \\partCombine whose parts "
+          + "say how they are combined (\\partCombineApart…) or that has other music beside it, is kept exactly "
+          + "as its text writes it, with the variables it uses: its notes are shown and played, and edited in the "
           + "text, while every other staff of the piece is edited on the score."
         },
         {

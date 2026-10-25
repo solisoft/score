@@ -14,7 +14,8 @@ export function install(ctx) {
   function lit() {
     const items = {};
     const heads = [];
-    const itemOf = (s, i) => st.items.findIndex((it) => it.staff === s && it.index === i);
+    // A part's note drawn once for both parts (\\partCombine): lit through the note drawn.
+    const itemOf = (s, i) => M.drawnItem(st.items, st.items.findIndex((it) => it.staff === s && it.index === i));
     const r = range();
     if (r && !st.input.on) {
       for (let i = r.a; i <= r.b; i++) items[itemOf(r.s, i)] = COLOURS.selection;
@@ -95,7 +96,7 @@ export function install(ctx) {
     };
     if (!g || !st.score || st.input.on || st.playing || !sel || sel.bars || sel.t0 !== sel.t1) return hide();
     const starts = M.starts(st.score.staves[sel.staff]);
-    const k = st.items.findIndex((it) => it.staff === sel.staff && starts[it.index] === sel.t0);
+    const k = M.drawnItem(st.items, st.items.findIndex((it) => it.staff === sel.staff && starts[it.index] === sel.t0));
     const item = st.view?.items.find((it) => it.item === k);
     if (!item) return hide();
     const corner = g.at(item.box[0], item.box[1]);

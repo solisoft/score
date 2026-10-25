@@ -74,8 +74,15 @@
       <code>\stopped</code>, <code>\tiny</code> and <code>\small</code>, <code>\new TabStaff</code>,
       <code>\new CueVoice</code> and <code>\cueDuring</code>, and an ossia. <code>\override</code>,
       <code>\set</code>, <code>\tweak</code>, a staff's <code>\with</code>, <code>\layout</code> and
-      <code>\paper</code> are kept where they are written, and a staff made by <code>\partCombine</code> or
-      <code>\autoChange</code> is kept as written, its notes edited in the text.
+      <code>\paper</code> are kept where they are written.
+    </p>
+    <p>
+      The score editor now also edits a staff made by <code>\partCombine</code> on the score, its two parts as two
+      voices (the variables it names kept), and a piano staff made by <code>\autoChange</code> as one voice,
+      used directly or inside a variable; a <code>\tweak</code> on an articulation, words or a dynamic stays
+      with it. Still kept as written, its notes edited in the text: <code>\partCombineUp</code> and
+      <code>\partCombineDown</code>, a part that says how the parts combine (<code>\partCombineApart</code>
+      and the like), and other music beside <code>\partCombine</code> or <code>\autoChange</code> on its staff.
     </p>
     <ul>
       <li><strong>Layout</strong>: vertical spacing does not tighten on a crowded page, a beam across the staves

@@ -125,7 +125,13 @@
         .then(function (all) {
           return all[2].text().then(function (src) {
             var M = all[1];
-            var read = M.fromParsed(JSON.parse(all[0].engine.score_json(src)), src);
+            var E = all[0].engine;
+            var withSpans = function (text) {
+              var parsed = JSON.parse(E.score_json(text));
+              parsed.spans = JSON.parse(E.source_spans(text));
+              return parsed;
+            };
+            var read = M.fromParsed(withSpans(src), src, { parse: withSpans });
             return { E: all[0], M: M, score: read.score || null };
           });
         });

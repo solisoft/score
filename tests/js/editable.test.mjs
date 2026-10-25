@@ -357,10 +357,12 @@ test("\\override, \\set, \\tweak and the like before a note: kept as written, th
   assert.match(engrave(score), /^ {2}\\override NoteHead\.color = #red \\set Staff\.midiInstrument = "flute" \\revert NoteHead\.color a'2/m);
 });
 
-test("a \\tweak on an articulation, and a setting after the last note, are named before they go", () => {
+test("a \\tweak on an articulation is the articulation's: kept with it (#413), not the next note's", () => {
   const result = parse("{ c'4-\\tweak color #red -> d'4 e'2 }");
-  assert.deepEqual(result.lost, ["the settings the engraver passes over (\\tweak color)"]);
+  assert.equal(result.lost, undefined, "nothing is lost");
+  assert.deepEqual(result.score.staves[0].events[0].tweaks, [{ on: "art:accent", lead: "-", text: "\\tweak color #red" }]);
   assert.equal(result.score.staves[0].events[1].before, undefined);
+  assert.match(roundTrip("{ c'4-\\tweak color #red -> d'4 e'2 }").source, /c'4-\\tweak color #red -> d'4 e'2/);
 });
 
 test("a staff's \\with, the \\layout blocks and what \\paper says more: kept as written", () => {
