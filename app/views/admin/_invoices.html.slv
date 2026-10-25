@@ -1,0 +1,30 @@
+<%# Stripe's invoices (`rows`, as AdminReport.invoice reads them), each
+    linked to its account when `accounts` (Stripe customer to key) knows it. %>
+<div class="table-scroll">
+  <table class="ref-table admin-table" data-invoices>
+    <thead><tr><th>Invoice</th><th>Customer</th><th class="num">Amount</th><th>Status</th><th>Date</th></tr></thead>
+    <tbody>
+      <% for invoice in rows %>
+        <tr data-invoice="<%= invoice["id"] %>">
+          <td>
+            <% if invoice["url"].present? %>
+              <a href="<%= invoice["url"] %>" target="_blank" rel="noopener"><%= invoice["number"].blank? ? invoice["id"] : invoice["number"] %> ↗</a>
+            <% else %>
+              <%= invoice["number"].blank? ? invoice["id"] : invoice["number"] %>
+            <% end %>
+          </td>
+          <td>
+            <% if accounts[invoice["customer"]].nil? %>
+              <%= invoice["email"] %>
+            <% else %>
+              <a href="<%= admin_customer_path(accounts[invoice["customer"]]) %>"><%= invoice["email"] %></a>
+            <% end %>
+          </td>
+          <td class="num"><%= admin_money(invoice["amount"], invoice["currency"]) %></td>
+          <td><span class="admin-badge admin-badge-<%= invoice["status"] == "paid" ? "pro" : (["open", "uncollectible"].includes?(invoice["status"]) ? "trouble" : "free") %>"><%= invoice["status"] %></span></td>
+          <td><%= admin_day(invoice["created"]) %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>

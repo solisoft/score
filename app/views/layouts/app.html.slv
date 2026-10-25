@@ -58,6 +58,9 @@
             <% if signed_in?() %>
                 <a href="<%= app_scores_path() %>"<%- current_path.starts_with?("/app/scores") || current_path == app_trash_path() ? " aria-current=\"page\"" : "" %>>Your scores</a>
                 <a href="<%= app_account_path() %>"<%- current_path == app_account_path() ? " aria-current=\"page\"" : "" %>>Account</a>
+                <% if current_user().admin?() %>
+                    <a href="<%= admin_path() %>" data-admin-link<%- current_path.starts_with?("/admin") ? " aria-current=\"page\"" : "" %>>Admin</a>
+                <% end %>
                 <%# The bell (#385): how many notifications are unread, asked
                     for by the page (below), so every screen shows it. %>
                 <a class="app-bell" href="<%= app_notifications_path() %>" data-bell aria-label="Notifications"<%- current_path == app_notifications_path() ? " aria-current=\"page\"" : "" %>>

@@ -1065,6 +1065,47 @@
      page turns between two systems; until they have, the whole drawing
      prints. Everything around the score — menus, toolbox, source, headers,
      buttons, dialogs — stays on the screen. */
+  /* ---- Admin (#399) ------------------------------------------------------- */
+  .admin { width: 100%; max-width: 1120px; margin: 0 auto; padding: 32px 20px 64px; display: grid; gap: 24px; }
+  .admin-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px 24px; }
+  .admin-head h1 { font-size: 30px; margin: 0; }
+  .admin-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+  .admin-tabs a { padding: 7px 14px; border-radius: 999px; color: var(--ink-soft); font-weight: 500; font-size: 14px; }
+  .admin-tabs a:hover { background: var(--paper-deep); text-decoration: none; }
+  .admin-tabs a[aria-current="page"] { background: var(--ink); color: var(--paper); }
+  .admin-figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .admin-figure { background: var(--sheet); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 4px; }
+  .admin-figure dt { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .admin-figure dd { margin: 0; font: 600 28px/1.1 var(--font-serif); color: var(--ink); font-variant-numeric: tabular-nums; }
+  .admin-figure small { font-size: 13px; color: var(--muted); }
+  .admin-figure-money dd { color: var(--accent); }
+  .admin-panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; align-items: start; }
+  .admin-panel { background: var(--sheet); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; min-width: 0; }
+  .admin-panel h2 { font-size: 18px; margin: 0 0 12px; }
+  .admin-panel .ref-table { margin: 0; border: 0; border-radius: 0; }
+  .admin-weeks { display: flex; align-items: flex-end; gap: 6px; height: 120px; padding-top: 18px; }
+  .admin-week { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .admin-week span { width: 100%; max-width: 28px; background: var(--accent); border-radius: 4px 4px 0 0; min-height: 2px; }
+  .admin-search { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .admin-search input[type="search"] { flex: 1 1 260px; padding: 10px 14px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--sheet); font: inherit; }
+  .admin-search select { padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--sheet); font: inherit; }
+  .admin-table td, .admin-table th { white-space: nowrap; }
+  .admin-table td:first-child { white-space: normal; }
+  .admin-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .admin-who { display: grid; }
+  .admin-who a { font-weight: 600; color: var(--ink); }
+  .admin-who small { color: var(--muted); }
+  .admin-badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--paper-deep); color: var(--ink-soft); }
+  .admin-badge-pro { background: #e7efe4; color: #2c5427; }
+  .admin-badge-gift { background: #f4ecd9; color: #6b5220; }
+  .admin-badge-trouble { background: var(--accent-soft); color: var(--accent-ink); }
+  .admin-pager { display: flex; gap: 8px; justify-content: flex-end; }
+  .admin-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
+  .admin-actions form { display: flex; gap: 6px; align-items: center; margin: 0; }
+  .admin-actions select { padding: 9px 10px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--sheet); font: inherit; }
+  .admin-empty { color: var(--muted); margin: 0; }
+  .admin-note { padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper-deep); color: var(--ink-soft); margin: 0; }
+
   @media print {
     @page { margin: 14mm 12mm; }
     html, body, .app-body, .studio, .studio-canvas, .studio-sheet, .score-sheet { background: #fff !important; }

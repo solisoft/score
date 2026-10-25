@@ -46,6 +46,17 @@ class Stripe
     key.present? && monthly.present? && annual.present?
   end
 
+  # Stripe's dashboard at `path` ("customers/cus_…"), in the mode the key
+  # is in: live, or test (the admin section's links, #399).
+  static def dashboard_url(path)
+    Stripe.dashboard_in(path, Stripe.secret_key)
+  end
+
+  static def dashboard_in(path, key)
+    mode = key.to_s.starts_with?("sk_live") || key.to_s.starts_with?("rk_live") ? "" : "test/"
+    "https://dashboard.stripe.com/#{mode}#{path}"
+  end
+
   # Whether `price_id` is one of Pro's (either interval).
   static def pro_price?(price_id)
     return false if price_id.blank?

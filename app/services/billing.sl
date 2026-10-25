@@ -241,6 +241,8 @@ class Billing
     user.current_period_end = Billing.period_end(subscription)
     user.cancel_at_period_end = subscription["cancel_at_period_end"] == true
     user.stripe_subscription_id = subscription["id"].to_s
+    user.plan_interval = Billing.interval_of(subscription)
+    user.plan_gift = false
     customer = Billing.id_of(subscription["customer"])
     user.stripe_customer_id = customer unless customer.blank?
     user.update()
@@ -251,6 +253,8 @@ class Billing
   # (an older one, replaced) changes nothing.
   static def ended(subscription, user)
     return "ignored" if Billing.other_subscription?(user, subscription["id"])
+    # Pro offered by an admin (#399) is not a subscription's to end.
+    return "ignored" if user.plan_gift == true
 
     user.plan = "free"
     user.plan_status = "canceled"
@@ -288,6 +292,18 @@ class Billing
     return "" if items.length == 0
 
     Billing.id_of(items[0]["price"])
+  end
+
+  # How often a subscription is paid: "annual" when its first item's
+  # Price recurs yearly, else "monthly". The admin's revenue reads it.
+  static def interval_of(subscription)
+    items = (subscription["items"] ?? {})["data"] ?? []
+    return "monthly" if items.length == 0
+
+    price = items[0]["price"]
+    return "monthly" unless price.is_a?("hash")
+
+    (price["recurring"] ?? {})["interval"] == "year" ? "annual" : "monthly"
   end
 
   # When the period paid for ends: on the subscription, or (Stripe's newer

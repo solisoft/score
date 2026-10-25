@@ -1,0 +1,27 @@
+<%# The events Stripe sent the webhook (`events`), with the account each was
+    about (`names`, key to name). %>
+<% if events.length == 0 %>
+  <p class="admin-empty">No event from Stripe yet.</p>
+<% else %>
+  <div class="table-scroll">
+    <table class="ref-table admin-table" data-events>
+      <thead><tr><th>Event</th><th>Outcome</th><th>Account</th><th>Received</th></tr></thead>
+      <tbody>
+        <% for event in events %>
+          <tr>
+            <td><code><%= event.kind %></code></td>
+            <td><%= event.outcome ?? "—" %></td>
+            <td>
+              <% if event.user_id.blank? %>
+                —
+              <% else %>
+                <a href="<%= admin_customer_path(event.user_id) %>"><%= names[event.user_id] ?? event.user_id %></a>
+              <% end %>
+            </td>
+            <td><%= admin_day(event.received_at) %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+<% end %>

@@ -1,0 +1,50 @@
+<section class="admin" data-admin="customers">
+  <%- partial("admin/head", {"heading": "Customers", "current": "customers"}) %>
+
+  <form class="admin-search" action="<%= admin_customers_path() %>" method="GET" role="search">
+    <input type="search" name="q" value="<%= query %>" placeholder="An address or a name" aria-label="Search the customers">
+    <select name="filter" aria-label="Show">
+      <option value="">Everyone</option>
+      <% for choice in filters %>
+        <option value="<%= choice[0] %>"<%= filter == choice[0] ? " selected" : "" %>><%= choice[1] %></option>
+      <% end %>
+    </select>
+    <button type="submit" class="btn btn-ghost">Search</button>
+  </form>
+
+  <% if users.length == 0 %>
+    <p class="admin-empty" data-no-customer>No account matches.</p>
+  <% else %>
+    <div class="table-scroll">
+      <table class="ref-table admin-table" data-customers>
+        <thead><tr><th>Account</th><th>Plan</th><th>Until</th><th class="num">Scores</th><th>Signed up</th><th>Address</th></tr></thead>
+        <tbody>
+          <% for customer in users %>
+            <tr data-customer="<%= customer._key %>">
+              <td>
+                <div class="admin-who">
+                  <a href="<%= admin_customer_path(customer) %>"><%= customer.display_name %></a>
+                  <% if customer.name.present? %><small><%= customer.email %></small><% end %>
+                </div>
+              </td>
+              <td><%- partial("admin/badge", {"customer": customer}) %><% if customer.admin?() %> <span class="admin-badge">Admin</span><% end %></td>
+              <td><%= customer.pro?() ? admin_day(customer.current_period_end) : "" %></td>
+              <td class="num"><%= scores[customer._key] ?? 0 %></td>
+              <td><%= admin_day(customer._created_at) %></td>
+              <td><%= customer.confirmed?() ? "Confirmed" : "Not confirmed" %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% end %>
+
+  <nav class="admin-pager" aria-label="Pages">
+    <% if page > 1 %>
+      <a class="btn btn-ghost" href="<%= admin_customers_path() %>?q=<%= url_encode(query) %>&filter=<%= filter %>&page=<%= page - 1 %>">← Newer</a>
+    <% end %>
+    <% if more %>
+      <a class="btn btn-ghost" href="<%= admin_customers_path() %>?q=<%= url_encode(query) %>&filter=<%= filter %>&page=<%= page + 1 %>" data-next-page>Older →</a>
+    <% end %>
+  </nav>
+</section>

@@ -1,0 +1,56 @@
+<section class="admin" data-admin="dashboard">
+  <%- partial("admin/head", {"heading": "Admin", "current": "dashboard"}) %>
+
+  <% unless payments_open %>
+    <p class="admin-note">Payments are not open: Stripe's key or Pro's prices are not set on this server, so no one can buy Pro yet.</p>
+  <% end %>
+
+  <dl class="admin-figures">
+    <div class="admin-figure"><dt>Accounts</dt><dd data-figure="accounts"><%= figures["accounts"] %></dd><small><%= figures["confirmed"] %> confirmed</small></div>
+    <div class="admin-figure"><dt>New</dt><dd data-figure="new_week"><%= figures["new_week"] %></dd><small>this week · <%= figures["new_month"] %> in 30 days</small></div>
+    <div class="admin-figure"><dt>On Pro</dt><dd data-figure="pro"><%= figures["pro"] %></dd><small><%= figures["gifts"] %> offered</small></div>
+    <div class="admin-figure admin-figure-money"><dt>Monthly revenue</dt><dd data-figure="mrr"><%= admin_money(figures["mrr_cents"]) %></dd><small>from paying accounts</small></div>
+    <div class="admin-figure"><dt>Payment failed</dt><dd data-figure="past_due"><%= figures["past_due"] %></dd><small><%= figures["cancelling"] %> cancelling</small></div>
+    <div class="admin-figure"><dt>Scores</dt><dd data-figure="scores"><%= figures["scores"] %></dd><small>out of the trash</small></div>
+  </dl>
+
+  <div class="admin-panels">
+    <section class="admin-panel">
+      <h2>Sign-ups, week by week</h2>
+      <div class="admin-weeks" role="img" aria-label="Sign-ups over the last weeks">
+        <% for week in weeks %>
+          <div class="admin-week" title="Week of <%= admin_day(week["from"]) %>: <%= week["count"] %>">
+            <%= week["count"] %>
+            <span style="height: <%= (week["count"] * 100 / peak).to_i %>%"></span>
+          </div>
+        <% end %>
+      </div>
+    </section>
+
+    <section class="admin-panel">
+      <h2>Newest accounts</h2>
+      <% if newest.length == 0 %>
+        <p class="admin-empty">No account yet.</p>
+      <% else %>
+        <table class="ref-table admin-table" data-newest>
+          <tbody>
+            <% for customer in newest %>
+              <tr>
+                <td><div class="admin-who"><a href="<%= admin_customer_path(customer) %>"><%= customer.display_name %></a><% if customer.name.present? %><small><%= customer.email %></small><% end %></div></td>
+                <td><%- partial("admin/badge", {"customer": customer}) %></td>
+                <td><%= admin_day(customer._created_at) %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      <% end %>
+      <p><a href="<%= admin_customers_path() %>">All the customers →</a></p>
+    </section>
+  </div>
+
+  <section class="admin-panel">
+    <h2>Last events from Stripe</h2>
+    <%- partial("admin/events", {"events": events, "names": names}) %>
+    <p><a href="<%= admin_payments_path() %>">The payments →</a></p>
+  </section>
+</section>

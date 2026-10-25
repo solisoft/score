@@ -1,0 +1,104 @@
+<section class="admin" data-admin="customer">
+  <%- partial("admin/head", {"heading": customer.display_name, "current": "customers"}) %>
+
+  <div class="admin-panels">
+    <section class="admin-panel">
+      <h2>Account</h2>
+      <dl class="account-facts">
+        <dt>Email</dt><dd><%= customer.email %></dd>
+        <% if customer.name.present? %><dt>Name</dt><dd><%= customer.name %></dd><% end %>
+        <dt>Signed up</dt><dd><%= admin_day(customer._created_at) %></dd>
+        <dt>Address</dt><dd data-confirmed="<%= customer.confirmed?() %>"><%= customer.confirmed?() ? "Confirmed" : "Not confirmed" %></dd>
+        <dt>Two-step</dt><dd><%= customer.two_step?() ? "On" : "Off" %></dd>
+        <dt>Signing in</dt><dd data-locked="<%= customer.locked?() %>"><%= customer.locked?() ? "Locked: too many wrong passwords" : "Open" %></dd>
+        <dt>Role</dt><dd><%= customer.admin?() ? "Admin" : "Member" %></dd>
+        <dt>Own AI key</dt><dd><%= customer.ai_key.blank? ? "None" : "#{customer.ai_provider} · …#{customer.ai_key_hint}" %></dd>
+        <dt>Scores</dt><dd><%= picture["score_count"] %></dd>
+        <dt>Audio takes</dt><dd><%= (picture["take_bytes"] / 1000000).to_i %> MB</dd>
+      </dl>
+      <div class="admin-actions">
+        <% if customer.locked?() %>
+          <form action="<%= admin_customer_unlock_path(customer) %>" method="POST"><%- csrf_field() %><button type="submit" class="btn btn-ghost">Unlock signing in</button></form>
+        <% end %>
+        <% unless customer.confirmed?() %>
+          <form action="<%= admin_customer_confirm_path(customer) %>" method="POST"><%- csrf_field() %><button type="submit" class="btn btn-ghost">Confirm the address</button></form>
+        <% end %>
+      </div>
+    </section>
+
+    <section class="admin-panel" id="plan">
+      <h2>Plan</h2>
+      <dl class="account-facts">
+        <dt>Plan</dt><dd><%- partial("admin/badge", {"customer": customer}) %></dd>
+        <% summary = customer.plan_summary() %>
+        <% if summary.present? %><dt>Status</dt><dd><%= summary %></dd><% end %>
+        <% if customer.plan_interval.present? %><dt>Paid</dt><dd><%= customer.plan_interval == "annual" ? "Yearly" : "Monthly" %></dd><% end %>
+        <dt>Stripe</dt>
+        <dd>
+          <% if stripe_customer.nil? %>
+            No Stripe customer
+          <% else %>
+            <a href="<%= stripe_customer %>" target="_blank" rel="noopener" data-stripe-customer><%= customer.stripe_customer_id %> ↗</a>
+          <% end %>
+        </dd>
+      </dl>
+      <div class="admin-actions">
+        <% if customer.paying?() %>
+          <p class="muted">Paid through Stripe: refunds, cancelling and the card are changed in Stripe's dashboard.</p>
+        <% else %>
+          <form action="<%= admin_customer_gift_path(customer) %>" method="POST" data-gift>
+            <%- csrf_field() %>
+            <select name="days" aria-label="For how long">
+              <option value="30">30 days</option>
+              <option value="90">3 months</option>
+              <option value="365">1 year</option>
+            </select>
+            <button type="submit" class="btn btn-primary"><%= customer.plan_gift == true && customer.pro?() ? "Offer more Pro" : "Offer Pro" %></button>
+          </form>
+          <% if customer.plan_gift == true %>
+            <form action="<%= admin_customer_stop_gift_path(customer) %>" method="POST" data-stop-gift><%- csrf_field() %><button type="submit" class="btn btn-danger">End the offer</button></form>
+          <% end %>
+        <% end %>
+      </div>
+    </section>
+  </div>
+
+  <section class="admin-panel">
+    <h2>Invoices</h2>
+    <% if invoices["error"].present? %>
+      <p class="admin-note"><%= invoices["error"] %></p>
+    <% elsif invoices["invoices"].length == 0 %>
+      <p class="admin-empty">No invoice.</p>
+    <% else %>
+      <%- partial("admin/invoices", {"rows": invoices["invoices"], "accounts": {}}) %>
+    <% end %>
+  </section>
+
+  <section class="admin-panel">
+    <h2>Scores</h2>
+    <% if picture["scores"].length == 0 %>
+      <p class="admin-empty">No score.</p>
+    <% else %>
+      <div class="table-scroll">
+        <table class="ref-table admin-table" data-customer-scores>
+          <thead><tr><th>Title</th><th>Changed</th><th>Made</th><th></th></tr></thead>
+          <tbody>
+            <% for score in picture["scores"] %>
+              <tr>
+                <td><%= score.title %><% if score.composer.present? %> <span class="muted">— <%= score.composer %></span><% end %></td>
+                <td><%= admin_day(score.updated_at) %></td>
+                <td><%= admin_day(score.created_at) %></td>
+                <td><%= score.trashed_at.nil? ? "" : "In the trash" %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    <% end %>
+  </section>
+
+  <section class="admin-panel">
+    <h2>Events from Stripe</h2>
+    <%- partial("admin/events", {"events": picture["events"], "names": picture["names"]}) %>
+  </section>
+</section>

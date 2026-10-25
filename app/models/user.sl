@@ -695,6 +695,48 @@ class User < Model
     @current_period_end.to_s.to_i > now
   end
 
+  # --- What an admin may change (#399, /admin) ----------------------------------
+
+  # Whether Pro is paid for through Stripe: a subscription the webhook set.
+  def paying?
+    @pro? && @plan_gift != true && @stripe_subscription_id.present?
+  end
+
+  # Pro offered for `days` from `now`: nil, or why not. An offer already
+  # running is lengthened from its end; a paying account is left alone.
+  def gift_pro(days, now)
+    return "This account pays for Pro already: Stripe manages it." if @paying?
+    return "An offer lasts from 1 to 3660 days." if days < 1 || days > 3660
+
+    starts = @plan_gift == true && @pro_at?(now) ? @current_period_end.to_s.to_i : now
+    @plan = "pro"
+    @plan_status = "active"
+    @plan_gift = true
+    @cancel_at_period_end = false
+    @current_period_end = starts + days * 86400
+    @update()
+    nil
+  end
+
+  # The offer of Pro ended now: back on Free. nil, or why not.
+  def stop_gift
+    return "This account has no offer of Pro." unless @plan_gift == true
+
+    @plan = "free"
+    @plan_status = "canceled"
+    @plan_gift = false
+    @current_period_end = nil
+    @update()
+    nil
+  end
+
+  # Signing in allowed again after too many wrong passwords.
+  def unlock
+    @locked_at = nil
+    @failed_attempts = 0
+    @update()
+  end
+
   # The plan's name, as the account page shows it.
   def plan_name
     @pro? ? "Pro" : "Free"
@@ -706,6 +748,7 @@ class User < Model
     at = now ?? DateTime.utc.to_unix
     ends = @current_period_end.nil? ? "" : DateTime.from_unix(@current_period_end.to_s.to_i).format("%B %-d, %Y")
     if @pro_at?(at)
+      return "Offered until #{ends}." if @plan_gift == true
       return "Ends on #{ends}: it will not renew." if @cancel_at_period_end == true
       return "On trial until #{ends}." if @plan_status == "trialing"
 

@@ -1,0 +1,23 @@
+<section class="admin" data-admin="payments">
+  <%- partial("admin/head", {"heading": "Payments", "current": "payments"}) %>
+
+  <section class="admin-panel">
+    <h2>Invoices <a class="muted" href="<%= stripe_invoices %>" target="_blank" rel="noopener" style="font-size: 14px; font-weight: 500;">in Stripe ↗</a></h2>
+    <% if invoices["error"].present? %>
+      <p class="admin-note" data-invoices-error><%= invoices["error"] %></p>
+    <% elsif invoices["invoices"].length == 0 %>
+      <p class="admin-empty">No invoice yet.</p>
+    <% else %>
+      <%- partial("admin/invoices", {"rows": invoices["invoices"], "accounts": accounts}) %>
+      <nav class="admin-pager" aria-label="Pages">
+        <% if after.present? %><a class="btn btn-ghost" href="<%= admin_payments_path() %>">← The latest</a><% end %>
+        <% unless next_after.nil? %><a class="btn btn-ghost" href="<%= admin_payments_path() %>?after=<%= url_encode(next_after) %>" data-next-page>Older →</a><% end %>
+      </nav>
+    <% end %>
+  </section>
+
+  <section class="admin-panel">
+    <h2>Events from Stripe</h2>
+    <%- partial("admin/events", {"events": events, "names": names}) %>
+  </section>
+</section>

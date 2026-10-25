@@ -153,5 +153,18 @@ middleware("require_app_database", fn() {
     post("/app/scores/:id/comments/:thread_id/reopen", "app/comments#reopen")
     put("/app/scores/:id/comments/:thread_id/messages/:comment_id", "app/comments#update")
     delete("/app/scores/:id/comments/:thread_id/messages/:comment_id", "app/comments#destroy")
+
+    # The admin section (#399): the accounts, the plans, the payments.
+    # Admins only (User#admin?): anyone else is answered 404.
+    middleware("require_admin", fn() {
+      get("/admin", "admin/dashboard#index", name: "admin")
+      get("/admin/customers", "admin/customers#index", name: "admin_customers")
+      get("/admin/customers/:id", "admin/customers#show", name: "admin_customer")
+      post("/admin/customers/:id/gift", "admin/customers#gift", name: "admin_customer_gift")
+      post("/admin/customers/:id/gift/stop", "admin/customers#stop_gift", name: "admin_customer_stop_gift")
+      post("/admin/customers/:id/unlock", "admin/customers#unlock", name: "admin_customer_unlock")
+      post("/admin/customers/:id/confirm", "admin/customers#confirm", name: "admin_customer_confirm")
+      get("/admin/payments", "admin/payments#index", name: "admin_payments")
+    })
   })
 })
