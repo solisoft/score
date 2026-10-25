@@ -109,7 +109,8 @@ pub fn spans(src: &str) -> Result<Value, String> {
     let units = utf16_offsets(src);
     let mut out: Vec<(usize, Value)> = Vec::new();
     for staff in &parsed.staves {
-        for ev in staff.events.iter().filter(|e| matches!(e.k, Kind::Note | Kind::Rest)) {
+        // A spacer the engraver adds to fill a voice out (voices inside a voice) has no number: not an item.
+        for ev in staff.events.iter().filter(|e| matches!(e.k, Kind::Note | Kind::Rest) && e.i != usize::MAX) {
             let span = bytes.get(ev.at).and_then(|&at| written_span(src, at)).map(|r| json!([units[r.start], units[r.end]]));
             out.push((ev.i, span.unwrap_or(Value::Null)));
         }
@@ -850,6 +851,8 @@ pub fn score(src: &str) -> Result<Value, String> {
             // `\startTextSpan`, with the words before its line (empty: none), and `\stopTextSpan`.
             event["span_start"] = json!(ev.span_start.as_ref().map(|runs| runs.iter().filter(|r| !r.glyph).map(|r| r.text.as_str()).collect::<Vec<_>>().join(" ")));
             event["span_stop"] = json!(ev.span_stop);
+            // `\scaleDurations n/d`: the ratio its length is scaled by (its ticks are the scaled length), or null.
+            event["scale"] = json!(ev.scale.map(|(n, d)| [n, d]));
             events.push(event);
         }
         let words = |syl: &[parse::Syllable]| syl.iter().map(|s| json!({ "text": s.text, "hyphen": s.hyphen, "extend": s.extend })).collect::<Vec<_>>();
@@ -873,7 +876,7 @@ pub fn score(src: &str) -> Result<Value, String> {
     }
     // The page it asks for: \paper's size and margins (mm), the staff size (pt).
     let p = &parsed.paper;
-    let paper = json!({ "size": p.size, "staff_size": p.staff_size, "left": p.left, "right": p.right, "top": p.top, "bottom": p.bottom, "indent": p.indent, "even_pages": p.even_pages });
+    let paper = json!({ "size": p.size, "staff_size": p.staff_size, "left": p.left, "right": p.right, "top": p.top, "bottom": p.bottom, "indent": p.indent, "even_pages": p.even_pages, "polymeter": p.polymeter });
     // What the source says that the engraver reads and passes over (`\\override`, …).
     let warnings: Vec<&str> = parsed.warnings.iter().map(|w| w.message.as_str()).collect();
     Ok(json!({ "header": header, "paper": paper, "groups": groups, "staves": staves, "warnings": warnings }))

@@ -51,7 +51,9 @@ test("pickup: \\partial is read as a short first bar and written back as itself"
 });
 
 test("pickup: what the model cannot follow still leaves the piece to its text", () => {
-  assert.deepEqual(read("{ c'4 \\partial 4 d'4 }").unsupported, ["a pickup after the first note"]);
+  // A \\partial after the first note makes its bar that much longer (#408): read.
+  const later = read("{ c'4 \\partial 4 d'4 }").score;
+  assert.equal(M.barLength(later, 0), 2 * q);
   assert.deepEqual(read("<< \\new Staff { \\partial 4 c'4 d'1 } \\new Staff { \\partial 8 c'8 d'1 } >>").unsupported, ["staves whose pickups differ"]);
   // The same pickup on every staff is the score's.
   assert.equal(read("<< \\new Staff { \\partial 4 c'4 d'1 } \\new Staff { \\partial 4 c'4 d'1 } >>").score.pickup, q);
