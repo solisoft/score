@@ -745,6 +745,7 @@ function pieces(score, ev, at, ticks, role) {
       // A chord of a line of chord names is named once, where it starts; so is a figure, a chord diagram.
       delete p.chordmode;
       delete p.artDirs;
+      delete p.before;
       delete p.figure;
       delete p.fret;
       delete p.fretBelow;
@@ -804,9 +805,12 @@ export function write(score, s, t, ticks, content, { tidyUp = true } = {}) {
   const fill = [...rests(score, from, t - from), ...pieces(score, note, t, ticks, "whole"), ...rests(score, t + ticks, to - (t + ticks))];
   // The ottava lines, the stems and the beaming over what is written over: as they were before it and after it.
   const replaced = staff.events.slice(a, b);
+  // A setting that holds on (\\override …) stays where the music goes on: on what is written first.
+  const held = heldCommands(replaced);
   const then = Object.fromEntries(Object.keys(MARKERS).map((field) => [field, markerAt(staff, b - 1, field)]));
   const lastMarkers = Object.fromEntries(Object.keys(MARKERS).map((field) => [field, replaced.findLast((ev) => ev[field] != null)?.[field]]));
   staff.events.splice(a, b - a, ...fill);
+  if (held.length) fill[0].before = [...held, ...(fill[0].before ?? [])];
   const next = staff.events[a + fill.length];
   for (const field of Object.keys(MARKERS)) {
     if (fill[0][field] == null && lastMarkers[field] != null) fill[0][field] = lastMarkers[field];
@@ -825,7 +829,7 @@ const sameNote = (a, b) => Boolean(a && b && !a.rest && !b.rest && a.pitches.len
 
 /** A rest with nothing on it (a spacer may be one): what tidy merges, and a bar of rest gathers. */
 export function isBareRest(ev) {
-  const marked = ev.ottava != null || ev.stemDir != null || ev.noAutoBeam != null || ev.breath || ev.spanStart != null || ev.spanEnd || ev.cross != null || ev.figure || ev.fret;
+  const marked = ev.before?.length || ev.ottava != null || ev.stemDir != null || ev.noAutoBeam != null || ev.breath || ev.spanStart != null || ev.spanEnd || ev.cross != null || ev.figure || ev.fret;
   return ev.rest && !ev.tuplet && !ev.dynamic && !ev.hairpin && !ev.hairpinEnd && !ev.texts.length && !ev.chord && !ev.arts.length && !ev.pedalOn && !ev.pedalOff && !ev.beamStart && !ev.beamEnd && !marked;
 }
 
@@ -2334,7 +2338,7 @@ function retime(score, b, num, den) {
     const after = staff.events.filter((_, i) => at[i] >= to);
     staff.events = [...before, ...rests(score, from, to - from + grown), ...after];
     for (const { ev, t } of inside) {
-      if (ev.rest && !ev.dynamic && !ev.texts.length && !ev.chord && !ev.hairpin && !ev.hairpinEnd && !ev.pedalOn && !ev.pedalOff) continue;
+      if (ev.rest && !ev.dynamic && !ev.texts.length && !ev.chord && !ev.hairpin && !ev.hairpinEnd && !ev.pedalOn && !ev.pedalOff && !ev.before?.length) continue;
       const { id, base, dots, ...content } = ev;
       write(score, k, t, ticksOf(ev), content);
     }
@@ -2469,8 +2473,11 @@ export function deleteBars(score, a, b) {
     // What holds after the bars (an ottava, the stems, the beaming) holds there still.
     const last = at.findLastIndex((t) => t < to);
     const then = Object.fromEntries(Object.keys(MARKERS).map((field) => [field, markerAt(staff, last, field)]));
+    const held = heldCommands(staff.events.filter((_, k) => at[k] >= from && at[k] < to));
     staff.events = staff.events.filter((_, k) => at[k] < from || at[k] >= to);
     const next = staff.events[at.filter((t) => t < from).length];
+    // The settings that hold on from the bars taken away go on with the music after them.
+    if (next && held.length) next.before = [...held, ...(next.before ?? [])];
     for (const field of Object.keys(MARKERS)) {
       if (next && next[field] == null) next[field] = then[field];
       tidyMarkers(staff, field);
@@ -2565,8 +2572,9 @@ function eventText(ev, beam = "") {
   const bare = (p) => p.drum ?? spellPitch(p.d, p.alter);
   const head = (p) => bare(p) + (ev.rest ? "" : reminder(p));
   const notes = (pitches, at = head) => (pitches.length === 1 ? at(pitches[0]) : `<${pitches.map(at).join(" ")}>`);
-  // The stems and the beaming switched, a text span's words, before the note.
-  let out = ev.stemDir != null ? `${["\\stemDown", "\\stemNeutral", "\\stemUp"][Math.sign(ev.stemDir) + 1]} ` : "";
+  // What is kept as written (\\override …), then the stems and the beaming switched, a text span's words.
+  let out = ev.before?.length ? `${ev.before.join(" ")} ` : "";
+  out += ev.stemDir != null ? `${["\\stemDown", "\\stemNeutral", "\\stemUp"][Math.sign(ev.stemDir) + 1]} ` : "";
   if (ev.noAutoBeam != null) out += ev.noAutoBeam ? "\\autoBeamOff " : "\\autoBeamOn ";
   if (ev.spanStart) out += `\\override TextSpanner.bound-details.left.text = ${quote(ev.spanStart)} `;
   // An ottava line starts (or ends) before the note, its grace notes too.
@@ -2691,7 +2699,8 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
       // A line of chord names or a figured bass: its bars, the metre and the repeats left to the music's staves.
       for (const bar of upper) items.push(...bar.items);
       const texts = upper.map((bar, b) => oddStart(score, b, true) + bar.text + oddEnd(score, b));
-      const line = staff.chords ? "\\new ChordNames \\chordmode" : "\\new FiguredBass \\figuremode";
+      const kept = staff.withMore ? ` \\with { ${staff.withMore} }` : "";
+      const line = staff.chords ? `\\new ChordNames${kept} \\chordmode` : `\\new FiguredBass${kept} \\figuremode`;
       return `${line} {\n  ${unfold ? playedOut(score, s, texts) : checked(texts)}\n}`;
     }
     // The other voices, each its bars: a bar is written in voices up to the
@@ -2748,7 +2757,8 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
     const clef = clefText(staff.clef);
     const time = staff.time ?? score.time;
     const partial = score.pickup > 0 ? ` \\partial ${pickupText(score.pickup)}` : "";
-    const settings = name + short + midi;
+    // What its \\with says more, kept as written.
+    const settings = name + short + midi + (staff.withMore ? `${staff.withMore} ` : "");
     // A piece that ends on a repeat's end keeps its :|. sign, not a final bar.
     const ending = lastRepeat ? "" : ' \\bar "|."';
     // Written pitch: a transposing instrument's staff, key and all, where it is read.
@@ -4191,7 +4201,10 @@ function pageText(score) {
   if (p.evenPages != null) inside.push(`page-breaking = #ly:${p.evenPages ? "optimal" : "minimal"}-breaking`);
   if (p.systemsPerPage) inside.push(`systems-per-page = ${p.systemsPerPage}`);
   for (const [key, name] of PAGE_LINES) if (p.marks?.[key]) inside.push(`${name} = ${lineText(p.marks[key])}`);
+  // What \\paper says more, and the \\layout blocks, as they were written.
+  inside.push(...(p.more ?? []));
   if (inside.length) lines.push(`\\paper { ${inside.join(" ")} }`);
+  lines.push(...(score.layout ?? []));
   return lines.length ? lines.join("\n") + "\n" : "";
 }
 
@@ -4630,6 +4643,350 @@ function playedOut(score, s, bars) {
     .join(" | ");
 }
 
+// ---- Kept as written: \override, \set, \tweak, \with, \layout, \paper ----------------------------
+//
+// What the model does not understand but must not lose is kept as the text
+// wrote it, in the place it holds in the music:
+//
+// - `ev.before`: the commands written right before a note or rest that set
+//   how things are drawn — \override, \revert, \set, \unset, \tweak, \hide,
+//   \omit, with \once, \temporary or \undo before them — each its text. One
+//   that holds on (not \once, not \tweak) stays in the music when its note
+//   is written over or its bar taken away: it moves to what comes there.
+// - `staff.withMore`: what a staff's \with says beside its names and sound
+//   (\RemoveEmptyStaves, \override StaffSymbol.line-count = 1, \consists …).
+// - `score.layout`: each \layout block, as written.
+// - `score.paper.more`: what \paper says beside the paper, the margins, the
+//   spreading of lines, the systems a page and the headers and footers.
+//
+// Each is read from the source with the notes' places in it (eui-score's
+// `source_spans`), so a text the model wrote itself reads back the same.
+
+/** The commands kept before a note: how they start. */
+const KEPT_COMMANDS = ["override", "revert", "set", "unset", "tweak", "hide", "omit"];
+const KEPT_PREFIXES = ["once", "temporary", "undo", "single"];
+/** What the model writes itself, so does not keep: a text span's words. */
+const WRITTEN_BY_MODEL = /^\\override TextSpanner\.bound-details\.left\.text\b/;
+
+/** Where the blanks and comments from `i` end. */
+function skipBlank(src, i) {
+  for (;;) {
+    while (i < src.length && /\s/.test(src[i])) i++;
+    if (src.startsWith("%{", i)) {
+      const end = src.indexOf("%}", i + 2);
+      i = end < 0 ? src.length : end + 2;
+    } else if (src[i] === "%") {
+      const end = src.indexOf("\n", i);
+      i = end < 0 ? src.length : end + 1;
+    } else return i;
+  }
+}
+
+/** Where the string starting at `i` (its opening quote) ends, after its closing one. */
+function stringEnd(src, i) {
+  let k = i + 1;
+  while (k < src.length && src[k] !== '"') k += src[k] === "\\" ? 2 : 1;
+  return Math.min(src.length, k + 1);
+}
+
+/** Where `open` at `i` is closed by its `close`, past it; strings and comments skipped. */
+function balancedEnd(src, i, open, close) {
+  let depth = 0;
+  let k = i;
+  while (k < src.length) {
+    const c = src[k];
+    if (c === '"') k = stringEnd(src, k);
+    else if (c === "%" && open !== "(") k = skipBlank(src, k);
+    else if (c === ";" && open === "(") {
+      const end = src.indexOf("\n", k);
+      k = end < 0 ? src.length : end + 1;
+    } else {
+      if (c === open) depth++;
+      else if (c === close && --depth === 0) return k + 1;
+      k++;
+    }
+  }
+  return src.length;
+}
+
+/** Where a Scheme value at `i` (its #) ends: #red, ##t, #'(1 . 2), #(rgb-color 1 0 0), #{ … #}. */
+function schemeEnd(src, i) {
+  let k = i + 1;
+  // ##t, ##f, and a vector, ##(#t #t #f).
+  if (src[k] === "#") return src[k + 1] === "(" ? balancedEnd(src, k + 1, "(", ")") : k + 1 + (/^[a-z]+/i.exec(src.slice(k + 1))?.[0].length ?? 0);
+  if (src[k] === "{") {
+    const end = src.indexOf("#}", k);
+    return end < 0 ? src.length : end + 2;
+  }
+  while ("'`,".includes(src[k]) && k < src.length) k++;
+  if (src[k] === "(") return balancedEnd(src, k, "(", ")");
+  if (src[k] === '"') return stringEnd(src, k);
+  while (k < src.length && !/[\s{}()"]/.test(src[k])) k++;
+  return k;
+}
+
+/** The name of the command at `i` (a backslash), or null. */
+function commandAt(src, i) {
+  return src[i] === "\\" ? /^\\([A-Za-z]+(?:-[A-Za-z]+)*)/.exec(src.slice(i, i + 64))?.[1] ?? null : null;
+}
+
+/** Where a markup at `i` ends: its commands, their Scheme, then a braced list, a string or a word. */
+function markupEnd(src, i) {
+  let k = skipBlank(src, i);
+  for (let guard = 0; guard < 64 && k < src.length; guard++) {
+    if (src[k] === "{") return balancedEnd(src, k, "{", "}");
+    if (src[k] === '"') return stringEnd(src, k);
+    if (src[k] === "#") k = skipBlank(src, schemeEnd(src, k));
+    else if (src[k] === "\\") {
+      const name = commandAt(src, k);
+      if (!name) return k + 1;
+      k = skipBlank(src, k + 1 + name.length);
+      // A command that takes nothing: the markup ends with it.
+      if (["null", "hspace", "vspace", "fromproperty"].includes(name) && src[k] !== "#") return k;
+    } else {
+      while (k < src.length && !/[\s{}"\\]/.test(src[k])) k++;
+      return k;
+    }
+  }
+  return k;
+}
+
+/** Where a value at `i` ends: Scheme, a string, a markup, a number with its unit, \default, a word. */
+function valueEnd(src, i) {
+  const k = skipBlank(src, i);
+  if (src[k] === "#") return schemeEnd(src, k);
+  if (src[k] === '"') return stringEnd(src, k);
+  const name = commandAt(src, k);
+  if (name === "markup" || name === "markuplist") return markupEnd(src, k + 1 + name.length);
+  if (name) return k + 1 + name.length;
+  const number = /^-?\d+(?:\.\d+)?(?:\s*\\(?:mm|cm|in|pt))?/.exec(src.slice(k, k + 32));
+  if (number) return k + number[0].length;
+  let end = k;
+  while (end < src.length && !/[\s{}"\\]/.test(src[end])) end++;
+  return end;
+}
+
+/** Where a grob's or a property's path at `i` ends: Staff.NoteHead.color, and old #'symbols after it. */
+function pathEnd(src, i) {
+  let k = skipBlank(src, i);
+  if (src[k] === "#") k = schemeEnd(src, k);
+  else while (k < src.length && /[A-Za-z0-9.\-]/.test(src[k])) k++;
+  for (;;) {
+    const next = skipBlank(src, k);
+    if (src.startsWith("#'", next)) k = schemeEnd(src, next);
+    else return k;
+  }
+}
+
+/**
+ * A command kept before a note, read at `i` (its backslash): `{ end, text }`,
+ * or null when it is not one, or is one the model writes itself.
+ */
+function keptCommandAt(src, i) {
+  const name = commandAt(src, i);
+  if (!name) return null;
+  let k = i + 1 + name.length;
+  if (KEPT_PREFIXES.includes(name)) {
+    const inner = keptCommandAt(src, skipBlank(src, k));
+    return inner ? { end: inner.end, text: `\\${name} ${inner.text}`, tweak: inner.tweak } : null;
+  }
+  if (!KEPT_COMMANDS.includes(name)) return null;
+  k = pathEnd(src, k);
+  if (name === "override" || name === "set") {
+    const eq = skipBlank(src, k);
+    if (src[eq] === "=") k = eq + 1;
+    k = valueEnd(src, k);
+  } else if (name === "tweak") {
+    // \tweak color #red: a property then its value (\tweak NoteHead.color …, \tweak #'color …).
+    k = valueEnd(src, k);
+  }
+  const text = src.slice(i, k).replace(/\s+/g, " ").trim();
+  if (WRITTEN_BY_MODEL.test(text)) return null;
+  return { end: k, text, tweak: name === "tweak" };
+}
+
+/** Where what a block command at `i` takes ends: `\\with { … }`, `\\layout { … }` and the like. */
+function blockEnd(src, i) {
+  const k = skipBlank(src, i);
+  return src[k] === "{" ? balancedEnd(src, k, "{", "}") : k;
+}
+
+/**
+ * The commands kept before each note and rest of `source`, by the
+ * engraver's number for it: Map i → [text]. `spans` are `source_spans`.
+ */
+export function keptCommands(source, spans) {
+  const out = new Map();
+  if (!source || !Array.isArray(spans)) return out;
+  const ends = spans.filter(Boolean).map((sp) => sp[1]).sort((x, y) => x - y);
+  spans.forEach((span, i) => {
+    if (!span) return;
+    // From the end of the note written just before it in the text.
+    let from = 0;
+    for (const e of ends) {
+      if (e <= span[0]) from = e;
+      else break;
+    }
+    const kept = [];
+    let k = from;
+    while (k < span[0]) {
+      const c = source[k];
+      if (c === '"') k = stringEnd(source, k);
+      else if (c === "%") k = skipBlank(source, k);
+      else if (c === "#") k = schemeEnd(source, k);
+      else if (c === "\\") {
+        const name = commandAt(source, k);
+        if (!name) {
+          k += 2;
+          continue;
+        }
+        // Blocks that hold settings of their own, and words: passed over whole.
+        if (["with", "layout", "paper", "header", "midi"].includes(name)) {
+          k = blockEnd(source, k + 1 + name.length);
+          continue;
+        }
+        if (name === "markup" || name === "markuplist") {
+          k = markupEnd(source, k + 1 + name.length);
+          continue;
+        }
+        // After a note's -, ^ or _ it is that note's, not the next one's.
+        const attached = k > 0 && "-^_".includes(source[k - 1]);
+        const command = attached ? null : keptCommandAt(source, k);
+        if (!command || command.end > span[0]) {
+          k += 1 + name.length;
+          continue;
+        }
+        // A \tweak is the next note's only when that note follows it.
+        const next = skipBlank(source, command.end);
+        if (!command.tweak || next === span[0]) kept.push(command.text);
+        k = command.end;
+      } else k++;
+    }
+    if (kept.length) out.set(i, kept);
+  });
+  return out;
+}
+
+/** Whether a kept command holds on after its note: not \once, not a \tweak of that note. */
+const holdsOn = (text) => !/^\\(once|tweak|single)\b/.test(text);
+
+/** The kept commands of `events` that hold on, in order. */
+function heldCommands(events) {
+  return events.flatMap((ev) => (ev.before ?? []).filter(holdsOn));
+}
+
+/** The \\with block of each `\\new Staff` (DrumStaff, TabStaff…) of `source`, in order: its text, or null. */
+function staffWiths(source) {
+  const out = [];
+  const re = /\\(?:new|context)\s+(Staff|DrumStaff|TabStaff|RhythmicStaff|Lyrics|ChordNames|FiguredBass|PianoStaff|GrandStaff|StaffGroup|ChoirStaff|Voice|CueVoice|Dynamics|NullVoice)\b/g;
+  const text = String(source ?? "");
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    let k = skipBlank(text, m.index + m[0].length);
+    // `= "name"`
+    if (text[k] === "=") {
+      k = skipBlank(text, k + 1);
+      k = text[k] === '"' ? stringEnd(text, k) : valueEnd(text, k);
+      k = skipBlank(text, k);
+    }
+    const isWith = commandAt(text, k) === "with";
+    let body = null;
+    if (isWith) {
+      const open = skipBlank(text, k + 5);
+      const end = blockEnd(text, k + 5);
+      body = text.slice(open + 1, end - 1);
+    }
+    out.push({ kind: m[1], body, at: m.index });
+  }
+  return out;
+}
+
+/** What a \\with block says beside the names and sound the model writes: its text, or "". */
+function withMore(body) {
+  let rest = String(body ?? "");
+  for (const name of ["instrumentName", "shortInstrumentName", "midiInstrument"]) {
+    for (;;) {
+      const m = new RegExp(`(^|\\s)${name}\\s*=`).exec(rest);
+      if (!m) break;
+      const end = valueEnd(rest, m.index + m[0].length);
+      rest = rest.slice(0, m.index) + rest.slice(end);
+    }
+  }
+  return rest.replace(/\s+/g, " ").trim();
+}
+
+/** Each \\layout block of `source`, as written, outside a \\with or a \\paper. */
+function layoutBlocks(source) {
+  const text = String(source ?? "");
+  const out = [];
+  let k = 0;
+  while (k < text.length) {
+    const c = text[k];
+    if (c === '"') k = stringEnd(text, k);
+    else if (c === "%") k = skipBlank(text, k);
+    else if (c === "#") k = schemeEnd(text, k);
+    else if (c === "\\") {
+      const name = commandAt(text, k);
+      if (!name) {
+        k += 2;
+        continue;
+      }
+      if (name === "layout") {
+        const end = blockEnd(text, k + 7);
+        out.push(text.slice(k, end).replace(/\s+/g, " ").trim());
+        k = end;
+      } else if (["with", "paper", "header", "midi"].includes(name)) k = blockEnd(text, k + 1 + name.length);
+      else if (name === "markup") k = markupEnd(text, k + 7);
+      else k += 1 + name.length;
+    } else k++;
+  }
+  return out;
+}
+
+// What \\paper says that the model writes itself (see pageText, readPage).
+const PAPER_WRITTEN = /^(left-margin|right-margin|top-margin|bottom-margin|indent|page-breaking|(max-)?systems-per-page|(odd|even)(Header|Footer)Markup)$/;
+
+/** What the first \\paper block of `source` says beside what the model writes: each setting's text. */
+function paperMore(source) {
+  const text = String(source ?? "");
+  const at = /\\paper\s*\{/.exec(text);
+  if (!at) return [];
+  const open = text.indexOf("{", at.index);
+  const end = balancedEnd(text, open, "{", "}") - 1;
+  const out = [];
+  let k = skipBlank(text, open + 1);
+  while (k < end) {
+    const start = k;
+    if (text[k] === "#") {
+      k = schemeEnd(text, k);
+      const said = text.slice(start, k);
+      if (!/^#\(set-paper-size\b/.test(said)) out.push(said.replace(/\s+/g, " "));
+    } else {
+      const name = /^[A-Za-z][A-Za-z0-9-]*/.exec(text.slice(k, k + 80))?.[0];
+      if (!name) {
+        k = text[k] === "\\" ? valueEnd(text, k) : k + 1;
+        k = skipBlank(text, k);
+        continue;
+      }
+      k = skipBlank(text, k + name.length);
+      if (text[k] === "=") k = valueEnd(text, k + 1);
+      if (!PAPER_WRITTEN.test(name)) out.push(text.slice(start, k).replace(/\s+/g, " ").trim());
+    }
+    k = skipBlank(text, k);
+  }
+  return out;
+}
+
+/** Whether the warning's name (from passedOver) is kept by what the model holds. */
+function keptName(name, held) {
+  const plain = (t) => t.replace(/\s+/g, " ").trim();
+  const inWith = / in \\with$/.exec(name);
+  if (inWith) return held.withs.some((w) => w.includes(plain(name.slice(0, inWith.index))));
+  if (/^the \\layout block/.test(name)) return held.layout.length > 0;
+  const paper = /^\\paper's (.+)$/.exec(name);
+  if (paper) return held.paper.some((p) => p.startsWith(paper[1]));
+  return held.commands.some((c) => c.includes(plain(name)));
+}
+
 // ---- Reading eui-score's parse back ---------------------------------------------------------
 
 /** What the editor says of a piece of several movements (#359): engraved, edited in the text. */
@@ -4646,6 +5003,14 @@ const BREATHS_READ = { breathMarkComma: "breathe", caesura: "caesura" };
  * the engraver could not set is not a setting (see MOVEMENTS).
  */
 export function passedOver(warnings) {
+  return shortList(passedOverAll(warnings));
+}
+
+/** A list of names, past six the first five and how many more. */
+const shortList = (list) => (list.length > 6 ? [...list.slice(0, 5), `${list.length - 5} more`] : list);
+
+/** Every name passedOver gives, none left out. */
+function passedOverAll(warnings) {
   const names = new Set();
   for (const w of warnings ?? []) {
     if (/^movement \d|^the lyrics of movement/.test(w)) continue;
@@ -4653,8 +5018,7 @@ export function passedOver(warnings) {
     if (/^\\paper's ((max-)?systems-per-page|(odd|even)(Header|Footer)Markup) /.test(w)) continue;
     names.add(w.replace(/:.*$/, "").replace(/ (is|are) not (drawn|read|engraved|set|words this prints).*$/, "").replace(/ outside the music$/, "").trim());
   }
-  const list = [...names].filter(Boolean);
-  return list.length > 6 ? [...list.slice(0, 5), `${list.length - 5} more`] : list;
+  return [...names].filter(Boolean);
 }
 
 /** A clef's name by the parse's `[sign, line, octave]`. */
@@ -4717,13 +5081,12 @@ function chordLine(score, staff, unsupported) {
  * what it uses that this model does not keep — so the page edits the text
  * instead of losing it.
  */
-export function fromParsed(parsed, source = null) {
+export function fromParsed(parsed, source = null, { spans = parsed.spans ?? null } = {}) {
   const unsupported = new Set();
   // What the model reads and does not keep: the first edit writes the text without it.
   const lost = new Set();
-  // The layout settings the engraver passes over (\\override, \\set, \\with …): not written again.
-  const settings = passedOver(parsed.warnings);
-  if (settings.length) lost.add(`the settings the engraver passes over (${settings.join(", ")})`);
+  // The commands written before each note that the model keeps as written (\\override, \\set …).
+  const before = keptCommands(source, spans);
   if ((parsed.warnings ?? []).some((w) => /^movement \d/.test(w))) unsupported.add(MOVEMENTS);
   const score = { header: { ...parsed.header }, key: 0, time: [4, 4], tempo: null, group: "none", groups: [], staves: [], repeats: [], changes: [] };
   score.paper = paperFrom(parsed.paper);
@@ -4987,6 +5350,7 @@ export function fromParsed(parsed, source = null) {
           if (whole.length && ev.span_stop) whole[whole.length - 1].spanEnd = true;
           if (whole.length && BREATHS_READ[ev.breath]) whole[whole.length - 1].breath = BREATHS_READ[ev.breath];
           if (ev.cross) for (const r of whole) r.cross = ev.cross;
+          if (whole.length && before.get(ev.i)?.length) whole[0].before = [...before.get(ev.i)];
           lane.events.push(...whole);
           continue;
         }
@@ -4994,6 +5358,7 @@ export function fromParsed(parsed, source = null) {
         if (k === "Rest" && !ev.tuplet && ev.ticks !== notated(ev.base, ev.dots) && ev.ticks > 0) {
           const filled = rests(score, lengthOf(lane), ev.ticks, Boolean(ev.spacer));
           if (filled.length && ev.cross) for (const r of filled) r.cross = ev.cross;
+          if (filled.length && before.get(ev.i)?.length) filled[0].before = [...before.get(ev.i)];
           lane.events.push(...filled);
           continue;
         }
@@ -5058,6 +5423,8 @@ export function fromParsed(parsed, source = null) {
           // Drawn on another staff, `\change Staff = "down"`: that staff's id.
           ...(ev.cross ? { cross: ev.cross } : {}),
           ...(diagram && k === "Note" ? { fret: diagram.text.slice(FRET_MARK.length), ...(diagram.dir > 0 ? { fretBelow: true } : {}) } : {}),
+          // The \\override, \\set, \\tweak … written before it, as written.
+          ...(before.get(ev.i)?.length ? { before: [...before.get(ev.i)] } : {}),
         });
         // \\stemUp and \\autoBeamOff hold until changed: written where the lane's notes change them.
         if (k === "Note") {
@@ -5122,6 +5489,24 @@ export function fromParsed(parsed, source = null) {
   }
   if (unsupported.size) return { unsupported: [...unsupported] };
   if (!score.staves.length) return { unsupported: ["a piece with no staff"] };
+  // What each staff's \\with says beside its names, the \\layout blocks, what \\paper says more: kept as written.
+  const withs = staffWiths(source).filter((w) => ["Staff", "DrumStaff", "TabStaff", "RhythmicStaff", "ChordNames", "FiguredBass"].includes(w.kind));
+  const more = withs.map((w) => withMore(w.body));
+  if (withs.length === parsed.staves.length) placed.forEach((lanes, k) => more[k] && (lanes[0].withMore = more[k]));
+  else if (more.some(Boolean)) lost.add("what a staff's \\with says beside its name");
+  const layout = layoutBlocks(source);
+  if (layout.length) score.layout = layout;
+  const paper = paperMore(source);
+  if (paper.length) score.paper.more = paper;
+  // The layout settings the engraver passes over (\\override, \\set, \\with …) and the model does not keep.
+  const held = {
+    commands: placed.flat().flatMap((lane) => lane.events.flatMap((ev) => ev.before ?? [])),
+    withs: withs.length === parsed.staves.length ? more : [],
+    layout,
+    paper,
+  };
+  const settings = shortList(passedOverAll(parsed.warnings).filter((name) => !keptName(name, held)));
+  if (settings.length) lost.add(`the settings the engraver passes over (${settings.join(", ")})`);
   ensureLength(score, Math.max(...score.staves.map(lengthOf), barStart(score, 1)));
   if (score.staves.some((st) => !isBarLine(score, lengthOf(st)))) return { unsupported: ["a bar left unfinished"] };
   // A double bar at the very end is the final bar line, written anyway.

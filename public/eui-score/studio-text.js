@@ -4,7 +4,7 @@
 
 /** Answers the score's model and text: reading, writing, the undoable edit, opening. */
 export function install(ctx) {
-  const { options, draftKey, sourceBox, status, st, M, Vel, editor_view_lit, score_json } = ctx;
+  const { options, draftKey, sourceBox, status, st, M, Vel, editor_view_lit, score_json, source_spans } = ctx;
   const { settleHistory, draw, say, mixFromMeta, applyMix } = ctx.call;
 
   // ---- Model ↔ text ----------------------------------------------------------
@@ -13,6 +13,8 @@ export function install(ctx) {
     st.text = text;
     try {
       const parsed = JSON.parse(score_json(text));
+      // Where each note is written: what the model keeps as written (\override …) is read before it.
+      parsed.spans = JSON.parse(source_spans(text));
       const result = M.fromParsed(parsed, text);
       st.score = result.score ?? null;
       // The mixer, the velocities…: on the text's last line, a comment the engraver passes over.

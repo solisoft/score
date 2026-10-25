@@ -7,7 +7,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import init, { editor_view, score_json } from "../../public/eui-score/eui_score_web.js";
+import init, { editor_view, score_json, source_spans } from "../../public/eui-score/eui_score_web.js";
 import * as M from "../../public/eui-score/score-model.js";
 import * as X from "../../public/eui-score/musicxml.js";
 
@@ -18,8 +18,9 @@ const h = M.notated(2);
 const e8 = M.notated(8);
 const A4 = { rest: false, pitches: [{ d: 12, alter: 0 }] };
 
+/** The model of `src` as the page reads it: with where each note is written. */
 function parse(src) {
-  return M.fromParsed(JSON.parse(score_json(src)), src);
+  return M.fromParsed(JSON.parse(score_json(src)), src, { spans: JSON.parse(source_spans(src)) });
 }
 
 /** The model of `src`: it must read, every tool on. */
@@ -324,4 +325,70 @@ test("a tuplet in a tuplet goes out to MusicXML with its whole ratio", () => {
   assert.equal((xml.match(/<tuplet type="start" number="\d">/g) ?? []).length, 2);
   const back = read(X.fromMusicXML(xml).source);
   assert.deepEqual(shape(back), shape(score));
+});
+
+// ---- Kept as written: \override, \set, \tweak, \with, \layout, \paper ----------------------------
+
+test("\\override, \\set, \\tweak and the like before a note: kept as written, through edits around them", () => {
+  const src = "{ \\override NoteHead.color = #red c'4 \\once \\override Stem.length = #10 d'4 \\tweak color #blue e'4 \\set Staff.midiInstrument = \"flute\" f'4 | \\revert NoteHead.color g'2 \\temporary \\override Beam.positions = #'(3 . 3) a'8 b'8 \\undo \\omit Stem c''4 | \\hide Stem \\override Score.BarNumber.break-visibility = ##(#t #t #t) r1 }";
+  const result = parse(src);
+  assert.equal(result.lost, undefined, "nothing is lost");
+  const { score, source } = roundTrip(src);
+  const ev = score.staves[0].events;
+  assert.deepEqual(ev[0].before, ["\\override NoteHead.color = #red"]);
+  assert.deepEqual(ev[2].before, ["\\tweak color #blue"]);
+  assert.deepEqual(ev[5].before, ["\\temporary \\override Beam.positions = #'(3 . 3)"]);
+  assert.match(source, /\\override NoteHead\.color = #red c'4 \\once \\override Stem\.length = #10 d'4 \\tweak color #blue e'4 \\set Staff\.midiInstrument = "flute" f'4 \| \\revert NoteHead\.color g'2/);
+  assert.match(source, /\| \\hide Stem \\override Score\.BarNumber\.break-visibility = ##\(#t #t #t\) r1/);
+  // A note with a setting that holds on, written over: the setting stays, on what is written there.
+  M.write(score, 0, 0, h, A4);
+  assert.match(engrave(score), /^ {2}\\override NoteHead\.color = #red a'2 \\tweak color #blue e'4/m);
+  // One that is the note's own (\once, \tweak) goes with it.
+  M.write(score, 0, h, q, A4);
+  assert.match(engrave(score), /a'2 a'4 \\set Staff\.midiInstrument/);
+  // Transposed, copied and pasted: the settings travel with their notes.
+  M.transpose(score, { steps: 1, semitones: 2 });
+  const clip = M.copy(score, 0, 0, 0);
+  M.paste(score, 0, M.barStart(score, 2), clip);
+  assert.match(engrave(score), /\| \\hide Stem \\override Score\.BarNumber[^|]*\\override NoteHead\.color = #red b'2/);
+  // The bar they are in taken away: those that hold on go on with the next bar.
+  M.deleteBars(score, 0, 0);
+  assert.match(engrave(score), /^ {2}\\override NoteHead\.color = #red \\set Staff\.midiInstrument = "flute" \\revert NoteHead\.color a'2/m);
+});
+
+test("a \\tweak on an articulation, and a setting after the last note, are named before they go", () => {
+  const result = parse("{ c'4-\\tweak color #red -> d'4 e'2 }");
+  assert.deepEqual(result.lost, ["the settings the engraver passes over (\\tweak color)"]);
+  assert.equal(result.score.staves[0].events[1].before, undefined);
+});
+
+test("a staff's \\with, the \\layout blocks and what \\paper says more: kept as written", () => {
+  const src = "\\paper { indent = 0 ragged-right = ##t #(set-paper-size \"a5\") left-margin = 10\\mm print-page-number = ##f } \\layout { \\context { \\Staff \\RemoveEmptyStaves } } << \\new Staff \\with { \\RemoveEmptyStaves instrumentName = \"Flute\" \\override StaffSymbol.line-count = #3 \\consists \"Ambitus_engraver\" } { c'1 | d'1 } \\new Staff { R1 | e'1 } >>";
+  const result = parse(src);
+  assert.equal(result.lost, undefined, "nothing is lost");
+  const { score, source } = roundTrip(src);
+  assert.equal(score.staves[0].withMore, '\\RemoveEmptyStaves \\override StaffSymbol.line-count = #3 \\consists "Ambitus_engraver"');
+  assert.equal(score.staves[0].name, "Flute");
+  assert.deepEqual(score.layout, ["\\layout { \\context { \\Staff \\RemoveEmptyStaves } }"]);
+  assert.deepEqual(score.paper.more, ["ragged-right = ##t", "print-page-number = ##f"]);
+  assert.match(source, /\\paper \{ #\(set-paper-size "a5"\) left-margin = 10\\mm indent = 0\\mm ragged-right = ##t print-page-number = ##f \}\n\\layout \{ \\context \{ \\Staff \\RemoveEmptyStaves \} \}/);
+  assert.match(source, /\\new Staff \\with \{ instrumentName = "Flute" \\RemoveEmptyStaves \\override StaffSymbol\.line-count = #3 \\consists "Ambitus_engraver" \}/);
+  // The staff renamed and the paper changed from the menus: what was kept stays.
+  score.staves[0].name = "Fl.";
+  M.setPaper(score, { size: "letter", staffSize: 18 });
+  const after = engrave(score);
+  assert.match(after, /instrumentName = "Fl\." \\RemoveEmptyStaves/);
+  assert.match(after, /set-paper-size "letter"\) left-margin = 10\\mm indent = 0\\mm ragged-right = ##t/);
+  // \RemoveEmptyStaves in a \layout inside \score: kept too.
+  const inScore = read("\\score { << \\new Staff { c'1 } \\new Staff { R1 } >> \\layout { \\context { \\Staff \\RemoveEmptyStaves } } }");
+  assert.deepEqual(inScore.layout, ["\\layout { \\context { \\Staff \\RemoveEmptyStaves } }"]);
+  assert.match(engrave(inScore), /\\RemoveEmptyStaves/);
+});
+
+test("\\change Staff in the middle of a hand-written beam: kept, through an edit elsewhere", () => {
+  const src = "\\new PianoStaff << \\new Staff = \"up\" { c''8[ d'' \\change Staff = \"down\" c8 e8] \\change Staff = \"up\" c''2 | d''1 } \\new Staff = \"down\" { \\clef bass s1 | c1 } >>";
+  const { score, source } = roundTrip(src);
+  assert.match(source, /c''8\[ d''8 \\change Staff = "down" c8 e8\] \\change Staff = "up" c''2/);
+  M.write(score, 0, M.barStart(score, 1), q, A4);
+  assert.match(engrave(score), /c''8\[ d''8 \\change Staff = "down" c8 e8\]/);
 });
