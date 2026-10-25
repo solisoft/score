@@ -263,9 +263,10 @@ test("musicxml: a third and a fourth voice are read, in their lanes, and written
   const read = scoreOf(two.source);
   assert.deepEqual(read.staves.map((l) => l.voice ?? 1), [1, 2, 3]);
   assert.equal(read.staves[2].events.filter((ev) => !ev.rest).length, 2);
-  // Written by the editor, voice 2 rests there, and the score reads back the same.
+  // Written by the editor, voice 2 is drawn as nothing there (#408: a voice a block leaves out), each voice
+  // named so that voice 3 stays voice 3, and the score reads back the same.
   const written = M.toLilyPond(read).source;
-  assert.match(written, /<< \{ e''1 \} \\\\ \{ r1 \} \\\\ \{ g'2 a'2 \} >>/);
+  assert.match(written, /<< \{ \\voiceOne e''1 \} \\\\ \{ \\voiceTwo s1 \} \\\\ \{ \\voiceThree g'2 a'2 \} >>/);
   assert.deepEqual(shapeOf(scoreOf(written)), shapeOf(read));
   // Out: four voices of one staff, back as themselves.
   const out = X.toMusicXML(score);

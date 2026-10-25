@@ -94,11 +94,27 @@
       Pages are spaced with LilyPond's springs (a crowded page squeezes, a page with room stretches, ink never
       collides), and beams are sloped and placed as LilyPond's quanting places them.
     </p>
+    <p>
+      The score editor also opens on the score what the engraver now reads of the metre: a <code>\time</code>
+      in the middle of a bar, a <code>\partial</code> after the first bar (at a bar line or inside one), a
+      <code>\time</code> written in one staff only, a metre drawn beside another with bars as long
+      (<code>\set Staff.timeSignatureFraction</code> and <code>\scaleDurations</code>, or
+      <code>\enablePolymeter</code>), voices inside a voice, and staves drawn smaller
+      (<code>\magnifyStaff</code>, a <code>staff-space</code> and <code>fontSize</code> in a staff's
+      <code>\with</code>). Each is written back where it was while the bars still say the same; a bar whose
+      <code>\time</code> or <code>\partial</code> an edit has moved is written as a <code>\partial</code> of its
+      length.
+    </p>
     <ul>
       <li><strong>Metre</strong>: staves whose bars last differently (polymetre with bars of different lengths)
         are refused: line them up with <code>\scaleDurations</code> or <code>timeSignatureFraction</code>.</li>
       <li><strong>Layout</strong>: a beam is not moved away from other objects it could touch, and the
         <code>\paper</code> spacings around titles and markups are not read.</li>
+      <li><strong>Editor</strong>: the notes of a staff scaled by <code>\scaleDurations</code> keep their
+        lengths on the score (their pitches, marks and rests are edited; note input, lengths, pasting and a new
+        metre there are refused, edited in the text), a drawn metre that changes after a staff's start
+        (<code>timeSignatureFraction</code>) is left to the text, and staves whose bars last differently stay
+        the engraver's alone.</li>
       <li><strong>Settings</strong>: an <code>\override</code> not in the lists above is still passed over
         with a warning.</li>
     </ul>

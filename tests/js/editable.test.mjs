@@ -479,11 +479,9 @@ test("notes set smaller (\\tiny, \\small …): kept with the command that sets t
   assert.match(engrave(score), /c'4 \\tiny a'2 \\normalsize f'4/);
 });
 
-test("what the engraver itself refuses is still left to the text, named", () => {
-  // A pickup after the first note, staves whose bars last differently, voices inside voices.
-  for (const src of ["{ c'1 | \\partial 4 d'4 | e'1 }", "<< \\new Staff { \\time 3/4 c'2. } \\new Staff { \\time 4/4 c'1 } >>", "{ \\time 4/4 c'2 \\time 2/4 d'2 }"]) {
-    assert.throws(() => editor_view(src, 900, 7, -1, -1));
-  }
-  assert.ok(parse("{ c'1 | \\partial 4 d'4 | e'1 }").unsupported.includes("a pickup after the first note"));
-  assert.ok(parse("{ c'2 \\time 2/4 d'2 }").unsupported.includes("a change of metre inside a bar"));
+test("what the engraver read and the editor still cannot hold is left to the text, named", () => {
+  // Since #408 the engraver reads a pickup after the first note, a \\time inside a bar and voices
+  // inside voices (see metre.test.mjs); staves whose bars last differently it draws, the editor refuses.
+  assert.ok(parse("<< \\new Staff { \\time 3/4 c'2. } \\new Staff { \\time 4/4 c'1 } >>").unsupported.includes("staves whose bars last differently"));
+  assert.ok(parse("{ c'1 | \\set Staff.timeSignatureFraction = 3/4 c'1 }").unsupported.includes("a drawn metre (timeSignatureFraction) changed after a staff's start"));
 });

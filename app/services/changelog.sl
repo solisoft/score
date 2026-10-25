@@ -32,6 +32,18 @@ class Changelog
         },
         {
           "area": "editor",
+          "title": "The metre wherever it is written, edited on the score",
+          "text": "Pieces that change metre in the middle of a bar (\\time after the first notes), that write a "
+          + "\\partial after the first bar, that write a \\time in one staff only, or that set a metre beside "
+          + "another with bars as long (\\set Staff.timeSignatureFraction with \\scaleDurations, or "
+          + "\\enablePolymeter) now open in the score editor instead of as text only, and so do voices inside "
+          + "a voice. Notes typed, bars put in or taken away, a new metre, copy and paste, transposing and the "
+          + "MIDI view keep the bars as they were, the \\time and the \\partial written back where they were. "
+          + "On a staff whose notes are scaled, pitches and marks are edited on the score and lengths in the "
+          + "text, as the editor says. Staves drawn smaller (\\magnifyStaff) keep their size through every edit."
+        },
+        {
+          "area": "editor",
           "title": "\\partCombine and \\autoChange edited on the score",
           "text": "Two parts set on one staff by \\partCombine are now edited on the score: each part is a voice of "
           + "the staff, part I and part II, and everything that works on a voice works on each part — notes "

@@ -88,7 +88,8 @@ export function notated(base, dots = 0) {
 
 /** The ticks an event lasts: its written value, scaled by its tuplet (and the tuplet around that one). */
 export function ticksOf(ev) {
-  const written = notated(ev.base, ev.dots);
+  // \\scaleDurations n/d (#408): the written value lasts n/d of itself.
+  const written = notated(ev.base, ev.dots) * (ev.scale ? ev.scale[0] / ev.scale[1] : 1);
   if (!ev.tuplet) return written;
   const outer = ev.tuplet.outer;
   return (written * ev.tuplet.d * (outer ? outer.d : 1)) / (ev.tuplet.n * (outer ? outer.n : 1));
@@ -212,6 +213,7 @@ export function pickupText(ticks) {
  */
 export function setPickup(score, ticks) {
   refuseRawBars(score);
+  if (score.staves.some((_, s) => isScaled(score, s))) throw new Error(SCALED_METRE);
   const full = (WHOLE * score.time[0]) / score.time[1];
   if (!Number.isInteger(ticks) || ticks < 0 || ticks % (WHOLE / 128) !== 0) throw new Error("a pickup is a whole number of 128ths");
   if (ticks >= full) throw new Error(`a pickup is shorter than a bar of ${score.time[0]}/${score.time[1]}`);
@@ -596,6 +598,42 @@ function rests(score, at, ticks, spacer = false) {
   return out;
 }
 
+/** Rests filling `ticks` from `at` in `lane`: drawn at its scale when every event of it is scaled alike (\\scaleDurations). */
+function laneRests(score, lane, at, ticks) {
+  const scale = scaleOf(lane);
+  if (!scale) return rests(score, at, ticks);
+  const [n, d] = scale;
+  if ((ticks * d) % n) return rests(score, at, ticks);
+  const out = [];
+  let t = at;
+  const end = at + ticks;
+  while (t < end - 1e-6) {
+    const piece = Math.min(end, nextBarLine(score, t)) - t;
+    for (const v of spellDuration((piece * d) / n)) out.push(makeEvent({ base: v.base, dots: v.dots, scale: [n, d] }));
+    t += piece;
+  }
+  return out;
+}
+
+/** The scale every event of `lane` is drawn at, [n, d], when they share one; else null. */
+function scaleOf(lane) {
+  const first = lane.events[0]?.scale;
+  return first && lane.events.every((ev) => ev.scale && ev.scale[0] === first[0] && ev.scale[1] === first[1]) ? first : null;
+}
+
+/** Whether lane `s` holds notes scaled by \\scaleDurations. */
+export function isScaled(score, s) {
+  return Boolean(score.staves[s]?.events.some((ev) => ev.scale));
+}
+
+const SCALED_METRE = "A staff's notes are scaled (\\scaleDurations, a metre beside another): change the metre or the pickup in the text below";
+const SCALED_REFUSAL = "The notes of this staff are scaled (\\scaleDurations, a metre beside another): change their lengths in the text below";
+
+/** An edit that would change the lengths of notes in a scaled lane: refused, said. */
+function refuseScaled(score, s) {
+  if (isScaled(score, s)) throw new Error(SCALED_REFUSAL);
+}
+
 export function emptyStaff(score, fields = {}) {
   return { name: "", short: "", instrument: "acoustic grand", clef: "treble", events: rests(score, 0, barStart(score, barsOf(score))), ...fields };
 }
@@ -780,7 +818,7 @@ export function ensureLength(score, ticks) {
   if (score.staves.some((staff) => (staff.raw != null || staff.rawPart) && lengthOf(staff) < want)) throw new Error(RAW_BARS_REFUSAL);
   for (const staff of score.staves) {
     const have = lengthOf(staff);
-    if (have < want) staff.events.push(...rests(score, have, want - have));
+    if (have < want) staff.events.push(...laneRests(score, staff, have, want - have));
   }
 }
 
@@ -794,6 +832,7 @@ export function write(score, s, t, ticks, content, { tidyUp = true } = {}) {
   const staff = score.staves[s];
   if (!staff) throw new Error("no such staff");
   refuseRaw(score, s);
+  refuseScaled(score, s);
   if ((staff.chords || staff.figures) && content.rest === false) throw new Error(staff.chords ? CHORD_LINE_NOTES : FIGURE_LINE_NOTES);
   if (!Number.isInteger(t) || t < 0 || !Number.isInteger(ticks) || ticks <= 0) throw new Error("nothing to write there");
   ensureLength(score, t + ticks);
@@ -838,7 +877,7 @@ const sameNote = (a, b) => Boolean(a && b && !a.rest && !b.rest && a.pitches.len
 /** A rest with nothing on it (a spacer may be one): what tidy merges, and a bar of rest gathers. */
 export function isBareRest(ev) {
   const marked = ev.before?.length || ev.cue || ev.ottava != null || ev.stemDir != null || ev.noAutoBeam != null || ev.breath || ev.spanStart != null || ev.spanEnd || ev.cross != null || ev.figure || ev.figureRaw || ev.fret;
-  return ev.rest && !ev.tuplet && !ev.dynamic && !ev.hairpin && !ev.hairpinEnd && !ev.texts.length && !ev.chord && !ev.arts.length && !ev.pedalOn && !ev.pedalOff && !ev.beamStart && !ev.beamEnd && !marked;
+  return ev.rest && !ev.tuplet && !ev.scale && !ev.dynamic && !ev.hairpin && !ev.hairpinEnd && !ev.texts.length && !ev.chord && !ev.arts.length && !ev.pedalOn && !ev.pedalOff && !ev.beamStart && !ev.beamEnd && !marked;
 }
 
 /** Rests side by side in a bar, with nothing on them, written as few as can be. */
@@ -995,6 +1034,7 @@ export function remove(score, s, i, head = -1) {
 
 /** Event `i` written with another value: shorter leaves a rest, longer writes over what follows. */
 export function setDuration(score, s, i, base, dots) {
+  refuseScaled(score, s);
   const staff = score.staves[s];
   const ev = noteOf(score, s, i);
   if (ev.tuplet) throw new Error("the notes of a tuplet keep their value: remove the tuplet first");
@@ -1654,6 +1694,7 @@ export function versesOf(staff) {
  * first keeps the note, the others are rests to write into.
  */
 export function makeTuplet(score, s, i, n) {
+  refuseScaled(score, s);
   const staff = score.staves[s];
   const ev = noteOf(score, s, i);
   if (ev.tuplet) throw new Error("already in a tuplet");
@@ -1683,6 +1724,7 @@ export function tupletAt(score, s, t, value, n) {
 
 /** The tuplet event `i` is in, made one plain value again: its first note, or a rest. */
 export function removeTuplet(score, s, i) {
+  refuseScaled(score, s);
   const staff = score.staves[s];
   const [a, b] = tupletBounds(staff, i);
   if (!staff.events[i].tuplet) throw new Error("not in a tuplet");
@@ -1753,6 +1795,7 @@ export function clipFromText(text, parse) {
 
 /** A clipboard written from `t` (ticks) on: answers the index of the last event written. */
 export function paste(score, s, t, clip) {
+  refuseScaled(score, s);
   const staff = score.staves[s];
   const from = t;
   const end = t + clip.reduce((sum, piece) => sum + piece.ticks, 0);
@@ -1860,6 +1903,7 @@ export function dynamicOfVelocity(velocity) {
  * notes at least. Answers how many notes were written.
  */
 export function writeRecording(score, s, from, to, played, grid, { dynamics = false } = {}) {
+  refuseScaled(score, s);
   if (to <= from) return 0;
   const drums = isDrums(score, s);
   const notes = quantize(played, grid)
@@ -1942,6 +1986,7 @@ function markDynamics(staff, at, notes) {
  * lines follow. Answers the index of its first event.
  */
 export function moveNote(score, s, i, { key = null, semitones = 0, shift = 0, length = null } = {}) {
+  if (shift || length != null) refuseScaled(score, s);
   const staff = score.staves[s];
   const ev = staff?.events[i];
   if (!ev || ev.rest) throw new Error("no note there");
@@ -1967,6 +2012,11 @@ export function moveNote(score, s, i, { key = null, semitones = 0, shift = 0, le
   });
   // Two heads on one key are one.
   const pitches = sortPitches(moved.filter((p, n) => moved.findIndex((q) => keyOfPitch(q) === keyOfPitch(p)) === n));
+  // A scaled note (\\scaleDurations) keeps its place and its length: its pitch only changes.
+  if (isScaled(score, s)) {
+    for (let k = a; k <= b; k++) staff.events[k].pitches = structuredClone(pitches);
+    return a;
+  }
   const { base, dots, tuplet, id, ...content } = structuredClone(ev);
   write(score, s, t0, was, { rest: true });
   write(score, s, t, ticks, { ...content, rest: false, pitches, tie: false });
@@ -2014,6 +2064,7 @@ export function sectionLanes(score, lane, section) {
  * voice (see above): answers how many parts found no staff there.
  */
 export function pasteSection(score, lane, bar, section) {
+  refuseScaled(score, lane);
   const t = barStart(score, bar);
   let skipped = 0;
   for (const part of section.parts) {
@@ -2250,6 +2301,7 @@ export function setTimeAt(score, b, num, den) {
 
 function retime(score, b, num, den) {
   refuseRawBars(score);
+  if (score.staves.some((_, s) => isScaled(score, s))) throw new Error(SCALED_METRE);
   const bars = barsOf(score);
   if (b < 0 || b >= bars) throw new Error("no such bar");
   if (![1, 2, 4, 8, 16].includes(den) || !Number.isInteger(num) || num < 1 || num > 32) throw new Error("no such metre");
@@ -2544,11 +2596,15 @@ export function deleteBars(score, a, b) {
   });
   if (b + 1 < bars) {
     if (a === 0) {
-      score.key = after.key;
-      score.time = after.time;
-      score.tempo = after.tempo;
-      // Bar 0's own change is the score's setting now.
-      score.changes = score.changes.filter((c) => c.bar !== 0);
+      // What changes where the bars end is in force from the start now.
+      score.key = own.key ?? after.key;
+      score.time = own.time ?? after.time;
+      if (own.time) score.timeParts = own.parts ?? null;
+      score.tempo = own.tempo ?? after.tempo;
+      // Bar 0's own change is the score's setting now; a length of its own stays its own (a pickup's place).
+      score.changes = score.changes
+        .map((c) => (c.bar === 0 ? Object.fromEntries(Object.entries(c).filter(([field]) => !["key", "mode", "time", "parts", "tempo"].includes(field))) : c))
+        .filter((c) => Object.keys(c).length > 1);
     } else {
       if (own.key == null && after.key !== before.key) setChange(score, a, "key", after.key);
       if (!own.time && String(after.time) !== String(before.time)) setChange(score, a, "time", after.time);
@@ -2834,7 +2890,12 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
     const tempo = s === music0 && score.tempo && (score.tempo.text || score.tempo.bpm) ? ` ${tempoText(score.tempo)}` : "";
     const clef = clefText(staff.clef);
     const time = staff.time ?? score.time;
-    const partial = score.pickup > 0 ? ` \\partial ${pickupText(score.pickup)}` : "";
+    // The metre a staff draws beside the others' (\\set Staff.timeSignatureFraction), its bars as long as theirs.
+    const shown = staff.shownTime ? ` \\set Staff.timeSignatureFraction = ${staff.shownTime[0]}/${staff.shownTime[1]}` : "";
+    // The first bar a \\partial made its own length (see oddWriting): a pickup, as every staff writes one.
+    const odd0 = score.pickup > 0 ? null : oddWriting(score, 0);
+    const first = score.pickup > 0 ? score.pickup : odd0?.kind === "partial" && odd0.pos === 0 ? odd0.ticks : 0;
+    const partial = (first > 0 ? ` \\partial ${pickupText(first)}` : "") + shown;
     // What its \\with says more, kept as written.
     const settings = name + short + midi + (staff.withMore ? `${staff.withMore} ` : "");
     // A piece that ends on a repeat's end keeps its :|. sign, not a final bar.
@@ -3059,9 +3120,13 @@ function changesText(score, s, b) {
   const c = changeAt(score, b);
   const key = drums ? null : keyChanges(score, s).find((m) => m.bar === b && m.pos === 0);
   if (key) parts.push(`\\key ${keyText(key.key, key.mode)}`);
-  const time = timeChanges(score, s).find((m) => m.bar === b);
+  // A metre whose \\time was written inside the bar before: not again.
+  const time = oddWriting(score, b - 1)?.kind === "time" && !score.staves[s].times ? null : timeChanges(score, s).find((m) => m.bar === b);
   if (time) parts.push(`\\time ${time.parts?.length > 1 && time.parts.reduce((x, y) => x + y, 0) === time.time[0] ? time.parts.join("+") : time.time[0]}/${time.time[1]}`);
   if (c?.tempo && s === firstMusic(score)) parts.push(tempoText(c.tempo));
+  // A bar its \\partial makes as long as it is, from its start: the first staff writes it.
+  const odd = s === firstMusic(score) ? oddWriting(score, b) : null;
+  if (odd?.kind === "partial" && odd.pos === 0) parts.push(`\\partial ${pickupText(odd.ticks)}`);
   // After a bar of its own length, its end wrote it.
   if (c?.line && !isOddBar(score, b - 1)) parts.unshift(`\\bar "${c.line}"`);
   return parts.length ? parts.join(" ") + " " : "";
@@ -3098,12 +3163,20 @@ function midChanges(score, s) {
   if (staff.voice || staff.chords || staff.figures) return [];
   // The tempo and the marks inside bars: the first staff's to write.
   const top = s === firstMusic(score);
+  // A \\time or a \\partial inside a bar, where it was (see oddWriting): the first staff's.
+  const odds = [];
+  for (let b = 0; top && b < barsOf(score); b++) {
+    const odd = isOddBar(score, b) ? oddWriting(score, b) : null;
+    if (!odd || odd.pos === 0) continue;
+    const text = odd.kind === "partial" ? `\\partial ${pickupText(odd.ticks)}` : `\\time ${odd.parts?.length > 1 ? odd.parts.join("+") : odd.time[0]}/${odd.time[1]}`;
+    odds.push({ bar: b, pos: odd.pos, order: -1, text });
+  }
   const tempos = top ? (score.midTempos ?? []).map((m) => ({ bar: m.bar, pos: m.pos, order: 2, text: tempoText(m.tempo) })) : [];
   const marks = top ? (score.midMarks ?? []).map((m) => ({ bar: m.bar, pos: m.pos, order: 3, text: midMarkText(m) })) : [];
-  if (staff.drums) return [...tempos, ...marks].sort((x, y) => x.bar - y.bar || x.pos - y.pos || x.order - y.order);
+  if (staff.drums) return [...odds, ...tempos, ...marks].sort((x, y) => x.bar - y.bar || x.pos - y.pos || x.order - y.order);
   const keys = keyChanges(score, s).filter((m) => m.pos > 0).map((m) => ({ bar: m.bar, pos: m.pos, order: 1, text: `\\key ${keyText(m.key, m.mode)}` }));
   const clefs = staff.tab ? [] : (staff.midClefs ?? []).map((c) => ({ bar: c.bar, pos: c.pos, order: 0, text: `\\clef ${clefText(c.clef)}` }));
-  return [...clefs, ...keys, ...tempos, ...marks].sort((x, y) => x.bar - y.bar || x.pos - y.pos || x.order - y.order);
+  return [...odds, ...clefs, ...keys, ...tempos, ...marks].sort((x, y) => x.bar - y.bar || x.pos - y.pos || x.order - y.order);
 }
 
 /**
@@ -3125,6 +3198,8 @@ function oddEnd(score, b, final = false) {
   const c = changeAt(score, b);
   if (!c?.len) return "";
   const line = changeAt(score, b + 1)?.line;
+  // A bar a \\time or a \\partial made: they end it (see oddWriting).
+  if (oddWriting(score, b)) return line ? ` \\bar "${line}"` : "";
   if (c.cadenza != null) return ` \\cadenzaOff${line ? ` \\bar "${line}"` : ""}`;
   return final && !line ? "" : ` \\bar "${line ?? "|"}"`;
 }
@@ -3141,6 +3216,8 @@ function staffBars(score, staff, s) {
   let open = null;
   let inner = null;
   let cue = false;
+  // The scale of the \\scaleDurations run open, "n/d", or null.
+  let scaled = null;
   // The bar whose cadenza has been opened.
   let cadenzaIn = -1;
   // The staff the notes are drawn on: each bar starts and ends on its own.
@@ -3148,12 +3225,16 @@ function staffBars(score, staff, s) {
   let drawnOn = null;
   const change = (id) => current.parts.push(`\\change Staff = ${quote(id ?? own)}`);
   const close = () => {
+    // A \\time that ends its bar where it is written (see oddWriting): before the bar line.
+    while (next < mids.length && mids[next].bar === bars.length && mids[next].order === -1) current.parts.push(mids[next++].text);
     if (drawnOn !== null) change(null);
     drawnOn = null;
     if (inner !== null) current.parts.push("}");
     inner = null;
     if (open !== null) current.parts.push("}");
     open = null;
+    if (scaled !== null) current.parts.push("}");
+    scaled = null;
     if (cue) current.parts.push("}");
     cue = false;
     bars.push({ text: current.parts.join(" "), items: current.items, events: current.events });
@@ -3200,6 +3281,17 @@ function staffBars(score, staff, s) {
     if (cadenza > 0 && !staff.voice && !staff.chords && !staff.figures && cadenzaIn !== b && pos >= cadenza - 1e-6) {
       current.parts.push("\\cadenzaOn");
       cadenzaIn = b;
+    }
+    // A run of notes scaled alike (\\scaleDurations n/d): in braces of its own, around its tuplets.
+    const scale = ev.scale ? `${ev.scale[0]}/${ev.scale[1]}` : null;
+    if (scale !== scaled) {
+      if (inner !== null) current.parts.push("}");
+      if (open !== null) current.parts.push("}");
+      inner = null;
+      open = null;
+      if (scaled !== null) current.parts.push("}");
+      if (scale !== null) current.parts.push(`\\scaleDurations ${scale} {`);
+      scaled = scale;
     }
     if (tid !== null && open === null) {
       const around = ev.tuplet.outer ?? ev.tuplet;
@@ -3424,7 +3516,7 @@ export function insertBars(score, at, count) {
   for (const staff of score.staves) {
     const i = t === lengthOf(staff) ? staff.events.length : eventAt(staff, t);
     if (i < 0) throw new Error("bars must start at a bar line");
-    staff.events.splice(i, 0, ...rests(score, t, ticks));
+    staff.events.splice(i, 0, ...laneRests(score, staff, t, ticks));
   }
   for (const r of score.repeats ?? []) {
     if (r.from >= at) r.from += count;
@@ -4811,7 +4903,7 @@ const KEPT_PREFIXES = ["once", "temporary", "undo", "single"];
 /** The sizes notes are set in, from there on: kept as written too. */
 const KEPT_SIZES = ["teeny", "tiny", "small", "normalsize", "large", "huge"];
 /** What the model writes itself, so does not keep: a text span's words. */
-const WRITTEN_BY_MODEL = /^\\override TextSpanner\.bound-details\.left\.text\b/;
+const WRITTEN_BY_MODEL = /^\\override TextSpanner\.bound-details\.left\.text\b|^\\set (Staff\.)?timeSignatureFraction\b/;
 
 /** Where the blanks and comments from `i` end. */
 function skipBlank(src, i) {
@@ -5886,6 +5978,107 @@ function midiOfPitchName(name) {
   return 48 + NATURAL[NAMES.indexOf(m[1])] + alter + 12 * octave;
 }
 
+// ---- The metre changed anywhere (#408) -------------------------------------------------------
+//
+// The engraver reads a \\time or a \\partial wherever it is written: in the
+// middle of a bar, after the first bar, in one staff only. Unless the staves
+// keep their own timing (\\enablePolymeter), each applies to every staff at
+// that moment, the first staff's first. The model keeps what they make of
+// the bars:
+//
+// - a \\time at the start of a bar: a change of metre there, as before;
+// - a \\time `pos` ticks into bar b: bar b ends when it is as long as the new
+//   metre's bar, or at once when it is longer already — its own length
+//   (`len`), `timeAt: pos` — and the new metre from bar b + 1;
+// - a \\partial T at the start of bar b: a bar of T (`len`, `partialAt: 0`);
+//   `pos` into it: a bar of pos + T (`partialAt: pos`).
+//
+// They are written back where they were, in the first staff (oddWriting),
+// when the bars still say the same; else the bar is written \\partial its
+// length at its start, which any bar can be.
+
+/**
+ * Every staff's real \\time and \\partial with the moment it is written at
+ * (ticks): [{ at, k, time, parts, ticks, staff }], in order, one of each kind
+ * a moment — the first staff's (in `order`).
+ */
+function metreMoments(parsed, order) {
+  const out = [];
+  for (const k of order) {
+    const st = parsed.staves[k];
+    if (!["Notes", "Drums", "Tab"].includes(st.kind)) continue;
+    let t = 0;
+    let from = 0;
+    let end = 0;
+    for (const ev of st.events) {
+      if (ev.k === "Voices") {
+        from = t;
+        end = t;
+      } else if (ev.k === "VoiceNext") {
+        end = Math.max(end, t);
+        t = from;
+      } else if (ev.k === "VoicesEnd") t = Math.max(end, t);
+      else if (ev.k === "Note" || ev.k === "Rest") t += ev.full ? ev.ticks * Math.max(1, ev.count) : ev.ticks;
+      else if (ev.k === "Time" && !ev.bar) out.push({ at: t, k: "Time", time: ev.time, parts: (ev.time_parts ?? []).filter((p) => p > 0), staff: k });
+      else if (ev.k === "Partial") out.push({ at: t, k: "Partial", ticks: ev.ticks, staff: k });
+    }
+  }
+  const sorted = out.map((m, n) => [m, n]).sort((x, y) => x[0].at - y[0].at || x[1] - y[1]).map(([m]) => m);
+  return sorted.filter((m, n) => !sorted.slice(0, n).some((o) => Math.abs(o.at - m.at) < 1e-6 && o.k === m.k));
+}
+
+/** A \\time or \\partial of `metreMoments` made the score's bars. */
+function applyMoment(score, m) {
+  const b = barAt(score, m.at);
+  const pos = m.at - barStart(score, b);
+  const at0 = pos < 1e-6;
+  if (m.k === "Partial") {
+    if (m.ticks <= 0) return;
+    setChange(score, b, "len", (at0 ? 0 : pos) + m.ticks);
+    setChange(score, b, "partialAt", at0 ? 0 : pos);
+    return;
+  }
+  const parts = m.parts.length > 1 ? m.parts : null;
+  const was = timeAt(score, b);
+  if (at0) {
+    // At a bar line: a change of metre there, unless it says the metre again.
+    const lastTime = (score.changes ?? []).filter((c) => c.time && c.bar < b).pop();
+    const wasParts = (lastTime ? lastTime.parts : score.timeParts) ?? [];
+    if (m.time[0] !== was[0] || m.time[1] !== was[1] || String(parts ?? []) !== String(wasParts)) setChange(score, b, "time", m.time);
+    setChange(score, b, "parts", parts);
+    return;
+  }
+  const len = Math.max(pos, (WHOLE * m.time[0]) / m.time[1]);
+  if (m.time[0] === was[0] && m.time[1] === was[1] && len === barLength(score, b)) return;
+  setChange(score, b, "len", len);
+  setChange(score, b, "timeAt", pos);
+  setChange(score, b + 1, "time", m.time);
+  setChange(score, b + 1, "parts", parts);
+}
+
+/**
+ * How bar `b` of its own length is written, when it is one a \\time or a
+ * \\partial made: { kind: "time", pos, time } — the \\time where it was, in
+ * the first staff, the next bar's metre; or { kind: "partial", pos, ticks };
+ * null for a cadenza or a bar a bar line ends.
+ */
+function oddWriting(score, b) {
+  const c = changeAt(score, b);
+  if (!c?.len || c.cadenza != null || (c.timeAt == null && c.partialAt == null)) return null;
+  const from = barStart(score, b);
+  const at = starts(score.staves[firstMusic(score)] ?? { events: [] });
+  const hits = (pos) => pos < 1e-6 || at.some((x) => Math.abs(x - from - pos) < 1e-6);
+  if (c.timeAt != null) {
+    const next = changeAt(score, b + 1);
+    if (next?.time && c.timeAt > 0 && c.timeAt <= c.len && c.len === Math.max(c.timeAt, (WHOLE * next.time[0]) / next.time[1]) && hits(c.timeAt)) {
+      return { kind: "time", pos: c.timeAt, time: next.time, parts: next.parts ?? null };
+    }
+  }
+  const pos = c.partialAt != null && c.partialAt < c.len && hits(c.partialAt) ? c.partialAt : 0;
+  const ticks = c.len - pos;
+  return ticks % (WHOLE / 128) === 0 ? { kind: "partial", pos, ticks } : null;
+}
+
 // ---- Reading eui-score's parse back ---------------------------------------------------------
 
 /** What the editor says of a piece of several movements (#359): engraved, edited in the text. */
@@ -6040,6 +6233,12 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
   // An ossia after the staves of music too: it follows their metre, and is kept on its staff (see ossiaOf).
   const rank = (st) => (isLine(st) ? 2 : st.kind === "Ossia" ? 1 : 0);
   const order = parsed.staves.map((_, k) => k).sort((x, y) => rank(parsed.staves[x]) - rank(parsed.staves[y]));
+  // Each staff's real \\time and \\partial, applied to every staff where it is written (#408), unless
+  // the staves keep their own timing (\\enablePolymeter): the first staff's reading applies them as it goes.
+  const polymeter = Boolean(parsed.paper?.polymeter);
+  const moments = polymeter ? [] : metreMoments(parsed, order);
+  const initial = { time: moments.find((m) => m.at === 0 && m.k === "Time") ?? null, partial: moments.find((m) => m.at === 0 && m.k === "Partial") ?? null };
+  const pending = moments.filter((m) => m.at > 0);
   // The engraver's numbers for the notes of every staff but the ossias: an ossia's own are the others.
   const musicNumbers = new Set(parsed.staves.filter((st) => st.kind !== "Ossia").flatMap((st) => st.events.map((ev) => ev.i)));
   for (const k of order) {
@@ -6065,7 +6264,9 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
     const laneFor = (voice) => (voice >= 2 ? others[voice - 2] : out);
     let lane = out;
     let voices = 0;
-    const pad = (target, upto) => target.events.push(...rests(score, lengthOf(target), upto - lengthOf(target)));
+    const pad = (target, upto, spacer = false) => target.events.push(...rests(score, lengthOf(target), upto - lengthOf(target), spacer));
+    // The lanes a block of voices writes in: one it leaves out is drawn as nothing there (voices inside a voice, #408).
+    const inBlock = new Set();
     let started = false;
     const tuplets = new Map();
     let key = null;
@@ -6095,6 +6296,8 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
     // Where the open cadenza started in its bar.
     let cadenzaAt = null;
     for (const ev of staff.events) {
+      // The metre's changes up to here, wherever they are written.
+      if (first && started) while (pending.length && pending[0].at <= lengthOf(lane) + 1e-6) applyMoment(score, pending.shift());
       // A cadenza is kept as a bar of its own length.
       // A cadenza is kept as a bar of its own length; cue notes as notes drawn small (`cue`).
       // Notes set smaller (\\tiny …) are kept with the command that sets them, read from the text.
@@ -6161,6 +6364,16 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
           setChange(score, bar, "key", same ? null : ev.fifths);
           setChange(score, bar, "mode", same ? null : named);
         } else if (!drums) ownKeys.push({ bar, pos: 0, key: ev.fifths, ...(named ? { mode: named } : {}) });
+      } else if (k === "Time" && ev.bar === "default") {
+        // A 4/4 the engraver puts in where nothing says the metre: not in the text.
+        continue;
+      } else if (k === "Time" && ev.bar === "shown") {
+        // \\set Staff.timeSignatureFraction: the metre this staff draws, its bars as long as the others'.
+        if (!started && !drums) out.shownTime = ev.time;
+        else unsupported.add("a drawn metre (timeSignatureFraction) changed after a staff's start");
+      } else if (k === "Time" && started && !polymeter && (first || bar < 0)) {
+        // The score's change, applied as the first staff's reading reaches it (see metreMoments).
+        continue;
       } else if (k === "Time") {
         const added = (ev.time_parts ?? []).filter((p) => p > 0);
         if (!started) {
@@ -6194,7 +6407,8 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
           else setChange(score, bar, "tempo", { text: ev.tempo.text ?? "", base: ev.tempo.base || 4, bpm: ev.tempo.bpm || 0 });
         }
       } else if (k === "Partial") {
-        // A pickup: the first staff's is the score's, the others' the same.
+        // A pickup: the first staff's is the score's, the others' the same. Later, the score's (see metreMoments).
+        if (started && !polymeter) continue;
         if (started) unsupported.add("a pickup after the first note");
         else if (first) score.pickup = ev.ticks;
         else if (ev.ticks !== (score.pickup ?? 0)) unsupported.add("staves whose pickups differ");
@@ -6223,6 +6437,7 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
       } else if (k === "Voices") {
         if (voices) unsupported.add("voices inside voices");
         voices = 1;
+        inBlock.clear();
         for (const other of others) pad(other, lengthOf(out));
       } else if (k === "VoiceNext") {
         voices++;
@@ -6232,7 +6447,7 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
         lane = out;
         const upto = Math.max(lengthOf(out), ...others.map(lengthOf));
         pad(out, upto);
-        for (const other of others) pad(other, upto);
+        for (const other of others) pad(other, upto, !inBlock.has(other));
       } else if (["RepeatStart", "RepeatEnd", "VoltaStart", "VoltaEnd", "Bar"].includes(k)) {
         // Repeat signs, where they fall in bars — the first staff's are the score's.
         if (!first) continue;
@@ -6257,12 +6472,18 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
           if (first) {
             score.key = key ?? 0;
             if (mode) score.mode = mode;
+            // No \\time or \\partial here: another staff's at the start is every staff's.
+            if (time == null && initial.time) {
+              time = initial.time.time;
+              score.timeParts = initial.time.parts.length > 1 ? initial.time.parts : null;
+            }
+            if (!(score.pickup > 0) && initial.partial) score.pickup = initial.partial.ticks;
             score.time = time ?? [4, 4];
           } else {
             // A staff in a key of its own (a horn in E♭), or a metre of its own
             // whose bars last as long as the others' (6/8 beside 3/4).
             if ((key ?? 0) !== score.key && !drums) out.key = key ?? 0;
-            const own = time ?? [4, 4];
+            const own = time ?? (polymeter ? [4, 4] : score.time);
             if (own[0] !== score.time[0] || own[1] !== score.time[1]) {
               if (own[0] * score.time[1] !== score.time[0] * own[1]) unsupported.add("staves whose bars last differently");
               else out.time = own;
@@ -6276,6 +6497,7 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
           ottavas.delete(lane);
           lane = own;
         }
+        if (voices) inBlock.add(lane);
         const ottava = ottavas.get(lane);
         ottavas.delete(lane);
         if (k === "Rest" && ev.full) {
@@ -6292,7 +6514,7 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
           continue;
         }
         // A spacer or a rest stretched by a factor (s8*7, r4*3): rests filling its time, spacers stay spacers.
-        if (k === "Rest" && !ev.tuplet && ev.ticks !== notated(ev.base, ev.dots) && ev.ticks > 0) {
+        if (k === "Rest" && !ev.tuplet && !ev.scale && ev.ticks !== notated(ev.base, ev.dots) && ev.ticks > 0) {
           const filled = rests(score, lengthOf(lane), ev.ticks, Boolean(ev.spacer));
           if (filled.length && ev.cross) for (const r of filled) r.cross = ev.cross;
           if (filled.length && before.get(ev.i)?.length) filled[0].before = [...before.get(ev.i)];
@@ -6368,6 +6590,8 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
           // The \\override, \\set, \\tweak … written before it, as written.
           ...(before.get(ev.i)?.length ? { before: [...before.get(ev.i)] } : {}),
           ...(tweaked.get(ev.i)?.length ? { tweaks: tweaked.get(ev.i).map((x) => ({ ...x })) } : {}),
+          // \\scaleDurations n/d: the written value, lasting n/d of itself.
+          ...(Array.isArray(ev.scale) && ev.scale[0] > 0 && ev.scale[1] > 0 ? { scale: [ev.scale[0], ev.scale[1]] } : {}),
         });
         // \\stemUp and \\autoBeamOff hold until changed: written where the lane's notes change them.
         if (k === "Note") {
@@ -6378,7 +6602,7 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
         }
         // A note past its bar line, as the engraver cuts it: tied pieces.
         const at = lengthOf(lane);
-        if (!tuplet && at + ev.ticks > nextBarLine(score, at) + 1e-6) lane.events.push(...pieces(score, read, at, ev.ticks, "whole"));
+        if (!tuplet && !read.scale && at + ev.ticks > nextBarLine(score, at) + 1e-6) lane.events.push(...pieces(score, read, at, ev.ticks, "whole"));
         else lane.events.push(read);
       }
     }
@@ -6420,6 +6644,8 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
     while (kept > 0 && !(others[kept - 1].events.length && (sounding(others[kept - 1].events) || (besideCue && kept === 1 && others[0].events.some((x) => x.rest && !x.spacer))))) kept--;
     for (const other of others.slice(0, kept)) pad(other, lengthOf(out));
     placed[k] = [out, ...others.slice(0, kept)];
+    // What other staves write after the first one ends.
+    if (first && started) while (pending.length) applyMoment(score, pending.shift());
     first = false;
   }
   // Each ossia, kept on the staff it stands over: its bars, its music, its \\with.
@@ -6645,6 +6871,7 @@ const FINE = WHOLE / 64;
  * (ticks; RECORDING_GRIDS lists them). Answers how many notes moved.
  */
 export function quantizeLane(score, s, from, to, { grid, strength = 1, ends = false } = {}) {
+  refuseScaled(score, s);
   const staff = score.staves[s];
   if (!staff) throw new Error("no such staff");
   if (!(grid > 0)) throw new Error("choose a grid");
@@ -6732,6 +6959,7 @@ function notesOf(score, s, from, to) {
  * many pairs.
  */
 export function writeSwing(score, s, from, to, { unit = 8, feel = "triplet" } = {}) {
+  refuseScaled(score, s);
   const staff = score.staves[s];
   if (!staff) throw new Error("no such staff");
   if (unit !== 8 && unit !== 16) throw new Error("swing is of eighths or sixteenths");
