@@ -109,11 +109,30 @@ function metres(score) {
   const pickup = score.pickup > 0 && score.pickup < full ? score.pickup : 0;
   const out = pickup ? [{ bar: 0, start: 0, len: pickup, time: score.time }, { bar: 1, start: pickup, len: full, time: score.time }] : [{ bar: 0, start: 0, len: full, time: score.time }];
   for (const c of score.changes ?? []) {
-    if (!c.time) continue;
-    const prev = out[out.length - 1];
-    out.push({ bar: c.bar, start: prev.start + (c.bar - prev.bar) * prev.len, len: (WHOLE * c.time[0]) / c.time[1], time: c.time });
+    if (!c.time && !c.len) continue;
+    let prev = out[out.length - 1];
+    // A change where the bar after one of its own length starts: in its place.
+    if (prev.bar === c.bar && out.length > 1) {
+      out.pop();
+      prev = out[out.length - 1];
+    }
+    const start = prev.start + (c.bar - prev.bar) * prev.len;
+    const time = c.time ?? prev.time;
+    const len = (WHOLE * time[0]) / time[1];
+    if (c.bar === 0 && c.len) {
+      // The first bar its own length: a pickup's place, its own start.
+      out.splice(0, out.length, { bar: 0, start: 0, len: c.len, time, odd: true }, { bar: 1, start: c.len, len, time });
+    } else if (c.len) {
+      // A bar of its own length (a cadenza, a bar a bar line cut short), then the metre again.
+      out.push({ bar: c.bar, start, len: c.len, time, odd: true }, { bar: c.bar + 1, start: start + c.len, len, time });
+    } else out.push({ bar: c.bar, start, len, time });
   }
   return out;
+}
+
+/** Whether bar `b` is one of its own length: a cadenza, or a bar a bar line ends before its metre does. */
+export function isOddBar(score, b) {
+  return Boolean(changeAt(score, b)?.len);
 }
 
 function metreOfBar(score, b) {
@@ -2148,6 +2167,8 @@ function retime(score, b, num, den) {
   if (b < 0 || b >= bars) throw new Error("no such bar");
   if (![1, 2, 4, 8, 16].includes(den) || !Number.isInteger(num) || num < 1 || num > 32) throw new Error("no such metre");
   const len = (WHOLE * num) / den;
+  // A bar of its own length counts as itself, whatever the metre: those after it are not laid out again.
+  if ((score.changes ?? []).some((c) => c.len && c.bar >= b)) throw new Error("a cadenza or a bar cut short comes later: the metre changes from the bar after it");
   const old = { time: score.time, changes: structuredClone(score.changes ?? []), pickup: score.pickup };
   // A pickup stays as long as it is, before the full bars of the first metre.
   const pickup = score.pickup > 0 ? score.pickup : 0;
@@ -2198,6 +2219,8 @@ function retime(score, b, num, den) {
       if (Object.keys(change).length > 1) changes.push(change);
     }
     if (m.time) seg = bar === 0 && pickup ? { bar: 1, at: pickup, len: (WHOLE * m.time[0]) / m.time[1], time: m.time, parts: m.parts } : { bar, at, len: (WHOLE * m.time[0]) / m.time[1], time: m.time, parts: m.parts };
+    // A bar of its own length before the bars laid out again: the metre goes on after it.
+    if (m.len) seg = { ...seg, bar: bar + 1, at: at + m.len };
   }
   if (b === 0) {
     score.time = [num, den];
@@ -2580,7 +2603,7 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
     if (staff.chords || staff.figures) {
       // A line of chord names or a figured bass: its bars, the metre and the repeats left to the music's staves.
       for (const bar of upper) items.push(...bar.items);
-      const texts = upper.map((bar) => bar.text);
+      const texts = upper.map((bar, b) => oddStart(score, b, true) + bar.text + oddEnd(score, b));
       const line = staff.chords ? "\\new ChordNames \\chordmode" : "\\new FiguredBass \\figuremode";
       return `${line} {\n  ${unfold ? playedOut(score, s, texts) : checked(texts)}\n}`;
     }
@@ -2617,7 +2640,7 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
       const named = voices.length > 1 && voices.some((v) => v.events.every((ev) => ev.rest && ev.spacer));
       const parts = [bar, ...voices].map((v, k) => `{ ${named ? `\\voice${VOICE_NAMES[k]} ` : ""}${v.text} }`);
       const music = voices.length ? `<< ${parts.join(" \\\\ ")} >>` : bar.text;
-      return broken + changesText(score, s, b) + (top ? markText(score, b) : "") + music + (top ? jumpText(score, b) : "");
+      return broken + changesText(score, s, b) + (top ? markText(score, b) : "") + oddStart(score, b, voices.length > 0) + music + (top ? jumpText(score, b) : "") + oddEnd(score, b, b === upper.length - 1);
     });
     let music = unfold ? playedOut(score, s, bars) : withRepeats(bars, repeats);
     if (toVoice) {
@@ -2743,13 +2766,13 @@ function restRuns(score, upper, voicesIn, repeats) {
     for (const len of r.endings) edges.add((next += len));
   }
   const restOf = (b) => {
-    if ((b === 0 && score.pickup > 0) || voicesIn(b).length) return null;
+    if ((b === 0 && score.pickup > 0) || isOddBar(score, b) || voicesIn(b).length) return null;
     const events = upper[b].events;
     if (!events.length || !events.every((ev) => isBareRest(ev) && !ev.spacer)) return null;
     const value = spellDuration(barLength(score, b));
     return value.length === 1 ? `R${value[0].base}${".".repeat(value[0].dots)}` : null;
   };
-  const quiet = (b) => !edges.has(b) && !score.staves.some((_, s) => changesText(score, s, b)) && !markText(score, b) && !(score.breaks ?? {})[b - 1] && !jumpText(score, b - 1);
+  const quiet = (b) => !edges.has(b) && !isOddBar(score, b - 1) && !score.staves.some((_, s) => changesText(score, s, b)) && !markText(score, b) && !(score.breaks ?? {})[b - 1] && !jumpText(score, b - 1);
   const runs = [];
   let b = 0;
   while (b < upper.length) {
@@ -2854,7 +2877,8 @@ function changesText(score, s, b) {
   if (c?.key != null && !drums) parts.push(`\\key ${keyText(keyOf(score, s, barStart(score, b)), c.mode)}`);
   if (c?.time) parts.push(`\\time ${c.parts?.length > 1 && c.parts.reduce((x, y) => x + y, 0) === c.time[0] ? c.parts.join("+") : c.time[0]}/${c.time[1]}`);
   if (c?.tempo && s === firstMusic(score)) parts.push(tempoText(c.tempo));
-  if (c?.line) parts.unshift(`\\bar "${c.line}"`);
+  // After a bar of its own length, its end wrote it.
+  if (c?.line && !isOddBar(score, b - 1)) parts.unshift(`\\bar "${c.line}"`);
   return parts.length ? parts.join(" ") + " " : "";
 }
 
@@ -2898,6 +2922,29 @@ function midChanges(score, s) {
   return [...clefs, ...keys, ...tempos, ...marks].sort((x, y) => x.bar - y.bar || x.pos - y.pos || x.order - y.order);
 }
 
+/**
+ * What starts a bar of its own length: \\cadenzaOn, for a cadenza from its
+ * start (or one beside other voices, which start with it). One that starts
+ * later in its bar is written before its note (staffBars).
+ */
+function oddStart(score, b, whole) {
+  const at = changeAt(score, b)?.cadenza;
+  return at != null && (at === 0 || whole) ? "\\cadenzaOn " : "";
+}
+
+/**
+ * What ends a bar of its own length: \\cadenzaOff, or a bar line where its
+ * metre would go on — the next bar's own when it has one (written here, not
+ * at its start). The piece's last bar ends on its final bar line (`final`).
+ */
+function oddEnd(score, b, final = false) {
+  const c = changeAt(score, b);
+  if (!c?.len) return "";
+  const line = changeAt(score, b + 1)?.line;
+  if (c.cadenza != null) return ` \\cadenzaOff${line ? ` \\bar "${line}"` : ""}`;
+  return final && !line ? "" : ` \\bar "${line ?? "|"}"`;
+}
+
 /** A lane's music, a string per bar, with its events and items; a tuplet never leaves its bar. */
 function staffBars(score, staff, s) {
   const beams = handBeams(score, staff);
@@ -2908,6 +2955,8 @@ function staffBars(score, staff, s) {
   let current = { parts: [], items: [], events: [] };
   let t = 0;
   let open = null;
+  // The bar whose cadenza has been opened.
+  let cadenzaIn = -1;
   // The staff the notes are drawn on: each bar starts and ends on its own.
   const own = score.staves[upperOf(score, s)].id;
   let drawnOn = null;
@@ -2932,6 +2981,12 @@ function staffBars(score, staff, s) {
     const pos = t - barStart(score, b);
     // One no event starts at is written before the first after it, the next bar's first at the latest.
     while (next < mids.length && (mids[next].bar < b || (mids[next].bar === b && mids[next].pos <= pos + 1e-6))) current.parts.push(mids[next++].text);
+    // A cadenza that starts inside its bar: before its first note (a staff's first voice writes it).
+    const cadenza = changeAt(score, b)?.cadenza;
+    if (cadenza > 0 && !staff.voice && !staff.chords && !staff.figures && cadenzaIn !== b && pos >= cadenza - 1e-6) {
+      current.parts.push("\\cadenzaOn");
+      cadenzaIn = b;
+    }
     if (tid !== null && open === null) {
       current.parts.push(`\\tuplet ${ev.tuplet.n}/${ev.tuplet.d} {`);
       open = tid;
@@ -4361,13 +4416,17 @@ export function beats(score, passes, { subdivide = 0 } = {}) {
   const out = [];
   for (const p of passes) {
     const [num, den] = timeAt(score, p.bar);
-    // A pickup is the end of a bar: its beats are the bar's last ones.
-    const missing = (WHOLE * num) / den - barLength(score, p.bar);
+    // A pickup is the end of a bar: its beats are the bar's last ones. A bar
+    // of its own length (a cadenza, a bar cut short) counts its beats from its start.
+    const length = barLength(score, p.bar);
+    const odd = isOddBar(score, p.bar);
+    const missing = odd ? 0 : (WHOLE * num) / den - length;
     const parts = subdivide > den && subdivide % den === 0 ? subdivide / den : 1;
-    for (let k = 0; k < num; k++) {
+    const count = odd ? Math.ceil(length / (WHOLE / den) - 1e-9) : num;
+    for (let k = 0; k < count; k++) {
       for (let j = 0; j < parts; j++) {
         const into = (k * WHOLE) / den + (j * WHOLE) / (den * parts) - missing;
-        if (into < 0) continue;
+        if (into < 0 || into > length - 1e-6) continue;
         const sec = p.start + intoPass(p, into);
         out.push(j ? { sec, down: false, sub: true } : { sec, down: k === 0 });
       }
@@ -4602,8 +4661,24 @@ export function fromParsed(parsed, source = null) {
     const ottavas = new Map();
     // Each lane's stems and beaming, as its notes last said.
     const switches = new Map();
+    // A cadenza's length, from its \\cadenzaOn: its notes and rests, up to its \\cadenzaOff.
+    const cadenzas = new Map();
+    if (first) {
+      let open = null;
+      for (const ev of staff.events) {
+        if (ev.k === "CadenzaOn") open = { ev, ticks: 0 };
+        else if (ev.k === "CadenzaOff" && open) {
+          cadenzas.set(open.ev, open.ticks);
+          open = null;
+        } else if (open && ["Voices", "VoiceNext"].includes(ev.k)) open.ticks = NaN;
+        else if (open && (ev.k === "Note" || ev.k === "Rest")) open.ticks += ev.ticks * (ev.full ? Math.max(1, ev.count) : 1);
+      }
+    }
+    // Where the open cadenza started in its bar.
+    let cadenzaAt = null;
     for (const ev of staff.events) {
-      ev.unsupported.forEach((u) => unsupported.add(u));
+      // A cadenza is kept as a bar of its own length.
+      ev.unsupported.filter((u) => u !== "a cadenza").forEach((u) => unsupported.add(u));
       // A tuplet in a tuplet is engraved and played; the score tools write one level.
       if (ev.tuplet_outer) unsupported.add("a tuplet inside a tuplet");
       const k = ev.k;
@@ -4622,6 +4697,21 @@ export function fromParsed(parsed, source = null) {
       }
       if (k === "Movement") {
         unsupported.add(MOVEMENTS);
+        continue;
+      }
+      if (k === "CadenzaOn" || k === "CadenzaOff") {
+        // \\cadenzaOn … \\cadenzaOff: the first staff's make its bar as long as its notes, then end it.
+        if (!first) continue;
+        const b = barAt(score, here);
+        if (k === "CadenzaOn") {
+          const ticks = cadenzas.get(ev);
+          if (!Number.isFinite(ticks) || cadenzaAt) unsupported.add("a cadenza in voices, or one left open");
+          else if (ticks > 0) {
+            cadenzaAt = { bar: b, pos: here - barStart(score, b) };
+            setChange(score, b, "len", cadenzaAt.pos + ticks);
+            setChange(score, b, "cadenza", cadenzaAt.pos);
+          }
+        } else cadenzaAt = null;
         continue;
       }
       if (k === "Clef" && drums) continue;
@@ -4726,14 +4816,20 @@ export function fromParsed(parsed, source = null) {
       } else if (["RepeatStart", "RepeatEnd", "VoltaStart", "VoltaEnd", "Bar"].includes(k)) {
         // Repeat signs, where they fall in bars — the first staff's are the score's.
         if (!first) continue;
-        const at = bar >= 0 ? bar : barAt(score, here) + 0.5;
+        let at = bar >= 0 ? bar : barAt(score, here) + 0.5;
         const marks = { RepeatStart: ["start"], RepeatEnd: ["end"], VoltaStart: ["volta"], VoltaEnd: ["volta-end"], Bar: { ".|:": ["start"], ":|.": ["end"], ":|.|:": ["end", "start"] }[ev.bar] ?? [] }[k];
-        if (marks.length && !Number.isInteger(at)) unsupported.add("a repeat inside a bar");
-        // A double bar line between sections (or a final one, before a coda): the bar after it keeps it.
-        if (k === "Bar" && ["||", "|."].includes(ev.bar)) {
-          if (bar > 0) setChange(score, bar, "line", ev.bar);
-          else if (bar < 0) lost.add("a double bar line inside a bar");
+        // A bar line inside a bar (or a repeat's end, `}`) ends that bar there, as the engraver
+        // ends it: a bar of its own length, the metre going on after it.
+        if (bar < 0 && (k === "Bar" || k === "RepeatEnd")) {
+          const b = barAt(score, here);
+          setChange(score, b, "len", here - barStart(score, b));
+          at = b + 1;
         }
+        if (marks.length && !Number.isInteger(at)) unsupported.add("a repeat inside a bar");
+        // A bar line of another kind between bars (a double one, a final one before a coda, a
+        // dashed one…): the bar after it keeps it; a plain one only after a cadenza, which has none.
+        const plainAfterCadenza = ev.bar === "|" && changeAt(score, at - 1)?.cadenza != null;
+        if (k === "Bar" && !marks.length && at > 0 && (ev.bar !== "|" || plainAfterCadenza)) setChange(score, at, "line", ev.bar);
         for (const mark of marks) signs.push({ mark, at, times: ev.times ?? null });
       } else if (k === "Note" || k === "Rest") {
         if (!started) {
@@ -4771,6 +4867,13 @@ export function fromParsed(parsed, source = null) {
           if (whole.length && BREATHS_READ[ev.breath]) whole[whole.length - 1].breath = BREATHS_READ[ev.breath];
           if (ev.cross) for (const r of whole) r.cross = ev.cross;
           lane.events.push(...whole);
+          continue;
+        }
+        // A spacer or a rest stretched by a factor (s8*7, r4*3): rests filling its time, spacers stay spacers.
+        if (k === "Rest" && !ev.tuplet && ev.ticks !== notated(ev.base, ev.dots) && ev.ticks > 0) {
+          const filled = rests(score, lengthOf(lane), ev.ticks, Boolean(ev.spacer));
+          if (filled.length && ev.cross) for (const r of filled) r.cross = ev.cross;
+          lane.events.push(...filled);
           continue;
         }
         let tuplet = null;

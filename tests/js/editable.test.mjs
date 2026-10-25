@@ -174,3 +174,62 @@ test("a tempo inside a bar: read, written before its note, played from there", (
   assert.deepEqual(score.midTempos.map((m) => [m.bar, m.pos]), [[1, 0], [5, 0]]);
   engrave(score);
 });
+
+// ---- Bars of their own length: a bar line inside a bar, a cadenza --------------------
+
+test("a repeat sign inside a bar ends that bar there, as the engraver ends it; the repeat is kept", () => {
+  const { score, source } = roundTrip("{ c'4 d'4 \\bar \".|:\" e'4 f'4 g'2 | a'1 \\bar \":|.\" }");
+  assert.equal(M.barLength(score, 0), h);
+  assert.ok(M.isOddBar(score, 0) && !M.isOddBar(score, 1));
+  assert.deepEqual(score.repeats, [{ from: 1, to: 2, endings: [] }]);
+  assert.match(source, /c'4 d'4 \\bar "\|" \| \\repeat volta 2 \{ e'4 f'4 g'2 \| a'1 \}/);
+  // A half note typed at its start fills it; a whole note is tied over its end.
+  M.write(score, 0, 0, M.notated(1), A4);
+  assert.match(engrave(score), /a'2~ \\bar "\|" \| \\repeat volta 2 \{ a'2 g'2/);
+  // Bars put in before it move it along.
+  M.insertBars(score, 0, 1);
+  assert.ok(M.isOddBar(score, 1) && M.barLength(score, 1) === h);
+  engrave(score);
+  // A repeat that starts inside a bar with no bar line there is the engraver's to refuse.
+  assert.throws(() => editor_view("{ c'2 \\repeat volta 2 { d'2 | e'1 } }", 900, 7, -1, -1));
+});
+
+test("a double bar line inside a bar, and a last bar left short by its final bar line", () => {
+  const { score, source } = roundTrip("{ c'1 | d'4 e'4 \\bar \"||\" f'2 g'2 | a'4 b'4 c''4 \\bar \"|.\" }");
+  assert.equal(M.barLength(score, 1), h);
+  assert.equal(M.changeAt(score, 2).line, "||");
+  assert.equal(M.barLength(score, M.barsOf(score) - 1), M.notated(2, 1));
+  assert.match(source, /d'4 e'4 \\bar "\|\|" \| f'2 g'2 \| a'4 b'4 c''4 \\bar "\|\."/);
+  // Taken away from its bar's start: the bar line goes, the bar keeps its length.
+  M.setDoubleBar(score, 2, false);
+  assert.match(engrave(score), /d'4 e'4 \\bar "\|" \| f'2 g'2/);
+});
+
+test("a cadenza: a bar as long as its notes, read, written between \\cadenzaOn and \\cadenzaOff, edited", () => {
+  const src = "<< \\new Staff { c'1 | \\cadenzaOn c''8 d'' e'' f'' g'' a'' b'' \\cadenzaOff \\bar \"|\" c'''1 } \\new Staff { \\clef bass c1 | \\cadenzaOn s8*7 \\cadenzaOff \\bar \"|\" c1 } >>";
+  const { score, source } = roundTrip(src);
+  assert.equal(M.changeAt(score, 1).cadenza, 0);
+  assert.equal(M.barLength(score, 1), 7 * e8);
+  assert.equal(M.changeAt(score, 2).line, "|");
+  assert.match(source, /c'1 \| \\cadenzaOn c''8 d''8 e''8 f''8 g''8 a''8 b''8 \\cadenzaOff \\bar "\|" \| c'''1/);
+  // The other staff's bar is as long, written the same way.
+  assert.match(source, /c1 \| \\cadenzaOn s2\.\. \\cadenzaOff \\bar "\|" \| c1/);
+  // A note typed in it, one taken away.
+  M.write(score, 0, M.barStart(score, 1) + e8, e8, { rest: false, pitches: [{ d: 15, alter: 1 }] });
+  M.remove(score, 0, 6);
+  assert.match(engrave(score), /\\cadenzaOn c''8 dis''8 e''8 f''8 g''8 r8 b''8 \\cadenzaOff/);
+  // Played: its seven eighths, seven beats of an eighth's count; the bar after it starts on time.
+  const passes = M.playback(score);
+  assert.ok(Math.abs(passes[2].start - passes[1].start - (7 / 8) * 4 * 0.6) < 1e-6);
+  // The metre is not changed over it.
+  assert.throws(() => M.setTimeAt(score, 0, 3, 4), /cadenza/);
+  M.setTimeAt(score, 2, 3, 4);
+  engrave(score);
+});
+
+test("a cadenza that starts inside its bar", () => {
+  const { score, source } = roundTrip("{ c'2 \\cadenzaOn d'8 e' f' \\cadenzaOff g'2 a'2 | b'1 }");
+  assert.equal(M.changeAt(score, 0).cadenza, h);
+  assert.equal(M.barLength(score, 0), h + 3 * e8);
+  assert.match(source, /c'2 \\cadenzaOn d'8 e'8 f'8 \\cadenzaOff \| g'2 a'2 \| b'1/);
+});
