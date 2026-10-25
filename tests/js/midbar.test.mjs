@@ -81,8 +81,10 @@ test("a key and a clef inside a bar on a piano's two staves, in a minor mode", (
   const source = engrave(score);
   assert.match(source, /c''2 \\key a \\minor a'2/);
   assert.match(source, /c2 \\clef treble \\key a \\minor a'2/);
-  // Staves that change key apart inside a bar are left to the text.
-  assert.ok(M.fromParsed(JSON.parse(score_json("\\new PianoStaff << \\new Staff { c''2 \\key d \\major a'2 } \\new Staff { \\clef bass c2 a2 } >>"))).unsupported.includes("staves changing key apart"));
+  // Staves that change key apart inside a bar: the second keeps its own key (#402).
+  const apart = read("\\new PianoStaff << \\new Staff { c''2 \\key d \\major a'2 } \\new Staff { \\clef bass c2 a2 } >>").score;
+  assert.deepEqual(apart.staves[1].keys, []);
+  assert.match(engrave(apart), /\\clef bass \\key c \\major \\time 4\/4\n {4}c2 a2/);
 });
 
 test("inside a bar: changes move with bars inserted, deleted, and a metre changed", () => {

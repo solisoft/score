@@ -233,3 +233,60 @@ test("a cadenza that starts inside its bar", () => {
   assert.equal(M.barLength(score, 0), h + 3 * e8);
   assert.match(source, /c'2 \\cadenzaOn d'8 e'8 f'8 \\cadenzaOff \| g'2 a'2 \| b'1/);
 });
+
+// ---- Staves that change key or metre apart ----------------------------------------------
+
+test("staves changing key apart: each keeps its own keys, at bar lines and inside bars", () => {
+  const src = "<< \\new Staff { \\key c \\major c'1 | \\key g \\major d'1 | e'2 \\key f \\major f'2 | g'1 } \\new Staff { \\key c \\major c'1 | \\key d \\major d'1 | e'1 | \\key a \\minor a1 } >>";
+  const { score, source } = roundTrip(src);
+  assert.equal(score.staves[0].keys, undefined);
+  assert.deepEqual(score.staves[1].keys, [{ bar: 1, pos: 0, key: 2 }, { bar: 3, pos: 0, key: 0, mode: "minor" }]);
+  assert.match(source, /c'1 \| \\key g \\major d'1 \| e'2 \\key f \\major f'2 \| g'1/);
+  assert.match(source, /c'1 \| \\key d \\major d'1 \| e'1 \| \\key a \\minor a1/);
+  // The keys in force: the second staff's own.
+  assert.equal(M.keyOf(score, 1, M.barStart(score, 2) + h), 2);
+  assert.equal(M.keyOf(score, 0, M.barStart(score, 2) + h), -1);
+  // A letter typed on it is spelled in its key: an F in D major is F sharp.
+  M.letter(score, 1, 2, 3);
+  assert.equal(score.staves[1].events[2].pitches[0].alter, 1);
+  // The score's key changed from the menu: the staff changes with it, as far from it as it stood.
+  M.setKeyAt(score, 2, 3);
+  assert.deepEqual(score.staves[1].keys.find((m) => m.bar === 2), { bar: 2, pos: 0, key: 4 });
+  // Transposed up a tone, every key of its goes up a tone.
+  M.transpose(score, { steps: 1, semitones: 2 });
+  assert.deepEqual(score.staves[1].keys.map((m) => m.key), [4, 6, 2]);
+  engrave(score);
+  // Bars put in and taken away: its keys move with their bars, the key after a bar taken away holds.
+  M.insertBars(score, 1, 1);
+  assert.deepEqual(score.staves[1].keys.map((m) => m.bar), [2, 3, 4]);
+  M.deleteBars(score, 2, 2);
+  assert.deepEqual(score.staves[1].keys.map((m) => [m.bar, m.key]), [[2, 6], [3, 2]]);
+  engrave(score);
+});
+
+test("staves changing key apart through MusicXML", () => {
+  const score = read("<< \\new Staff { \\key c \\major c'1 | \\key g \\major d'1 } \\new Staff { \\key c \\major c'1 | \\key d \\major d'1 } >>");
+  const back = read(X.fromMusicXML(X.toMusicXML(score)).source);
+  assert.deepEqual(back.staves[1].keys, [{ bar: 1, pos: 0, key: 2 }]);
+  assert.deepEqual(M.changeAt(back, 1), { bar: 1, key: 1 });
+});
+
+test("staves changing metre apart, their bars as long: 6/8 beside 3/4", () => {
+  const src = "<< \\new Staff { \\time 4/4 c'1 | \\time 3/4 c'2. | c'2. | \\time 2/4 c'2 } \\new Staff { \\time 4/4 c'1 | \\time 6/8 c'4. c'4. | \\time 3/4 c'2. | \\time 2/4 c'2 } >>";
+  const { score, source } = roundTrip(src);
+  assert.deepEqual(score.staves[1].times, [{ bar: 1, time: [6, 8] }, { bar: 2, time: [3, 4] }, { bar: 3, time: [2, 4] }]);
+  assert.match(source, /c'1 \| \\time 3\/4 c'2\. \| c'2\. \| \\time 2\/4 c'2/);
+  assert.match(source, /c'1 \| \\time 6\/8 c'4\. c'4\. \| \\time 3\/4 c'2\. \| \\time 2\/4 c'2/);
+  // Notes written in it; bars put in after the change and taken away.
+  M.write(score, 1, M.barStart(score, 1), e8, A4);
+  M.insertBars(score, 2, 1);
+  assert.deepEqual(score.staves[1].times.map((m) => m.bar), [1, 3, 4]);
+  M.deleteBars(score, 1, 1);
+  // The bar put in kept the 6/8 before it: now bar 1, it starts that metre again.
+  assert.deepEqual(score.staves[1].times, [{ bar: 1, time: [6, 8] }, { bar: 2, time: [3, 4] }, { bar: 3, time: [2, 4] }]);
+  engrave(score);
+  // The metre changed from the menu would leave its own behind: refused, said.
+  assert.throws(() => M.setTimeAt(score, 1, 5, 4), /metre on its own/);
+  // Bars of different lengths are the engraver's to refuse.
+  assert.ok(parse("<< \\new Staff { \\time 4/4 c'1 | \\time 3/4 c'2. } \\new Staff { \\time 4/4 c'1 | \\time 2/4 c'2 } >>").unsupported);
+});

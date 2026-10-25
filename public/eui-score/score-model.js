@@ -491,6 +491,7 @@ export function transpose(score, { steps, semitones, s = null, a = 0, b = Infini
     const clamp = (k) => Math.max(-7, Math.min(7, k));
     score.key = clamp(score.key + f);
     for (const staff of score.staves) if (staff.key != null) staff.key = clamp(staff.key + f);
+    for (const staff of score.staves) for (const m of staff.keys ?? []) m.key = clamp(m.key + f);
     for (const c of score.changes ?? []) if (c.key != null) c.key = clamp(c.key + f);
     for (const m of score.midKeys ?? []) m.key = clamp(m.key + f);
   }
@@ -2021,6 +2022,8 @@ export function setKey(score, fifths) {
   const to = clamp(fifths);
   for (const s of staffLanes(score)) {
     const staff = score.staves[s];
+    // A staff changing key on its own: every key of its moved as far.
+    for (const m of staff.keys ?? []) m.key = clamp(m.key + to - score.key);
     if (staff.key == null) continue;
     staff.key = clamp(staff.key + to - score.key);
     if (staff.key === to) delete staff.key;
@@ -2099,12 +2102,57 @@ export function staffNumber(score, s) {
   return staffLanes(score).indexOf(upperOf(score, s));
 }
 
-/** The key lane `s` is written in at time `t`: the score's then, moved as far as the staff's own. */
-export function keyOf(score, s, t = 0) {
+// A staff's key goes with the score's, moved as far as its own (a horn in
+// E♭: `staff.key`), unless it changes key apart from the others: then
+// `staff.keys` lists its own changes, { bar, pos, key, mode }, and the
+// score's are not its (its first key: `staff.key`, its mode `staff.mode`).
+
+/**
+ * The changes of key staff `s` writes after its start, in order:
+ * [{ bar, pos, key, mode }], `key` the staff's own fifths.
+ */
+export function keyChanges(score, s) {
   const staff = score.staves[upperOf(score, s)];
+  if (staff?.keys) return [...staff.keys].sort((x, y) => x.bar - y.bar || x.pos - y.pos);
   const own = staff?.key == null ? 0 : staff.key - score.key;
+  const clamp = (k) => Math.max(-7, Math.min(7, k + own));
+  return [
+    ...(score.changes ?? []).filter((c) => c.key != null).map((c) => ({ bar: c.bar, pos: 0, key: clamp(c.key), ...(c.mode ? { mode: c.mode } : {}) })),
+    ...(score.midKeys ?? []).map((m) => ({ bar: m.bar, pos: m.pos, key: clamp(m.key), ...(m.mode ? { mode: m.mode } : {}) })),
+  ].sort((x, y) => x.bar - y.bar || x.pos - y.pos);
+}
+
+/** Staff `s`'s key and mode in force at `pos` ticks into bar `b` (Infinity: at its end). */
+function staffKeyAt(score, s, b, pos = 0) {
+  const staff = score.staves[upperOf(score, s)];
+  let now = { key: staff?.key ?? score.key, mode: (staff?.keys ? staff.mode : null) ?? score.mode ?? "major" };
+  for (const m of keyChanges(score, s)) if (m.bar < b || (m.bar === b && m.pos <= pos)) now = { key: m.key, mode: m.mode ?? "major" };
+  return now;
+}
+
+/**
+ * The changes of metre staff `s` writes, [{ bar, time, parts }]: the
+ * score's, or its own (`staff.times`) when it changes metre apart from the
+ * others — bars as long as theirs, 6/8 beside 3/4.
+ */
+export function timeChanges(score, s) {
+  const staff = score.staves[upperOf(score, s)];
+  if (staff?.times) return staff.times;
+  return (score.changes ?? []).filter((c) => c.time).map((c) => ({ bar: c.bar, time: c.time, ...(c.parts ? { parts: c.parts } : {}) }));
+}
+
+/** The metre staff `s` is in, in bar `b`. */
+function staffTimeAt(score, s, b) {
+  const staff = score.staves[upperOf(score, s)];
+  let now = staff?.time ?? score.time;
+  for (const m of timeChanges(score, s)) if (m.bar <= b) now = m.time;
+  return now;
+}
+
+/** The key lane `s` is written in at time `t`: the score's then, moved as far as the staff's own — or the staff's own. */
+export function keyOf(score, s, t = 0) {
   const b = barAt(score, t);
-  return Math.max(-7, Math.min(7, scoreKeyAt(score, b, t - barStart(score, b)) + own));
+  return staffKeyAt(score, s, b, t - barStart(score, b)).key;
 }
 
 /**
@@ -2167,6 +2215,7 @@ function retime(score, b, num, den) {
   if (b < 0 || b >= bars) throw new Error("no such bar");
   if (![1, 2, 4, 8, 16].includes(den) || !Number.isInteger(num) || num < 1 || num > 32) throw new Error("no such metre");
   const len = (WHOLE * num) / den;
+  if (score.staves.some((staff) => staff.times?.length)) throw new Error("a staff changes metre on its own: change its metres in the text");
   // A bar of its own length counts as itself, whatever the metre: those after it are not laid out again.
   if ((score.changes ?? []).some((c) => c.len && c.bar >= b)) throw new Error("a cadenza or a bar cut short comes later: the metre changes from the bar after it");
   const old = { time: score.time, changes: structuredClone(score.changes ?? []), pickup: score.pickup };
@@ -2196,6 +2245,7 @@ function retime(score, b, num, den) {
   const clefs = score.staves.map((staff) => (staff.clefs ?? []).map((c) => ({ ...c, at: tick(c.bar) })));
   // The changes inside bars keep their time: they may fall anywhere.
   const midClefs = score.staves.map((staff) => (staff.midClefs ?? []).map((c) => ({ ...c, at: tick(c.bar) + c.pos })));
+  const ownKeys = score.staves.map((staff) => staff.keys?.map((m) => ({ ...m, at: tick(m.bar) + m.pos })));
   const mids = Object.fromEntries(SCORE_LISTS.map((name) => [name, (score[name] ?? []).map((m) => ({ ...m, at: tick(m.bar) + m.pos }))]));
   // The new bars: each mark's bar counted in the new metres.
   // The bars laid out again stay where they were; what is after them moves by what they grew.
@@ -2261,6 +2311,9 @@ function retime(score, b, num, den) {
   midClefs.forEach((list, k) => {
     if (list.length) score.staves[k].midClefs = list.map(placed);
   });
+  ownKeys.forEach((list, k) => {
+    if (list) score.staves[k].keys = list.map(placed);
+  });
   for (const name of SCORE_LISTS) if (mids[name].length) score[name] = mids[name].map(placed);
   // The music of those bars, laid out again.
   for (const [k, staff] of score.staves.entries()) {
@@ -2283,6 +2336,15 @@ function retime(score, b, num, den) {
 export function setKeyAt(score, b, fifths) {
   if (b <= 0) return setKey(score, fifths);
   const to = fifths == null ? null : Math.max(-7, Math.min(7, fifths));
+  // A staff changing key on its own changes here too, as far from the score's as it stood.
+  for (const s of staffLanes(score)) {
+    const staff = score.staves[s];
+    if (!staff.keys) continue;
+    const was = staffKeyAt(score, s, b - 1, Infinity).key;
+    const mine = to == null ? null : Math.max(-7, Math.min(7, to + was - scoreKeyAt(score, b - 1, Infinity)));
+    staff.keys = staff.keys.filter((m) => !(m.bar === b && m.pos === 0));
+    if (mine != null && mine !== was) staff.keys = [...staff.keys, { bar: b, pos: 0, key: mine }].sort((x, y) => x.bar - y.bar || x.pos - y.pos);
+  }
   setChange(score, b, "key", to === scoreKeyAt(score, b - 1, Infinity) ? null : to);
   // A change of key set here is a major key's; none, no mode.
   setChange(score, b, "mode", null);
@@ -2385,6 +2447,9 @@ export function deleteBars(score, a, b) {
   const before = a > 0 ? { key: scoreKeyAt(score, a - 1, Infinity), time: timeAt(score, a - 1), tempo: tempoAt(score, a - 1, Infinity) } : { key: score.key, time: score.time, tempo: score.tempo };
   const own = changeAt(score, b + 1) ?? {};
   const clefsAfter = score.staves.map((staff, s) => (staff.voice ? null : clefAt(score, s, b, Infinity)));
+  // A staff with keys and metres of its own: what holds after the bars, and before them.
+  const ownAfter = score.staves.map((staff, s) => ({ key: staff.keys ? staffKeyAt(score, s, b, Infinity) : null, time: staff.times ? staffTimeAt(score, s, b) : null }));
+  const ownBefore = score.staves.map((staff, s) => ({ key: staff.keys ? staffKeyAt(score, s, a - 1, Infinity) : null, time: staff.times ? staffTimeAt(score, s, a - 1) : null }));
   const clefsBefore = score.staves.map((staff, s) => (staff.voice ? null : a > 0 ? clefAt(score, s, a - 1, Infinity) : staff.clef));
   const from = barStart(score, a);
   const to = barStart(score, b + 1);
@@ -2412,6 +2477,17 @@ export function deleteBars(score, a, b) {
   score.staves.forEach((staff, s) => {
     for (const name of STAFF_LISTS) if (staff[name]) staff[name] = shift(staff[name]);
     if (staff.voice || b + 1 >= bars) return;
+    const [mine, was] = [ownAfter[s], ownBefore[s]];
+    if (mine.key) {
+      if (a === 0) {
+        staff.key = mine.key.key;
+        staff.mode = mine.key.mode;
+      } else if (mine.key.key !== was.key.key && !staff.keys.some((m) => m.bar === a && m.pos === 0)) staff.keys = [...staff.keys, { bar: a, pos: 0, key: mine.key.key, mode: mine.key.mode }].sort((x, y) => x.bar - y.bar || x.pos - y.pos);
+    }
+    if (mine.time) {
+      if (a === 0) staff.time = mine.time;
+      else if (String(mine.time) !== String(was.time) && !staff.times.some((m) => m.bar === a)) staff.times = [...staff.times, { bar: a, time: mine.time }].sort((x, y) => x.bar - y.bar);
+    }
     if (a === 0) staff.clef = clefsAfter[s];
     else if (clefsAfter[s] !== clefsBefore[s] && !(staff.clefs ?? []).some((c) => c.bar === a)) staff.clefs = [...(staff.clefs ?? []), { bar: a, clef: clefsAfter[s] }].sort((x, y) => x.bar - y.bar);
     if (staff.clefs && !staff.clefs.length) delete staff.clefs;
@@ -2670,7 +2746,7 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
     // A drum staff: its strokes in \\drummode, with no clef and no key.
     const opening = staff.drums
       ? `\\new DrumStaff ${settings ? `\\with { ${settings}} ` : ""}\\drummode {\n  \\time ${timeText(score, time)}${partial}${tempo}`
-      : `\\new Staff ${staff.id ? `= ${quote(staff.id)} ` : ""}${settings ? `\\with { ${settings}} ` : ""}${brace}\n  \\clef ${clef} \\key ${keyText(keyOf(score, s), score.mode)} \\time ${timeText(score, time)}${partial}${tempo}`;
+      : `\\new Staff ${staff.id ? `= ${quote(staff.id)} ` : ""}${settings ? `\\with { ${settings}} ` : ""}${brace}\n  \\clef ${clef} \\key ${keyText(keyOf(score, s), staffKeyAt(score, s, 0).mode)} \\time ${timeText(score, time)}${partial}${tempo}`;
     let out = `${opening}\n  ${music.replace(/\n {4}/g, "\n  ")}${ending}\n}`;
     // Each verse a line under the one before; sung to a lower voice, a Lyrics line that follows it.
     if (toVoice) {
@@ -2874,8 +2950,10 @@ function changesText(score, s, b) {
   const clef = (score.staves[s].clefs ?? []).find((c) => c.bar === b);
   if (clef && !drums) parts.push(`\\clef ${clefText(clef.clef)}`);
   const c = changeAt(score, b);
-  if (c?.key != null && !drums) parts.push(`\\key ${keyText(keyOf(score, s, barStart(score, b)), c.mode)}`);
-  if (c?.time) parts.push(`\\time ${c.parts?.length > 1 && c.parts.reduce((x, y) => x + y, 0) === c.time[0] ? c.parts.join("+") : c.time[0]}/${c.time[1]}`);
+  const key = drums ? null : keyChanges(score, s).find((m) => m.bar === b && m.pos === 0);
+  if (key) parts.push(`\\key ${keyText(key.key, key.mode)}`);
+  const time = timeChanges(score, s).find((m) => m.bar === b);
+  if (time) parts.push(`\\time ${time.parts?.length > 1 && time.parts.reduce((x, y) => x + y, 0) === time.time[0] ? time.parts.join("+") : time.time[0]}/${time.time[1]}`);
   if (c?.tempo && s === firstMusic(score)) parts.push(tempoText(c.tempo));
   // After a bar of its own length, its end wrote it.
   if (c?.line && !isOddBar(score, b - 1)) parts.unshift(`\\bar "${c.line}"`);
@@ -2916,8 +2994,7 @@ function midChanges(score, s) {
   const tempos = top ? (score.midTempos ?? []).map((m) => ({ bar: m.bar, pos: m.pos, order: 2, text: tempoText(m.tempo) })) : [];
   const marks = top ? (score.midMarks ?? []).map((m) => ({ bar: m.bar, pos: m.pos, order: 3, text: midMarkText(m) })) : [];
   if (staff.drums) return [...tempos, ...marks].sort((x, y) => x.bar - y.bar || x.pos - y.pos || x.order - y.order);
-  const own = staff.key == null ? 0 : staff.key - score.key;
-  const keys = (score.midKeys ?? []).map((m) => ({ bar: m.bar, pos: m.pos, order: 1, text: `\\key ${keyText(Math.max(-7, Math.min(7, m.key + own)), m.mode)}` }));
+  const keys = keyChanges(score, s).filter((m) => m.pos > 0).map((m) => ({ bar: m.bar, pos: m.pos, order: 1, text: `\\key ${keyText(m.key, m.mode)}` }));
   const clefs = (staff.midClefs ?? []).map((c) => ({ bar: c.bar, pos: c.pos, order: 0, text: `\\clef ${clefText(c.clef)}` }));
   return [...clefs, ...keys, ...tempos, ...marks].sort((x, y) => x.bar - y.bar || x.pos - y.pos || x.order - y.order);
 }
@@ -4558,6 +4635,24 @@ export function passedOver(warnings) {
 /** A clef's name by the parse's `[sign, line, octave]`. */
 const CLEF_NAMES = Object.fromEntries(Object.entries(CLEF_SHAPES).map(([name, shape]) => [shape.join(","), name]));
 
+/** Whether two lists of changes of key, from `start`, set the same keys at the same places. */
+function sameKeys(score, start, a, b) {
+  const plain = (list) => {
+    let now = start;
+    return list.filter((m) => m.key !== now && ((now = m.key), true)).map((m) => `${m.bar}:${m.pos}:${m.key}`).join(" ");
+  };
+  return plain(a) === plain(b);
+}
+
+/** Whether two lists of changes of metre, from `start`, set the same metres in the same bars. */
+function sameTimes(start, a, b) {
+  const plain = (list) => {
+    let now = String(start);
+    return list.filter((m) => String(m.time) !== now && ((now = String(m.time)), true)).map((m) => `${m.bar}:${m.time}`).join(" ");
+  };
+  return plain(a) === plain(b);
+}
+
 /** A grace note from the parse, `[pitches, value, dots, fingers]`, as the model keeps it. */
 function graceOf([pitches, base, dots, fingers]) {
   const g = { pitches: pitches.map(([d, alter]) => ({ d, alter })), base, dots };
@@ -4655,8 +4750,10 @@ export function fromParsed(parsed, source = null) {
     let key = null;
     let mode = null;
     let time = null;
-    // The score's keys changed inside bars this staff changed with.
-    let midKeysSeen = 0;
+    // This staff's own changes of key and metre after its start, as it writes them:
+    // the same as the score's, or its own (`keys`, `times`).
+    const ownKeys = [];
+    const ownTimes = [];
     // An \ottava waiting for its lane's next note or rest.
     const ottavas = new Map();
     // Each lane's stems and beaming, as its notes last said.
@@ -4736,13 +4833,12 @@ export function fromParsed(parsed, source = null) {
           const b = barAt(score, here);
           const pos = here - barStart(score, b);
           if (first) score.midKeys = [...(score.midKeys ?? []), { bar: b, pos, key: ev.fifths, ...(named ? { mode: named } : {}) }];
-          else if (!drums && ++midKeysSeen && !(score.midKeys ?? []).some((m) => m.bar === b && Math.abs(m.pos - pos) < 1e-6 && Math.max(-7, Math.min(7, m.key + (out.key ?? score.key) - score.key)) === ev.fifths)) unsupported.add("staves changing key apart");
+          else if (!drums) ownKeys.push({ bar: b, pos, key: ev.fifths, ...(named ? { mode: named } : {}) });
         } else if (first) {
           const same = ev.fifths === scoreKeyAt(score, bar - 1, Infinity) && (named ?? "major") === modeAt(score, bar - 1, Infinity);
           setChange(score, bar, "key", same ? null : ev.fifths);
           setChange(score, bar, "mode", same ? null : named);
-        }
-        else if (!drums && ev.fifths !== Math.max(-7, Math.min(7, scoreKeyAt(score, bar) + (out.key ?? score.key) - score.key))) unsupported.add("staves changing key apart");
+        } else if (!drums) ownKeys.push({ bar, pos: 0, key: ev.fifths, ...(named ? { mode: named } : {}) });
       } else if (k === "Time") {
         const added = (ev.time_parts ?? []).filter((p) => p > 0);
         if (!started) {
@@ -4759,8 +4855,10 @@ export function fromParsed(parsed, source = null) {
           // An added-up metre, 2+2+3/8: its parts, written again.
           if (bar > 0) setChange(score, bar, "parts", added.length > 1 ? added : null);
         } else {
+          // Its bars must last as long as the first staff's: the engraver lines them up.
           const want = timeAt(score, bar);
-          if (ev.time[0] !== want[0] || ev.time[1] !== want[1]) unsupported.add("staves changing metre apart");
+          if (ev.time[0] * want[1] !== want[0] * ev.time[1] && !isOddBar(score, bar)) unsupported.add("staves whose bars last differently");
+          ownTimes.push({ bar, time: ev.time, ...(added.length > 1 ? { parts: added } : {}) });
         }
       } else if (k === "Tempo") {
         if (!started) {
@@ -4945,8 +5043,16 @@ export function fromParsed(parsed, source = null) {
         else lane.events.push(read);
       }
     }
-    // A staff that did not change key inside a bar where the first did.
-    if (!first && !drums && midKeysSeen !== (score.midKeys ?? []).length) unsupported.add("staves changing key apart");
+    // A staff that changes key or metre apart from the first: its own changes, kept as its own.
+    if (!first && !drums && started) {
+      const derived = keyChanges(score, 0).map((m) => ({ ...m, key: Math.max(-7, Math.min(7, m.key + (out.key ?? score.key) - score.key)) }));
+      if (!sameKeys(score, out.key ?? score.key, derived, ownKeys)) {
+        out.keys = ownKeys;
+        // Its first key's mode, when it is not the score's.
+        if (mode && mode !== (score.mode ?? null)) out.mode = mode;
+      }
+    }
+    if (!first && started && !sameTimes(out.time ?? score.time, timeChanges(score, 0), ownTimes)) out.times = ownTimes;
     // An \ottava with no note after it draws nothing.
     if (ottavas.size) lost.add("an \\ottava after the last note");
     if (staff.lyrics) {

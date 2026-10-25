@@ -1162,11 +1162,15 @@ export function toMusicXML(score) {
       // The attributes: all of them at the start, then what changes.
       const attrs = [];
       if (b === 0) attrs.push(`<divisions>${divisions}</divisions>`);
-      const key = b === 0 ? score.staves[p.staves[0]].key ?? score.key : change?.key;
-      const mode = b === 0 ? score.mode : change?.mode;
+      // The part's first staff's key: the score's, or its own when it changes key apart.
+      const keyHere = b === 0 ? null : M.keyChanges(score, p.staves[0]).find((m) => m.bar === b && m.pos === 0);
+      const key = b === 0 ? M.keyOf(score, p.staves[0], 0) : keyHere?.key;
+      const mode = b === 0 ? score.staves[p.staves[0]].mode ?? score.mode : keyHere?.mode;
       if (key != null && !drums) attrs.push(`<key><fifths>${interval ? writtenKey(key, interval) : key}</fifths>${mode && mode !== "major" ? `<mode>${mode}</mode>` : ""}</key>`);
-      const time = b === 0 ? score.time : change?.time;
-      if (time) attrs.push(`<time><beats>${b === 0 && score.timeParts ? score.timeParts.join("+") : time[0]}</beats><beat-type>${time[1]}</beat-type></time>`);
+      const timeHere = b === 0 ? null : M.timeChanges(score, p.staves[0]).find((m) => m.bar === b);
+      const time = b === 0 ? score.staves[p.staves[0]].time ?? score.time : timeHere?.time;
+      const added = b === 0 ? score.timeParts : timeHere?.parts;
+      if (time) attrs.push(`<time><beats>${added?.length > 1 && added.reduce((x, y) => x + y, 0) === time[0] ? added.join("+") : time[0]}</beats><beat-type>${time[1]}</beat-type></time>`);
       if (b === 0 && p.staves.length > 1) attrs.push(`<staves>${p.staves.length}</staves>`);
       p.staves.forEach((s, k) => {
         const staff = score.staves[s];
@@ -1205,14 +1209,13 @@ export function toMusicXML(score) {
           const staffNo = p.staves.length > 1 ? k + 1 : 0;
           // A clef or a key changed inside the bar (#360): its attributes before the note it falls at, in the first voice.
           const staff = score.staves[p.staves[k]];
-          const own = (staff.key ?? score.key) - score.key;
           const mids = v > 0 || drums ? [] : [
             ...(staff.midClefs ?? []).filter((c) => c.bar === b).map((c) => {
               const [sign, lineNo, octave] = CLEFS_OUT[c.clef] ?? CLEFS_OUT.treble;
               return { pos: c.pos, xml: `<clef${staffNo ? ` number="${staffNo}"` : ""}><sign>${sign}</sign>${lineNo ? `<line>${lineNo}</line>` : ""}${octave ? `<clef-octave-change>${octave}</clef-octave-change>` : ""}</clef>` };
             }),
-            ...(k === 0 ? (score.midKeys ?? []).filter((m) => m.bar === b) : []).map((m) => {
-              const fifths = Math.max(-7, Math.min(7, m.key + own));
+            ...(k === 0 ? M.keyChanges(score, p.staves[k]).filter((m) => m.bar === b && m.pos > 0) : []).map((m) => {
+              const fifths = m.key;
               return { pos: m.pos, xml: `<key><fifths>${interval ? writtenKey(fifths, interval) : fifths}</fifths>${m.mode && m.mode !== "major" ? `<mode>${m.mode}</mode>` : ""}</key>` };
             }),
           ].sort((x, y) => x.pos - y.pos);
