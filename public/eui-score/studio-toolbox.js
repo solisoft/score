@@ -82,8 +82,11 @@ export function install(ctx) {
     for (const button of root.querySelectorAll('[data-act="duration"]')) button.classList.toggle("on", Number(button.dataset.base) === st.input.base);
     root.querySelector('.studio-toolbox [data-act="dot"]')?.classList.toggle("on", st.input.dots > 0);
     // The toolbox's toggles show their state; the menus' items of the same name do not.
-    root.querySelector('.studio-toolbox [data-act="mode-input"]')?.classList.toggle("on", st.input.on);
-    root.querySelector('.studio-toolbox [data-act="mode-select"]')?.classList.toggle("on", !st.input.on);
+    for (const [act, on] of [["mode-input", st.input.on], ["mode-select", !st.input.on]]) {
+      const button = root.querySelector(`.studio-toolbox [data-act="${act}"]`);
+      button?.classList.toggle("on", on);
+      button?.setAttribute("aria-pressed", String(on));
+    }
     const voiceNow = st.score ? M.voiceOf(st.score, staffOf()) : 0;
     for (const button of root.querySelectorAll('.studio-toolbox [data-act="voice"]')) button.classList.toggle("on", Number(button.dataset.voice) === voiceNow);
     // A drum staff writes with drums, the others with letters.
@@ -106,7 +109,7 @@ export function install(ctx) {
     // What is selected, in words.
     const value = `${({ 1: "whole", 2: "half", 4: "quarter", 8: "eighth", 16: "16th", 32: "32nd" })[st.input.base]}${st.input.dots ? ", dotted" : ""}`;
     if (st.playing) showProgress();
-    else if (st.input.on) state.textContent = `Note input${M.isLower(st.score, st.input.staff) ? ` · voice ${M.voiceOf(st.score, st.input.staff)}` : ""} · ${value} · A–G write, 0 rest, Esc to stop`;
+    else if (st.input.on) state.textContent = `Note input${M.isLower(st.score, st.input.staff) ? ` · voice ${M.voiceOf(st.score, st.input.staff)}` : ""} · ${value} · A–G or a click write, 0 rest, Esc to stop`;
     else {
       const r = range();
       if (!r) state.textContent = st.score ? "Click a note to select it · N to write notes" : "Text only";

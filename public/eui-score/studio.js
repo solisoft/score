@@ -60,12 +60,13 @@ const musicXml = () => import(`./musicxml.js${V}`);
 // - studio-roll.js: the MIDI view;
 // - studio-velocity.js: the velocity strip and the automation lane;
 // - studio-pointer.js: the pointer on the score: selecting, dragging;
+// - studio-ghost.js: note input's pen and ghost note, a click writing there;
 // - studio-playback.js: Play, the metronome, practice, the loop;
 // - studio-mix.js: mute, solo, the mixer, the instruments, the audio tracks;
 // - studio-recording.js: a MIDI keyboard, recording, Sound to.
 const [
   Toolbox, Files, Text, Selection, History, Source, Input, Commands, Clipboard, Words, Draw, Peers, Roll, Velocity,
-  Pointer, Playback, Mix, Recording
+  Pointer, Ghost, Playback, Mix, Recording
 ] = await Promise.all([
   import(`./studio-toolbox.js${V}`),
   import(`./studio-files.js${V}`),
@@ -82,6 +83,7 @@ const [
   import(`./studio-roll.js${V}`),
   import(`./studio-velocity.js${V}`),
   import(`./studio-pointer.js${V}`),
+  import(`./studio-ghost.js${V}`),
   import(`./studio-playback.js${V}`),
   import(`./studio-mix.js${V}`),
   import(`./studio-recording.js${V}`),
@@ -302,6 +304,7 @@ export function startStudio(root, options = {}) {
   Object.assign(ctx, Roll.install(ctx));
   Object.assign(ctx, Velocity.install(ctx));
   Object.assign(ctx, Pointer.install(ctx));
+  Object.assign(ctx, Ghost.install(ctx));
   Object.assign(ctx, Playback.install(ctx));
   Object.assign(ctx, Mix.install(ctx));
   Object.assign(ctx, Recording.install(ctx));

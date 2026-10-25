@@ -31,6 +31,8 @@ class ScoreAssets
       "studio-roll.js",
       "studio-velocity.js",
       "studio-pointer.js",
+      "studio-ghost.js",
+      "ghost.js",
       "studio-playback.js",
       "studio-mix.js",
       "studio-recording.js",

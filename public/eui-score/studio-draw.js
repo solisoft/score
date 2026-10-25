@@ -7,7 +7,7 @@ const COLOURS = { selection: "#b4373a", head: "#e0662a", cursor: "#2563c9", play
 /** Answers the drawing: the score engraved, and what goes over it. */
 export function install(ctx) {
   const { root, options, sheet, svgHost, overlay, palette, playhead, st, loaded, M, editor_view_lit } = ctx;
-  const { range, showInText, placeWords, tellPlace, placePeers, placeMarkers, drawRoll, showState, refuse } = ctx.call;
+  const { range, showInText, placeWords, tellPlace, placePeers, placeMarkers, placeGhost, drawRoll, showState, refuse } = ctx.call;
 
   // ---- Drawing ------------------------------------------------------------------
 
@@ -120,6 +120,7 @@ export function install(ctx) {
     };
     placePeers(g, add);
     placeMarkers(g, add);
+    placeGhost();
     if (st.input.on) return;
     if (st.sel?.bars) {
       for (let bar = st.sel.bars[0]; bar <= st.sel.bars[1]; bar++) {

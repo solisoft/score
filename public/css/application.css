@@ -3596,6 +3596,13 @@
     flex: 1;
     font-size: 13px;
   }
+  .pen-icon {
+    display: inline-block;
+    width: 1.1em;
+    height: 1.1em;
+    vertical-align: -.2em;
+    flex: none;
+  }
   .tool-dyn {
     font: italic 700 14px/1 Georgia, serif;
     min-width: 36px;
@@ -4020,6 +4027,24 @@
   }
   .studio-sheet.studio-dragging {
     cursor: ns-resize;
+  }
+  .studio-sheet.studio-pen, .studio-sheet.studio-pen .studio-svg {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%231d4fa3' stroke-width='1.6' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M15.5 3.5l5 5L9 20l-6.5 1.5L4 15z' fill='%23fff'/%3E%3Cpath d='M13 6l5 5'/%3E%3Cpath d='M4 15l5 5'/%3E%3Cpath d='M2.5 21.5l2-2'/%3E%3C/svg%3E") 2 22, crosshair;
+  }
+  .studio-ghost {
+    position: absolute;
+    z-index: 3;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    color: #2563c9;
+    opacity: .5;
+  }
+  .studio-ghost svg {
+    position: absolute;
+    max-width: none;
+    transform: translate(-50%, -50%);
+    overflow: visible;
   }
   .studio-svg {
     position: relative;
@@ -5551,7 +5576,7 @@
     body {
       color: #000;
     }
-    .site-header, .site-footer, .app-header, .app-flash, .playground-banner, .page-head, .studio-menubar, .studio-progress, .studio-toolbox, .studio-source, .studio-notice, .studio-status, .studio-roll, .studio-overlay, .studio-palette, .studio-playhead, .studio-words, dialog, .score-actions, .score-source, .score-figure figcaption, .read-exports, .studio-comments, .read-comments, .read-takes {
+    .site-header, .site-footer, .app-header, .app-flash, .playground-banner, .page-head, .studio-menubar, .studio-progress, .studio-toolbox, .studio-source, .studio-notice, .studio-status, .studio-roll, .studio-overlay, .studio-ghost, .studio-palette, .studio-playhead, .studio-words, dialog, .score-actions, .score-source, .score-figure figcaption, .read-exports, .studio-comments, .read-comments, .read-takes {
       display: none !important;
     }
     .wrap, .app-main, .studio, .studio-body, .studio-canvas {

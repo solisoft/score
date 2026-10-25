@@ -12,6 +12,17 @@ class Changelog
     [
       {"date": "2026-10-25", "entries": [
         {
+          "area": "editor",
+          "title": "Writing notes: a pen over the staves, a ghost note, a click writes it",
+          "text": "In note input (N, or the Note input button, which now wears a pen), the pointer over the staves "
+          + "becomes a pen, and a pale note follows it: on the line or space under it, read through the staff's "
+          + "clef with the sharp or flat the key gives it, with its ledger lines, in the duration chosen, at the "
+          + "beat a click would write it. A click writes that note there, one step to undo, and the cursor goes "
+          + "on after it, as typing its letter does; on a drum staff, the drum drawn on that line. Shift+click "
+          + "still moves the cursor to a note without writing. Off the staves, or out of note input, the pen and "
+          + "the ghost go."
+        },
+        {
           "area": "site",
           "title": "The home page shows the app: the editor, playing together, practice, sharing",
           "text": "The home page now says what EUI Score is for: writing, playing and sharing scores, together, in "

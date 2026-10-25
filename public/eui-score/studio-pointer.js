@@ -4,7 +4,7 @@
 /** The score's pointer wired: notes and bars selected, notes and repeats dragged. */
 export function install(ctx) {
   const { sheet, st, M } = ctx;
-  const { writeText, snapshot, saveDraft, select, geometry, draw, say } = ctx.call;
+  const { writeText, snapshot, saveDraft, select, geometry, draw, say, ghostAt, writeAtGhost } = ctx.call;
 
   // ---- Pointer ------------------------------------------------------------------
 
@@ -89,6 +89,12 @@ export function install(ctx) {
       sheet.setPointerCapture(event.pointerId);
       event.preventDefault();
       return;
+    }
+    // Note input: a click writes the ghost's note there (studio-ghost.js); Shift+click moves the cursor, as a click did before.
+    const spot = st.input.on && !event.shiftKey ? ghostAt(event) : null;
+    if (spot) {
+      event.preventDefault();
+      return writeAtGhost(spot);
     }
     const found = p && hit(p);
     if (!found) {

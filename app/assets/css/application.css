@@ -603,6 +603,8 @@
   .tool.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
   .tool-glyph { font: 20px/1 "Noto Music", "Bravura", "Segoe UI Symbol", serif; padding: 0 6px; }
   .tool-wide { flex: 1; font-size: 13px; }
+  /* The pen of note input (#398), the same as the pointer over the staves. */
+  .pen-icon { display: inline-block; width: 1.1em; height: 1.1em; vertical-align: -.2em; flex: none; }
   .tool-dyn { font: italic 700 14px/1 Georgia, serif; min-width: 36px; }
   .studio-input .tool[data-act="mode-input"] { background: #2563c9; border-color: #2563c9; }
   .tool-hint { font-size: 12px; line-height: 1.4; color: var(--muted); margin: 4px 0 0; }
@@ -697,6 +699,10 @@
   .roll-track-name, .roll-track-range { cursor: zoom-in; }
   .studio-roll-only { font-size: 12.5px; font-weight: 600; color: var(--ink); background: var(--accent-soft); border-radius: 999px; padding: 2px 10px; }
   .studio-sheet.studio-dragging { cursor: ns-resize; }
+  /* Note input (#398): over the staves, the pointer is a pen, its nib the hotspot; a pale ghost note shows what a click writes. */
+  .studio-sheet.studio-pen, .studio-sheet.studio-pen .studio-svg { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%231d4fa3' stroke-width='1.6' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M15.5 3.5l5 5L9 20l-6.5 1.5L4 15z' fill='%23fff'/%3E%3Cpath d='M13 6l5 5'/%3E%3Cpath d='M4 15l5 5'/%3E%3Cpath d='M2.5 21.5l2-2'/%3E%3C/svg%3E") 2 22, crosshair; }
+  .studio-ghost { position: absolute; z-index: 3; width: 0; height: 0; pointer-events: none; color: #2563c9; opacity: .5; }
+  .studio-ghost svg { position: absolute; max-width: none; transform: translate(-50%, -50%); overflow: visible; }
   .studio-svg { position: relative; z-index: 1; }
   .studio-overlay { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
   .studio-bar-selected { position: absolute; background: rgba(37, 99, 201, .1); box-shadow: inset 0 0 0 1.5px rgba(37, 99, 201, .45); border-radius: 4px; }
@@ -1065,7 +1071,7 @@
     body { color: #000; }
     .site-header, .site-footer, .app-header, .app-flash, .playground-banner, .page-head,
     .studio-menubar, .studio-progress, .studio-toolbox, .studio-source, .studio-notice, .studio-status, .studio-roll,
-    .studio-overlay, .studio-palette, .studio-playhead, .studio-words, dialog,
+    .studio-overlay, .studio-ghost, .studio-palette, .studio-playhead, .studio-words, dialog,
     .score-actions, .score-source, .score-figure figcaption, .read-exports,
     .studio-comments, .read-comments, .read-takes { display: none !important; }
     .wrap, .app-main, .studio, .studio-body, .studio-canvas { display: block; max-width: none; min-height: 0; padding: 0; margin: 0; }
