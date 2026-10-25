@@ -54,9 +54,9 @@ export function install(ctx) {
     if (st.playing) stopPlay();
     if (st.input.on) setInput(false);
     const sound = st.score.staves[M.upperOf(st.score, lane)]?.instrument;
-    const muted = !st.mix.mute.has(lane);
+    const mutedByRecording = !st.mix.mute.has(lane);
     st.mix.mute.add(lane);
-    st.recording = { lane, bar: changeBar() ?? 0, program: M.programOf(sound), drums: M.isDrums(st.score, lane), channel: laneChannel(lane), down: new Map(), played: [], muted };
+    st.recording = { lane, bar: changeBar() ?? 0, program: M.programOf(sound), drums: M.isDrums(st.score, lane), channel: laneChannel(lane), down: new Map(), played: [], mutedByRecording };
     P.listen(port, recordKey, releaseKey);
     for (const button of recordButtons()) {
       button.textContent = "■ Stop rec";
@@ -118,7 +118,7 @@ export function install(ctx) {
     const rec = st.recording;
     st.recording = null;
     P.listen(keyboardChosen(), playKey);
-    if (rec.muted) st.mix.mute.delete(rec.lane);
+    if (rec.mutedByRecording) st.mix.mute.delete(rec.lane);
     renderMix();
     for (const button of recordButtons()) {
       button.textContent = "● Rec";

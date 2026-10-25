@@ -19,7 +19,7 @@ export function install(ctx) {
   function mixFromMeta() {
     const mix = X.mixOf(st.score);
     st.mix = { mute: new Set(X.lanesWith(mix, "mute")), solo: new Set(X.lanesWith(mix, "solo")) };
-    if (st.recording?.muted) st.mix.mute.add(st.recording.lane);
+    if (st.recording?.mutedByRecording) st.mix.mute.add(st.recording.lane);
   }
   mixFromMeta();
 
@@ -28,7 +28,7 @@ export function install(ctx) {
     // A stem being made: its staff alone.
     if (st.stemMix) return st.stemMix;
     const mix = st.heardMix ?? X.mixOf(st.score);
-    return st.recording?.muted ? (X.patched(mix, st.recording.lane, { mute: true }) ?? {}) : mix;
+    return st.recording?.mutedByRecording ? (X.patched(mix, st.recording.lane, { mute: true }) ?? {}) : mix;
   }
 
   // Play's mixer goes out through the MIDI-learn volume (player.js), a WAV's straight to its file.

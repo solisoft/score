@@ -90,8 +90,10 @@ export function install(ctx) {
     if (!backend) return;
     const store = H.historyStore(backend);
     historyKeeper = H.keeper(store, historyKey);
-    addEventListener("pagehide", () => historyKeeper.flush());
-    document.addEventListener("visibilitychange", () => document.hidden && historyKeeper.flush());
+    addEventListener("pagehide", () => historyKeeper.flush(), { signal: ctx.signal });
+    document.addEventListener("visibilitychange", () => document.hidden && historyKeeper.flush(), { signal: ctx.signal });
+    // Leaving by a link (instant navigation) is not a pagehide: the history is kept before the swap.
+    document.addEventListener("soli:visit", () => historyKeeper.flush(), { signal: ctx.signal });
     const kept = H.decode(await store.get(historyKey));
     if (!kept || (!kept.past.length && !kept.future.length)) return;
     const same = kept.end === st.text;

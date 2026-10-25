@@ -276,6 +276,30 @@ describe("The app, in a browser") do
     assert_no_page_errors()
   end
 
+  test("leaving the editor by a link lets go of the page, and coming back gives one working editor") do
+    sign_up_in_browser(journey_email())
+    choose("input[value='string-quartet']")
+    fill_in("#new-title", "Gone and back")
+    click_button("Create the score")
+    wait_for("[data-save-state]")
+    wait_editor()
+    score_path = page_path()
+    evaluate("window.leftStudio = document.querySelector('.studio')")
+    assert_eq(evaluate("window.leftStudio.dataset.studio ?? 'live'"), "live")
+    # Instant navigation: a link, not a reload.
+    click("a[href='/app/scores']")
+    wait_for("a.score-card-open")
+    assert_eq(evaluate("window.leftStudio.dataset.studio"), "ended")
+    # Back in the score: its menus open and close as before.
+    click("a[href='#{score_path}']")
+    wait_editor()
+    click(".studio-dropdown summary")
+    assert_eq(evaluate("document.querySelectorAll('.studio-dropdown[open]').length"), 1)
+    click("[data-save-state]")
+    assert_eq(evaluate("document.querySelectorAll('.studio-dropdown[open]').length"), 0)
+    assert_no_page_errors()
+  end
+
   test("share a score by its link: a guest reads and plays it, but cannot edit it") do
     sign_up_in_browser(journey_email())
     click_button("Create the score")

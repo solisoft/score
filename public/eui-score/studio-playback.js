@@ -331,7 +331,9 @@ export function install(ctx) {
   root.querySelector(".studio-menubar").after(progress);
   // On a narrow screen the menu bar wraps: the progress bar sticks under it, however tall.
   const menubar = root.querySelector(".studio-menubar");
-  new ResizeObserver(() => root.style.setProperty("--studio-menubar-h", `${menubar.offsetHeight}px`)).observe(menubar);
+  const menubarSize = new ResizeObserver(() => root.style.setProperty("--studio-menubar-h", `${menubar.offsetHeight}px`));
+  menubarSize.observe(menubar);
+  ctx.observers.push(menubarSize);
   progress.addEventListener("click", (event) => {
     const handle = st.playing?.handle;
     if (!handle?.duration) return;

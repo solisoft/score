@@ -86,7 +86,7 @@ export function install(ctx) {
     return out;
   }
 
-  /** The selected bars' boxes, and a handle on every edge of every repeat. */
+  /** The note palette, beside the selection: above it, kept inside the sheet. */
   function placePalette() {
     const g = geometry();
     const sel = st.sel;
@@ -241,10 +241,12 @@ export function install(ctx) {
     window.removeEventListener("beforeprint", printCopy);
     window.removeEventListener("afterprint", dropPrintCopy);
   }
-  window.addEventListener("beforeprint", printCopy);
-  window.addEventListener("afterprint", dropPrintCopy);
+  window.addEventListener("beforeprint", printCopy, { signal: ctx.signal });
+  window.addEventListener("afterprint", dropPrintCopy, { signal: ctx.signal });
 
-  new ResizeObserver(() => draw()).observe(sheet);
+  const sheetSize = new ResizeObserver(() => draw());
+  sheetSize.observe(sheet);
+  ctx.observers.push(sheetSize);
 
   return { geometry, draw, placeOverlay, followPlaying };
 }

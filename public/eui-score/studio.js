@@ -238,6 +238,14 @@ export function startStudio(root, options = {}) {
     installInstruments, F, A, Ch, G, automationLane, audioTracks, H, mergeScores, conflictLines, editor_view_lit,
     score_json, source_spans, musicXml, refuse, say
   };
+  // The editor's lifetime: instant navigation swaps the page out without
+  // unloading it, so what a part adds to `document` or `window` takes this
+  // signal, its observers go in `ctx.observers`, and `ctx.ends` run when the
+  // editor is gone (see the end of the parts below).
+  const lifetime = new AbortController();
+  ctx.signal = lifetime.signal;
+  ctx.observers = [];
+  ctx.ends = [];
   // A part calls another's functions through `ctx.call`, which finds them when
   // called: whichever part is installed first, `draw` reaches `showState`.
   const asked = new Set();
@@ -299,6 +307,16 @@ export function startStudio(root, options = {}) {
   Object.assign(ctx, Recording.install(ctx));
   // The MIDI clock, sent and followed, and MIDI learn (midi-sync.js).
   ctx.sync = S.attach({ root, st, M, P, act, say });
+
+  // Once a swap has taken this editor away, its listeners and observers go with it.
+  document.addEventListener("soli:load", () => {
+    if (root.isConnected) return;
+    for (const end of ctx.ends) end();
+    for (const observer of ctx.observers) observer.disconnect();
+    lifetime.abort();
+    // For a test: this editor has let go of the page.
+    root.dataset.studio = "ended";
+  }, { signal: lifetime.signal });
 
   // Every function a part asked for is there.
   for (const name of asked) if (typeof ctx[name] !== "function") throw new Error(`studio: no part installs ${name}`);

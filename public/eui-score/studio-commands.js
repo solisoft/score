@@ -34,7 +34,7 @@ export function install(ctx) {
   function doAct(name, data = {}) {
     switch (name) {
       case "new": return newDialog.showModal();
-      case "properties": return root.querySelector("[data-properties]").showModal();
+      case "properties": return root.querySelector("[data-properties]")?.showModal();
       case "midi-view": {
         if (!st.score) return say("The MIDI view needs the score tools: this piece is edited in its text.", true);
         st.mode = st.mode === "midi" ? "score" : "midi";
@@ -507,7 +507,7 @@ export function install(ctx) {
   }
   document.addEventListener("click", (event) => {
     for (const menu of menus) if (menu.open && !menu.contains(event.target)) menu.open = false;
-  });
+  }, { signal: ctx.signal });
   // They are menus to a screen reader (role="menu"), and to the keyboard as
   // one: ↓ on a menu's name opens it at its first item, ↑ ↓ Home End move
   // between its items, ← → to the menu beside it, Escape closes it, back on
