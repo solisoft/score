@@ -448,3 +448,22 @@ test("an ossia: kept over its bars as written, the bars under it edited, moved w
   assert.equal(score.staves[0].ossias, undefined);
   engrave(score);
 });
+
+// ---- Lines of chord names and figured basses -----------------------------------------------
+
+test("a tuplet in a line of chord names and in a figured bass, figures the tools do not write: kept", () => {
+  const src = "<< \\new Staff { c'2 \\tuplet 3/2 { d'4 e' f' } | g'1 } \\new ChordNames \\chordmode { c2 \\tuplet 3/2 { d4:m e:m f } | g1:7 } \\new FiguredBass \\figuremode { <6>2 \\tuplet 3/2 { <_+>4 <6 5 4 3 2> s } | <7>1 } >>";
+  const { score, source } = roundTrip(src);
+  assert.match(source, /\\new ChordNames \\chordmode \{\n {4}c2 \\tuplet 3\/2 \{ d4:m e4:m f4 \} \| g1:7/);
+  assert.match(source, /\\figuremode \{\n {4}<6>2 \\tuplet 3\/2 \{ <_\+>4 <6 5 4 3 2>4 s4 \} \| <7>1/);
+  const figures = score.staves[2].events;
+  assert.equal(figures[1].figureRaw, "<_+>");
+  // A figure typed over one kept as written: the typed one.
+  M.setFigureAt(score, 2, 0, "6 4");
+  M.setFigureAt(score, 2, M.starts(score.staves[2])[1], "5");
+  assert.match(engrave(score), /<6 4>2 \\tuplet 3\/2 \{ <5>4 <6 5 4 3 2>4 s4 \}/);
+  // A chord changed at the bar after them; inside the tuplet the line refuses to be cut.
+  M.setChordAt(score, 1, M.barStart(score, 1), "Am");
+  assert.match(engrave(score), /\| a1:m/);
+  assert.throws(() => M.setChordAt(score, 1, h + M.ticksOf(score.staves[1].events[1]) / 2, "F"));
+});

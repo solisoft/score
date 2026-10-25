@@ -749,6 +749,7 @@ function pieces(score, ev, at, ticks, role) {
       delete p.artDirs;
       delete p.before;
       delete p.figure;
+      delete p.figureRaw;
       delete p.fret;
       delete p.fretBelow;
     }
@@ -831,7 +832,7 @@ const sameNote = (a, b) => Boolean(a && b && !a.rest && !b.rest && a.pitches.len
 
 /** A rest with nothing on it (a spacer may be one): what tidy merges, and a bar of rest gathers. */
 export function isBareRest(ev) {
-  const marked = ev.before?.length || ev.cue || ev.ottava != null || ev.stemDir != null || ev.noAutoBeam != null || ev.breath || ev.spanStart != null || ev.spanEnd || ev.cross != null || ev.figure || ev.fret;
+  const marked = ev.before?.length || ev.cue || ev.ottava != null || ev.stemDir != null || ev.noAutoBeam != null || ev.breath || ev.spanStart != null || ev.spanEnd || ev.cross != null || ev.figure || ev.figureRaw || ev.fret;
   return ev.rest && !ev.tuplet && !ev.dynamic && !ev.hairpin && !ev.hairpinEnd && !ev.texts.length && !ev.chord && !ev.arts.length && !ev.pedalOn && !ev.pedalOff && !ev.beamStart && !ev.beamEnd && !marked;
 }
 
@@ -3696,7 +3697,7 @@ export function isDrawn(score, item) {
   if (item.kept) return !item.spacer;
   const ev = score.staves[item.staff]?.events[item.index];
   const line = score.staves[item.staff];
-  return Boolean(ev) && !ev.spacer && !(line.chords && !ev.chord) && !(line.figures && !/[^_ ]/.test(ev.figure ?? ""));
+  return Boolean(ev) && !ev.spacer && !(line.chords && !ev.chord) && !(line.figures && !ev.figureRaw && !/[^_ ]/.test(ev.figure ?? ""));
 }
 
 /** The line of chord names right over the staff of lane `s` (or that lane itself when it is one), or −1. */
@@ -3748,7 +3749,7 @@ function figuresOf(text) {
 /** What a figured bass writes for one of its events. */
 function figureText(ev) {
   const value = ev.base + ".".repeat(ev.dots);
-  return ev.figure ? `<${ev.figure}>${value}` : `s${value}`;
+  return ev.figure ? `<${ev.figure}>${value}` : ev.figureRaw ? `${ev.figureRaw}${value}` : `s${value}`;
 }
 
 /** The figured bass right under the staff of lane `s` (or that lane itself when it is one), or −1. */
@@ -3767,6 +3768,7 @@ export function setFigureAt(score, s, t, text) {
   const figure = String(text ?? "").trim() ? figuresOf(text) : "";
   if (cut(score, staff, t) !== t) throw new Error("figures do not start inside a tuplet");
   const ev = staff.events[eventAt(staff, t)];
+  delete ev.figureRaw;
   if (figure) ev.figure = figure;
   else delete ev.figure;
   tidy(score, staff);
@@ -3786,23 +3788,36 @@ export function addFigureStaff(score, s = 0) {
   return at;
 }
 
+/** The tuplets of a line of chord names or figures, by the parse's: each the model's own id. */
+function lineTuplets() {
+  const ids = new Map();
+  return (ev) => {
+    const [tid, n, d] = ev.tuplet;
+    if (!ids.has(tid)) ids.set(tid, newId());
+    return { id: ids.get(tid), n, d };
+  };
+}
+
 /** A figured bass from its parse: each figure a rest as long as it holds, its figures as written. */
 function figureLine(score, staff, unsupported) {
   const out = { name: "", short: "", instrument: "", clef: "bass", figures: true, events: [] };
+  const tuplet = lineTuplets();
   for (const ev of staff.events) {
     ev.unsupported.forEach((u) => unsupported.add(u));
     if (ev.k !== "Note" && ev.k !== "Rest") continue;
-    if (ev.tuplet) unsupported.add("a tuplet in a figured bass");
+    if (ev.tuplet_outer) unsupported.add("a tuplet in a tuplet in a figured bass");
     const ticks = ev.ticks * Math.max(1, ev.count ?? 1);
     const at = lengthOf(out);
     let figure = "";
+    let raw = "";
     try {
       figure = ev.figure_text ? figuresOf(ev.figure_text) : "";
     } catch {
-      unsupported.add("figures this editor does not write");
+      // Figures the tools do not write (an accidental alone, five figures…): kept as written.
+      raw = ev.figure_text;
     }
-    const read = makeEvent({ base: ev.base, dots: ev.dots, ...(figure ? { figure } : {}) });
-    if (at + ticks > nextBarLine(score, at) + 1e-6 || notated(ev.base, ev.dots) !== ticks) out.events.push(...pieces(score, read, at, ticks, "whole"));
+    const read = makeEvent({ base: ev.base, dots: ev.dots, ...(figure ? { figure } : {}), ...(raw ? { figureRaw: raw } : {}), ...(ev.tuplet ? { tuplet: tuplet(ev) } : {}) });
+    if (!ev.tuplet && (at + ticks > nextBarLine(score, at) + 1e-6 || notated(ev.base, ev.dots) !== ticks)) out.events.push(...pieces(score, read, at, ticks, "whole"));
     else out.events.push(read);
   }
   return out;
@@ -5190,12 +5205,20 @@ function graceOf([pitches, base, dots, fingers]) {
  */
 function chordLine(score, staff, unsupported) {
   const out = { name: staff.name ?? "", short: staff.short ?? "", instrument: "", clef: "treble", chords: true, events: [] };
+  const tuplet = lineTuplets();
   for (const ev of staff.events) {
     ev.unsupported.forEach((u) => unsupported.add(u));
     if (ev.k !== "Note" && ev.k !== "Rest") continue;
-    if (ev.tuplet) unsupported.add("a tuplet in a line of chord names");
     const ticks = ev.ticks * Math.max(1, ev.count ?? 1);
     const at = lengthOf(out);
+    // A chord in a tuplet keeps it: written in its \\tuplet again.
+    if (ev.tuplet) {
+      if (ev.tuplet_outer) unsupported.add("a tuplet in a tuplet in a line of chord names");
+      const written = String(ev.chord_text ?? "").replace(/^([a-g](?:is|es|s)*[',]*|r)\d*\.*(?:\*\d+)?/, "$1");
+      const chord = ev.k === "Rest" ? (ev.spacer ? "" : "N.C.") : symbolOfChordmode(written) ?? symbolOfName(ev.chord_name);
+      out.events.push(makeEvent({ base: ev.base, dots: ev.dots, tuplet: tuplet(ev), chord, ...(written && ev.k !== "Rest" ? { chordmode: written } : {}) }));
+      continue;
+    }
     if (ev.k === "Rest" && (ev.spacer || ev.full)) {
       out.events.push(...rests(score, at, ticks));
       continue;
