@@ -1365,7 +1365,9 @@ test("reading: what the score tools do not write is engraved and named, not lost
   assert.deepEqual(named("{ c''1^\\markup \\fret-diagram-terse \"x;3;2;o;1;o;\" }"), []);
   assert.deepEqual(named("{ c''1^\\markup { \\fret-diagram-terse \"x;3;2;o;1;o;\" C } }"), ["a chord diagram among words"]);
   assert.deepEqual(named("{ \\tiny c'1 }"), ["notes set smaller"]);
-  assert.ok(named("\\addQuote \"f\" { e''1 } { \\cueDuring \"f\" #UP { R1 } }").includes("cue notes"));
+  // Cue notes are kept now (#402): editable.test.mjs.
+  assert.deepEqual(named("\\addQuote \"f\" { e''1 } { \\cueDuring \"f\" #UP { R1 } }"), []);
+  // An ossia is kept from its text, which tells which staff it stands over (#402): without it, named.
   assert.ok(named("\\new Staff = \"m\" { << { c'1 } \\new Staff \\with { alignAboveContext = \"m\" } { e'1 } >> }").includes("an ossia"));
   // Each still engraves.
   for (const src of ["<< \\new Staff { c1 } \\new FiguredBass \\figuremode { <6>1 } >>", "\\new Staff = \"m\" { << { c'1 } \\new Staff \\with { alignAboveContext = \"m\" } { e'1 } >> }"]) {

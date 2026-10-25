@@ -74,7 +74,8 @@ export function install(ctx) {
     const upper = lanes[Math.min(k, lanes.length - 1)];
     const top = bar.staves[k];
     const staff = st.score.staves[upper];
-    if (upper == null || !staff || M.isChords(st.score, upper) || M.isFigures(st.score, upper)) return { over: true, spot: null };
+    // A tablature's lines are strings, not pitches: the pen does not write there.
+    if (upper == null || !staff || M.isChords(st.score, upper) || M.isFigures(st.score, upper) || M.isTab(st.score, upper)) return { over: true, spot: null };
     const step = Gh.stepAt(p.y, top, space);
     if (step < -8 || step > 16) return { over: true, spot: null };
     // The voice the cursor writes in, on its own staff; else the staff's first.

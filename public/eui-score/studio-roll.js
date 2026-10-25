@@ -20,7 +20,7 @@ export function install(ctx) {
     let cursor = null;
     for (const k of st.playing?.now ?? []) {
       const it = st.items[k];
-      if (!it) continue;
+      if (!it || it.kept) continue;
       lit.add(`${it.staff}:${it.index}`);
       const t = M.starts(st.score.staves[it.staff])[it.index];
       cursor = cursor == null ? t : Math.min(cursor, t);

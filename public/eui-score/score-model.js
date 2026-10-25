@@ -507,6 +507,8 @@ export function transpose(score, { steps, semitones, s = null, a = 0, b = Infini
     for (const m of score.midKeys ?? []) m.key = clamp(m.key + f);
   }
   if (s != null) refuseDrums(score, s);
+  // An ossia goes with the whole score.
+  if (s == null) for (const staff of score.staves) for (const o of staff.ossias ?? []) for (const ev of o.events) if (!ev.rest) ev.pitches = ev.pitches.map((p) => transposePitch(p, steps, semitones));
   const lanes = (s == null ? score.staves.map((_, k) => k) : [s]).filter((lane) => !isDrums(score, lane));
   for (const lane of lanes) {
     const events = score.staves[lane].events;
@@ -829,7 +831,7 @@ const sameNote = (a, b) => Boolean(a && b && !a.rest && !b.rest && a.pitches.len
 
 /** A rest with nothing on it (a spacer may be one): what tidy merges, and a bar of rest gathers. */
 export function isBareRest(ev) {
-  const marked = ev.before?.length || ev.ottava != null || ev.stemDir != null || ev.noAutoBeam != null || ev.breath || ev.spanStart != null || ev.spanEnd || ev.cross != null || ev.figure || ev.fret;
+  const marked = ev.before?.length || ev.cue || ev.ottava != null || ev.stemDir != null || ev.noAutoBeam != null || ev.breath || ev.spanStart != null || ev.spanEnd || ev.cross != null || ev.figure || ev.fret;
   return ev.rest && !ev.tuplet && !ev.dynamic && !ev.hairpin && !ev.hairpinEnd && !ev.texts.length && !ev.chord && !ev.arts.length && !ev.pedalOn && !ev.pedalOff && !ev.beamStart && !ev.beamEnd && !marked;
 }
 
@@ -2231,6 +2233,7 @@ function retime(score, b, num, den) {
   if (![1, 2, 4, 8, 16].includes(den) || !Number.isInteger(num) || num < 1 || num > 32) throw new Error("no such metre");
   const len = (WHOLE * num) / den;
   if (score.staves.some((staff) => staff.times?.length)) throw new Error("a staff changes metre on its own: change its metres in the text");
+  if (score.staves.some((staff) => (staff.ossias ?? []).some((o) => o.bar + o.bars > b))) throw new Error("an ossia stands over those bars: change the metre in the text");
   // A bar of its own length counts as itself, whatever the metre: those after it are not laid out again.
   if ((score.changes ?? []).some((c) => c.len && c.bar >= b)) throw new Error("a cadenza or a bar cut short comes later: the metre changes from the bar after it");
   const old = { time: score.time, changes: structuredClone(score.changes ?? []), pickup: score.pickup };
@@ -2382,6 +2385,7 @@ export function setTempoAt(score, b, tempo) {
 export function setClefAt(score, s, b, clef) {
   const staff = score.staves[upperOf(score, s)];
   if (!staff) throw new Error("no such staff");
+  if (staff.tab) throw new Error("a tablature has no clef: its lines are the strings");
   if (clef != null && !CLEFS.includes(clef)) throw new Error("no such clef");
   if (b <= 0) {
     if (clef) staff.clef = clef;
@@ -2442,6 +2446,7 @@ export function removeLastBar(score) {
   }
   score.changes = (score.changes ?? []).filter((c) => c.bar < bars - 1);
   for (const [holder, name] of barLists(score)) holder[name] = holder[name].filter((m) => m.bar < bars - 1);
+  for (const staff of score.staves) ossiasAfterDelete(staff, bars - 1, bars - 1, 1);
 }
 
 /**
@@ -2494,6 +2499,7 @@ export function deleteBars(score, a, b) {
   score.breaks = Object.fromEntries(Object.entries(score.breaks ?? {}).filter(([bar]) => Number(bar) < a || Number(bar) > b).map(([bar, kind]) => [Number(bar) > b ? Number(bar) - count : Number(bar), kind]));
   score.staves.forEach((staff, s) => {
     for (const name of STAFF_LISTS) if (staff[name]) staff[name] = shift(staff[name]);
+    ossiasAfterDelete(staff, a, b, count);
     if (staff.voice || b + 1 >= bars) return;
     const [mine, was] = [ownAfter[s], ownBefore[s]];
     if (mine.key) {
@@ -2707,7 +2713,9 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
     // last that sounds there (or that the page writes in), those before it as they are.
     const others = voiceLanes(score, s).slice(1).map((lane) => ({ lane, bars: staffBars(score, score.staves[lane], lane) }));
     const voicesIn = (b) => {
-      const shown = (o) => o.bars[b] && (sounding(o.bars[b].events) || open.some((x) => x.staff === o.lane && x.bar === b));
+      // A bar of cue notes keeps the rests of the part beside them.
+      const cueBar = upper[b]?.events.length > 0 && upper[b].events.every((ev) => ev.cue);
+      const shown = (o) => o.bars[b] && (sounding(o.bars[b].events) || open.some((x) => x.staff === o.lane && x.bar === b) || cueBar);
       let last = others.length - 1;
       while (last >= 0 && !shown(others[last])) last--;
       return others.slice(0, last + 1).map((o) => o.bars[b]);
@@ -2719,7 +2727,7 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
     const toVoice = !unfold && sungLane > s && versesOf(score.staves[sungLane]) > 0;
     if (toVoice) lyricsTo = true;
     // Under \compressMMRests, bars of rest side by side are written R1*n: gathered.
-    const gathered = !toVoice && !unfold && score.compress ? restRuns(score, upper, voicesIn, repeats) : [];
+    const gathered = !toVoice && !unfold && score.compress ? restRuns(score, upper, voicesIn, repeats, (b) => (staff.ossias ?? []).some((o) => b >= o.bar && b < o.bar + o.bars)) : [];
     const bars = upper.map((bar, b) => {
       const broken = top && b > 0 ? { line: "\\break ", page: "\\pageBreak " }[(score.breaks ?? {})[b - 1]] ?? "" : "";
       const run = gathered[b];
@@ -2731,12 +2739,20 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
       }
       const voices = toVoice ? [] : voicesIn(b);
       items.push(...bar.items, ...voices.flatMap((v) => v.items));
+      // An ossia over the bars ending here: its notes come after theirs, kept as written.
+      const ossiaEnds = unfold ? [] : (staff.ossias ?? []).filter((o) => o.bar + o.bars - 1 === b);
+      for (const o of ossiaEnds) items.push(...o.events.map((ev) => (ev.spacer ? { kept: true, spacer: true } : { kept: true })));
+      const ossiaStarts = unfold ? [] : (staff.ossias ?? []).filter((o) => o.bar === b);
       // A voice drawn as nothing in the bar (spacers) is not counted among the voices:
       // past two, each then says which it is, so voice 3 stays voice 3.
       const named = voices.length > 1 && voices.some((v) => v.events.every((ev) => ev.rest && ev.spacer));
       const parts = [bar, ...voices].map((v, k) => `{ ${named ? `\\voice${VOICE_NAMES[k]} ` : ""}${v.text} }`);
-      const music = voices.length ? `<< ${parts.join(" \\\\ ")} >>` : bar.text;
-      return broken + changesText(score, s, b) + (top ? markText(score, b) : "") + oddStart(score, b, voices.length > 0) + music + (top ? jumpText(score, b) : "") + oddEnd(score, b, b === upper.length - 1);
+      // A second voice of cue notes alone: a CueVoice beside the first, as \\cueDuring and its like write it.
+      const cueOnly = (v) => v.events.every((ev) => ev.cue) && /^\\new CueVoice \{[^{}]*\}$/.test(v.text);
+      const besideCue = voices.length === 1 && (cueOnly(voices[0]) || cueOnly(bar));
+      const music = besideCue ? `<< ${[bar, voices[0]].map((v) => (cueOnly(v) ? v.text : `{ ${v.text} }`)).join(" ")} >>` : voices.length ? `<< ${parts.join(" \\\\ ")} >>` : bar.text;
+      const bodyText = changesText(score, s, b) + (top ? markText(score, b) : "") + oddStart(score, b, voices.length > 0) + music + (top ? jumpText(score, b) : "") + oddEnd(score, b, b === upper.length - 1);
+      return broken + ossiaStarts.map(() => "<< { ").join("") + bodyText + ossiaEnds.map((o) => ` } ${ossiaText(o)} >>`).join("");
     });
     let music = unfold ? playedOut(score, s, bars) : withRepeats(bars, repeats);
     if (toVoice) {
@@ -2767,7 +2783,7 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
     // A drum staff: its strokes in \\drummode, with no clef and no key.
     const opening = staff.drums
       ? `\\new DrumStaff ${settings ? `\\with { ${settings}} ` : ""}\\drummode {\n  \\time ${timeText(score, time)}${partial}${tempo}`
-      : `\\new Staff ${staff.id ? `= ${quote(staff.id)} ` : ""}${settings ? `\\with { ${settings}} ` : ""}${brace}\n  \\clef ${clef} \\key ${keyText(keyOf(score, s), staffKeyAt(score, s, 0).mode)} \\time ${timeText(score, time)}${partial}${tempo}`;
+      : `\\new ${staff.tab ? "TabStaff" : "Staff"} ${staff.id ? `= ${quote(staff.id)} ` : ""}${settings ? `\\with { ${settings}} ` : ""}${brace}\n  ${staff.tab ? "" : `\\clef ${clef} `}\\key ${keyText(keyOf(score, s), staffKeyAt(score, s, 0).mode)} \\time ${timeText(score, time)}${partial}${tempo}`;
     let out = `${opening}\n  ${music.replace(/\n {4}/g, "\n  ")}${ending}\n}`;
     // Each verse a line under the one before; sung to a lower voice, a Lyrics line that follows it.
     if (toVoice) {
@@ -2855,7 +2871,7 @@ export function writeMeta(source, obj) {
  * something is written at a bar line — a change, a mark, a break, a jump, a
  * repeat's edge — and never gathers a pickup.
  */
-function restRuns(score, upper, voicesIn, repeats) {
+function restRuns(score, upper, voicesIn, repeats, ossiaOver = () => false) {
   const edges = new Set();
   for (const r of repeats) {
     let next = r.to + 1;
@@ -2863,7 +2879,7 @@ function restRuns(score, upper, voicesIn, repeats) {
     for (const len of r.endings) edges.add((next += len));
   }
   const restOf = (b) => {
-    if ((b === 0 && score.pickup > 0) || isOddBar(score, b) || voicesIn(b).length) return null;
+    if ((b === 0 && score.pickup > 0) || isOddBar(score, b) || voicesIn(b).length || ossiaOver(b)) return null;
     const events = upper[b].events;
     if (!events.length || !events.every((ev) => isBareRest(ev) && !ev.spacer)) return null;
     const value = spellDuration(barLength(score, b));
@@ -2969,7 +2985,7 @@ function changesText(score, s, b) {
   const parts = [];
   const drums = isDrums(score, s);
   const clef = (score.staves[s].clefs ?? []).find((c) => c.bar === b);
-  if (clef && !drums) parts.push(`\\clef ${clefText(clef.clef)}`);
+  if (clef && !drums && !score.staves[s].tab) parts.push(`\\clef ${clefText(clef.clef)}`);
   const c = changeAt(score, b);
   const key = drums ? null : keyChanges(score, s).find((m) => m.bar === b && m.pos === 0);
   if (key) parts.push(`\\key ${keyText(key.key, key.mode)}`);
@@ -3016,7 +3032,7 @@ function midChanges(score, s) {
   const marks = top ? (score.midMarks ?? []).map((m) => ({ bar: m.bar, pos: m.pos, order: 3, text: midMarkText(m) })) : [];
   if (staff.drums) return [...tempos, ...marks].sort((x, y) => x.bar - y.bar || x.pos - y.pos || x.order - y.order);
   const keys = keyChanges(score, s).filter((m) => m.pos > 0).map((m) => ({ bar: m.bar, pos: m.pos, order: 1, text: `\\key ${keyText(m.key, m.mode)}` }));
-  const clefs = (staff.midClefs ?? []).map((c) => ({ bar: c.bar, pos: c.pos, order: 0, text: `\\clef ${clefText(c.clef)}` }));
+  const clefs = staff.tab ? [] : (staff.midClefs ?? []).map((c) => ({ bar: c.bar, pos: c.pos, order: 0, text: `\\clef ${clefText(c.clef)}` }));
   return [...clefs, ...keys, ...tempos, ...marks].sort((x, y) => x.bar - y.bar || x.pos - y.pos || x.order - y.order);
 }
 
@@ -3054,6 +3070,7 @@ function staffBars(score, staff, s) {
   let t = 0;
   let open = null;
   let inner = null;
+  let cue = false;
   // The bar whose cadenza has been opened.
   let cadenzaIn = -1;
   // The staff the notes are drawn on: each bar starts and ends on its own.
@@ -3067,6 +3084,8 @@ function staffBars(score, staff, s) {
     inner = null;
     if (open !== null) current.parts.push("}");
     open = null;
+    if (cue) current.parts.push("}");
+    cue = false;
     bars.push({ text: current.parts.join(" "), items: current.items, events: current.events });
     current = { parts: [], items: [], events: [] };
   };
@@ -3076,6 +3095,15 @@ function staffBars(score, staff, s) {
     // The tuplet it is in (the outer one, when they nest), and the one inside that.
     const tid = tupletGroup(ev);
     const iid = ev.tuplet?.outer ? ev.tuplet.id : null;
+    // A run of cue notes ends: its tuplets close inside it.
+    if (cue && !ev.cue) {
+      if (inner !== null) current.parts.push("}");
+      if (open !== null) current.parts.push("}");
+      inner = null;
+      open = null;
+      current.parts.push("}");
+      cue = false;
+    }
     if (inner !== null && (iid !== inner || tid !== open)) {
       current.parts.push("}");
       inner = null;
@@ -3088,6 +3116,15 @@ function staffBars(score, staff, s) {
     const pos = t - barStart(score, b);
     // One no event starts at is written before the first after it, the next bar's first at the latest.
     while (next < mids.length && (mids[next].bar < b || (mids[next].bar === b && mids[next].pos <= pos + 1e-6))) current.parts.push(mids[next++].text);
+    // A run of cue notes: in a CueVoice of their own, around their tuplets.
+    if (ev.cue && !cue) {
+      if (inner !== null) current.parts.push("}");
+      if (open !== null) current.parts.push("}");
+      inner = null;
+      open = null;
+      current.parts.push("\\new CueVoice {");
+      cue = true;
+    }
     // A cadenza that starts inside its bar: before its first note (a staff's first voice writes it).
     const cadenza = changeAt(score, b)?.cadenza;
     if (cadenza > 0 && !staff.voice && !staff.chords && !staff.figures && cadenzaIn !== b && pos >= cadenza - 1e-6) {
@@ -3301,6 +3338,18 @@ export function insertBars(score, at, count) {
   for (const c of score.changes ?? []) if (c.bar >= at) c.bar += count;
   for (const [holder, name] of barLists(score)) for (const m of holder[name]) if (m.bar >= at) m.bar += count;
   const ticks = barStart(score, at + count) - t;
+  // An ossia the bars go into grows by them, spacers where they go; one after them moves along.
+  for (const staff of score.staves) {
+    for (const o of staff.ossias ?? []) {
+      if (o.bar >= at) o.bar += count;
+      else if (at < o.bar + o.bars) {
+        const into = t - barStart(score, o.bar);
+        const k = starts({ events: o.events }).indexOf(into);
+        if (k >= 0) o.events.splice(k, 0, ...rests(score, t, ticks, true));
+        o.bars += count;
+      }
+    }
+  }
   for (const staff of score.staves) {
     const i = t === lengthOf(staff) ? staff.events.length : eventAt(staff, t);
     if (i < 0) throw new Error("bars must start at a bar line");
@@ -3517,6 +3566,11 @@ export function drumKey(name) {
   return (DRUMS.find((x) => x.name === name) ?? MORE_DRUMS.find((x) => x.name === name))?.key ?? 38;
 }
 
+/** Whether lane `s` is a tablature's (\\new TabStaff): its notes are drawn as frets, it has no clef. */
+export function isTab(score, s) {
+  return Boolean(score.staves[upperOf(score, s)]?.tab);
+}
+
 /** Whether lane `s` is a drum staff's. */
 export function isDrums(score, s) {
   return Boolean(score.staves[upperOf(score, s)]?.drums);
@@ -3638,6 +3692,8 @@ export function nextBeat(score, t) {
 
 /** Whether an item of `toLilyPond` is drawn: a spacer is not, nor a beat of a line of chord names with no chord. */
 export function isDrawn(score, item) {
+  // A note of what is kept as written (an ossia's): drawn unless a spacer.
+  if (item.kept) return !item.spacer;
   const ev = score.staves[item.staff]?.events[item.index];
   const line = score.staves[item.staff];
   return Boolean(ev) && !ev.spacer && !(line.chords && !ev.chord) && !(line.figures && !/[^_ ]/.test(ev.figure ?? ""));
@@ -4987,6 +5043,83 @@ function keptName(name, held) {
   return held.commands.some((c) => c.includes(plain(name)));
 }
 
+// ---- An ossia: another way of playing some bars, on a small staff over them ---------------
+//
+// `\new Staff \with { alignAboveContext = "main" } { … }` beside a staff's
+// bars, inside `<< >>`: kept on that staff as `staff.ossias`, each
+// { bar, bars, with, clef, events } — the bars it stands over, its \with as
+// written, its clef, and its notes from the first of those bars (spacers
+// where it is silent). It is shown and played as written; the bars under it
+// are edited as any others, and it moves with them.
+
+/** An ossia's lanes (from the parse) kept on the staff its \\with names; false when it cannot be. */
+function ossiaOf(score, lanes, body, placed) {
+  const [lane, ...others] = lanes;
+  if (others.some((o) => sounding(o.events))) return false;
+  const name = /\balign(?:Above|Below)Context\s*=\s*"([^"]+)"/.exec(body ?? "")?.[1];
+  const main = placed.flat().find((x) => !x.voice && x.id === name && x !== lane);
+  if (!main) return false;
+  const at = starts(lane);
+  const real = lane.events.map((ev, i) => (ev.mirror ? -1 : i)).filter((i) => i >= 0);
+  if (!real.length) return true;
+  const first = barAt(score, at[real[0]]);
+  const lastEv = real[real.length - 1];
+  const last = barAt(score, at[lastEv] + ticksOf(lane.events[lastEv]) - 1);
+  const from = barStart(score, first);
+  const to = barStart(score, last + 1);
+  const events = lane.events
+    .filter((_, i) => at[i] >= from && at[i] < to)
+    .map(({ mirror, ...ev }) => (mirror ? makeEvent({ base: ev.base, dots: ev.dots, tuplet: ev.tuplet, spacer: true }) : ev));
+  const clef = [...(lane.clefs ?? [])].filter((c) => c.bar <= first).pop()?.clef ?? lane.clef ?? "treble";
+  main.ossias = [...(main.ossias ?? []), { bar: first, bars: last - first + 1, with: body.replace(/\s+/g, " ").trim(), clef, events }];
+  return true;
+}
+
+/** Events as LilyPond, their tuplets (one in another too) around them, with no bar checks. */
+function plainMusic(events) {
+  const parts = [];
+  let open = null;
+  let inner = null;
+  for (const ev of events) {
+    const tid = tupletGroup(ev);
+    const iid = ev.tuplet?.outer ? ev.tuplet.id : null;
+    if (inner !== null && (iid !== inner || tid !== open)) {
+      parts.push("}");
+      inner = null;
+    }
+    if (open !== null && tid !== open) {
+      parts.push("}");
+      open = null;
+    }
+    if (tid !== null && open === null) {
+      const around = ev.tuplet.outer ?? ev.tuplet;
+      parts.push(`\\tuplet ${around.n}/${around.d} {`);
+      open = tid;
+    }
+    if (iid !== null && inner === null) {
+      parts.push(`\\tuplet ${ev.tuplet.n}/${ev.tuplet.d} {`);
+      inner = iid;
+    }
+    parts.push(eventText(ev));
+  }
+  if (inner !== null) parts.push("}");
+  if (open !== null) parts.push("}");
+  return parts.join(" ");
+}
+
+/** An ossia as LilyPond: its staff, its \\with, its clef, its music. */
+function ossiaText(o) {
+  const clef = o.clef && o.clef !== "treble" ? `\\clef ${clefText(o.clef)} ` : "";
+  return `\\new Staff \\with { ${o.with} } { ${clef}${plainMusic(o.events)} }`;
+}
+
+/** The ossias over bars `a`…`b` taken away (they go with their bars); those after move back by `count`. */
+function ossiasAfterDelete(staff, a, b, count) {
+  if (!staff.ossias) return;
+  staff.ossias = staff.ossias.filter((o) => o.bar + o.bars - 1 < a || o.bar > b).map((o) => (o.bar > b ? { ...o, bar: o.bar - count } : o));
+  if (!staff.ossias.length) delete staff.ossias;
+}
+
 // ---- Reading eui-score's parse back ---------------------------------------------------------
 
 /** What the editor says of a piece of several movements (#359): engraved, edited in the text. */
@@ -5112,7 +5245,11 @@ export function fromParsed(parsed, source = null, { spans = parsed.spans ?? null
   // after the music, whose metre, pickup and repeats they follow.
   const placed = [];
   const isLine = (st) => st.kind === "ChordNames" || st.kind === "Figures";
-  const order = parsed.staves.map((_, k) => k).sort((x, y) => Number(isLine(parsed.staves[x])) - Number(isLine(parsed.staves[y])));
+  // An ossia after the staves of music too: it follows their metre, and is kept on its staff (see ossiaOf).
+  const rank = (st) => (isLine(st) ? 2 : st.kind === "Ossia" ? 1 : 0);
+  const order = parsed.staves.map((_, k) => k).sort((x, y) => rank(parsed.staves[x]) - rank(parsed.staves[y]));
+  // The engraver's numbers for the notes of every staff but the ossias: an ossia's own are the others.
+  const musicNumbers = new Set(parsed.staves.filter((st) => st.kind !== "Ossia").flatMap((st) => st.events.map((ev) => ev.i)));
   for (const k of order) {
     const staff = parsed.staves[k];
     if (staff.kind === "ChordNames" || staff.kind === "Figures") {
@@ -5120,10 +5257,14 @@ export function fromParsed(parsed, source = null, { spans = parsed.spans ?? null
       continue;
     }
     const drums = staff.kind === "Drums";
-    const kinds = { Tab: "tablature", FretBoards: "guitar chord diagrams", Ossia: "an ossia" };
-    if (staff.kind !== "Notes" && !drums) unsupported.add(kinds[staff.kind] ?? "a staff of another kind");
+    // A tablature (\\new TabStaff): a staff of notes, drawn as frets on strings.
+    const tab = staff.kind === "Tab";
+    const ossia = staff.kind === "Ossia";
+    const kinds = { FretBoards: "guitar chord diagrams" };
+    if (staff.kind !== "Notes" && !drums && !tab && !ossia) unsupported.add(kinds[staff.kind] ?? "a staff of another kind");
     const out = { name: staff.name ?? "", short: staff.short ?? "", instrument: drums ? "" : staff.instrument ?? "", clef: drums ? "percussion" : "treble", events: [] };
     if (drums) out.drums = true;
+    if (tab) out.tab = true;
     // `\new Staff = "down"`: the name \change Staff goes to.
     if (staff.id) out.id = staff.id;
     // Voices 2 to 4, `<< { … } \\ { … } \\ { … } >>`: each its own lane, rests where it is silent.
@@ -5163,7 +5304,8 @@ export function fromParsed(parsed, source = null, { spans = parsed.spans ?? null
     let cadenzaAt = null;
     for (const ev of staff.events) {
       // A cadenza is kept as a bar of its own length.
-      ev.unsupported.filter((u) => u !== "a cadenza").forEach((u) => unsupported.add(u));
+      // A cadenza is kept as a bar of its own length; cue notes as notes drawn small (`cue`).
+      ev.unsupported.filter((u) => u !== "a cadenza" && u !== "cue notes").forEach((u) => unsupported.add(u));
       const k = ev.k;
       // A change after the first note is the bar's it starts: the first staff
       // writes the score's changes, the others must change with it.
@@ -5197,7 +5339,7 @@ export function fromParsed(parsed, source = null, { spans = parsed.spans ?? null
         } else cadenzaAt = null;
         continue;
       }
-      if (k === "Clef" && drums) continue;
+      if (k === "Clef" && (drums || tab)) continue;
       if (k === "Clef") {
         const name = CLEF_NAMES[ev.clef.join(",")];
         if (!name) unsupported.add("this clef");
@@ -5351,6 +5493,7 @@ export function fromParsed(parsed, source = null, { spans = parsed.spans ?? null
           if (whole.length && BREATHS_READ[ev.breath]) whole[whole.length - 1].breath = BREATHS_READ[ev.breath];
           if (ev.cross) for (const r of whole) r.cross = ev.cross;
           if (whole.length && before.get(ev.i)?.length) whole[0].before = [...before.get(ev.i)];
+          if (ossia && musicNumbers.has(ev.i)) for (const r of whole) r.mirror = true;
           lane.events.push(...whole);
           continue;
         }
@@ -5359,6 +5502,7 @@ export function fromParsed(parsed, source = null, { spans = parsed.spans ?? null
           const filled = rests(score, lengthOf(lane), ev.ticks, Boolean(ev.spacer));
           if (filled.length && ev.cross) for (const r of filled) r.cross = ev.cross;
           if (filled.length && before.get(ev.i)?.length) filled[0].before = [...before.get(ev.i)];
+          if (ossia && musicNumbers.has(ev.i)) for (const r of filled) r.mirror = true;
           lane.events.push(...filled);
           continue;
         }
@@ -5423,6 +5567,10 @@ export function fromParsed(parsed, source = null, { spans = parsed.spans ?? null
           // Drawn on another staff, `\change Staff = "down"`: that staff's id.
           ...(ev.cross ? { cross: ev.cross } : {}),
           ...(diagram && k === "Note" ? { fret: diagram.text.slice(FRET_MARK.length), ...(diagram.dir > 0 ? { fretBelow: true } : {}) } : {}),
+          // In an ossia, what only mirrors its staff's time: drawn as nothing there.
+          ...(ossia && musicNumbers.has(ev.i) ? { mirror: true } : {}),
+          // A cue note: another part's, drawn small and not played (\\new CueVoice, \\cueDuring).
+          ...(ev.unsupported.includes("cue notes") ? { cue: true } : {}),
           // The \\override, \\set, \\tweak … written before it, as written.
           ...(before.get(ev.i)?.length ? { before: [...before.get(ev.i)] } : {}),
         });
@@ -5472,10 +5620,25 @@ export function fromParsed(parsed, source = null, { spans = parsed.spans ?? null
     }
     // The voices up to the last that sounds: one before it that is silent stays, as rests.
     let kept = others.length;
-    while (kept > 0 && !(others[kept - 1].events.length && sounding(others[kept - 1].events))) kept--;
+    // Beside cue notes, a voice of rests is the part's own: its rests are kept.
+    const besideCue = out.events.some((x) => x.cue);
+    while (kept > 0 && !(others[kept - 1].events.length && (sounding(others[kept - 1].events) || (besideCue && kept === 1 && others[0].events.some((x) => x.rest && !x.spacer))))) kept--;
     for (const other of others.slice(0, kept)) pad(other, lengthOf(out));
     placed[k] = [out, ...others.slice(0, kept)];
     first = false;
+  }
+  // Each ossia, kept on the staff it stands over: its bars, its music, its \\with.
+  const ossias = parsed.staves.map((st, k) => (st.kind === "Ossia" ? k : -1)).filter((k) => k >= 0);
+  if (ossias.length) {
+    const bodies = staffWiths(source).filter((w) => w.kind === "Staff" && /\balign(Above|Below)Context\b/.test(w.body ?? ""));
+    ossias.forEach((k, n) => {
+      const kept = bodies.length === ossias.length ? ossiaOf(score, placed[k], bodies[n].body, placed) : null;
+      if (!kept) unsupported.add("an ossia");
+      placed[k] = [];
+    });
+    // The groups, counted in staves without them.
+    const shift = (at) => at - ossias.filter((k) => k < at).length;
+    score.groups = score.groups.map((g) => ({ ...g, first: shift(g.first), last: shift(g.last) })).filter((g) => g.last >= g.first);
   }
   score.staves = placed.flat();
   // A staff whose notes go to another one needs a name to come back to.
@@ -5490,9 +5653,12 @@ export function fromParsed(parsed, source = null, { spans = parsed.spans ?? null
   if (unsupported.size) return { unsupported: [...unsupported] };
   if (!score.staves.length) return { unsupported: ["a piece with no staff"] };
   // What each staff's \\with says beside its names, the \\layout blocks, what \\paper says more: kept as written.
-  const withs = staffWiths(source).filter((w) => ["Staff", "DrumStaff", "TabStaff", "RhythmicStaff", "ChordNames", "FiguredBass"].includes(w.kind));
+  // (An ossia's \\with is its own: see ossiaOf.)
+  const isOssiaWith = (w) => /\balign(Above|Below)Context\b/.test(w.body ?? "");
+  const withs = staffWiths(source).filter((w) => ["Staff", "DrumStaff", "TabStaff", "RhythmicStaff", "ChordNames", "FiguredBass"].includes(w.kind) && !isOssiaWith(w));
   const more = withs.map((w) => withMore(w.body));
-  if (withs.length === parsed.staves.length) placed.forEach((lanes, k) => more[k] && (lanes[0].withMore = more[k]));
+  const plainStaves = parsed.staves.map((st, k) => k).filter((k) => parsed.staves[k].kind !== "Ossia");
+  if (withs.length === plainStaves.length) plainStaves.forEach((k, n) => more[n] && placed[k][0] && (placed[k][0].withMore = more[n]));
   else if (more.some(Boolean)) lost.add("what a staff's \\with says beside its name");
   const layout = layoutBlocks(source);
   if (layout.length) score.layout = layout;
@@ -5501,7 +5667,7 @@ export function fromParsed(parsed, source = null, { spans = parsed.spans ?? null
   // The layout settings the engraver passes over (\\override, \\set, \\with …) and the model does not keep.
   const held = {
     commands: placed.flat().flatMap((lane) => lane.events.flatMap((ev) => ev.before ?? [])),
-    withs: withs.length === parsed.staves.length ? more : [],
+    withs: withs.length === plainStaves.length ? more : [],
     layout,
     paper,
   };

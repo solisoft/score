@@ -376,8 +376,9 @@ export function install(ctx) {
     if (!st.score) return [];
     const at = new Map();
     const starts = st.score.staves.map((staff) => M.starts(staff));
-    st.items.forEach(({ staff, index }, item) => {
-      if (st.score.staves[staff].events[index].rest) return;
+    st.items.forEach(({ staff, index, kept }, item) => {
+      // What is kept as written (an ossia's notes) is not the model's to light.
+      if (kept || st.score.staves[staff].events[index].rest) return;
       for (const sec of G.heardAt(st.score, passes, staff, index, starts[staff][index])) {
         const key = Math.round(sec * 1000);
         if (!at.has(key)) at.set(key, { sec, items: [] });

@@ -46,7 +46,8 @@ function engrave(score) {
 
 /** The model without its event ids, which every read numbers afresh. */
 function shape(score) {
-  return JSON.parse(JSON.stringify(score.staves.map((st) => ({ ...st, events: st.events.map(({ id, tuplet, ...ev }) => ({ ...ev, tuplet: tuplet && { n: tuplet.n, d: tuplet.d, ...(tuplet.outer ? { outer: { n: tuplet.outer.n, d: tuplet.outer.d } } : {}) } })) }))));
+  const plain = (events) => events.map(({ id, tuplet, ...ev }) => ({ ...ev, tuplet: tuplet && { n: tuplet.n, d: tuplet.d, ...(tuplet.outer ? { outer: { n: tuplet.outer.n, d: tuplet.outer.d } } : {}) } }));
+  return JSON.parse(JSON.stringify(score.staves.map((st) => ({ ...st, events: plain(st.events), ...(st.ossias ? { ossias: st.ossias.map((o) => ({ ...o, events: plain(o.events) })) } : {}) }))));
 }
 
 /** Read, written, read again: the same model, and the second writing the same text. */
@@ -391,4 +392,59 @@ test("\\change Staff in the middle of a hand-written beam: kept, through an edit
   assert.match(source, /c''8\[ d''8 \\change Staff = "down" c8 e8\] \\change Staff = "up" c''2/);
   M.write(score, 0, M.barStart(score, 1), q, A4);
   assert.match(engrave(score), /c''8\[ d''8 \\change Staff = "down" c8 e8\]/);
+});
+
+// ---- Tablature, cue notes, an ossia ---------------------------------------------------------
+
+test("a tablature is a staff of notes drawn as frets: read, written as a TabStaff, edited", () => {
+  const src = "<< \\new Staff { \\clef \"treble_8\" c'4 e'4\\2 g'4 c''4 | d'1 } \\new TabStaff \\with { stringTunings = #guitar-tuning } { c'4 e'4\\2 g'4 c''4 | d'1 } >>";
+  const { score, source } = roundTrip(src);
+  assert.ok(M.isTab(score, 1) && !M.isTab(score, 0));
+  assert.equal(score.staves[1].withMore, "stringTunings = #guitar-tuning");
+  assert.match(source, /\\new TabStaff \\with \{ stringTunings = #guitar-tuning \} \{\n {4}\\key c \\major \\time 4\/4\n {4}c'4 e'4\\2 g'4 c''4 \| d'1/);
+  // A note typed on it, transposed with the score; it has no clef to set.
+  M.write(score, 1, M.barStart(score, 1), h, A4);
+  M.transpose(score, { steps: 1, semitones: 2 });
+  assert.match(engrave(score), /\\new TabStaff[^]*\| b'2 e'2/);
+  assert.throws(() => M.setClefAt(score, 1, 1, "bass"), /no clef/);
+});
+
+test("cue notes: in a CueVoice beside the part's rests, or in its own voice; kept through edits", () => {
+  const { score, source } = roundTrip("{ c'1 | << { r1 } \\new CueVoice { e''4 f''4 g''4 a''4 } >> | d'1 }");
+  assert.ok(score.staves[1].events.filter((ev) => !ev.rest).every((ev) => ev.cue));
+  assert.match(source, /c'1 \| << \{ r1 \} \\new CueVoice \{ e''4 f''4 g''4 a''4 \} >> \| d'1/);
+  // A note written elsewhere, the cue notes stay as they are.
+  M.write(score, 0, 0, h, A4);
+  assert.match(engrave(score), /a'2 c'2 \| << \{ r1 \} \\new CueVoice \{ e''4 f''4 g''4 a''4 \} >>/);
+  // \cueDuring: the quoted notes, drawn small, the part's own rest beside them.
+  const quoted = roundTrip("flute = { c''1 d''1 } \\addQuote \"flute\" \\flute { c'1 \\cueDuring \"flute\" #UP { R1 } }");
+  assert.match(quoted.source, /c'1 \| << \\new CueVoice \{ d''1 \} \{ r1 \} >>/);
+  // Inline, around a tuplet.
+  const inline = roundTrip("{ c'1 \\new CueVoice { d''2 \\tuplet 3/2 { e''4 f'' g'' } } e'1 }");
+  assert.match(inline.source, /\\new CueVoice \{ d''2 \\tuplet 3\/2 \{ e''4 f''4 g''4 \} \}/);
+});
+
+test("an ossia: kept over its bars as written, the bars under it edited, moved with them", () => {
+  const src = "<< \\new Staff = \"main\" { \\key g \\major c'1 << { d'2 e'2 | f'1 } \\new Staff \\with { alignAboveContext = \"main\" } { \\clef bass e2 \\tuplet 3/2 { f4 g a } | b1 } >> g'1 } \\new Staff { c1 c c c } >>";
+  const { score, source } = roundTrip(src);
+  const [o] = score.staves[0].ossias;
+  assert.deepEqual([o.bar, o.bars, o.clef, o.with], [1, 2, "bass", 'alignAboveContext = "main"']);
+  assert.match(source, /c'1 \| << \{ d'2 e'2 \| f'1 \} \\new Staff \\with \{ alignAboveContext = "main" \} \{ \\clef bass e2 \\tuplet 3\/2 \{ f4 g4 a4 \} b1 \} >> \| g'1/);
+  // The bars under it edited.
+  M.write(score, 0, M.barStart(score, 1), q, A4);
+  assert.match(engrave(score), /<< \{ a'4 d'4 e'2 \| f'1 \}/);
+  // A bar put in before it moves it; one put in under it grows it with a silent bar.
+  M.insertBars(score, 0, 1);
+  assert.equal(score.staves[0].ossias[0].bar, 2);
+  M.insertBars(score, 3, 1);
+  assert.equal(score.staves[0].ossias[0].bars, 3);
+  assert.match(engrave(score), /\\clef bass e2 \\tuplet 3\/2 \{ f4 g4 a4 \} s1 b1 \}/);
+  // Transposed with the score.
+  M.transpose(score, { steps: 1, semitones: 2 });
+  assert.match(engrave(score), /\\clef bass fis2 \\tuplet 3\/2 \{ g4 a4 b4 \} s1 cis'1 \}/);
+  // The metre is not changed under it; its bars taken away take it.
+  assert.throws(() => M.setTimeAt(score, 1, 3, 4), /ossia/);
+  M.deleteBars(score, 2, 2);
+  assert.equal(score.staves[0].ossias, undefined);
+  engrave(score);
 });
