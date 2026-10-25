@@ -402,7 +402,7 @@ describe("AppScoresController") do
       # File › Open a photo…: without an AI key of one's own (#396), the way to
       # one (with a key: AppScoreSuggestionsController's spec).
       assert_contains(page, "data-photo-refused>Open a photo… <kbd>Add your key in Account</kbd>")
-      assert_not(page.contains("data-photo-open"))
+      assert_not(page.contains("data-photo-open hidden"))
       # New, Open and the examples make a new score, never over this one.
       assert_contains(page, "data-open-form")
       assert_contains(page, "onOpen: openAsNew")

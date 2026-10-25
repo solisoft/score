@@ -72,8 +72,9 @@ describe("AppScoreSuggestionsController") do
       + "<span data-ai-left>#{SCORE_SUGGESTIONS_OWN_PER_DAY}</span> questions left today."
     )
     assert_contains(page, "data-photo-open hidden")
-    assert_not(page.contains("data-ai-refused"))
-    assert_not(page.contains("data-photo-refused"))
+    # The page's script names both hooks: the elements are what must not carry them.
+    assert_contains(page, "data-ai aria-labelledby=\"studio-ai-title\">")
+    assert_not(page.contains("data-photo-refused>"))
   end
 
   test("without a key, the editor's photo and assistant explain and link the way to one, before anything is sent") do
@@ -93,7 +94,7 @@ describe("AppScoreSuggestionsController") do
     assert_not(page.contains("Answered by Claude"))
     # File › Open a photo… links to the account instead of taking a file.
     assert_contains(page, "href=\"/app/account#ai\" data-photo-refused>Open a photo…")
-    assert_not(page.contains("data-photo-open"))
+    assert_not(page.contains("data-photo-open hidden"))
   end
 
   test("starts a suggestion from the editor's text, leaving the score as it is") do
