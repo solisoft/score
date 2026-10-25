@@ -61,6 +61,8 @@ test("\\partCombine: the staff kept as written with the variables it uses; the o
   assert.throws(() => M.deleteBars(score, 0, 0), /in the text/);
   assert.throws(() => M.write(score, bass, M.barStart(score, 2), q, A4), /in the text/);
   assert.throws(() => M.transpose(score, { steps: 1, semitones: 2 }), /in the text/);
+  assert.throws(() => M.addVoice(score, 0), /kept as LilyPond wrote it/);
+  assert.throws(() => M.setClefAt(score, 0, 1, "bass"), /kept as LilyPond wrote it/);
   // The other staff transposed alone.
   M.transpose(score, { steps: 1, semitones: 2, s: bass });
   assert.match(written("partCombine", score, true), /b'4 d2\./);

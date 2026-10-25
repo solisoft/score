@@ -2059,6 +2059,7 @@ export function setKey(score, fifths) {
 export function setStaffKey(score, s, fifths) {
   const staff = score.staves[upperOf(score, s)];
   if (!staff) throw new Error("no such staff");
+  refuseRaw(score, s);
   const to = Math.max(-7, Math.min(7, fifths));
   if (to === score.key) delete staff.key;
   else staff.key = to;
@@ -2184,6 +2185,7 @@ export function keyOf(score, s, t = 0) {
  * the voices before it when it has none yet: answers its lane.
  */
 export function addVoice(score, s, voice = 2) {
+  refuseRaw(score, s);
   const u = upperOf(score, s);
   if (!score.staves[u]) throw new Error("no such staff");
   if (!Number.isInteger(voice) || voice < 2 || voice > MAX_VOICES) throw new Error(`a staff holds ${MAX_VOICES} voices at most`);
@@ -2200,6 +2202,7 @@ export function addVoice(score, s, voice = 2) {
  * voices of rests at the end go.
  */
 export function removeVoice(score, s, voice = null) {
+  refuseRaw(score, s);
   const lanes = voiceLanes(score, s);
   if (lanes.length < 2) throw new Error("this staff has one voice");
   const v = voice ?? (isLower(score, s) ? voiceOf(score, s) : lanes.length);
@@ -2394,6 +2397,7 @@ export function setClefAt(score, s, b, clef) {
   const staff = score.staves[upperOf(score, s)];
   if (!staff) throw new Error("no such staff");
   if (staff.tab) throw new Error("a tablature has no clef: its lines are the strings");
+  refuseRaw(score, s);
   if (clef != null && !CLEFS.includes(clef)) throw new Error("no such clef");
   if (b <= 0) {
     if (clef) staff.clef = clef;
@@ -4914,12 +4918,15 @@ export function keptCommands(source, spans) {
   const ends = spans.filter(Boolean).map((sp) => sp[1]).sort((x, y) => x - y);
   spans.forEach((span, i) => {
     if (!span) return;
-    // From the end of the note written just before it in the text.
-    let from = 0;
-    for (const e of ends) {
-      if (e <= span[0]) from = e;
-      else break;
+    // From the end of the note written just before it in the text (the last end at or before its start).
+    let lo = 0;
+    let hi = ends.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (ends[mid] <= span[0]) lo = mid + 1;
+      else hi = mid;
     }
+    const from = lo > 0 ? ends[lo - 1] : 0;
     const kept = [];
     let k = from;
     while (k < span[0]) {

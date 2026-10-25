@@ -363,12 +363,13 @@ describe("The playground, in a browser") do
     assert_no_page_errors()
   end
 
-  test("a real file's breaths, bowings, cis! and mid-bar clef are edited on the score; its settings are named") do
+  test("a real file's breaths, bowings, cis! and mid-bar clef are edited on the score; its settings are kept") do
     type_source("{ \\override NoteHead.color = #red \\stemUp c''4\\upbow cis''!4 \\breathe \\clef bass e4 f4 | g1 }")
     assert_not(evaluate("document.querySelector('#studio').classList.contains('studio-text-only')"))
-    # The rewrite left out the \override, and said so.
-    assert_contains(evaluate("document.querySelector('[data-notice]').textContent"), "\\override NoteHead.color")
-    assert_contains(playground_text(), "\\stemUp c''4\\upbow cis''!4 \\breathe \\clef bass e4 f4 | g1")
+    # The rewrite keeps the \override where it was written (#402), and has nothing to say.
+    assert_not(evaluate("document.querySelector('[data-notice]').textContent").includes?("\\override"))
+    assert_contains(playground_text(), "\\override NoteHead.color = #red \\stemUp c''4\\upbow cis''!4 \\breathe")
+    assert_contains(playground_text(), "\\clef bass e4 f4 | g1")
     caret_on("e4")
     evaluate("document.querySelector(\"[data-act='breath'][data-kind='caesura']\").click()")
     sleep(0.4)
