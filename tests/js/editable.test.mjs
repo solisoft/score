@@ -320,5 +320,8 @@ test("a tuplet in a tuplet goes out to MusicXML with its whole ratio", () => {
   const score = read("{ \\tuplet 3/2 { c''4 \\tuplet 3/2 { d''8 e''8 f''8 } g''4 } c''2 }");
   const xml = X.toMusicXML(score);
   assert.match(xml, /<actual-notes>9<\/actual-notes><normal-notes>4<\/normal-notes>/);
-  assert.equal((xml.match(/<tuplet type="start"\/>/g) ?? []).length, 1);
+  // Two brackets, each its own ratio; read back, the same tuplets.
+  assert.equal((xml.match(/<tuplet type="start" number="\d">/g) ?? []).length, 2);
+  const back = read(X.fromMusicXML(xml).source);
+  assert.deepEqual(shape(back), shape(score));
 });

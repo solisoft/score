@@ -789,16 +789,33 @@ function readPart(part, info, first, warnings) {
         if (DYNAMICS_IN.includes(mark)) suffix += `\\${mark}`;
       }
       const tuplets = each("tuplet");
-      const opens = ratio && (tuplets.some((t) => t.attrs.type === "start") || !tupletOpen.get(key));
-      const closes = ratio && tuplets.some((t) => t.attrs.type === "stop");
       const lane = staff.lanes[v];
-      if (tupletOpen.get(key) && (!ratio || (opens && tuplets.some((t) => t.attrs.type === "start")))) {
-        lane.push("}");
-        tupletOpen.set(key, false);
-      }
-      if (ratio && opens && !tupletOpen.get(key)) {
-        lane.push(`\\tuplet ${ratio.n}/${ratio.d} {`);
-        tupletOpen.set(key, true);
+      // The tuplets open in this voice, outermost first: each its own ratio.
+      const opened = tupletOpen.get(key) ?? [];
+      tupletOpen.set(key, opened);
+      const closeAll = () => {
+        while (opened.length) {
+          lane.push("}");
+          opened.pop();
+        }
+      };
+      const startsHere = tuplets.filter((t) => t.attrs.type === "start").sort((x, y) => Number(x.attrs.number ?? 1) - Number(y.attrs.number ?? 1));
+      const stopsHere = ratio ? tuplets.filter((t) => t.attrs.type === "stop").length : 0;
+      if (!ratio) closeAll();
+      else {
+        // A bracket that says its own ratio nests in those open; one that does not starts afresh.
+        const levels = startsHere.map((t) => {
+          const n = numberIn(kid(t, "tuplet-actual") ?? { children: [] }, "tuplet-number");
+          const d = numberIn(kid(t, "tuplet-normal") ?? { children: [] }, "tuplet-number");
+          return n && d ? { n, d, own: true } : null;
+        });
+        if (!startsHere.length && !opened.length) levels.push(null);
+        if (levels.length && levels.some((l) => !l?.own)) closeAll();
+        for (const level of levels) {
+          const r = level ?? ratio;
+          lane.push(`\\tuplet ${r.n}/${r.d} {`);
+          opened.push(r);
+        }
       }
       const pending = graces.get(key);
       // Grace notes that take their time from the note before them, or come before a rest: that note's \afterGrace.
@@ -856,9 +873,9 @@ function readPart(part, info, first, warnings) {
       if (beam === "end") beamFrom.delete(key);
       entry.render();
       lastNote.set(key, entry);
-      if (closes && tupletOpen.get(key)) {
+      for (let k = 0; k < stopsHere && opened.length; k++) {
         lane.push("}");
-        tupletOpen.set(key, false);
+        opened.pop();
       }
       staff.pos[v] = start + duration;
       cursor = start + duration;
@@ -901,7 +918,7 @@ function readPart(part, info, first, warnings) {
 
   // The staves, each with its voices and its verses.
   const staffText = (st, k) => {
-    for (const [key, open] of tupletOpen) if (open && key.startsWith(`${k + 1}:`)) st.lanes[Number(key.split(":")[1])].push("}");
+    for (const [key, open] of tupletOpen) if (key.startsWith(`${k + 1}:`)) for (const _ of open) st.lanes[Number(key.split(":")[1])].push("}");
     const tidy = (lane) => {
       while (lane.length && lane[lane.length - 1] === "|") lane.pop();
       return lane.filter(Boolean).join(" ");
@@ -1412,8 +1429,18 @@ function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, 
       // A phrasing slur: a second slur, numbered 2.
       if (ev.phraseEnd) notations.push('<slur type="stop" number="2"/>');
       if (ev.phraseStart) notations.push('<slur type="start" number="2"/>');
-      if (ev.tuplet && !(M.tupletGroup(before) === M.tupletGroup(ev))) notations.push('<tuplet type="start"/>');
-      if (ev.tuplet && !(M.tupletGroup(after) === M.tupletGroup(ev))) notations.push('<tuplet type="stop"/>');
+      if (ev.tuplet) {
+        // A tuplet in a tuplet: each bracket numbered, with its own ratio (the notes' is both).
+        const group = M.tupletGroup(ev);
+        const nested = lane.some((x) => M.tupletGroup(x.ev) === group && x.ev.tuplet?.outer);
+        const own = (r, n) => (nested ? ` number="${n}"><tuplet-actual><tuplet-number>${r.n}</tuplet-number></tuplet-actual><tuplet-normal><tuplet-number>${r.d}</tuplet-number></tuplet-normal></tuplet>` : "/>");
+        const outer = ev.tuplet.outer ?? ev.tuplet;
+        const inner = ev.tuplet.outer ? ev.tuplet : null;
+        if (M.tupletGroup(before) !== group) notations.push(`<tuplet type="start"${own(outer, 1)}`);
+        if (inner && before?.tuplet?.id !== inner.id) notations.push(`<tuplet type="start"${own(inner, 2)}`);
+        if (inner && after?.tuplet?.id !== inner.id) notations.push(`<tuplet type="stop"${nested ? ' number="2"/>' : "/>"}`);
+        if (M.tupletGroup(after) !== group) notations.push(`<tuplet type="stop"${nested ? ' number="1"/>' : "/>"}`);
+      }
       // An articulation written above or below the note says so.
       const where = (a) => (ev.artDirs?.[a] ? ` placement="${ev.artDirs[a] < 0 ? "above" : "below"}"` : "");
       const arts = ev.arts.filter((a) => ARTICULATIONS_OUT[a]).map((a) => `<${ARTICULATIONS_OUT[a]}${where(a)}/>`);
