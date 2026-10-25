@@ -1,4 +1,6 @@
-<%- partial("shared/studio", {"examples": examples, "figure": figure, "source": source, "app": true, "owner": owner, "ai_link": ai_link}) %>
+<%- partial("shared/studio", {
+  "examples": examples, "figure": figure, "source": source, "app": true, "owner": owner, "ai_link": ai_link
+}) %>
 
 <%# Comments on the score's bars (#385): the panel the editor's script
     fills (public/eui-score/comments.js), beside the score. %>
