@@ -467,3 +467,21 @@ test("a tuplet in a line of chord names and in a figured bass, figures the tools
   assert.match(engrave(score), /\| a1:m/);
   assert.throws(() => M.setChordAt(score, 1, h + M.ticksOf(score.staves[1].events[1]) / 2, "F"));
 });
+
+test("notes set smaller (\\tiny, \\small …): kept with the command that sets them", () => {
+  const { score, source } = roundTrip("{ c'4 \\tiny d'4 e'4 \\normalsize f'4 | \\small g'1 }");
+  assert.deepEqual(score.staves[0].events[1].before, ["\\tiny"]);
+  assert.match(source, /c'4 \\tiny d'4 e'4 \\normalsize f'4 \| \\small g'1/);
+  // Written over, the size holds on where the music goes on.
+  M.write(score, 0, q, h, A4);
+  assert.match(engrave(score), /c'4 \\tiny a'2 \\normalsize f'4/);
+});
+
+test("what the engraver itself refuses is still left to the text, named", () => {
+  // A pickup after the first note, staves whose bars last differently, voices inside voices.
+  for (const src of ["{ c'1 | \\partial 4 d'4 | e'1 }", "<< \\new Staff { \\time 3/4 c'2. } \\new Staff { \\time 4/4 c'1 } >>", "{ \\time 4/4 c'2 \\time 2/4 d'2 }"]) {
+    assert.throws(() => editor_view(src, 900, 7, -1, -1));
+  }
+  assert.ok(parse("{ c'1 | \\partial 4 d'4 | e'1 }").unsupported.includes("a pickup after the first note"));
+  assert.ok(parse("{ c'2 \\time 2/4 d'2 }").unsupported.includes("a change of metre inside a bar"));
+});

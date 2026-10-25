@@ -4755,6 +4755,8 @@ function playedOut(score, s, bars) {
 /** The commands kept before a note: how they start. */
 const KEPT_COMMANDS = ["override", "revert", "set", "unset", "tweak", "hide", "omit"];
 const KEPT_PREFIXES = ["once", "temporary", "undo", "single"];
+/** The sizes notes are set in, from there on: kept as written too. */
+const KEPT_SIZES = ["teeny", "tiny", "small", "normalsize", "large", "huge"];
 /** What the model writes itself, so does not keep: a text span's words. */
 const WRITTEN_BY_MODEL = /^\\override TextSpanner\.bound-details\.left\.text\b/;
 
@@ -4880,6 +4882,7 @@ function keptCommandAt(src, i) {
     const inner = keptCommandAt(src, skipBlank(src, k));
     return inner ? { end: inner.end, text: `\\${name} ${inner.text}`, tweak: inner.tweak } : null;
   }
+  if (KEPT_SIZES.includes(name)) return { end: k, text: `\\${name}`, tweak: false };
   if (!KEPT_COMMANDS.includes(name)) return null;
   k = pathEnd(src, k);
   if (name === "override" || name === "set") {
@@ -5515,6 +5518,8 @@ export function fromParsed(parsed, source = null, { spans = parsed.spans ?? null
   const lost = new Set();
   // The commands written before each note that the model keeps as written (\\override, \\set …).
   const before = keptCommands(source, spans);
+  // Sizes set by a command the model keeps (\\tiny, \\small …): the notes after it are kept as they are.
+  const keptSizes = [...before.values()].flat().some((text) => KEPT_SIZES.includes(text.slice(1)));
   if ((parsed.warnings ?? []).some((w) => /^movement \d/.test(w))) unsupported.add(MOVEMENTS);
   const score = { header: { ...parsed.header }, key: 0, time: [4, 4], tempo: null, group: "none", groups: [], staves: [], repeats: [], changes: [] };
   score.paper = paperFrom(parsed.paper);
@@ -5600,7 +5605,9 @@ export function fromParsed(parsed, source = null, { spans = parsed.spans ?? null
     for (const ev of staff.events) {
       // A cadenza is kept as a bar of its own length.
       // A cadenza is kept as a bar of its own length; cue notes as notes drawn small (`cue`).
-      ev.unsupported.filter((u) => u !== "a cadenza" && u !== "cue notes").forEach((u) => unsupported.add(u));
+      // Notes set smaller (\\tiny …) are kept with the command that sets them, read from the text.
+      const sized = (u) => u === "notes set smaller" && keptSizes;
+      ev.unsupported.filter((u) => u !== "a cadenza" && u !== "cue notes" && !sized(u)).forEach((u) => unsupported.add(u));
       const k = ev.k;
       // A change after the first note is the bar's it starts: the first staff
       // writes the score's changes, the others must change with it.
