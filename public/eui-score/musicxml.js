@@ -143,7 +143,12 @@ function quoted(text) {
 
 // ---- MusicXML → LilyPond ------------------------------------------------------------
 
-const CLEFS_IN = { G2: "treble", F4: "bass", C3: "alto", C4: "tenor", C1: "soprano", F3: "varbaritone", G1: "french", C2: "mezzosoprano", C5: "baritone" };
+const CLEFS_IN = { G2: "treble", F4: "bass", C3: "alto", C4: "tenor", C1: "soprano", F3: "varbaritone", G1: "french", C2: "mezzosoprano", C5: "baritone", F5: "subbass" };
+/** A script's LilyPond, `-.` or `\\trill`, written above (^) or below (_) when `placement` says so. */
+function placed(text, placement) {
+  if (placement !== "above" && placement !== "below") return text;
+  return (placement === "above" ? "^" : "_") + (text.startsWith("-") ? text.slice(1) : text);
+}
 const ARTICULATIONS_IN = { staccato: "-.", accent: "->", tenuto: "--", "strong-accent": "-^", staccatissimo: "-!", "detached-legato": "-_", spiccato: "-!" };
 const ORNAMENTS_IN = { "trill-mark": "\\trill", mordent: "\\mordent", "inverted-mordent": "\\prall", turn: "\\turn" };
 const DYNAMICS_IN = ["ppp", "pp", "p", "mp", "mf", "f", "ff", "fff", "sf", "sfz", "fp", "rfz", "sfp", "fz"];
@@ -765,15 +770,17 @@ function readPart(part, info, first, warnings) {
       }
       slurDepth.set(key, open);
       for (const art of notations.flatMap((n) => kids(n, "articulations")).flatMap((a) => a.children)) {
-        if (ARTICULATIONS_IN[art.name]) suffix += ARTICULATIONS_IN[art.name];
+        if (ARTICULATIONS_IN[art.name]) suffix += placed(ARTICULATIONS_IN[art.name], art.attrs.placement);
         else if (art.name !== "breath-mark") warnings.add("some articulations");
       }
       for (const orn of notations.flatMap((n) => kids(n, "ornaments")).flatMap((a) => a.children)) {
-        if (ORNAMENTS_IN[orn.name]) suffix += ORNAMENTS_IN[orn.name];
+        if (ORNAMENTS_IN[orn.name]) suffix += placed(ORNAMENTS_IN[orn.name], orn.attrs.placement);
         else if (orn.name === "tremolo" && orn.attrs.type !== "start" && orn.attrs.type !== "stop") suffix = `:${8 * 2 ** (Number(orn.text.trim() || 1) - 1)}${suffix}`;
         else if (orn.name !== "accidental-mark") warnings.add("some ornaments");
       }
-      if (has("fermata")) suffix += "\\fermata";
+      // A fermata turned over is below the note; one said upright, above it.
+      const fermata = each("fermata")[0];
+      if (fermata) suffix += placed("\\fermata", { inverted: "below", upright: fermata.attrs.type ? "above" : null }[fermata.attrs.type]);
       const marks = rest ? "" : fingeringText(notations);
       if (has("arpeggiate") && !rest) suffix += "\\arpeggio";
       if (each("glissando").some((g) => g.attrs.type === "start") || each("slide").some((g) => g.attrs.type === "start")) suffix += "\\glissando";
@@ -967,9 +974,8 @@ function chordName(el) {
 const xml = (text) => String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const ARTICULATIONS_OUT = { staccato: "staccato", accent: "accent", tenuto: "tenuto", marcato: "strong-accent", staccatissimo: "staccatissimo", portato: "detached-legato" };
 const ORNAMENTS_OUT = { trill: "trill-mark", prall: "inverted-mordent", mordent: "mordent", turn: "turn" };
-const CLEFS_OUT = {
-  treble: ["G", 2, 0], bass: ["F", 4, 0], alto: ["C", 3, 0], tenor: ["C", 4, 0], treble_8: ["G", 2, -1], bass_8: ["F", 4, -1], "treble^8": ["G", 2, 1], "bass^8": ["F", 4, 1], soprano: ["C", 1, 0], percussion: ["percussion", 0, 0],
-};
+// Every clef the model knows, as <clef> writes it: sign, line, octaves.
+const CLEFS_OUT = Object.fromEntries(M.CLEFS.map((clef) => [clef, M.clefShape(clef)]));
 const KIND_OF_CHORD = [
   [/^maj7|^Δ7?/, "major-seventh"], [/^m7b5|^ø/, "half-diminished"], [/^(m|min|-)7/, "minor-seventh"], [/^(dim|°)7/, "diminished-seventh"], [/^(m|min|-)/, "minor"],
   [/^(dim|°)/, "diminished"], [/^(aug|\+)/, "augmented"], [/^7/, "dominant"], [/^sus4/, "suspended-fourth"], [/^sus2/, "suspended-second"], [/^6/, "major-sixth"], [/^9/, "dominant-ninth"],
@@ -1404,12 +1410,14 @@ function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, 
       if (ev.phraseStart) notations.push('<slur type="start" number="2"/>');
       if (ev.tuplet && !(before?.tuplet?.id === ev.tuplet.id)) notations.push('<tuplet type="start"/>');
       if (ev.tuplet && !(after?.tuplet?.id === ev.tuplet.id)) notations.push('<tuplet type="stop"/>');
-      const arts = ev.arts.filter((a) => ARTICULATIONS_OUT[a]).map((a) => `<${ARTICULATIONS_OUT[a]}/>`);
+      // An articulation written above or below the note says so.
+      const where = (a) => (ev.artDirs?.[a] ? ` placement="${ev.artDirs[a] < 0 ? "above" : "below"}"` : "");
+      const arts = ev.arts.filter((a) => ARTICULATIONS_OUT[a]).map((a) => `<${ARTICULATIONS_OUT[a]}${where(a)}/>`);
       if (arts.length) notations.push(`<articulations>${arts.join("")}</articulations>`);
-      const orns = ev.arts.filter((a) => ORNAMENTS_OUT[a]).map((a) => `<${ORNAMENTS_OUT[a]}/>`);
+      const orns = ev.arts.filter((a) => ORNAMENTS_OUT[a]).map((a) => `<${ORNAMENTS_OUT[a]}${where(a)}/>`);
       if (ev.tremolo && p) orns.push(`<tremolo type="single">${Math.max(1, Math.log2(ev.tremolo / 4))}</tremolo>`);
       if (orns.length) notations.push(`<ornaments>${orns.join("")}</ornaments>`);
-      if (ev.arts.includes("fermata")) notations.push("<fermata/>");
+      if (ev.arts.includes("fermata")) notations.push(ev.artDirs?.fermata ? `<fermata type="${ev.artDirs.fermata < 0 ? "upright" : "inverted"}"/>` : "<fermata/>");
       if (before?.gliss && !ev.rest) notations.push('<glissando type="stop"/>');
       if (ev.gliss && p) notations.push('<glissando type="start"/>');
     }

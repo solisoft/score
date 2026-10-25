@@ -25,12 +25,39 @@ export const DEFAULT_BPM = 100;
 const NAMES = ["c", "d", "e", "f", "g", "a", "b"];
 const NATURAL = [0, 2, 4, 5, 7, 9, 11];
 const SHARPS = [3, 0, 4, 1, 5, 2, 6];
-const CLEFS = ["treble", "bass", "alto", "tenor", "treble_8", "bass_8", "treble^8", "bass^8", "soprano", "percussion"];
+// Every clef eui-score draws, by LilyPond's name: its sign, the line it
+// sits on (half spaces from the middle line) and its octaves (-2 to 2).
+const CLEF_BASES = {
+  treble: ["G", -2], french: ["G", -4], soprano: ["C", -4], mezzosoprano: ["C", -2], alto: ["C", 0], tenor: ["C", 2],
+  baritone: ["C", 4], varbaritone: ["F", 0], bass: ["F", 2], subbass: ["F", 4],
+};
+const OCTAVE_MARKS = { "-2": "_15", "-1": "_8", 1: "^8", 2: "^15" };
+const CLEF_SHAPES = Object.fromEntries([
+  ...Object.entries(CLEF_BASES).flatMap(([name, [sign, line]]) => [-2, -1, 0, 1, 2].map((oct) => [name + (OCTAVE_MARKS[oct] ?? ""), [sign, line, oct]])),
+  ["percussion", ["Percussion", 0, 0]],
+]);
+/** The clefs a staff may be in. */
+export const CLEFS = Object.keys(CLEF_SHAPES);
+
+/** Clef `clef` as MusicXML writes it: its sign, its line (1 the bottom one) and its octaves. */
+export function clefShape(clef) {
+  const [sign, line, octave] = CLEF_SHAPES[clef] ?? CLEF_SHAPES.treble;
+  return sign === "Percussion" ? ["percussion", 0, 0] : [sign, 3 + line / 2, octave];
+}
+
+/** The `d` of clef `clef`'s middle line (c' is 7); a treble clef's for one it does not know. */
+export function clefMiddle(clef) {
+  const [sign, line, octave] = CLEF_SHAPES[clef] ?? CLEF_SHAPES.treble;
+  if (sign === "Percussion") return 7;
+  return { G: 11, C: 7, F: 3 }[sign] - line + 7 * octave;
+}
 const SCRIPTS = {
   staccato: "-.", accent: "->", tenuto: "--", marcato: "-^", staccatissimo: "-!", portato: "-_", fermata: "\\fermata",
   trill: "\\trill", prall: "\\prall", mordent: "\\mordent", turn: "\\turn",
   // Bowings, a harmonic's circle and the espressivo (Soli 2.28.5).
   upbow: "\\upbow", downbow: "\\downbow", flageolet: "\\flageolet", espressivo: "\\espressivo",
+  // A brass mute's: open (o) and stopped (+). Read and written back; on a drum, the hi-hat's.
+  open: "\\open", stopped: "\\stopped",
 };
 /** A breath mark after a note or rest: `\\breathe` (a comma) or `\\caesura` (//). */
 export const BREATHS = ["breathe", "caesura"];
@@ -41,7 +68,8 @@ export const GRACES = ["acciaccatura", "appoggiatura", "grace", "slashedGrace"];
 /** A tremolo's strokes: the note repeated in eighths, sixteenths or thirty-seconds. */
 export const TREMOLOS = [8, 16, 32];
 export const DYNAMICS = ["ppp", "pp", "p", "mp", "mf", "f", "ff", "fff", "sf", "sfz", "fp", "rfz"];
-export const ARTICULATIONS = Object.keys(SCRIPTS);
+/** The articulations the tools offer: every one the model keeps but a brass mute's. */
+export const ARTICULATIONS = Object.keys(SCRIPTS).filter((name) => !["open", "stopped"].includes(name));
 /** Values, longest first, with their dots, a written duration may take. */
 const VALUES = [1, 2, 4, 8, 16, 32, 64, 128].flatMap((base) => [2, 1, 0].map((dots) => ({ base, dots, ticks: notated(base, dots) }))).sort((a, b) => b.ticks - a.ticks);
 
@@ -230,10 +258,19 @@ function scoreKeyAt(score, b, pos = 0) {
   return keyAtPlace(score, b, pos).key;
 }
 
-/** The tempo in force in bar `b`: { text, base, bpm }, or null. */
-export function tempoAt(score, b) {
+/**
+ * The score's tempo indications after its start, in order: [{ bar, pos, tempo }],
+ * those at bar lines (`score.changes`) and those inside bars (`score.midTempos`).
+ */
+function tempoMarks(score) {
+  const marks = [...(score.changes ?? []).filter((c) => c.tempo).map((c) => ({ bar: c.bar, pos: 0, tempo: c.tempo })), ...(score.midTempos ?? [])];
+  return marks.sort((x, y) => x.bar - y.bar || x.pos - y.pos);
+}
+
+/** The tempo in force in bar `b` (at `pos` ticks into it; Infinity: at its end): { text, base, bpm }, or null. */
+export function tempoAt(score, b, pos = 0) {
   let tempo = score.tempo;
-  for (const c of score.changes ?? []) if (c.bar <= b && c.tempo) tempo = { ...(tempo ?? {}), ...c.tempo, text: c.tempo.text ?? "" };
+  for (const m of tempoMarks(score)) if (m.bar < b || (m.bar === b && m.pos <= pos)) tempo = { ...(tempo ?? {}), ...m.tempo, text: m.tempo.text ?? "" };
   return tempo;
 }
 
@@ -265,9 +302,19 @@ function setChange(score, b, field, value) {
   if (Object.keys(c).length === 1) score.changes.splice(score.changes.indexOf(c), 1);
 }
 
+// What is counted in bars beside `score.changes`: the score's changes inside
+// bars, and each staff's own — `{ bar, … }` each, moved with their bars.
+const SCORE_LISTS = ["midKeys", "midTempos", "midMarks"];
+const STAFF_LISTS = ["clefs", "midClefs", "keys", "times"];
+
+/** Every list of `{ bar, … }` the score keeps beside its changes, with where it lives: [[holder, name]]. */
+function barLists(score) {
+  return [...SCORE_LISTS.map((name) => [score, name]), ...score.staves.flatMap((staff) => STAFF_LISTS.map((name) => [staff, name]))].filter(([holder, name]) => holder[name]);
+}
+
 /** When `t` sounds, in seconds, with the tempo changes on the way (100 a quarter when none is set). */
 export function secondsAt(score, t) {
-  const marks = [{ at: 0, tempo: score.tempo }, ...(score.changes ?? []).filter((c) => c.tempo?.bpm).map((c) => ({ at: barStart(score, c.bar), tempo: tempoAt(score, c.bar) }))];
+  const marks = [{ at: 0, tempo: score.tempo }, ...tempoMarks(score).filter((m) => m.tempo.bpm).map((m) => ({ at: barStart(score, m.bar) + m.pos, tempo: tempoAt(score, m.bar, m.pos) }))];
   let sec = 0;
   let bpm = score.tempo?.bpm || DEFAULT_BPM;
   let base = score.tempo?.base || 4;
@@ -666,6 +713,7 @@ function pieces(score, ev, at, ticks, role) {
       delete p.hairpinWords;
       // A chord of a line of chord names is named once, where it starts; so is a figure, a chord diagram.
       delete p.chordmode;
+      delete p.artDirs;
       delete p.figure;
       delete p.fret;
       delete p.fretBelow;
@@ -805,10 +853,8 @@ function setPitches(score, s, i, pitches) {
 export function previousPitch(score, s, i) {
   const events = score.staves[s].events;
   for (let k = i - 1; k >= 0; k--) if (!events[k].rest) return events[k].pitches[0].d;
-  const clef = score.staves[upperOf(score, s)].clef;
-  // The staff's middle line: an octave higher under a clef with an 8 above it.
-  const up = clef.endsWith("^8") ? 7 : 0;
-  return up + (clef.startsWith("bass") ? 3 : clef === "alto" ? 7 : clef === "tenor" ? 5 : 13);
+  // The staff's middle line.
+  return clefMiddle(score.staves[upperOf(score, s)].clef);
 }
 
 /** Event `i` moved by step, semitone or octave — one head `head` of a chord, or all. */
@@ -1307,6 +1353,10 @@ export function toggleArticulation(score, s, i, name) {
   const ev = noteOf(score, s, i);
   if (ev.rest && name !== "fermata") throw new Error("select a note");
   ev.arts = ev.arts.includes(name) ? ev.arts.filter((a) => a !== name) : [...ev.arts, name];
+  if (ev.artDirs?.[name] != null && !ev.arts.includes(name)) {
+    delete ev.artDirs[name];
+    if (!Object.keys(ev.artDirs).length) delete ev.artDirs;
+  }
 }
 
 /** A breath mark (`kind`: "breathe" or "caesura") after event `i`; the same again takes it away. */
@@ -2117,13 +2167,15 @@ function retime(score, b, num, den) {
   // Everything counted in bars, as times.
   const tick = (bar) => barStart(old, bar);
   const marks = old.changes.filter((c) => c.bar !== b).map((c) => ({ ...c, at: tick(c.bar) }));
-  marks.push({ ...(old.changes.find((c) => c.bar === b) ?? {}), bar: b, at: from, time: [num, den] });
+  // A metre set from the menu is a plain one: an added-up one's parts go.
+  const { parts: _parts, ...own } = old.changes.find((c) => c.bar === b) ?? {};
+  marks.push({ ...own, bar: b, at: from, time: [num, den] });
   marks.sort((x, y) => x.at - y.at);
   const repeats = (score.repeats ?? []).map((r) => ({ from: tick(r.from), to: tick(r.to + 1), ends: r.endings.map((_, k) => tick(r.to + 1 + r.endings.slice(0, k + 1).reduce((x, y) => x + y, 0))), times: r.times }));
   const clefs = score.staves.map((staff) => (staff.clefs ?? []).map((c) => ({ ...c, at: tick(c.bar) })));
   // The changes inside bars keep their time: they may fall anywhere.
   const midClefs = score.staves.map((staff) => (staff.midClefs ?? []).map((c) => ({ ...c, at: tick(c.bar) + c.pos })));
-  const midKeys = (score.midKeys ?? []).map((m) => ({ ...m, at: tick(m.bar) + m.pos }));
+  const mids = Object.fromEntries(SCORE_LISTS.map((name) => [name, (score[name] ?? []).map((m) => ({ ...m, at: tick(m.bar) + m.pos }))]));
   // The new bars: each mark's bar counted in the new metres.
   // The bars laid out again stay where they were; what is after them moves by what they grew.
   const shift = (t) => (t > from && t >= to ? t + grown : t);
@@ -2141,10 +2193,11 @@ function retime(score, b, num, den) {
       score.time = change.time ?? score.time;
     } else {
       // A metre that is the one in force already is no change.
-      if (change.time && change.time[0] === (seg.time ?? score.time)[0] && change.time[1] === (seg.time ?? score.time)[1]) delete change.time;
+      if (change.time && change.time[0] === (seg.time ?? score.time)[0] && change.time[1] === (seg.time ?? score.time)[1] && String(change.parts ?? []) === String(seg.parts ?? [])) delete change.time;
+      if (!change.time) delete change.parts;
       if (Object.keys(change).length > 1) changes.push(change);
     }
-    if (m.time) seg = bar === 0 && pickup ? { bar: 1, at: pickup, len: (WHOLE * m.time[0]) / m.time[1], time: m.time } : { bar, at, len: (WHOLE * m.time[0]) / m.time[1], time: m.time };
+    if (m.time) seg = bar === 0 && pickup ? { bar: 1, at: pickup, len: (WHOLE * m.time[0]) / m.time[1], time: m.time, parts: m.parts } : { bar, at, len: (WHOLE * m.time[0]) / m.time[1], time: m.time, parts: m.parts };
   }
   if (b === 0) {
     score.time = [num, den];
@@ -2185,7 +2238,7 @@ function retime(score, b, num, den) {
   midClefs.forEach((list, k) => {
     if (list.length) score.staves[k].midClefs = list.map(placed);
   });
-  if (midKeys.length) score.midKeys = midKeys.map(placed);
+  for (const name of SCORE_LISTS) if (mids[name].length) score[name] = mids[name].map(placed);
   // The music of those bars, laid out again.
   for (const [k, staff] of score.staves.entries()) {
     const at = starts(staff);
@@ -2286,11 +2339,9 @@ export function removeLastBar(score) {
   for (const staff of score.staves) {
     const at = starts(staff);
     staff.events = staff.events.filter((_, k) => at[k] < from);
-    if (staff.clefs) staff.clefs = staff.clefs.filter((c) => c.bar < bars - 1);
-    if (staff.midClefs) staff.midClefs = staff.midClefs.filter((c) => c.bar < bars - 1);
   }
   score.changes = (score.changes ?? []).filter((c) => c.bar < bars - 1);
-  if (score.midKeys) score.midKeys = score.midKeys.filter((m) => m.bar < bars - 1);
+  for (const [holder, name] of barLists(score)) holder[name] = holder[name].filter((m) => m.bar < bars - 1);
 }
 
 /**
@@ -2307,8 +2358,8 @@ export function deleteBars(score, a, b) {
   if (count >= bars) throw new Error("a score keeps one bar at least");
   if ((score.repeats ?? []).some((r) => r.from <= b && repeatEnd(r) >= a)) throw new Error("these bars are in a repeat: remove the repeat first");
   // What is in force after the bars, before they go.
-  const after = { key: scoreKeyAt(score, b, Infinity), time: timeAt(score, b), tempo: tempoAt(score, b) };
-  const before = a > 0 ? { key: scoreKeyAt(score, a - 1, Infinity), time: timeAt(score, a - 1), tempo: tempoAt(score, a - 1) } : { key: score.key, time: score.time, tempo: score.tempo };
+  const after = { key: scoreKeyAt(score, b, Infinity), time: timeAt(score, b), tempo: tempoAt(score, b, Infinity) };
+  const before = a > 0 ? { key: scoreKeyAt(score, a - 1, Infinity), time: timeAt(score, a - 1), tempo: tempoAt(score, a - 1, Infinity) } : { key: score.key, time: score.time, tempo: score.tempo };
   const own = changeAt(score, b + 1) ?? {};
   const clefsAfter = score.staves.map((staff, s) => (staff.voice ? null : clefAt(score, s, b, Infinity)));
   const clefsBefore = score.staves.map((staff, s) => (staff.voice ? null : a > 0 ? clefAt(score, s, a - 1, Infinity) : staff.clef));
@@ -2332,12 +2383,11 @@ export function deleteBars(score, a, b) {
   // The changes and clefs inside the bars go; those after them move back.
   const shift = (list) => (list ?? []).filter((c) => c.bar < a || c.bar > b).map((c) => (c.bar > b ? { ...c, bar: c.bar - count } : c));
   score.changes = shift(score.changes);
-  if (score.midKeys) score.midKeys = shift(score.midKeys);
+  for (const [holder, name] of barLists(score)) if (holder === score) holder[name] = shift(holder[name]);
   // A break after a bar that goes, goes; those after the bars move back.
   score.breaks = Object.fromEntries(Object.entries(score.breaks ?? {}).filter(([bar]) => Number(bar) < a || Number(bar) > b).map(([bar, kind]) => [Number(bar) > b ? Number(bar) - count : Number(bar), kind]));
   score.staves.forEach((staff, s) => {
-    if (staff.clefs) staff.clefs = shift(staff.clefs);
-    if (staff.midClefs) staff.midClefs = shift(staff.midClefs);
+    for (const name of STAFF_LISTS) if (staff[name]) staff[name] = shift(staff[name]);
     if (staff.voice || b + 1 >= bars) return;
     if (a === 0) staff.clef = clefsAfter[s];
     else if (clefsAfter[s] !== clefsBefore[s] && !(staff.clefs ?? []).some((c) => c.bar === a)) staff.clefs = [...(staff.clefs ?? []), { bar: a, clef: clefsAfter[s] }].sort((x, y) => x.bar - y.bar);
@@ -2444,7 +2494,12 @@ function eventText(ev, beam = "") {
   if (ev.dynamic) out += `\\${ev.dynamic}`;
   if (ev.hairpinEnd) out += "\\!";
   if (ev.hairpin) out += HAIRPIN_WORDS.includes(ev.hairpinWords) ? `\\${ev.hairpinWords}` : ev.hairpin === "<" ? "\\<" : "\\>";
-  for (const a of ev.arts) out += SCRIPTS[a] ?? "";
+  // Each above (^) or below (_) when it was written so, else where the engraver puts it.
+  for (const a of ev.arts) {
+    const text = SCRIPTS[a] ?? "";
+    const dir = ev.artDirs?.[a];
+    out += !text || !dir ? text : `${dir < 0 ? "^" : "_"}${text.startsWith("-") ? text.slice(1) : text}`;
+  }
   out += loose.map(fingerText).join("");
   if (ev.chord) out += `^${quote(ev.chord)}`;
   if (ev.fret && !ev.rest) out += `${ev.fretBelow ? "_" : "^"}\\markup \\fret-diagram ${quote(fretVerbose(ev.fret))}`;
@@ -2729,9 +2784,19 @@ export const MARKS = ["letter", "segno", "coda"];
 export const JUMPS = { ds: "D.S.", "ds-fine": "D.S. al Fine", "ds-coda": "D.S. al Coda", dc: "D.C.", "dc-fine": "D.C. al Fine", "dc-coda": "D.C. al Coda", fine: "Fine", "to-coda": "To Coda" };
 
 function markText(score, b) {
-  const mark = changeAt(score, b)?.mark;
-  if (!mark) return "";
-  return { letter: "\\mark \\default ", segno: "\\segnoMark ", coda: "\\codaMark " }[mark] ?? "";
+  const c = changeAt(score, b);
+  const words = c?.words ? `\\mark ${markWords(c.words)} ` : "";
+  return ({ letter: "\\mark \\default ", segno: "\\segnoMark ", coda: "\\codaMark " }[c?.mark] ?? "") + words;
+}
+
+/** A mark's words: bold, as a mark's are, unless they say otherwise. */
+const markWords = (w) => (w.bold && !w.italic ? quote(w.text) : wordsText(w));
+
+/** A mark inside a bar, `{ mark | words | jump }`, as LilyPond writes it. */
+function midMarkText(m) {
+  if (m.jump) return m.jump === "fine" ? "\\fine" : `\\jump ${quote(JUMPS[m.jump])}`;
+  if (m.words) return `\\mark ${markWords(m.words)}`;
+  return { letter: "\\mark \\default", segno: "\\segnoMark", coda: "\\codaMark" }[m.mark] ?? "";
 }
 
 function jumpText(score, b) {
@@ -2787,7 +2852,7 @@ function changesText(score, s, b) {
   if (clef && !drums) parts.push(`\\clef ${clefText(clef.clef)}`);
   const c = changeAt(score, b);
   if (c?.key != null && !drums) parts.push(`\\key ${keyText(keyOf(score, s, barStart(score, b)), c.mode)}`);
-  if (c?.time) parts.push(`\\time ${c.time[0]}/${c.time[1]}`);
+  if (c?.time) parts.push(`\\time ${c.parts?.length > 1 && c.parts.reduce((x, y) => x + y, 0) === c.time[0] ? c.parts.join("+") : c.time[0]}/${c.time[1]}`);
   if (c?.tempo && s === firstMusic(score)) parts.push(tempoText(c.tempo));
   if (c?.line) parts.unshift(`\\bar "${c.line}"`);
   return parts.length ? parts.join(" ") + " " : "";
@@ -2821,11 +2886,16 @@ export function handBeams(score, staff) {
  */
 function midChanges(score, s) {
   const staff = score.staves[s];
-  if (staff.voice || staff.drums || staff.chords || staff.figures) return [];
+  if (staff.voice || staff.chords || staff.figures) return [];
+  // The tempo and the marks inside bars: the first staff's to write.
+  const top = s === firstMusic(score);
+  const tempos = top ? (score.midTempos ?? []).map((m) => ({ bar: m.bar, pos: m.pos, order: 2, text: tempoText(m.tempo) })) : [];
+  const marks = top ? (score.midMarks ?? []).map((m) => ({ bar: m.bar, pos: m.pos, order: 3, text: midMarkText(m) })) : [];
+  if (staff.drums) return [...tempos, ...marks].sort((x, y) => x.bar - y.bar || x.pos - y.pos || x.order - y.order);
   const own = staff.key == null ? 0 : staff.key - score.key;
   const keys = (score.midKeys ?? []).map((m) => ({ bar: m.bar, pos: m.pos, order: 1, text: `\\key ${keyText(Math.max(-7, Math.min(7, m.key + own)), m.mode)}` }));
   const clefs = (staff.midClefs ?? []).map((c) => ({ bar: c.bar, pos: c.pos, order: 0, text: `\\clef ${clefText(c.clef)}` }));
-  return [...clefs, ...keys].sort((x, y) => x.bar - y.bar || x.pos - y.pos || x.order - y.order);
+  return [...clefs, ...keys, ...tempos, ...marks].sort((x, y) => x.bar - y.bar || x.pos - y.pos || x.order - y.order);
 }
 
 /** A lane's music, a string per bar, with its events and items; a tuplet never leaves its bar. */
@@ -3062,8 +3132,7 @@ export function insertBars(score, at, count) {
   if (score.staves.some((staff) => t > lengthOf(staff))) throw new Error("no such bar");
   // What changes from bar `at` moves along: the new bars keep the metre before them.
   for (const c of score.changes ?? []) if (c.bar >= at) c.bar += count;
-  for (const staff of score.staves) for (const c of [...(staff.clefs ?? []), ...(staff.midClefs ?? [])]) if (c.bar >= at) c.bar += count;
-  for (const m of score.midKeys ?? []) if (m.bar >= at) m.bar += count;
+  for (const [holder, name] of barLists(score)) for (const m of holder[name]) if (m.bar >= at) m.bar += count;
   const ticks = barStart(score, at + count) - t;
   for (const staff of score.staves) {
     const i = t === lengthOf(staff) ? staff.events.length : eventAt(staff, t);
@@ -3260,6 +3329,8 @@ const MORE_DRUMS = [
   { name: "bda", d: 4, key: 35 }, { name: "sne", d: 8, key: 40 }, { name: "cymcb", d: 12, key: 57 },
   { name: "cymrb", d: 12, key: 59 }, { name: "cymch", d: 12, key: 52 }, { name: "cyms", d: 12, key: 55 },
   { name: "vibs", d: 11, key: 58 },
+  // A closed hi-hat (+ over it) and a half-open one: the hi-hat's keys, told apart by their sign.
+  { name: "hhc", d: 10, key: 42 }, { name: "hhho", d: 10, key: 46 },
 ];
 
 /** Drum `name` as a head: where it is drawn, and its name. */
@@ -4132,10 +4203,11 @@ function repeatOrder(score) {
 function speedAt(score, b) {
   let bpm = score.tempo?.bpm || DEFAULT_BPM;
   let base = score.tempo?.base || 4;
-  for (const c of score.changes ?? []) {
-    if (c.bar > b || !c.tempo?.bpm) continue;
-    bpm = c.tempo.bpm;
-    base = c.tempo.base || base;
+  // A speed set inside a bar holds from the next bar on (its own bar's rest is a ramp's: see tempoRamps).
+  for (const m of tempoMarks(score)) {
+    if (m.bar > b || (m.bar === b && m.pos > 0) || !m.tempo?.bpm) continue;
+    bpm = m.tempo.bpm;
+    base = m.tempo.base || base;
   }
   return { bpm, base };
 }
@@ -4424,7 +4496,8 @@ export function passedOver(warnings) {
   return list.length > 6 ? [...list.slice(0, 5), `${list.length - 5} more`] : list;
 }
 
-const CLEF_NAMES = { "G,-2,0": "treble", "G,-2,-1": "treble_8", "G,-2,1": "treble^8", "F,2,0": "bass", "F,2,-1": "bass_8", "F,2,1": "bass^8", "C,0,0": "alto", "C,2,0": "tenor", "C,-4,0": "soprano" };
+/** A clef's name by the parse's `[sign, line, octave]`. */
+const CLEF_NAMES = Object.fromEntries(Object.entries(CLEF_SHAPES).map(([name, shape]) => [shape.join(","), name]));
 
 /** A grace note from the parse, `[pitches, value, dots, fingers]`, as the model keeps it. */
 function graceOf([pitches, base, dots, fingers]) {
@@ -4586,11 +4659,15 @@ export function fromParsed(parsed, source = null) {
           time = ev.time;
           // An additive metre at the start, 2+3/8: its parts, to be written again.
           if (first) score.timeParts = added.length > 1 ? added : null;
-        } else if (added.length > 1) unsupported.add("an added-up metre after the start");
-        else if (bar < 0) unsupported.add("a change of metre inside a bar");
+        } else if (bar < 0) unsupported.add("a change of metre inside a bar");
         else if (first) {
           const was = timeAt(score, bar);
-          if (bar > 0 && (ev.time[0] !== was[0] || ev.time[1] !== was[1])) setChange(score, bar, "time", ev.time);
+          // The metre's parts in force before: the last change of metre's, or the start's.
+          const lastTime = (score.changes ?? []).filter((c) => c.time && c.bar < bar).pop();
+          const wasParts = (lastTime ? lastTime.parts : score.timeParts) ?? [];
+          if (bar > 0 && (ev.time[0] !== was[0] || ev.time[1] !== was[1] || String(added.length > 1 ? added : []) !== String(wasParts))) setChange(score, bar, "time", ev.time);
+          // An added-up metre, 2+2+3/8: its parts, written again.
+          if (bar > 0) setChange(score, bar, "parts", added.length > 1 ? added : null);
         } else {
           const want = timeAt(score, bar);
           if (ev.time[0] !== want[0] || ev.time[1] !== want[1]) unsupported.add("staves changing metre apart");
@@ -4598,8 +4675,11 @@ export function fromParsed(parsed, source = null) {
       } else if (k === "Tempo") {
         if (!started) {
           if (first) score.tempo = ev.tempo;
-        } else if (bar < 0) unsupported.add("a change of tempo inside a bar");
-        else if (first) {
+        } else if (bar < 0) {
+          // Inside a bar: the first staff's, before the note it falls at.
+          const b = barAt(score, here);
+          if (first) score.midTempos = [...(score.midTempos ?? []), { bar: b, pos: here - barStart(score, b), tempo: { text: ev.tempo.text ?? "", base: ev.tempo.base || 4, bpm: ev.tempo.bpm || 0 } }];
+        } else if (first) {
           if (bar === 0) score.tempo = ev.tempo;
           else setChange(score, bar, "tempo", { text: ev.tempo.text ?? "", base: ev.tempo.base || 4, bpm: ev.tempo.bpm || 0 });
         }
@@ -4612,15 +4692,21 @@ export function fromParsed(parsed, source = null) {
         // A mark over a bar line: a jump over the end of the bar before it
         // (or of the last bar), else the bar's own mark.
         if (!first) continue;
-        if (bar < 0) {
-          unsupported.add("a mark inside a bar");
-          continue;
-        }
         const jump = Object.keys(JUMPS).find((id) => JUMPS[id] === ev.mark?.text);
         const own = ev.mark?.glyph === "segno" ? "segno" : ev.mark?.glyph === "coda" ? "coda" : /^[A-Z]{1,2}$/.test(ev.mark?.text ?? "") ? "letter" : null;
-        if (jump && bar > 0) setChange(score, bar - 1, "jump", jump);
+        // Words of its own (\mark "Trio", \mark \markup \bold "Allegro"): kept as words.
+        const words = !own && !jump && !ev.mark?.glyph && ev.mark?.text ? { text: ev.mark.text, ...(ev.mark.italic ? { italic: true } : {}), ...(ev.mark.bold ? { bold: true } : {}) } : null;
+        if (!own && !jump && !words) {
+          unsupported.add("a mark this editor does not name");
+          continue;
+        }
+        if (bar < 0) {
+          // Inside a bar: before the note it falls at.
+          const b = barAt(score, here);
+          score.midMarks = [...(score.midMarks ?? []), { bar: b, pos: here - barStart(score, b), ...(jump ? { jump } : own ? { mark: own } : { words }) }];
+        } else if (jump && bar > 0) setChange(score, bar - 1, "jump", jump);
         else if (own) setChange(score, bar, "mark", own);
-        else unsupported.add("a mark this editor does not name");
+        else setChange(score, bar, "words", words);
       } else if (k === "Compress") {
         // \\compressMMRests (or \\compressEmptyMeasures, skipBars): bars of rest gathered.
         score.compress = true;
@@ -4704,7 +4790,8 @@ export function fromParsed(parsed, source = null) {
         const scripts = drums ? ev.scripts.filter(([name]) => !["open", "stopped"].includes(name)) : ev.scripts;
         const arts = scripts.map(([name]) => name).filter((n) => SCRIPTS[n]);
         if (scripts.some(([name]) => !SCRIPTS[name])) unsupported.add("some articulations");
-        const byKey = (key) => (DRUMS.find((x) => x.key === key) ?? MORE_DRUMS.find((x) => x.key === key))?.name;
+        const signs = ev.scripts.map(([name]) => name);
+        const byKey = (key) => (key === 42 && signs.includes("stopped") ? "hhc" : key === 46 && !signs.includes("open") ? "hhho" : (DRUMS.find((x) => x.key === key) ?? MORE_DRUMS.find((x) => x.key === key))?.name);
         if (drums && ev.drums.some(([, key]) => !byKey(key))) unsupported.add("a drum this editor does not name");
         const read = makeEvent({
           rest: k === "Rest",
@@ -4712,6 +4799,8 @@ export function fromParsed(parsed, source = null) {
           base: ev.base, dots: ev.dots, tuplet,
           tie: ev.tie, slurStart: ev.slur_on, slurEnd: ev.slur_off, dynamic: ev.dynamic ?? null,
           hairpin: ev.hairpin ?? null, hairpinEnd: ev.hairpin_end, arts, chord, texts,
+          // An articulation written above (^) or below (_): -1 or 1, by its name.
+          ...(scripts.some(([name, dir]) => SCRIPTS[name] && dir) ? { artDirs: Object.fromEntries(scripts.filter(([name, dir]) => SCRIPTS[name] && dir).map(([name, dir]) => [name, Math.sign(dir)])) } : {}),
           graces: (ev.graces ?? []).map(graceOf),
           grace: ev.grace ?? null, arpeggio: Boolean(ev.arpeggio), gliss: Boolean(ev.gliss), tremolo: ev.tremolo ?? 0,
           ...(ev.after_graces?.length
@@ -4844,11 +4933,10 @@ export function tempoRamps(score) {
   const end = Math.max(0, ...score.staves.map(lengthOf));
   const begins = [];
   const stops = [];
-  for (const c of score.changes ?? []) {
-    if (!c.tempo) continue;
-    const t = barStart(score, c.bar);
+  for (const c of tempoMarks(score)) {
+    const t = barStart(score, c.bar) + c.pos;
     const way = rampOf(c.tempo.text);
-    if (way) begins.push({ t, way, target: c.tempo.bpm ? qpmOf(c.tempo) : null, before: Math.max(0, c.bar - 1) });
+    if (way) begins.push({ t, way, target: c.tempo.bpm ? qpmOf(c.tempo) : null, before: Math.max(0, c.pos > 0 ? c.bar : c.bar - 1) });
     else stops.push({ t, qpm: c.tempo.bpm ? qpmOf(c.tempo) : null, back: BACK.test(c.tempo.text ?? "") || Boolean(c.tempo.bpm) });
   }
   for (const staff of score.staves) {
@@ -4896,7 +4984,15 @@ export function tempoRamps(score) {
     const t1 = Math.min(stop?.t ?? end, end);
     if (t1 > held.t0) out.push({ t0: held.t0, t1, q0: held.q, q1: held.q });
   }
-  return out;
+  // A speed set inside a bar: from where it stands to the bar's end (the bars after it are its own).
+  for (const m of score.midTempos ?? []) {
+    if (!m.tempo.bpm) continue;
+    const t0 = barStart(score, m.bar) + m.pos;
+    const later = (score.midTempos ?? []).filter((x) => x.tempo.bpm && x.bar === m.bar && x.pos > m.pos).map((x) => barStart(score, x.bar) + x.pos);
+    const t1 = Math.min(barStart(score, m.bar + 1), ...later, end);
+    if (t1 > t0 && !out.some((r) => r.t0 < t1 && r.t1 > t0)) out.push({ t0, t1, q0: qpmOf(m.tempo), q1: qpmOf(m.tempo) });
+  }
+  return out.sort((x, y) => x.t0 - y.t0);
 }
 
 /**

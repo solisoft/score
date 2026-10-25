@@ -69,6 +69,9 @@ function plain(events) {
   });
 }
 
+/** The score's changes inside bars, each cut by bar with the bar's head. */
+const MID_LISTS = ["midKeys", "midTempos", "midMarks"];
+
 const key = (value) => (value === undefined ? ABSENT : JSON.stringify(value));
 
 /**
@@ -79,7 +82,7 @@ function cells(score) {
   const bars = M.barsOf(score);
   const fields = {};
   for (const [name, value] of Object.entries(score)) {
-    if (!["header", "staves", "changes", "breaks", "midKeys", "meta"].includes(name)) fields[name] = value;
+    if (!["header", "staves", "changes", "breaks", ...MID_LISTS, "meta"].includes(name)) fields[name] = value;
   }
   const heads = Array.from({ length: bars }, (_, b) => {
     const change = (score.changes ?? []).find((c) => c.bar === b);
@@ -89,8 +92,11 @@ function cells(score) {
       head.change = rest;
     }
     if ((score.breaks ?? {})[b]) head.break = score.breaks[b];
-    const mids = (score.midKeys ?? []).filter((m) => m.bar === b).map(({ bar, ...rest }) => rest);
-    if (mids.length) head.midKeys = mids;
+    // What changes inside the bar: keys, tempos, marks.
+    for (const name of MID_LISTS) {
+      const mids = (score[name] ?? []).filter((m) => m.bar === b).map(({ bar, ...rest }) => rest);
+      if (mids.length) head[name] = mids;
+    }
     return { key: key(head), value: head };
   });
   const staves = M.staffLanes(score).map((u) => {
@@ -271,7 +277,7 @@ export function mergeScores(base, mine, theirs, { parse, prefer = null } = {}) {
     const side = choose(pick(key(values.base), key(values.mine), key(values.theirs)), label, extra);
     return values[side];
   };
-  const out = { header: {}, staves: [], changes: [], breaks: {}, midKeys: [] };
+  const out = { header: {}, staves: [], changes: [], breaks: {}, ...Object.fromEntries(MID_LISTS.map((name) => [name, []])) };
   const names = (part) => new Set(["base", "mine", "theirs"].flatMap((side) => Object.keys(c[side][part])));
   for (const name of names("fields")) {
     const value = fromCells((side) => c[side].fields[name], SCORE_NAMES[name] ?? name, { area: "score" });
@@ -298,9 +304,9 @@ export function mergeScores(base, mine, theirs, { parse, prefer = null } = {}) {
     const head = heads[side].value;
     if (head.change) out.changes.push({ bar: k, ...head.change });
     if (head.break) out.breaks[k] = head.break;
-    for (const m of head.midKeys ?? []) out.midKeys.push({ bar: k, ...m });
+    for (const name of MID_LISTS) for (const m of head[name] ?? []) out[name].push({ bar: k, ...m });
   });
-  if (!out.midKeys.length) delete out.midKeys;
+  for (const name of MID_LISTS) if (!out[name].length) delete out[name];
 
   // Each staff: its settings field by field, each voice bar by bar.
   const chosen = [];

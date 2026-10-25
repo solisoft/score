@@ -578,6 +578,9 @@
           <select data-field="staff-clef">
             <option value="treble">Treble</option><option value="bass">Bass</option><option value="alto">Alto</option>
             <option value="tenor">Tenor</option><option value="treble_8">Treble 8 (guitar)</option><option value="bass_8">Bass 8</option><option value="treble^8">Treble 8 above (piccolo)</option><option value="bass^8">Bass 8 above</option>
+            <option value="treble_15">Treble 15 below</option><option value="treble^15">Treble 15 above</option><option value="bass_15">Bass 15 below</option>
+            <option value="soprano">Soprano (C, first line)</option><option value="mezzosoprano">Mezzo-soprano (C, second line)</option><option value="baritone">Baritone (C, fifth line)</option>
+            <option value="varbaritone">Baritone (F, third line)</option><option value="subbass">Sub-bass (F, fifth line)</option><option value="french">French violin (G, first line)</option>
           </select>
         </label>
         <label class="tool-field">Key
@@ -616,6 +619,9 @@
             <option value="">As before</option>
             <option value="treble">Treble</option><option value="bass">Bass</option><option value="alto">Alto</option>
             <option value="tenor">Tenor</option><option value="treble_8">Treble 8 (guitar)</option><option value="bass_8">Bass 8</option><option value="treble^8">Treble 8 above (piccolo)</option><option value="bass^8">Bass 8 above</option>
+            <option value="treble_15">Treble 15 below</option><option value="treble^15">Treble 15 above</option><option value="bass_15">Bass 15 below</option>
+            <option value="soprano">Soprano (C, first line)</option><option value="mezzosoprano">Mezzo-soprano (C, second line)</option><option value="baritone">Baritone (C, fifth line)</option>
+            <option value="varbaritone">Baritone (F, third line)</option><option value="subbass">Sub-bass (F, fifth line)</option><option value="french">French violin (G, first line)</option>
           </select>
         </label>
         <label class="tool-check"><input type="checkbox" data-field="change-double"> Double bar line before it</label>
