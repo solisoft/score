@@ -55,6 +55,16 @@
       starting on a line of its own. A clef or a key may change in the middle of a bar, and
       <code>\compressMMRests</code> gathers bars of rest into one.
     </p>
+    <p>
+      The score editor now edits what the engraver draws in such files instead of leaving them to the text:
+      staves changing key or metre apart, a tempo, a mark, a bar line or a repeat sign inside a bar,
+      <code>\cadenzaOn</code>, a tuplet inside a tuplet, every clef above, <code>\open</code> and
+      <code>\stopped</code>, <code>\tiny</code> and <code>\small</code>, <code>\new TabStaff</code>,
+      <code>\new CueVoice</code> and <code>\cueDuring</code>, and an ossia. <code>\override</code>,
+      <code>\set</code>, <code>\tweak</code>, a staff's <code>\with</code>, <code>\layout</code> and
+      <code>\paper</code> are kept where they are written, and a staff made by <code>\partCombine</code> or
+      <code>\autoChange</code> is kept as written, its notes edited in the text.
+    </p>
     <ul>
       <li><strong>Layout</strong>: no cross-staff notation, and a page breaker simpler than LilyPond's.</li>
     </ul>
