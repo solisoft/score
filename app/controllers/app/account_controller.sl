@@ -104,6 +104,17 @@ class AppAccountController < AppBaseController
     redirect(app_account_path() + "#notifications")
   end
 
+  # POST /app/account/push — `kinds[]`, the push notifications wanted (#400)
+  def push_prefs
+    wanted = params["kinds"] ?? []
+    wanted = [wanted] unless wanted.is_a?("array")
+    current_user().keep_push_prefs(wanted.filter(&{ |kind|
+      NOTIFICATION_KINDS.includes?(kind)
+    }))
+    flash("notice", "Your push notification settings are saved.")
+    redirect(app_account_path() + "#push")
+  end
+
   # DELETE /app/account — the password confirms it
   def destroy
     @user = current_user()

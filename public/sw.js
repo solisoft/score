@@ -66,6 +66,39 @@ self.addEventListener("message", (event) => {
   if (event.data?.type === "signed-out") event.waitUntil(caches.delete(PAGES));
 });
 
+// Push notifications (#400, app/services/web_push.sl): each shown with its
+// sentence; a click opens its page (which marks it read), in a window of
+// the app already open when there is one.
+self.addEventListener("push", (event) => {
+  let message = {};
+  try {
+    message = event.data ? event.data.json() : {};
+  } catch (error) {
+    message = { body: event.data ? event.data.text() : "" };
+  }
+  event.waitUntil(self.registration.showNotification(message.title || "EUI Score", {
+    body: message.body || "",
+    tag: message.tag,
+    icon: "/images/app/icon-192.png",
+    badge: "/images/app/icon-192.png",
+    data: { url: message.url || "/app/notifications" },
+  }));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || "/app/notifications", self.location.origin).href;
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const open = windows.find((client) => new URL(client.url).origin === self.location.origin);
+    if (open) {
+      await open.focus();
+      return open.navigate(target).catch(() => self.clients.openWindow(target));
+    }
+    return self.clients.openWindow(target);
+  })());
+});
+
 // Kept for good once fetched: what carries its version in its URL (?v=…),
 // the sounds, the fonts. Other files of the site go to the network first.
 const isLasting = (url) =>

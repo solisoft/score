@@ -43,17 +43,37 @@
 #             .env.before-stripe). The site restarts, must answer /health/deep
 #             with "ok", and /webhooks/stripe must refuse an unsigned event
 #             with 400 (503 would mean no secret read); or the old .env comes back.
+#   stripe-from-site — the Pro plan's payments in the Stripe account of
+#             another site on the server (input source_site, Bonfire's by
+#             default): its STRIPE_SECRET_KEY, read on the server from that
+#             site's .env and only if it is a live key; with it, the product
+#             "EUI Score Pro", its two Prices and the webhook endpoint are
+#             found or made in that account (as bin/stripe-setup does), and
+#             the key, both Prices and the endpoint's signing secret go into
+#             this site's .env (kept beside as .env.before-stripe). No value
+#             leaves the server or shows in a log. The site restarts, must
+#             answer /health/deep with "ok" and refuse an unsigned event with
+#             400; or the old .env comes back. Says whether the account has a
+#             customer portal set up (Manage billing needs one).
+#   push    — push notifications (#400): VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY
+#             made on the server by soli itself (vapid_generate_keys) when the
+#             .env has none, and VAPID_SUBJECT (mailto: the site's sender, or
+#             its address): the private key never leaves the server or shows
+#             in a log. The site restarts and must answer /health/deep with
+#             "ok"; or the old .env (.env.before-push) comes back. Run again,
+#             it keeps the keys it made: new ones would end every device's
+#             subscription.
 name: production database
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: "inspect, setup, encryption-key, jobs, own-user, own-user-undo, admin, or stripe"
+        description: "inspect, setup, encryption-key, jobs, own-user, own-user-undo, admin, stripe, stripe-from-site, or push"
         required: true
         default: inspect
         type: choice
-        options: [inspect, setup, encryption-key, jobs, own-user, own-user-undo, admin, stripe]
+        options: [inspect, setup, encryption-key, jobs, own-user, own-user-undo, admin, stripe, stripe-from-site, push]
       admin_user:
         description: "admin: the user name for /__soli/errors"
         required: false
@@ -62,6 +82,10 @@ on:
         description: "admin: where alerts go (comma-separated)"
         required: false
         default: ""
+      source_site:
+        description: "stripe-from-site: the site whose Stripe account is used"
+        required: false
+        default: bonfire-app.pro
 
 concurrency:
   group: deploy-refs/heads/main
@@ -122,6 +146,12 @@ jobs:
           done
           echo "== this site's payments, the Pro plan (#393)"
           for k in STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STRIPE_PRICE_PRO_MONTHLY STRIPE_PRICE_PRO_ANNUAL; do
+            if grep -qE "^$k=.+" "$SITES_DIR/$DOMAIN/.env" 2>/dev/null; then echo "$k=<set>"; else echo "$k=<unset>"; fi
+          done
+          grep -qE '^STRIPE_SECRET_KEY=sk_live_' "$SITES_DIR/$DOMAIN/.env" 2>/dev/null && echo "Stripe mode: live" || true
+          grep -qE '^STRIPE_SECRET_KEY=sk_test_' "$SITES_DIR/$DOMAIN/.env" 2>/dev/null && echo "Stripe mode: test" || true
+          echo "== this site's push notifications (#400)"
+          for k in VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY VAPID_SUBJECT; do
             if grep -qE "^$k=.+" "$SITES_DIR/$DOMAIN/.env" 2>/dev/null; then echo "$k=<set>"; else echo "$k=<unset>"; fi
           done
           REMOTE
@@ -379,6 +409,198 @@ jobs:
           exit 1
           REMOTE
           } | ssh "$USER@$HOST" SITES_DIR="$SITES_DIR" DOMAIN="$DOMAIN" PROXY_CONF="$PROXY_CONF" APP="$APP" bash -s
+
+      - name: Stripe from another site's account
+        if: inputs.action == 'stripe-from-site'
+        env:
+          PROXY_CONF: ${{ vars.DEPLOY_PROXY_CONF || '/home/rocky/proxy.conf' }}
+          APP: ${{ vars.DEPLOY_APP || 'score' }}
+          SOURCE: ${{ inputs.source_site }}
+        run: |
+          set -euo pipefail
+          case "$SOURCE" in
+            ""|*/*|*[[:space:]]*|.*) echo "source_site must be a site's folder name" >&2; exit 1 ;;
+          esac
+          ssh "$USER@$HOST" SITES_DIR="$SITES_DIR" DOMAIN="$DOMAIN" PROXY_CONF="$PROXY_CONF" APP="$APP" SOURCE="$SOURCE" bash -s <<'REMOTE'
+          set -euo pipefail
+          command -v python3 >/dev/null || { echo "python3 is needed on the server" >&2; exit 1; }
+          site="$SITES_DIR/$DOMAIN"
+          from="$SITES_DIR/$SOURCE/.env"
+          [ -f "$from" ] || { echo "no .env for $SOURCE" >&2; exit 1; }
+          cd "$site"
+          cp -p .env .env.before-stripe
+          # Python does the talking to Stripe and the writing of .env.next;
+          # it prints ids and names, never a key or a secret.
+          SOURCE_ENV="$from" WEBHOOK_URL="https://$DOMAIN/webhooks/stripe" python3 - <<'PY'
+          import json, os, re, sys, urllib.parse, urllib.request, urllib.error
+
+          def env_value(path, name):
+              for line in open(path):
+                  m = re.match(r"^%s=(.*)$" % name, line.rstrip("\n"))
+                  if m:
+                      return m.group(1).strip().strip('"').strip("'")
+              return ""
+
+          key = env_value(os.environ["SOURCE_ENV"], "STRIPE_SECRET_KEY")
+          if not re.match(r"^(sk|rk)_live_[A-Za-z0-9]+$", key):
+              mode = "test" if re.match(r"^(sk|rk)_test_", key) else "none"
+              sys.exit("the source site has no live Stripe key (found: %s): nothing done" % mode)
+          print("Stripe account: live mode, the source site's")
+          API = "https://api.stripe.com/v1/"
+          VERSION = "2024-06-20"
+          EVENTS = ["checkout.session.completed", "customer.subscription.created",
+                    "customer.subscription.updated", "customer.subscription.deleted",
+                    "invoice.payment_failed"]
+
+          def stripe(method, path, fields=None):
+              data = urllib.parse.urlencode(fields or [], doseq=True).encode() if method != "GET" else None
+              request = urllib.request.Request(API + path, data=data, method=method)
+              request.add_header("Authorization", "Bearer " + key)
+              request.add_header("Stripe-Version", VERSION)
+              try:
+                  with urllib.request.urlopen(request, timeout=30) as answer:
+                      return json.load(answer)
+              except urllib.error.HTTPError as error:
+                  message = json.load(error).get("error", {}).get("message", "")
+                  sys.exit("Stripe refused %s /%s: %s" % (method, path.split("?")[0], message))
+
+          products = stripe("GET", "products?active=true&limit=100")["data"]
+          product = next((p["id"] for p in products if p.get("metadata", {}).get("app") == "score"
+                          and p.get("metadata", {}).get("plan") == "pro"), None)
+          if product:
+              print("product found:", product)
+          else:
+              product = stripe("POST", "products", [("name", "EUI Score Pro"), ("metadata[app]", "score"),
+                                                    ("metadata[plan]", "pro")])["id"]
+              print("product made:", product)
+
+          def price(interval, cents, lookup):
+              prices = stripe("GET", "prices?product=%s&active=true&limit=100" % product)["data"]
+              found = next((p["id"] for p in prices if p["currency"] == "eur" and p["unit_amount"] == cents
+                            and (p.get("recurring") or {}).get("interval") == interval), None)
+              if found:
+                  print("price found: %s (%s)" % (found, interval))
+                  return found
+              made = stripe("POST", "prices", [("product", product), ("currency", "eur"), ("unit_amount", cents),
+                                               ("recurring[interval]", interval), ("lookup_key", lookup),
+                                               ("transfer_lookup_key", "true"), ("metadata[app]", "score"),
+                                               ("metadata[plan]", "pro")])["id"]
+              print("price made: %s (%s)" % (made, interval))
+              return made
+
+          monthly = price("month", 600, "score_pro_monthly")
+          annual = price("year", 6000, "score_pro_annual")
+
+          # The endpoint's signing secret is shown only when it is made: an
+          # endpoint found again is made anew unless this .env already holds
+          # its secret for this same key.
+          url = os.environ["WEBHOOK_URL"]
+          current_key = env_value(".env", "STRIPE_SECRET_KEY")
+          current_secret = env_value(".env", "STRIPE_WEBHOOK_SECRET")
+          events = [("enabled_events[]", e) for e in EVENTS]
+          endpoints = stripe("GET", "webhook_endpoints?limit=100")["data"]
+          endpoint = next((e for e in endpoints if e["url"] == url), None)
+          secret = ""
+          if endpoint and current_key == key and current_secret.startswith("whsec_"):
+              stripe("POST", "webhook_endpoints/" + endpoint["id"], [("disabled", "false")] + events)
+              secret = current_secret
+              print("webhook endpoint found:", endpoint["id"], "(its secret kept)")
+          else:
+              if endpoint:
+                  stripe("DELETE", "webhook_endpoints/" + endpoint["id"])
+                  print("webhook endpoint deleted:", endpoint["id"], "(its secret is not here)")
+              made = stripe("POST", "webhook_endpoints", [("url", url), ("api_version", VERSION),
+                            ("description", "EUI Score: the Pro plan (#393)"), ("metadata[app]", "score")] + events)
+              secret = made["secret"]
+              print("webhook endpoint made:", made["id"])
+
+          portals = stripe("GET", "billing_portal/configurations?is_default=true&limit=1")["data"]
+          print("customer portal:", "set up" if portals else "NOT set up: Settings > Billing > Customer portal in Stripe")
+
+          names = ("STRIPE_SECRET_KEY", "STRIPE_PUBLISHABLE_KEY", "STRIPE_WEBHOOK_SECRET",
+                   "STRIPE_PRICE_PRO_MONTHLY", "STRIPE_PRICE_PRO_ANNUAL")
+          kept = [line for line in open(".env.before-stripe")
+                  if not line.startswith("# The Pro plan") and line.split("=", 1)[0] not in names]
+          with open(".env.next", "w") as out:
+              out.writelines(kept)
+              out.write("# The Pro plan's payments (#393), in the Stripe account of %s.\n" % os.environ.get("SOURCE", "another site"))
+              out.write("STRIPE_SECRET_KEY=%s\nSTRIPE_WEBHOOK_SECRET=%s\n" % (key, secret))
+              out.write("STRIPE_PRICE_PRO_MONTHLY=%s\nSTRIPE_PRICE_PRO_ANNUAL=%s\n" % (monthly, annual))
+          os.chmod(".env.next", 0o600)
+          PY
+          mv .env.next .env
+          soli-proxy restart -c "$PROXY_CONF" "$APP" >/dev/null 2>&1 || true
+          ready=""
+          for attempt in 1 2 3 4 5 6; do
+            sleep 5
+            ready="$(curl -sk -m 8 --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/health/deep" || true)"
+            echo "$ready" | grep -q '"status":"ok"' && break
+          done
+          webhook="$(curl -sk -m 8 --resolve "$DOMAIN:443:127.0.0.1" -o /dev/null -w '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' -d '{}' "https://$DOMAIN/webhooks/stripe" || true)"
+          echo "ready: $ready | unsigned webhook: $webhook"
+          if echo "$ready" | grep -q '"status":"ok"' && [ "$webhook" = "400" ]; then
+            echo "done: the names now set, without their values:"
+            grep -E '^STRIPE_' .env | cut -d= -f1 | tr '\n' ' '; echo
+            exit 0
+          fi
+          echo "not as expected: the old .env comes back" >&2
+          cp -p .env.before-stripe .env
+          soli-proxy restart -c "$PROXY_CONF" "$APP" >/dev/null 2>&1 || true
+          exit 1
+          REMOTE
+
+      - name: Push notifications
+        if: inputs.action == 'push'
+        env:
+          PROXY_CONF: ${{ vars.DEPLOY_PROXY_CONF || '/home/rocky/proxy.conf' }}
+          APP: ${{ vars.DEPLOY_APP || 'score' }}
+        run: |
+          ssh "$USER@$HOST" SITES_DIR="$SITES_DIR" DOMAIN="$DOMAIN" PROXY_CONF="$PROXY_CONF" APP="$APP" bash -s <<'REMOTE'
+          set -euo pipefail
+          cd "$SITES_DIR/$DOMAIN"
+          if grep -qE '^VAPID_PRIVATE_KEY=.+' .env && grep -qE '^VAPID_PUBLIC_KEY=.+' .env; then
+            echo "the .env has VAPID keys already: kept (new ones would end every device's subscription)"
+            exit 0
+          fi
+          # One line, "public private", straight into the .env: never printed.
+          pair="$(soli -e 'keys = vapid_generate_keys()
+          print(keys["public_key"] + " " + keys["private_key"])' 2>/dev/null | tail -1)"
+          public="${pair%% *}"
+          private="${pair#* }"
+          case "$public$private" in
+            *[!A-Za-z0-9_-]*|"") echo "soli did not make the keys" >&2; exit 1 ;;
+          esac
+          [ "$public" != "$private" ] || { echo "soli did not make the keys" >&2; exit 1; }
+          sender="$(grep -E '^SOLI_SMTP_FROM=' .env | head -1 | cut -d= -f2- | sed -E 's/.*<([^>]+)>.*/\1/; s/[" ]//g')"
+          subject="https://$DOMAIN"
+          case "$sender" in *@*) subject="mailto:$sender" ;; esac
+          cp -p .env .env.before-push
+          grep -vE '^(# Push notifications|VAPID_PUBLIC_KEY=|VAPID_PRIVATE_KEY=|VAPID_SUBJECT=)' .env.before-push > .env.next || true
+          {
+            echo "# Push notifications (#400): the application server's keys, made here."
+            printf 'VAPID_PUBLIC_KEY=%s\n' "$public"
+            printf 'VAPID_PRIVATE_KEY=%s\n' "$private"
+            printf 'VAPID_SUBJECT=%s\n' "$subject"
+          } >> .env.next
+          chmod 600 .env.next && mv .env.next .env
+          soli-proxy restart -c "$PROXY_CONF" "$APP" >/dev/null 2>&1 || true
+          ready=""
+          for attempt in 1 2 3 4 5 6; do
+            sleep 5
+            ready="$(curl -sk -m 8 --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/health/deep" || true)"
+            echo "$ready" | grep -q '"status":"ok"' && break
+          done
+          echo "ready: $ready"
+          if echo "$ready" | grep -q '"status":"ok"'; then
+            echo "done: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT set (values not shown)"
+            exit 0
+          fi
+          echo "not as expected: the old .env comes back" >&2
+          cp -p .env.before-push .env
+          soli-proxy restart -c "$PROXY_CONF" "$APP" >/dev/null 2>&1 || true
+          exit 1
+          REMOTE
 
       - name: Back to the server's admin user
         if: inputs.action == 'own-user-undo'

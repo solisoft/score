@@ -59,6 +59,120 @@
     <button type="submit" class="btn btn-ghost">Save the e-mail settings</button>
   </form>
 
+  <%# Push notifications (#400): this device subscribed by the script below
+      (the browser asks permission), the kinds chosen by the form. %>
+  <h2 id="push">Push notifications</h2>
+  <% push = user.push_setup() %>
+  <% if push["key"].blank? %>
+    <p class="muted" data-push-unavailable>Not available on this server yet.</p>
+  <% else %>
+    <div class="account-push" data-push data-key="<%= push["key"] %>" data-devices="<%= push["devices"] %>">
+      <p data-push-state>Notifications on this phone or computer, even when the app is closed.</p>
+      <% one = push["devices"] == 1 %>
+      <% devices_said = "#{push["devices"]} #{one ? "device receives" : "devices receive"} them." %>
+      <p class="muted" data-push-devices><%= push["devices"] == 0 ? "No device receives them yet." : devices_said %></p>
+      <div class="account-plan-actions">
+        <button type="button" class="btn btn-primary" data-push-on hidden>Turn on for this device</button>
+        <button type="button" class="btn btn-ghost" data-push-off hidden>Turn off for this device</button>
+        <button type="button" class="btn btn-ghost" data-push-test<%= push["devices"] == 0 ? " hidden" : "" %>>Send a test</button>
+      </div>
+      <p class="muted">On an iPhone or iPad, add the app to the Home Screen first (Share, then Add to Home Screen), and turn them on from there.</p>
+    </div>
+    <form action="<%= app_account_push_path() %>" method="POST" class="auth-form account-mails" data-push-prefs>
+      <%- csrf_field() %>
+      <input type="hidden" name="kinds[]" value="none">
+      <label class="tool-check"><input type="checkbox" name="kinds[]" value="shared"<%= user.pushes?("shared") ? " checked" : "" %>> <span>A score shared with me</span></label>
+      <label class="tool-check"><input type="checkbox" name="kinds[]" value="reply"<%= user.pushes?("reply") ? " checked" : "" %>> <span>A reply in a thread I wrote in</span></label>
+      <label class="tool-check"><input type="checkbox" name="kinds[]" value="mention"<%= user.pushes?("mention") ? " checked" : "" %>> <span>A comment that mentions me</span></label>
+      <label class="tool-check"><input type="checkbox" name="kinds[]" value="changed"<%= user.pushes?("changed") ? " checked" : "" %>> <span>Changes to the scores shared with me <span class="muted">— once an hour a score</span></span></label>
+      <button type="submit" class="btn btn-ghost">Save the push settings</button>
+    </form>
+    <script data-push-script>
+      (() => {
+        const box = document.querySelector("[data-push]");
+        if (!box || box.dataset.ready) return;
+        box.dataset.ready = "1";
+        const state = box.querySelector("[data-push-state]");
+        const devices = box.querySelector("[data-push-devices]");
+        const on = box.querySelector("[data-push-on]");
+        const off = box.querySelector("[data-push-off]");
+        const test = box.querySelector("[data-push-test]");
+        const csrf = document.querySelector('input[name="_csrf_token"]')?.value ?? "";
+        const say = (text) => { state.textContent = text; };
+        const count = (n) => {
+          devices.textContent = n ? `${n} device${n === 1 ? "" : "s"} receive${n === 1 ? "s" : ""} them.` : "No device receives them yet.";
+          test.hidden = !n;
+        };
+        const post = async (url, body) => {
+          const answer = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify(body ?? {}) });
+          const data = await answer.json().catch(() => ({}));
+          if (!answer.ok) throw new Error(data.error || "The server said no.");
+          return data;
+        };
+        // The public key, base64url, as the bytes subscribe() wants.
+        const bytes = (text) => {
+          const raw = atob((text + "=".repeat((4 - (text.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/"));
+          return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+        };
+        if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+          say("This browser cannot receive push notifications.");
+          return;
+        }
+        const show = (subscribed) => {
+          on.hidden = subscribed;
+          off.hidden = !subscribed;
+          if (Notification.permission === "denied") {
+            say("Notifications are blocked for this site in the browser's settings: allow them there first.");
+            on.hidden = true;
+          } else {
+            say(subscribed ? "On for this device." : "Off for this device.");
+          }
+        };
+        const ready = navigator.serviceWorker.ready;
+        ready.then((registration) => registration.pushManager.getSubscription()).then((subscription) => show(Boolean(subscription)));
+        on.addEventListener("click", async () => {
+          on.disabled = true;
+          try {
+            if ((await Notification.requestPermission()) !== "granted") return show(false);
+            const registration = await ready;
+            const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytes(box.dataset.key) });
+            const answer = await post("<%= app_push_subscriptions_path() %>", subscription.toJSON());
+            count(answer.devices);
+            show(true);
+          } catch (error) {
+            say(`Could not turn them on: ${error.message}`);
+          } finally {
+            on.disabled = false;
+          }
+        });
+        off.addEventListener("click", async () => {
+          off.disabled = true;
+          try {
+            const subscription = await (await ready).pushManager.getSubscription();
+            if (subscription) {
+              const answer = await post("<%= app_push_subscriptions_remove_path() %>", { endpoint: subscription.endpoint });
+              await subscription.unsubscribe();
+              count(answer.devices);
+            }
+            show(false);
+          } catch (error) {
+            say(`Could not turn them off: ${error.message}`);
+          } finally {
+            off.disabled = false;
+          }
+        });
+        test.addEventListener("click", async () => {
+          try {
+            const answer = await post("<%= app_push_test_path() %>");
+            say(answer.sent ? `Sent to ${answer.sent} device${answer.sent === 1 ? "" : "s"}.` : "Nothing could be sent: turn them on again on this device.");
+          } catch (error) {
+            say(`Could not send: ${error.message}`);
+          }
+        });
+      })();
+    </script>
+  <% end %>
+
   <%# The plan (#393): set by Stripe's webhook only; Upgrade and Manage
       billing go to Stripe's own pages. %>
   <h2 id="plan">Subscription</h2>

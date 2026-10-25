@@ -675,6 +675,30 @@ class User < Model
     @save
   end
 
+  # Whether a push notification of `kind` (#400) goes to their devices:
+  # every kind until they choose.
+  def pushes?(kind)
+    (@push_prefs ?? {})[kind] != false
+  end
+
+  # What the account page's Push section needs (#400), which a view cannot
+  # ask WebPush or PushSubscription itself: the key a browser subscribes
+  # with ("" while push is not set up here) and how many devices are on.
+  def push_setup
+    {"key": WebPush.public_key, "devices": PushSubscription.count_of(this)}
+  end
+
+  # The push notifications they want: the kinds in `wanted`, the others off.
+  def keep_push_prefs(wanted)
+    chosen = wanted ?? []
+    prefs = {}
+    NOTIFICATION_KINDS.each do |kind|
+      prefs[kind] = chosen.includes?(kind)
+    end
+    @push_prefs = prefs
+    @save
+  end
+
   # --- The plan (#393) --------------------------------------------------------
   #
   # Set by Stripe's webhook only (Billing): `plan`, `plan_status`,
@@ -781,7 +805,8 @@ class User < Model
 
   # The account gone, and all it left: its scores (trash, versions, shares
   # and the AI's suggestions included), what was shared with it, its photo
-  # readings and the requests it made of the AI. A subscription is
+  # readings and the requests it made of the AI, its devices for push
+  # notifications. A subscription is
   # cancelled first; if Stripe cannot be reached, that is logged and the
   # account goes all the same.
   def erase_account
@@ -790,6 +815,7 @@ class User < Model
     ScoreReading.delete_all_of(this)
     ScoreSuggestion.delete_all_of(this)
     UserNotification.delete_all_of(this)
+    PushSubscription.delete_all_of(this)
     @delete
   end
 

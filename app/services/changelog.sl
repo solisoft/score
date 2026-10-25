@@ -12,6 +12,16 @@ class Changelog
     [
       {"date": "2026-10-25", "entries": [
         {
+          "area": "site",
+          "app": true,
+          "title": "Push notifications on your phone and computer",
+          "text": "What the bell tells you (a score shared with you, a reply, a mention, changes to a score shared "
+          + "with you) can now reach your phone or computer as a notification, even when the app is closed. Turn "
+          + "them on in Account, under Push notifications, on each device you want them on, and choose which "
+          + "kinds you get; Send a test checks it works. A click on one opens its score at the right place. On an "
+          + "iPhone or iPad, add the app to the Home Screen first and turn them on from there."
+        },
+        {
           "area": "editor",
           "title": "Writing notes: a pen over the staves, a ghost note, a click writes it",
           "text": "In note input (N, or the Note input button, which now wears a pen), the pointer over the staves "

@@ -5,7 +5,8 @@
 # per NOTIFICATION_CHANGED_SECONDS, which gathers who changed it). Nobody is
 # told of what they did themselves.
 #
-# Every notification is listed in the app. The e-mails leave from
+# Every notification is listed in the app, and sent to the person's devices
+# when they turned push notifications on (WebPush, #400). The e-mails leave from
 # NotificationMailJob (`mail_due`), each as its person's settings allow
 # (User#mails?): "mail" is "pending" until then, "sent", "off" (not wanted),
 # "failed" (NOTIFICATION_MAIL_TRIES tries), or "none" for a share, whose
@@ -33,7 +34,7 @@ class UserNotification < Model
   static def tell(user_key, kind, score, actor, extra = {})
     return nil if user_key.blank? || user_key == actor._key
 
-    UserNotification.create({
+    notification = UserNotification.create({
       "user_id": user_key,
       "kind": kind,
       "score_id": score._key,
@@ -48,6 +49,9 @@ class UserNotification < Model
       "mail": kind == "shared" ? "none" : "pending",
       "mail_tries": 0
     })
+    # To their devices too, when they turned push on (#400).
+    WebPush.queue(notification)
+    notification
   end
 
   # `share` made by `actor`: its person told in the app, if they have an
