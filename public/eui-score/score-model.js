@@ -5107,8 +5107,10 @@ function ossiaOf(score, lanes, body, placed) {
   const events = lane.events
     .filter((_, i) => at[i] >= from && at[i] < to)
     .map(({ mirror, ...ev }) => (mirror ? makeEvent({ base: ev.base, dots: ev.dots, tuplet: ev.tuplet, spacer: true }) : ev));
-  const clef = [...(lane.clefs ?? [])].filter((c) => c.bar <= first).pop()?.clef ?? lane.clef ?? "treble";
-  main.ossias = [...(main.ossias ?? []), { bar: first, bars: last - first + 1, with: body.replace(/\s+/g, " ").trim(), clef, events }];
+  // Its clef, when it is not its staff's there (the engraver gives it its staff's otherwise).
+  const clefOf = (x) => [...(x.clefs ?? [])].filter((c) => c.bar <= first).pop()?.clef ?? x.clef ?? "treble";
+  const clef = clefOf(lane) === clefOf(main) ? null : clefOf(lane);
+  main.ossias = [...(main.ossias ?? []), { bar: first, bars: last - first + 1, with: body.replace(/\s+/g, " ").trim(), ...(clef ? { clef } : {}), events }];
   return true;
 }
 
