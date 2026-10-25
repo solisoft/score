@@ -84,13 +84,23 @@
       <code>\partCombineDown</code>, a part that says how the parts combine (<code>\partCombineApart</code>
       and the like), and other music beside <code>\partCombine</code> or <code>\autoChange</code> on its staff.
     </p>
+    <p>
+      Since its second round of LilyPond work, the engraver also draws smaller staves
+      (<code>\magnifyStaff</code>, <code>StaffSymbol.staff-space</code> with <code>fontSize</code>, ossia and cue
+      staves), a <code>\time</code> in the middle of a bar, a <code>\partial</code> later in a piece, a
+      <code>\time</code> written in one staff only, polymetre with bars of one length
+      (<code>\enablePolymeter</code>, <code>\scaleDurations</code>, <code>timeSignatureFraction</code>) and
+      voices inside a voice. The accidentals of a note moved to the other staff are counted on that staff.
+      Pages are spaced with LilyPond's springs (a crowded page squeezes, a page with room stretches, ink never
+      collides), and beams are sloped and placed as LilyPond's quanting places them.
+    </p>
     <ul>
-      <li><strong>Layout</strong>: vertical spacing does not tighten on a crowded page, a beam across the staves
-        is sloped more simply than LilyPond's, and the accidentals of a note moved to the other staff are still
-        counted in its own staff's bar.</li>
-      <li><strong>Settings</strong>: an <code>\override</code> not in the list above, and smaller staves
-        (<code>StaffSymbol.staff-space</code>) for an ossia or cue notes, are still passed over with a
-        warning.</li>
+      <li><strong>Metre</strong>: staves whose bars last differently (polymetre with bars of different lengths)
+        are refused: line them up with <code>\scaleDurations</code> or <code>timeSignatureFraction</code>.</li>
+      <li><strong>Layout</strong>: a beam is not moved away from other objects it could touch, and the
+        <code>\paper</code> spacings around titles and markups are not read.</li>
+      <li><strong>Settings</strong>: an <code>\override</code> not in the lists above is still passed over
+        with a warning.</li>
     </ul>
     <div class="callout">
       Not sure? Paste your source into the <a href="<%= playground_path() %>">playground</a>: the engraver's

@@ -12,6 +12,25 @@ class Changelog
     [
       {"date": "2026-10-25", "entries": [
         {
+          "area": "engine",
+          "title": "Pages spaced and beams sloped as LilyPond sets them",
+          "text": "A crowded page now squeezes its systems toward their least distance before one moves to the next "
+          + "page, and a page with room spreads them, as LilyPond's springs do; ink of one staff never runs into "
+          + "the next. The \\paper and \\layout spacings (system-system, top-system, last-bottom, staff-staff) are "
+          + "read. Beams take the slope and the place on the staff lines that LilyPond's quanting gives them, "
+          + "across a piano's staves too, and a \\crossStaff eighth keeps its flag at the joined stem's end."
+        },
+        {
+          "area": "engine",
+          "title": "Smaller staves, a metre changed mid-bar, polymetre, voices inside a voice",
+          "text": "Ossia and cue staves are drawn smaller (\\magnifyStaff, StaffSymbol.staff-space with fontSize). "
+          + "A \\time may come in the middle of a bar and a \\partial later in a piece; a \\time written in "
+          + "one staff applies to the whole score. With \\enablePolymeter, staves keep their own metres when "
+          + "their bars last as long (\\scaleDurations, timeSignatureFraction). Voices may open inside a voice. "
+          + "The accidentals of a note moved to the other staff are counted on that staff, and \\partCombine "
+          + "plays the part a solo or a unison leaves off the staff."
+        },
+        {
           "area": "editor",
           "title": "\\partCombine and \\autoChange edited on the score",
           "text": "Two parts set on one staff by \\partCombine are now edited on the score: each part is a voice of "
