@@ -211,6 +211,7 @@ export function pickupText(ticks) {
  * which must be rests, and a longer one gets rests before its music.
  */
 export function setPickup(score, ticks) {
+  refuseRawBars(score);
   const full = (WHOLE * score.time[0]) / score.time[1];
   if (!Number.isInteger(ticks) || ticks < 0 || ticks % (WHOLE / 128) !== 0) throw new Error("a pickup is a whole number of 128ths");
   if (ticks >= full) throw new Error(`a pickup is shorter than a bar of ${score.time[0]}/${score.time[1]}`);
@@ -489,6 +490,8 @@ function fifthsOf(steps, semitones) {
  * enharmonic twin (D♯ major as E♭), and the notes are spelled to match it.
  */
 export function transpose(score, { steps, semitones, s = null, a = 0, b = Infinity }) {
+  if (s == null) refuseRawBars(score);
+  else refuseRaw(score, s);
   if (s == null) {
     let f = fifthsOf(steps, semitones);
     const to = score.key + f;
@@ -774,6 +777,7 @@ function pieces(score, ev, at, ticks, role) {
 /** Every staff made `ticks` long at least, in whole bars of rests. */
 export function ensureLength(score, ticks) {
   const want = ticks > 0 ? nextBarLine(score, ticks - 1) : 0;
+  if (score.staves.some((staff) => (staff.raw != null || staff.rawPart) && lengthOf(staff) < want)) throw new Error(RAW_BARS_REFUSAL);
   for (const staff of score.staves) {
     const have = lengthOf(staff);
     if (have < want) staff.events.push(...rests(score, have, want - have));
@@ -789,6 +793,7 @@ export function ensureLength(score, ticks) {
 export function write(score, s, t, ticks, content, { tidyUp = true } = {}) {
   const staff = score.staves[s];
   if (!staff) throw new Error("no such staff");
+  refuseRaw(score, s);
   if ((staff.chords || staff.figures) && content.rest === false) throw new Error(staff.chords ? CHORD_LINE_NOTES : FIGURE_LINE_NOTES);
   if (!Number.isInteger(t) || t < 0 || !Number.isInteger(ticks) || ticks <= 0) throw new Error("nothing to write there");
   ensureLength(score, t + ticks);
@@ -866,6 +871,7 @@ export function tidy(score, staff) {
 // ---- Edits on one event ---------------------------------------------------------
 
 function noteOf(score, s, i) {
+  refuseRaw(score, s);
   const ev = score.staves[s]?.events[i];
   if (!ev) throw new Error("no such note");
   return ev;
@@ -2229,6 +2235,7 @@ export function setTimeAt(score, b, num, den) {
 }
 
 function retime(score, b, num, den) {
+  refuseRawBars(score);
   const bars = barsOf(score);
   if (b < 0 || b >= bars) throw new Error("no such bar");
   if (![1, 2, 4, 8, 16].includes(den) || !Number.isInteger(num) || num < 1 || num > 32) throw new Error("no such metre");
@@ -2433,6 +2440,7 @@ export function addBars(score, count = 1) {
 
 /** The last bar taken away when it holds nothing but rests. */
 export function removeLastBar(score) {
+  refuseRawBars(score);
   const bars = barsOf(score);
   if (bars < 2) throw new Error("a score keeps one bar at least");
   const from = barStart(score, bars - 1);
@@ -2457,6 +2465,7 @@ export function removeLastBar(score) {
  * first, as for the last bar.
  */
 export function deleteBars(score, a, b) {
+  refuseRawBars(score);
   const bars = barsOf(score);
   [a, b] = [Math.min(a, b), Math.max(a, b)];
   if (a < 0 || b >= bars) throw new Error("no such bar");
@@ -2701,6 +2710,12 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
   const music0 = firstMusic(score);
   const staves = staffLanes(score).map((s) => {
     const staff = score.staves[s];
+    // A staff kept as written: its text, its notes numbered as the engraver numbers them there.
+    if (staff.rawPart) return "";
+    if (staff.raw != null) {
+      items.push(...(staff.rawItems ?? []).map((drawn) => (drawn ? { kept: true } : { kept: true, spacer: true })));
+      return staff.raw;
+    }
     const upper = staffBars(score, staff, s);
     if (staff.chords || staff.figures) {
       // A line of chord names or a figured bass: its bars, the metre and the repeats left to the music's staves.
@@ -2804,7 +2819,7 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
     while (n <= to) {
       const g = groups.filter((x) => x.first === n && x.last <= to).sort((x, y) => y.last - x.last)[0];
       if (!g) {
-        out.push(staves[n]);
+        if (staves[n]) out.push(staves[n]);
         n++;
         continue;
       }
@@ -2817,10 +2832,13 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
   };
   const groups = (score.groups ?? []).filter((g) => kinds[g.kind] && g.first <= g.last && g.last < staves.length);
   const group = kinds[score.group] ?? "";
-  const body = staves.length > 1 || group || lyricsTo ? `${group ? group + " " : ""}<<\n${indent(nest(0, staves.length - 1, groups))}\n>>` : staves[0];
+  const shownStaves = staves.filter(Boolean);
+  const body = shownStaves.length > 1 || group || lyricsTo ? `${group ? group + " " : ""}<<\n${indent(nest(0, staves.length - 1, groups))}\n>>` : shownStaves[0];
   // Bars of rest gathered on every staff: a part's long rests, as one bar.
   const gathering = score.compress ? "\\compressMMRests " : "";
-  const source = pageText(score) + (header ? `\\header { ${header} }\n` : "") + gathering + body + "\n";
+  // The variables a staff kept as written uses, as they were written.
+  const defs = score.defs?.length ? `${score.defs.join("\n")}\n` : "";
+  const source = pageText(score) + defs + (header ? `\\header { ${header} }\n` : "") + gathering + body + "\n";
   // What is not notation (the mixer, the notes' velocities…) rides along at the end, as a comment.
   return { source: unfold || !score.meta ? source : writeMeta(source, score.meta), items };
 }
@@ -3332,6 +3350,7 @@ export function endingFromBars(score, a, b) {
 
 /** `count` bars of rests put in every staff before bar `at`; the repeats after it move along. */
 export function insertBars(score, at, count) {
+  refuseRawBars(score);
   if (at === 0 && score.pickup > 0) throw new Error("the pickup starts the piece: bars go after it");
   const t = barStart(score, at);
   if (score.staves.some((staff) => t > lengthOf(staff))) throw new Error("no such bar");
@@ -5135,6 +5154,259 @@ function ossiasAfterDelete(staff, a, b, count) {
   if (!staff.ossias.length) delete staff.ossias;
 }
 
+// ---- Staves kept as written: \partCombine, \autoChange --------------------------------------
+//
+// Two parts set on one staff (`\partCombine \a \b`) or one part spread over
+// a piano's two staves (`\new PianoStaff \autoChange { … }`): the engraver
+// decides where each note goes, so the model keeps the staff's text as
+// written — `staff.raw` on its first staff, `rawPart` on the others it makes
+// — with the variables it names (`score.defs`). Its notes are read, shown
+// and played; they are edited in the text, the other staves on the score.
+
+/** The commands that make a staff the model keeps as written. */
+const RAW_COMMANDS = ["partCombine", "partcombine", "autoChange", "autochange"];
+
+/** Where a pitch written at `i` ends: c, fis'', bes,! … */
+function pitchEnd(src, i) {
+  const k = skipBlank(src, i);
+  const m = /^[a-z]+[',]*[!?]?/.exec(src.slice(k, k + 16));
+  return m ? k + m[0].length : k;
+}
+
+/** Where the music expression at `i` ends: braces, << >>, a command and what it takes, a variable, a note. */
+function musicEnd(src, i, depth = 0) {
+  const k = skipBlank(src, i);
+  if (depth > 32 || k >= src.length) return k;
+  if (src.startsWith("<<", k)) {
+    let level = 0;
+    let j = k;
+    while (j < src.length) {
+      if (src[j] === '"') j = stringEnd(src, j);
+      else if (src[j] === "%") j = skipBlank(src, j);
+      else if (src.startsWith("<<", j)) {
+        level++;
+        j += 2;
+      } else if (src.startsWith(">>", j)) {
+        level--;
+        j += 2;
+        if (level === 0) return j;
+      } else j++;
+    }
+    return src.length;
+  }
+  if (src[k] === "{") return balancedEnd(src, k, "{", "}");
+  const name = commandAt(src, k);
+  if (!name) {
+    let j = k;
+    while (j < src.length && !/[\s{}<>"\\]/.test(src[j])) j++;
+    return Math.max(j, k + 1);
+  }
+  let j = k + 1 + name.length;
+  const next = (n) => {
+    for (let c = 0; c < n; c++) j = musicEnd(src, j, depth + 1);
+  };
+  switch (name) {
+    case "new":
+    case "context": {
+      j = skipBlank(src, j);
+      while (j < src.length && /[A-Za-z]/.test(src[j])) j++;
+      let at = skipBlank(src, j);
+      if (src[at] === "=") {
+        at = skipBlank(src, at + 1);
+        j = src[at] === '"' ? stringEnd(src, at) : valueEnd(src, at);
+        at = skipBlank(src, j);
+      }
+      if (commandAt(src, at) === "with") j = blockEnd(src, at + 5);
+      next(1);
+      return j;
+    }
+    case "relative": {
+      const at = skipBlank(src, j);
+      if (/[a-g]/.test(src[at] ?? "") && commandAt(src, at) == null) j = pitchEnd(src, at);
+      next(1);
+      return j;
+    }
+    case "fixed":
+      j = pitchEnd(src, j);
+      next(1);
+      return j;
+    case "transpose":
+      j = pitchEnd(src, pitchEnd(src, j));
+      next(1);
+      return j;
+    case "partCombine":
+    case "partcombine":
+      next(2);
+      return j;
+    case "autoChange":
+    case "autochange":
+    case "drummode":
+    case "chordmode":
+    case "figuremode":
+    case "lyricmode":
+    case "notemode":
+    case "unfoldRepeats":
+      next(1);
+      return j;
+    case "times":
+    case "tuplet": {
+      j = skipBlank(src, j);
+      while (j < src.length && /[\d/]/.test(src[j])) j++;
+      const at = skipBlank(src, j);
+      if (/\d/.test(src[at] ?? "")) j = valueEnd(src, at);
+      next(1);
+      return j;
+    }
+    case "repeat": {
+      j = valueEnd(src, valueEnd(src, j));
+      next(1);
+      const at = skipBlank(src, j);
+      if (commandAt(src, at) === "alternative") j = musicEnd(src, at + 12, depth + 1);
+      return j;
+    }
+    default:
+      return j;
+  }
+}
+
+/** The top-level definitions of `source`, `name = …`: Map name → { at, end, text }. */
+function definitions(source) {
+  const text = String(source ?? "");
+  const out = new Map();
+  let k = 0;
+  let depth = 0;
+  while (k < text.length) {
+    const c = text[k];
+    if (c === '"') k = stringEnd(text, k);
+    else if (c === "%") k = skipBlank(text, k);
+    else if (c === "#") k = schemeEnd(text, k);
+    else if (c === "{" || c === "<") {
+      if (c === "{") depth++;
+      k++;
+    } else if (c === "}") {
+      depth--;
+      k++;
+    } else if (depth === 0 && /[A-Za-z]/.test(c) && (k === 0 || /\s/.test(text[k - 1]))) {
+      const m = /^([A-Za-z][A-Za-z_]*)\s*=\s*/.exec(text.slice(k, k + 128));
+      if (!m) {
+        while (k < text.length && /\S/.test(text[k])) k++;
+        continue;
+      }
+      const end = musicEnd(text, k + m[0].length);
+      out.set(m[1], { at: k, end, text: text.slice(k, end) });
+      k = end;
+    } else k++;
+  }
+  return out;
+}
+
+/** The names of the definitions `text` uses, and those they use in turn, in the source's order. */
+function usedDefinitions(text, defs, seen = new Set()) {
+  for (const m of String(text).matchAll(/\\([A-Za-z]+)\b/g)) {
+    const def = defs.get(m[1]);
+    if (!def || seen.has(m[1])) continue;
+    seen.add(m[1]);
+    usedDefinitions(def.text, defs, seen);
+  }
+  return [...seen].sort((x, y) => defs.get(x).at - defs.get(y).at);
+}
+
+/**
+ * The stretches of `source` kept as written: each `\\partCombine` or
+ * `\\autoChange` with the staff (or the piano staff) around it — [{ at, end,
+ * text, used }], `used` the definitions it names.
+ */
+function rawStretches(source) {
+  const text = String(source ?? "");
+  const defs = definitions(text);
+  const out = [];
+  const found = [...text.matchAll(new RegExp(`\\\\(${RAW_COMMANDS.join("|")})\\b`, "g"))].map((m) => m.index);
+  for (const p of found) {
+    // Not one inside a definition: its staff is wherever the variable is used.
+    if ([...defs.values()].some((d) => p >= d.at && p < d.end)) return null;
+    if (out.some((r) => p >= r.at && p < r.end)) continue;
+    // The staff around it: the nearest \\new … whose music holds it, or the command alone.
+    let stretch = { at: p, end: musicEnd(text, p) };
+    for (const m of [...text.slice(0, p).matchAll(/\\new\s+(Staff|PianoStaff|GrandStaff|DrumStaff)\b/g)].reverse()) {
+      const end = musicEnd(text, m.index);
+      if (end > p) {
+        stretch = { at: m.index, end };
+        break;
+      }
+    }
+    const raw = text.slice(stretch.at, stretch.end);
+    out.push({ ...stretch, text: raw, used: usedDefinitions(raw, defs), group: /^\\new\s+(PianoStaff|GrandStaff)\b/.test(raw) });
+  }
+  return { stretches: out, defs };
+}
+
+/** The staves of `parsed` that `stretch` makes: their indexes, by where their notes are written. */
+function stavesOf(parsed, spans, stretch, defs) {
+  const places = [stretch, ...stretch.used.map((name) => defs.get(name))];
+  return parsed.staves
+    .map((st, k) => (st.events.some((ev) => (ev.k === "Note" || ev.k === "Rest") && spans?.[ev.i] && places.some((r) => spans[ev.i][0] >= r.at && spans[ev.i][0] < r.end)) ? k : -1))
+    .filter((k) => k >= 0);
+}
+
+/** The staves made by \\partCombine and \\autoChange marked kept as written (see above); what cannot be, named. */
+function keepRaw(score, parsed, placed, source, spans, unsupported) {
+  const found = rawStretches(source);
+  if (!found) {
+    unsupported.add("\\partCombine or \\autoChange in a variable");
+    return;
+  }
+  const { stretches, defs } = found;
+  const numbers = (k) => parsed.staves[k].events.filter((ev) => ev.k === "Note" || ev.k === "Rest");
+  const all = parsed.staves.flatMap((st, k) => numbers(k).map((ev) => ev.i));
+  const ossiasBefore = (k) => parsed.staves.slice(0, k).filter((st) => st.kind === "Ossia").length;
+  const used = new Set();
+  for (const stretch of stretches) {
+    const ks = stavesOf(parsed, spans, stretch, defs).filter((k) => placed[k].length);
+    if (!ks.length) {
+      unsupported.add("\\partCombine or \\autoChange the editor cannot place");
+      continue;
+    }
+    const mine = ks.flatMap((k) => numbers(k));
+    const from = Math.min(...mine.map((ev) => ev.i));
+    const last = Math.max(...mine.map((ev) => ev.i));
+    const to = Math.min(1 + Math.max(...all), ...all.filter((i) => i > last && !mine.some((ev) => ev.i === i)));
+    const drawn = new Set(mine.filter((ev) => !ev.spacer).map((ev) => ev.i));
+    const head = placed[ks[0]][0];
+    head.raw = stretch.text;
+    head.rawItems = Array.from({ length: Math.max(0, to - from) }, (_, n) => drawn.has(from + n));
+    for (const k of ks.slice(1)) placed[k][0].rawPart = true;
+    for (const name of stretch.used) used.add(name);
+    // A piano staff it makes is in its text: the model's group around those staves goes.
+    if (stretch.group) {
+      const first = ks[0] - ossiasBefore(ks[0]);
+      const lastStaff = ks[ks.length - 1] - ossiasBefore(ks[ks.length - 1]);
+      score.groups = score.groups.filter((g) => !(g.first >= first && g.last <= lastStaff));
+      const staves = parsed.staves.filter((st) => st.kind !== "Ossia").length;
+      if (first === 0 && lastStaff === staves - 1) score.group = "none";
+    }
+  }
+  if (used.size) score.defs = [...used].sort((x, y) => defs.get(x).at - defs.get(y).at).map((name) => defs.get(name).text);
+}
+
+/** Whether lane `s` belongs to a staff kept as written. */
+export function isRaw(score, s) {
+  const staff = score.staves[upperOf(score, s)];
+  return Boolean(staff?.raw != null || staff?.rawPart);
+}
+
+/** An edit on a staff kept as written: refused, said. */
+function refuseRaw(score, s) {
+  if (isRaw(score, s)) throw new Error(RAW_REFUSAL);
+}
+
+/** An edit that would change every staff's bars, with a staff kept as written: refused, said. */
+function refuseRawBars(score) {
+  if (score.staves.some((staff) => staff.raw != null || staff.rawPart)) throw new Error(RAW_BARS_REFUSAL);
+}
+
+const RAW_REFUSAL = "This staff is kept as LilyPond wrote it (\\partCombine, \\autoChange): edit its notes in the text below";
+const RAW_BARS_REFUSAL = "A staff is kept as LilyPond wrote it (\\partCombine, \\autoChange): put bars in or take them away in the text below";
+
 // ---- Reading eui-score's parse back ---------------------------------------------------------
 
 /** What the editor says of a piece of several movements (#359): engraved, edited in the text. */
@@ -5663,6 +5935,8 @@ export function fromParsed(parsed, source = null, { spans = parsed.spans ?? null
     const shift = (at) => at - ossias.filter((k) => k < at).length;
     score.groups = score.groups.map((g) => ({ ...g, first: shift(g.first), last: shift(g.last) })).filter((g) => g.last >= g.first);
   }
+  // A staff kept as written (\\partCombine, \\autoChange): its text, the variables it uses, its notes shown.
+  if (source != null && new RegExp(`\\\\(${RAW_COMMANDS.join("|")})\\b`).test(source)) keepRaw(score, parsed, placed, source, spans, unsupported);
   score.staves = placed.flat();
   // A staff whose notes go to another one needs a name to come back to.
   for (const u of staffLanes(score)) {
