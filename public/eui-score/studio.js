@@ -53,6 +53,17 @@ const patternTools = () => import(`./pattern-tools.js${V}`);
 /** Quantize, swing and humanize (Edit and Play menus), loaded the first time one is opened. */
 const feelTools = () => import(`./feel-tools.js${V}`);
 
+// The editor's parts, one job each. startStudio makes what they share — the
+// elements, the state (`st`), say — and installs them in turn:
+// - studio-text.js: the score as a model and as text; the undoable edit;
+// - studio-history.js: Undo and Redo, the history kept in this browser;
+// - studio-source.js: the source box, linked to the drawing, typed in.
+const [Text, History, Source] = await Promise.all([
+  import(`./studio-text.js${V}`),
+  import(`./studio-history.js${V}`),
+  import(`./studio-source.js${V}`),
+]);
+
 const COLOURS = { selection: "#b4373a", head: "#e0662a", cursor: "#2563c9", playing: "#0f9d47" };
 const DRAFT = "eui-score-studio-draft";
 // The palette over the selected note: the changes made to a note most.
@@ -193,6 +204,54 @@ export function startStudio(root, options = {}) {
   };
   // For a console or a test: the studio's state, on its element.
   root.studio = st;
+  // The Quantize grid (Playback): what is recorded, dragged on the keyboard,
+  // or opened from a MIDI file is fitted to it.
+  const quantizeBox = root.querySelector("[data-quantize]");
+
+  // What the parts share: the elements, the state, the libraries — and each
+  // part's functions, added as it is installed (`install(ctx)` answers them).
+  const ctx = {
+    root, options, draftKey, sourceBox, status, st, M, Vel, H, mergeScores, conflictLines, editor_view_lit, score_json,
+    source_spans, range, draw, say, mixFromMeta, applyMix
+  };
+  // A part calls another's functions through `ctx.call`, which finds them when
+  // called: whichever part is installed first, `draw` reaches `showState`.
+  const asked = new Set();
+  ctx.call = new Proxy({}, { get: (_, name) => (asked.add(name), (...args) => ctx[name](...args)) });
+  const {
+    readText, adoptText, writeText, snapshot, restore, edit, barsEdit, undo, redo, restoreHistory, saveDraft, open,
+    load, passedText, showInText, keptHistoryNote
+  } = ctx.call;
+
+  /** A refusal of the text: its line, and a button that selects that place in the source. */
+  function refuse(error, text = st.text) {
+    const message = error.message ?? String(error);
+    const place = M.refusalPlace(message, text);
+    say(place ? place.message : message, true);
+    if (!place || text !== sourceBox.value) return false;
+    const show = Object.assign(document.createElement("button"), { type: "button", className: "studio-show", textContent: "Show" });
+    show.addEventListener("click", () => {
+      sourceBox.focus();
+      sourceBox.setSelectionRange(place.at, place.at + 1);
+      // The selected line, with two above it, at the top of the box.
+      const lineHeight = parseFloat(getComputedStyle(sourceBox).lineHeight) || 18;
+      sourceBox.scrollTop = Math.max(0, (place.line - 3) * lineHeight);
+      sourceBox.scrollIntoView({ block: "nearest" });
+    });
+    status.append(" ", show);
+    return false;
+  }
+
+  function say(message, error = false, link = null) {
+    // Said during an edit: it outlives the edit's own clearing.
+    status.dataset.fresh = "1";
+    queueMicrotask(() => delete status.dataset.fresh);
+    status.textContent = message;
+    // `link`: { href, text }, a way on after the message (the Pricing page, #393).
+    if (link?.href) status.append(" ", Object.assign(document.createElement("a"), { href: link.href, textContent: link.text }));
+    status.classList.toggle("studio-error", error);
+    return false;
+  }
 
   // A button drawn with a sign (𝅘𝅥, ♭, ↑, 3) tells a screen reader what it
   // does: its title, without the key in brackets.
@@ -326,295 +385,15 @@ export function startStudio(root, options = {}) {
     toPdf(partSource(), `${title()} — ${partName()}`).then((pdf) => download(pdf, `${fileName()} - ${partName()}.pdf`, "application/pdf")).catch((e) => refuse(e));
   });
 
-  // ---- Model ↔ text ----------------------------------------------------------
-
+  // The parts, installed in turn: each makes its elements and adds its
+  // listeners, in the order the editor always set them up.
+  Object.assign(ctx, Text.install(ctx));
   /** Bar `b`'s number as the score shows it: after a pickup, the pickup is bar 0. */
   function barNo(b) {
     return st.score ? M.barNumber(st.score, b) : b + 1;
   }
 
-  function readText(text) {
-    st.text = text;
-    try {
-      const parsed = JSON.parse(score_json(text));
-      const result = M.fromParsed(parsed, text);
-      st.score = result.score ?? null;
-      // The mixer, the velocities…: on the text's last line, a comment the engraver passes over.
-      if (st.score) st.score.meta = M.readMeta(text);
-      st.unsupported = result.unsupported ?? [];
-      st.lost = result.lost ?? [];
-      // What the engraver read and passed over (\\override, \\set …): said when the text is opened.
-      st.passed = M.passedOver(parsed.warnings);
-      // The notes and rests the engraver numbers in this text.
-      st.textItems = 1 + Math.max(-1, ...parsed.staves.flatMap((staff) => staff.events.filter((ev) => ev.k === "Note" || ev.k === "Rest").map((ev) => ev.i)));
-    } catch (error) {
-      st.score = null;
-      st.unsupported = [];
-      st.lost = [];
-      st.passed = [];
-    }
-    st.lostNotice = "";
-    mixFromMeta();
-  }
-
-  /**
-   * The text read: written again from the model, unless that would drop what
-   * the model does not keep — then it waits for the first edit, as long as
-   * the model numbers its notes as the text does.
-   */
-  function adoptText() {
-    if (!st.score) return;
-    const { items } = M.toLilyPond(st.score);
-    if (st.lost.length && items.length === st.textItems) st.items = items;
-    else writeText({ undo: false });
-  }
-
-  function writeText({ undo = true } = {}) {
-    if (!st.score) return;
-    // The first rewrite of a text holding what the model does not keep: said, once.
-    if (st.lost.length) {
-      const what = st.lost.length > 1 || st.lost[0].startsWith("the settings") ? "those" : "that";
-      st.lostNotice = `The score editor rewrote this piece's text without ${st.lost.join(", ")}: it does not keep ${what}.${undo ? " Undo puts the text back as it was." : ""}`;
-      st.lost = [];
-    }
-    const { source, items } = M.toLilyPond(st.score);
-    st.text = source;
-    st.items = items;
-    if (sourceBox.value !== source) sourceBox.value = source;
-  }
-
-  function snapshot() {
-    return JSON.stringify({ score: st.score, text: st.text, sel: st.sel, input: st.input, lost: st.lost });
-  }
-
-  function restore(snap) {
-    const s = JSON.parse(snap);
-    st.score = s.score;
-    st.text = s.text;
-    st.sel = s.sel;
-    st.input = s.input;
-    st.unsupported = [];
-    if (s.lost?.length) {
-      // The text as it was, with what the model does not keep.
-      sourceBox.value = st.text;
-      readText(st.text);
-      adoptText();
-    } else if (st.score) writeText();
-    else {
-      sourceBox.value = st.text;
-      readText(st.text);
-    }
-    mixFromMeta();
-    applyMix();
-  }
-
-  /** Runs `fn` on the model as one undoable edit; a refusal leaves everything as it was. */
-  function edit(fn, { keepFuture = false } = {}) {
-    if (!st.score) return say("The score tools wait: this piece is edited in its text below.", true);
-    if (st.written) return say("Written pitch is for reading: View ▸ Written pitch again to write, at concert pitch.", true);
-    const before = snapshot();
-    try {
-      fn(st.score);
-      // A note whose pitch changed in place keeps its velocity; a note gone, its velocity with it.
-      if (st.score.meta?.velocity) Vel.reconcile(JSON.parse(before).score, st.score);
-    } catch (error) {
-      restore(before);
-      return say(error.message ?? String(error), true);
-    }
-    writeText();
-    // Nothing changed: no step to undo.
-    if (st.text === JSON.parse(before).text) {
-      draw();
-      return true;
-    }
-    try {
-      JSON.parse(editor_view_lit(st.text, 600, 7, "{}"));
-    } catch (error) {
-      restore(before);
-      return say(M.plainRefusal(error.message ?? error), true);
-    }
-    st.past.push(before);
-    if (!keepFuture) st.future = [];
-    if (status.dataset.fresh !== "1") say("");
-    delete status.dataset.fresh;
-    saveDraft();
-    draw();
-    return true;
-  }
-
-  /**
-   * `edit`, `fn` answering the bars it put in or took away (`{ at, removed,
-   * added }`), told to `onBars` once the edit went through (#392): the app
-   * sends them with the save, so the comments on later bars follow them.
-   */
-  function barsEdit(fn) {
-    let op = null;
-    const done = edit((score) => (op = fn(score)));
-    if (done === true && op) options.onBars?.(op);
-    return done;
-  }
-
-  function undo() {
-    undoStep(st.past, st.future, "Undo");
-  }
-
-  function redo() {
-    undoStep(st.future, st.past, "Redo");
-  }
-
-  /**
-   * Undo (`from` the past, `to` the future) or Redo (the other way). A step
-   * whose text is still the score's goes back as it was; one that someone
-   * else's changes have come over since is taken back by a three-way merge
-   * — its `after` to its `text`, on the score as it now stands — and, when
-   * they changed the same bars, not at all: theirs are never undone.
-   */
-  function undoStep(from, to, name) {
-    settleHistory();
-    const back = from.at(-1);
-    if (!back) return;
-    const now = H.stepOf(snapshot(), null);
-    if (back.after === st.text) {
-      from.pop();
-      if (back.snap) restore(back.snap);
-      else restoreText(back);
-    } else {
-      const merged = mergeScores(back.after, back.text, st.text, { parse: score_json });
-      if (merged.text == null) {
-        const where = merged.whole ? "" : `: ${conflictLines(merged.conflicts).join("; ")}`;
-        return say(`${name} stops here: the score was changed elsewhere since, where this step changed it too${where}. Those changes stay as they are.`, true);
-      }
-      from.pop();
-      replaceText(merged.text, { keep: true, at: back });
-      say(`${name}: done around the changes made elsewhere since; those stay.`);
-    }
-    now.after = st.text;
-    to.push(now);
-    // What moved is no longer only what was done since the last save: the app lines the bars up by their content.
-    options.onBars?.(null);
-    // The step now last leads to where it led, not to this text: around others' changes, Undo merges again.
-    saveDraft({ pin: true });
-    draw();
-  }
-
-  /** A step kept as its text only (an old one, or one brought back from the browser) put back. */
-  function restoreText(back) {
-    sourceBox.value = back.text;
-    readText(back.text);
-    adoptText();
-    st.sel = back.sel ?? null;
-    if (back.input) st.input = { ...st.input, ...back.input };
-    applyMix();
-  }
-
-  // ---- The undo history, kept in this browser (undo-history.js) -----------------
-
-  const historyKey = options.history === false ? null : (options.history ?? (draftKey ? `playground:${draftKey}` : null));
-  let historyKeeper = null;
-  let historyNote = "";
-
-  /**
-   * The steps just pushed (as snapshots) made steps, each with the text it
-   * led to; the history kept within its memory; and saved in the browser.
-   */
-  function settleHistory({ pin = false } = {}) {
-    for (const stack of [st.past, st.future]) {
-      for (let i = 0; i < stack.length; i++) if (typeof stack[i] === "string") stack[i] = H.stepOf(stack[i], st.text);
-    }
-    // The last step led to the text as it now is (rewritten as the model
-    // writes it, say) — unless someone else's change came over it: then it
-    // stays pinned to the text it led to, and Undo merges around theirs.
-    const last = st.past.at(-1);
-    if (last && pin) last.pinned = true;
-    else if (last && !last.pinned) last.after = st.text;
-    H.keepWithin(st.past, st.future);
-    historyKeeper?.save(() => ({ end: st.text, past: st.past, future: st.future }));
-  }
-
-  /** The history kept in this browser for this score, back: said in `historyNote`. */
-  async function restoreHistory() {
-    if (!historyKey) return;
-    const backend = await H.indexedDbBackend();
-    if (!backend) return;
-    const store = H.historyStore(backend);
-    historyKeeper = H.keeper(store, historyKey);
-    addEventListener("pagehide", () => historyKeeper.flush());
-    document.addEventListener("visibilitychange", () => document.hidden && historyKeeper.flush());
-    const kept = H.decode(await store.get(historyKey));
-    if (!kept || (!kept.past.length && !kept.future.length)) return;
-    const same = kept.end === st.text;
-    if (!same && !options.historyAcross) return;
-    // Steps taken while it was being read stay above it.
-    st.past = [...kept.past, ...st.past];
-    if (!st.future.length) st.future = kept.future;
-    // Changed since by someone else: the last step leads to the text as it was.
-    const last = st.past.at(-1);
-    if (last && last.after !== st.text) last.pinned = true;
-    H.keepWithin(st.past, st.future);
-    const steps = st.past.length;
-    historyNote = same
-      ? `Your undo history is back: Edit ▸ Undo goes back ${steps} step${steps === 1 ? "" : "s"}.`
-      : "Your undo history is back. The score was changed elsewhere since: Undo takes back your own steps around those changes, and stops where both changed the same bars.";
-  }
-
-  // Every change ends here: the browser's draft (the playground's), and
-  // whoever embeds the editor (the app, which saves to the account).
-  function saveDraft({ pin = false } = {}) {
-    settleHistory({ pin });
-    if (draftKey) {
-      try {
-        localStorage.setItem(draftKey, st.text);
-      } catch (error) {}
-    }
-    options.onChange?.(st.text);
-  }
-
-  // New, Open a file, an example: a score of its own where the embedder says
-  // so (the app), else in place of this one (the playground, one draft).
-  function open(text, message) {
-    if (options.onOpen) return options.onOpen(text, message);
-    load(text, message);
-  }
-
-  /**
-   * `text` in place of the score, one Undo away. `keep`: another person's
-   * changes merged in (the app's co-editing) — the selection and the cursor
-   * stay where they were while their staff and bars are still there.
-   * `remote`: those changes are someone else's, not a step of this
-   * person's: Undo leaves them, taking back this person's steps around them.
-   */
-  function load(text, message, { keep = false, remote = false } = {}) {
-    if (!remote) {
-      st.past.push(snapshot());
-      st.future = [];
-    }
-    replaceText(text, { keep });
-    saveDraft({ pin: remote });
-    draw();
-    if (message || st.passed.length) say(`${message ?? ""}${passedText()}`.trim());
-  }
-
-  /** `text` read in place of the score's; `keep` (or `at`, a step's) the selection and the cursor where they still fit. */
-  function replaceText(text, { keep = false, at = null } = {}) {
-    const { sel, input } = at ? { sel: at.sel, input: { ...st.input, ...(at.input ?? {}) } } : st;
-    sourceBox.value = text;
-    readText(text);
-    adoptText();
-    st.sel = null;
-    st.input = { ...st.input, on: false, t: 0, staff: 0, last: null };
-    if (keep && st.score) {
-      const end = M.barStart(st.score, M.barsOf(st.score));
-      const fits = (lane, ...times) => st.score.staves[lane] && times.every((t) => t >= 0 && t < end);
-      if (sel && fits(sel.staff, sel.t0, sel.t1) && (sel.lanes ?? []).every((lane) => st.score.staves[lane]) && (!sel.bars || sel.bars[1] < M.barsOf(st.score))) st.sel = sel;
-      if (input?.on && fits(input.staff, input.t)) st.input = input;
-    }
-  }
-
-  /** The settings the engraver passed over in the text read, briefly: " Passed over: \\override …", or "". */
-  function passedText() {
-    return st.passed.length ? ` Passed over, not drawn: ${st.passed.join(", ")}.` : "";
-  }
-
+  Object.assign(ctx, History.install(ctx));
   // ---- Selection, in times -------------------------------------------------------
 
   /** The bar the changes section acts on: the cursor's, or the selection's first; null when none. */
@@ -662,87 +441,7 @@ export function startStudio(root, options = {}) {
     if (!extend) hear();
   }
 
-  // ---- The drawing and the text, linked -------------------------------------------
-  //
-  // A note clicked on the score is selected in the text, and the caret put on
-  // a note in the text selects it on the score — while the text is the one
-  // the model writes; typed text not yet read back links nothing.
-
-  let written = { text: null, spans: [] };
-  const textMark = root.querySelector("[data-source-mark]");
-
-  /** Each note of the model and where the source box writes it, or null while it holds other text. */
-  function writtenPlaces() {
-    if (!st.score) return null;
-    const { source, items } = M.toLilyPond(st.score);
-    if (source !== sourceBox.value) return null;
-    if (written.text !== source) {
-      let spans = [];
-      try {
-        spans = JSON.parse(source_spans(source));
-      } catch (error) {}
-      written = { text: source, spans };
-    }
-    return items.map((it, k) => ({ ...it, span: written.spans[k] }));
-  }
-
-  /** The selection's notes, marked in the text; `select` selects them there too and scrolls to them, the focus staying where it was. */
-  function showInText(select) {
-    const r = range();
-    const places = r && !st.input.on ? writtenPlaces() : null;
-    if (!places) return markText();
-    const first = places.find((p) => p.staff === r.s && p.index === r.a)?.span;
-    const last = places.find((p) => p.staff === r.s && p.index === r.b)?.span;
-    if (!first || !last) return markText();
-    markText(first[0], last[1]);
-    if (!select || document.activeElement === sourceBox) return;
-    const focused = document.activeElement;
-    sourceBox.setSelectionRange(first[0], last[1]);
-    if (focused && focused !== sourceBox && document.activeElement === sourceBox) focused.focus({ preventScroll: true });
-    const lineHeight = parseFloat(getComputedStyle(sourceBox).lineHeight) || 18;
-    const top = (sourceBox.value.slice(0, first[0]).split("\n").length - 1) * lineHeight;
-    if (top < sourceBox.scrollTop || top > sourceBox.scrollTop + sourceBox.clientHeight - lineHeight) {
-      sourceBox.scrollTop = Math.max(0, top - 2 * lineHeight);
-    }
-  }
-
-  /** Marks `from`–`to` of the text behind it, seen while the focus is elsewhere; no arguments, no mark. */
-  function markText(from, to) {
-    if (!textMark) return;
-    textMark.replaceChildren();
-    if (from == null || sourceBox.value !== written.text) return;
-    const text = sourceBox.value;
-    const mark = Object.assign(document.createElement("mark"), { textContent: text.slice(from, to) });
-    textMark.append(text.slice(0, from), mark, text.slice(to) + "\n");
-    followText();
-  }
-
-  function followText() {
-    if (!textMark) return;
-    textMark.scrollTop = sourceBox.scrollTop;
-    textMark.scrollLeft = sourceBox.scrollLeft;
-  }
-
-  sourceBox.addEventListener("scroll", followText);
-  sourceBox.addEventListener("input", () => markText());
-
-  /** The note the caret is on in the text, selected on the score. */
-  function showOnScore() {
-    if (typing || st.input.on || sourceBox.selectionStart !== sourceBox.selectionEnd) return;
-    const caret = sourceBox.selectionStart;
-    const place = writtenPlaces()?.find((p) => p.span && p.span[0] <= caret && caret <= p.span[1]);
-    if (!place) return;
-    const t = M.starts(st.score.staves[place.staff])[place.index];
-    if (st.sel && st.sel.staff === place.staff && st.sel.t0 === t && st.sel.t1 === t) return;
-    st.sel = { staff: place.staff, t0: t, t1: t, head: -1 };
-    draw();
-  }
-
-  sourceBox.addEventListener("click", showOnScore);
-  sourceBox.addEventListener("keyup", (event) => {
-    if (event.key.startsWith("Arrow") || ["Home", "End", "PageUp", "PageDown"].includes(event.key)) showOnScore();
-  });
-
+  Object.assign(ctx, Source.install(ctx));
   // ---- Hearing the notes ----------------------------------------------------------
 
   const HEAR = "eui-score-studio-hear";
@@ -927,7 +626,7 @@ export function startStudio(root, options = {}) {
         return draw();
       case "insert-copied": return insertCopied();
       case "record": return record();
-      case "midi-learn": return sync.open();
+      case "midi-learn": return ctx.sync.open();
       case "set-loop": return setLoop(selectedBarsOrNull());
       case "clear-loop": return setLoop(null);
       case "written": {
@@ -1739,7 +1438,7 @@ export function startStudio(root, options = {}) {
       sheet.classList.add("studio-sheet-refused");
       refuse(error, shown);
     }
-    if (wordsBox) placeWords();
+    placeWords();
     placeOverlay();
     placePlayhead();
     drawRoll();
@@ -2172,7 +1871,7 @@ export function startStudio(root, options = {}) {
   rollHost.append(velBar);
 
   // The automation lane (automation-ui.js), under the velocity strip.
-  st.automation = automationLane({ rollHost, rollScroll, st, edit, say, redraw: () => drawRoll(), recordingNow, learnt: () => sync?.learnt?.list() ?? [] });
+  st.automation = automationLane({ rollHost, rollScroll, st, edit, say, redraw: () => drawRoll(), recordingNow, learnt: () => ctx.sync?.learnt?.list() ?? [] });
 
   /** The velocities the dynamics give, as the MIDI plays them: found once per text, then drawn. */
   function heardVelocities() {
@@ -2556,36 +2255,6 @@ export function startStudio(root, options = {}) {
     }
   }
 
-  /** A refusal of the text: its line, and a button that selects that place in the source. */
-  function refuse(error, text = st.text) {
-    const message = error.message ?? String(error);
-    const place = M.refusalPlace(message, text);
-    say(place ? place.message : message, true);
-    if (!place || text !== sourceBox.value) return false;
-    const show = Object.assign(document.createElement("button"), { type: "button", className: "studio-show", textContent: "Show" });
-    show.addEventListener("click", () => {
-      sourceBox.focus();
-      sourceBox.setSelectionRange(place.at, place.at + 1);
-      // The selected line, with two above it, at the top of the box.
-      const lineHeight = parseFloat(getComputedStyle(sourceBox).lineHeight) || 18;
-      sourceBox.scrollTop = Math.max(0, (place.line - 3) * lineHeight);
-      sourceBox.scrollIntoView({ block: "nearest" });
-    });
-    status.append(" ", show);
-    return false;
-  }
-
-  function say(message, error = false, link = null) {
-    // Said during an edit: it outlives the edit's own clearing.
-    status.dataset.fresh = "1";
-    queueMicrotask(() => delete status.dataset.fresh);
-    status.textContent = message;
-    // `link`: { href, text }, a way on after the message (the Pricing page, #393).
-    if (link?.href) status.append(" ", Object.assign(document.createElement("a"), { href: link.href, textContent: link.text }));
-    status.classList.toggle("studio-error", error);
-    return false;
-  }
-
   function title() {
     return st.score?.header.title || (st.text.match(/title\s*=\s*"([^"]*)"/)?.[1] ?? "score");
   }
@@ -2942,11 +2611,16 @@ export function startStudio(root, options = {}) {
     const el = event.target;
     const menu = el.closest(".studio-dropdown");
     if (menu) menu.open = false;
+    if (openChosen(el)) return;
+    if (el.matches("select[data-field], input[type=number][data-field], input[type=checkbox][data-field]")) onField(event);
+  });
+  /** File ▸ Open a file or an example, chosen in `el`: opened, and true; false for any other control. */
+  function openChosen(el) {
     if (el.matches('[data-act="example"]') && el.value) {
       const path = `${options.examples ?? "/examples"}/${el.value}/source.ly`;
       el.value = "";
       fetch(path).then((r) => r.text()).then((text) => open(text, "Example opened.")).catch(() => say("Could not open that example", true));
-      return;
+      return true;
     }
     if (el.matches('[data-act="open"]') && el.files?.[0]) {
       const file = el.files[0];
@@ -2965,51 +2639,23 @@ export function startStudio(root, options = {}) {
         const grid = quantizeBox?.value ?? "sixteenth";
         const title = file.name.replace(/\.[^.]+$/, "");
         Promise.all([midiImport(), file.arrayBuffer()]).then(([I, bytes]) => opened(I.fromMidi(new Uint8Array(bytes), { title, grid }))).catch(failed);
-        return;
+        return true;
       }
       if (!isMusicXmlName(file.name)) {
         file.text().then((text) => open(text, `${file.name} opened.`));
-        return;
+        return true;
       }
       // MusicXML, from MuseScore, Sibelius, Finale or Dorico: read as LilyPond.
       musicXml()
         .then(async (X) => X.fromMusicXML(await X.musicXmlOf(file)))
         .then(opened)
         .catch(failed);
-      return;
+      return true;
     }
-    if (el.matches("select[data-field], input[type=number][data-field], input[type=checkbox][data-field]")) onField(event);
-  });
+    return false;
+  }
   root.addEventListener("input", (event) => {
     if (event.target.matches('input[type="text"][data-field]')) onField(event);
-  });
-
-  let typing = null;
-  sourceBox.addEventListener("input", () => {
-    clearTimeout(typing);
-    typing = setTimeout(() => {
-      typing = null;
-      st.past.push(snapshot());
-      st.future = [];
-      readText(sourceBox.value);
-      if (st.score) {
-        // Keep what was typed; the model rewrites it on the next edit.
-        st.items = M.toLilyPond(st.score).items;
-      }
-      saveDraft();
-      draw();
-    }, 250);
-  });
-
-  // Left alone, typed LilyPond is rewritten as the model writes it: one
-  // notation, and every note where the score's tools expect it.
-  sourceBox.addEventListener("change", () => {
-    if (!st.score) return;
-    // Rewriting it drops what the model does not keep: one Undo away.
-    if (st.lost.length) st.past.push(snapshot());
-    writeText();
-    saveDraft();
-    draw();
   });
 
   new ResizeObserver(() => draw()).observe(sheet);
@@ -3725,7 +3371,6 @@ export function startStudio(root, options = {}) {
   // played are kept with the times they were heard at, and written when the
   // music stops, fitted to the Quantize grid. One Undo takes it all back.
 
-  const quantizeBox = root.querySelector("[data-quantize]");
   const dynamicsBox = root.querySelector("[data-record-dynamics]");
   const recordButtons = () => root.querySelectorAll("[data-record]");
 
@@ -3914,7 +3559,10 @@ export function startStudio(root, options = {}) {
   }
 
   // The MIDI clock, sent and followed, and MIDI learn (midi-sync.js).
-  const sync = S.attach({ root, st, M, P, act, say });
+  ctx.sync = S.attach({ root, st, M, P, act, say });
+
+  // Every function a part asked for is there.
+  for (const name of asked) if (typeof ctx[name] !== "function") throw new Error(`studio: no part installs ${name}`);
 
   // ---- Start ---------------------------------------------------------------------
 
@@ -3948,7 +3596,7 @@ export function startStudio(root, options = {}) {
       await restoreHistory();
     } catch (error) {}
     // For a test, or a console: the history is read ("back", or "none").
-    root.dataset.history = historyNote ? "back" : "none";
+    root.dataset.history = keptHistoryNote() ? "back" : "none";
     draw();
     return sharedText;
   }).then((sharedText) => {
@@ -3959,7 +3607,7 @@ export function startStudio(root, options = {}) {
     else if (!fromExample && start !== sourceBox.defaultValue) say("Your last score, kept in this browser. New starts afresh.");
     else say("Click a note to select it, or press N and type A–G to write.");
     // After what was said on opening, not in its place.
-    if (historyNote) say(`${status.textContent} ${historyNote}`.trim(), status.classList.contains("studio-error"));
+    if (keptHistoryNote()) say(`${status.textContent} ${keptHistoryNote()}`.trim(), status.classList.contains("studio-error"));
   });
   // `parse`: the engraver's reading of a text (score_json), for the app's merge.
   return { state: st, ready, source: () => st.text, load, peers: setPeers, parse: (text) => score_json(text), markers: setMarkers, selectPlace, placeLabel, place };
