@@ -55,8 +55,25 @@
       starting on a line of its own. A clef or a key may change in the middle of a bar, and
       <code>\compressMMRests</code> gathers bars of rest into one.
     </p>
+    <p>
+      Since Soli 2.28.9, the piano's two staves are crossed as LilyPond crosses them: a beam over notes of both
+      staves is drawn once between them, slurs and ties go from one staff to the other, <code>\autoChange</code>
+      shares one voice between the hands, and <code>\showStaffSwitch</code> and <code>\crossStaff</code> are drawn.
+      The common <code>\override</code>, <code>\set</code>, <code>\tweak</code>, <code>\omit</code> and
+      <code>\hide</code> settings are followed instead of passed over (directions, offsets, sizes, beam grouping,
+      mark and time-signature styles, note-head styles, bar numbers). <code>\RemoveEmptyStaves</code> hides a
+      staff that rests for a whole system, and <code>\partCombine</code> sets two parts on one staff with
+      <em>a2</em>, <em>Solo</em> and two voices. Lines are broken over the whole piece, and the
+      <code>\paper</code> settings for widths, indents, ragged lines and pages, the space between systems and the
+      number of systems or pages are honoured.
+    </p>
     <ul>
-      <li><strong>Layout</strong>: no cross-staff notation, and a page breaker simpler than LilyPond's.</li>
+      <li><strong>Layout</strong>: vertical spacing does not tighten on a crowded page, a beam across the staves
+        is sloped more simply than LilyPond's, and the accidentals of a note moved to the other staff are still
+        counted in its own staff's bar.</li>
+      <li><strong>Settings</strong>: an <code>\override</code> not in the list above, and smaller staves
+        (<code>StaffSymbol.staff-space</code>) for an ossia or cue notes, are still passed over with a
+        warning.</li>
     </ul>
     <div class="callout">
       Not sure? Paste your source into the <a href="<%= playground_path() %>">playground</a>: the engraver's

@@ -12,6 +12,50 @@ class Changelog
     [
       {"date": "2026-10-25", "entries": [
         {
+          "area": "engine",
+          "title": "The piano's two staves crossed: beams, slurs and ties from one hand to the other",
+          "text": "Notes moved to the other staff with \\change Staff now share one beam drawn between the staves, "
+          + "upper stems down to it and lower stems up; a voice may cross in the middle of a beam. Slurs, phrasing "
+          + "slurs and ties go from a note on one staff to a note on the other. \\autoChange shares one voice "
+          + "between the hands at middle C, with rests where the other hand plays; \\showStaffSwitch draws the "
+          + "line that follows a voice across, and \\crossStaff joins a stem to the other staff's note."
+        },
+        {
+          "area": "engine",
+          "title": "Lines and pages laid out as LilyPond lays them out",
+          "text": "Line breaks are chosen over the whole piece, so the last line is no longer a lonely bar or two, and "
+          + "a last page of one system takes one from the page before. \\noBreak and \\noPageBreak are followed. "
+          + "The \\paper settings are read: line-width, indent and short-indent, ragged-right, ragged-last and "
+          + "ragged-bottom, the space between systems, systems a page, system-count and page-count, in mm, cm, "
+          + "in or pt. Notes are spaced a little apart where a stem up meets a stem down, as LilyPond does."
+        },
+        {
+          "area": "engine",
+          "title": "\\override, \\set and \\tweak followed",
+          "text": "The settings real files use most are followed instead of passed over: the direction of stems, "
+          + "slurs, ties, dynamics, words, fingerings and tuplets; offsets, padding and alignment of words and "
+          + "marks; sizes and \\magnifyMusic; beam grouping (beatStructure, subdivideBeams, Beam.positions); boxed, "
+          + "circled or numbered rehearsal marks; C or numbered time signatures; cross, diamond, triangle, slash "
+          + "and harmonic note heads; \\omit and \\hide; and which bar numbers are shown. \\once, \\revert and "
+          + "\\undo work. Anything else is still skipped with a warning."
+        },
+        {
+          "area": "engine",
+          "title": "Empty staves hidden: \\RemoveEmptyStaves",
+          "text": "With \\RemoveEmptyStaves, in a \\layout or a staff's \\with, a staff that only rests for a whole "
+          + "system is not drawn on that system, as in an orchestral score: the staves below move up, names turn "
+          + "to their short forms, brackets and braces shrink, and bar numbers and marks go over the first staff "
+          + "drawn. The first system keeps every staff, unless \\RemoveAllEmptyStaves asks otherwise."
+        },
+        {
+          "area": "engine",
+          "title": "Two parts on one staff: \\partCombine",
+          "text": "\\partCombine sets two parts on one staff as LilyPond does: the same notes once, with a2 where "
+          + "the parts join; chords when they move together; Solo or Solo II when one rests; two voices otherwise. "
+          + "\\partCombineApart, Chords, Unisono, SoloI and SoloII force a choice, and \\partCombineUp and Down "
+          + "put two pairs on one staff. Both parts are played."
+        },
+        {
           "area": "site",
           "app": true,
           "title": "Push notifications on your phone and computer",

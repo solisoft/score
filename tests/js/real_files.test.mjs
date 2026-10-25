@@ -63,7 +63,7 @@ test("kept: what real files write survives an edit elsewhere", () => {
   // The settings passed over are named before the rewrite drops them.
   assert.equal(lost.length, 1);
   assert.match(lost[0], /^the settings the engraver passes over \(/);
-  for (const name of ["\\override StaffSymbol.color in \\with", "\\override NoteHead.color", "the \\layout block's settings", "the header field 'encodingsoftware'"]) assert.ok(lost[0].includes(name), `${name} in ${lost[0]}`);
+  for (const name of ["\\override StaffSymbol.color in \\with", "\\override NoteHead.color", "\\consists in \\layout", "the header field 'encodingsoftware'"]) assert.ok(lost[0].includes(name), `${name} in ${lost[0]}`);
   // Read again, every one is there still.
   const back = read(source).score.staves[0].events;
   assert.equal(back[0].stemDir, 1);
