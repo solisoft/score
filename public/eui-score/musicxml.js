@@ -143,7 +143,12 @@ function quoted(text) {
 
 // ---- MusicXML → LilyPond ------------------------------------------------------------
 
-const CLEFS_IN = { G2: "treble", F4: "bass", C3: "alto", C4: "tenor", C1: "soprano", F3: "varbaritone", G1: "french", C2: "mezzosoprano", C5: "baritone" };
+const CLEFS_IN = { G2: "treble", F4: "bass", C3: "alto", C4: "tenor", C1: "soprano", F3: "varbaritone", G1: "french", C2: "mezzosoprano", C5: "baritone", F5: "subbass" };
+/** A script's LilyPond, `-.` or `\\trill`, written above (^) or below (_) when `placement` says so. */
+function placed(text, placement) {
+  if (placement !== "above" && placement !== "below") return text;
+  return (placement === "above" ? "^" : "_") + (text.startsWith("-") ? text.slice(1) : text);
+}
 const ARTICULATIONS_IN = { staccato: "-.", accent: "->", tenuto: "--", "strong-accent": "-^", staccatissimo: "-!", "detached-legato": "-_", spiccato: "-!" };
 const ORNAMENTS_IN = { "trill-mark": "\\trill", mordent: "\\mordent", "inverted-mordent": "\\prall", turn: "\\turn" };
 const DYNAMICS_IN = ["ppp", "pp", "p", "mp", "mf", "f", "ff", "fff", "sf", "sfz", "fp", "rfz", "sfp", "fz"];
@@ -765,15 +770,17 @@ function readPart(part, info, first, warnings) {
       }
       slurDepth.set(key, open);
       for (const art of notations.flatMap((n) => kids(n, "articulations")).flatMap((a) => a.children)) {
-        if (ARTICULATIONS_IN[art.name]) suffix += ARTICULATIONS_IN[art.name];
+        if (ARTICULATIONS_IN[art.name]) suffix += placed(ARTICULATIONS_IN[art.name], art.attrs.placement);
         else if (art.name !== "breath-mark") warnings.add("some articulations");
       }
       for (const orn of notations.flatMap((n) => kids(n, "ornaments")).flatMap((a) => a.children)) {
-        if (ORNAMENTS_IN[orn.name]) suffix += ORNAMENTS_IN[orn.name];
+        if (ORNAMENTS_IN[orn.name]) suffix += placed(ORNAMENTS_IN[orn.name], orn.attrs.placement);
         else if (orn.name === "tremolo" && orn.attrs.type !== "start" && orn.attrs.type !== "stop") suffix = `:${8 * 2 ** (Number(orn.text.trim() || 1) - 1)}${suffix}`;
         else if (orn.name !== "accidental-mark") warnings.add("some ornaments");
       }
-      if (has("fermata")) suffix += "\\fermata";
+      // A fermata turned over is below the note; one said upright, above it.
+      const fermata = each("fermata")[0];
+      if (fermata) suffix += placed("\\fermata", { inverted: "below", upright: fermata.attrs.type ? "above" : null }[fermata.attrs.type]);
       const marks = rest ? "" : fingeringText(notations);
       if (has("arpeggiate") && !rest) suffix += "\\arpeggio";
       if (each("glissando").some((g) => g.attrs.type === "start") || each("slide").some((g) => g.attrs.type === "start")) suffix += "\\glissando";
@@ -782,16 +789,33 @@ function readPart(part, info, first, warnings) {
         if (DYNAMICS_IN.includes(mark)) suffix += `\\${mark}`;
       }
       const tuplets = each("tuplet");
-      const opens = ratio && (tuplets.some((t) => t.attrs.type === "start") || !tupletOpen.get(key));
-      const closes = ratio && tuplets.some((t) => t.attrs.type === "stop");
       const lane = staff.lanes[v];
-      if (tupletOpen.get(key) && (!ratio || (opens && tuplets.some((t) => t.attrs.type === "start")))) {
-        lane.push("}");
-        tupletOpen.set(key, false);
-      }
-      if (ratio && opens && !tupletOpen.get(key)) {
-        lane.push(`\\tuplet ${ratio.n}/${ratio.d} {`);
-        tupletOpen.set(key, true);
+      // The tuplets open in this voice, outermost first: each its own ratio.
+      const opened = tupletOpen.get(key) ?? [];
+      tupletOpen.set(key, opened);
+      const closeAll = () => {
+        while (opened.length) {
+          lane.push("}");
+          opened.pop();
+        }
+      };
+      const startsHere = tuplets.filter((t) => t.attrs.type === "start").sort((x, y) => Number(x.attrs.number ?? 1) - Number(y.attrs.number ?? 1));
+      const stopsHere = ratio ? tuplets.filter((t) => t.attrs.type === "stop").length : 0;
+      if (!ratio) closeAll();
+      else {
+        // A bracket that says its own ratio nests in those open; one that does not starts afresh.
+        const levels = startsHere.map((t) => {
+          const n = numberIn(kid(t, "tuplet-actual") ?? { children: [] }, "tuplet-number");
+          const d = numberIn(kid(t, "tuplet-normal") ?? { children: [] }, "tuplet-number");
+          return n && d ? { n, d, own: true } : null;
+        });
+        if (!startsHere.length && !opened.length) levels.push(null);
+        if (levels.length && levels.some((l) => !l?.own)) closeAll();
+        for (const level of levels) {
+          const r = level ?? ratio;
+          lane.push(`\\tuplet ${r.n}/${r.d} {`);
+          opened.push(r);
+        }
       }
       const pending = graces.get(key);
       // Grace notes that take their time from the note before them, or come before a rest: that note's \afterGrace.
@@ -849,9 +873,9 @@ function readPart(part, info, first, warnings) {
       if (beam === "end") beamFrom.delete(key);
       entry.render();
       lastNote.set(key, entry);
-      if (closes && tupletOpen.get(key)) {
+      for (let k = 0; k < stopsHere && opened.length; k++) {
         lane.push("}");
-        tupletOpen.set(key, false);
+        opened.pop();
       }
       staff.pos[v] = start + duration;
       cursor = start + duration;
@@ -894,7 +918,7 @@ function readPart(part, info, first, warnings) {
 
   // The staves, each with its voices and its verses.
   const staffText = (st, k) => {
-    for (const [key, open] of tupletOpen) if (open && key.startsWith(`${k + 1}:`)) st.lanes[Number(key.split(":")[1])].push("}");
+    for (const [key, open] of tupletOpen) if (key.startsWith(`${k + 1}:`)) for (const _ of open) st.lanes[Number(key.split(":")[1])].push("}");
     const tidy = (lane) => {
       while (lane.length && lane[lane.length - 1] === "|") lane.pop();
       return lane.filter(Boolean).join(" ");
@@ -967,9 +991,8 @@ function chordName(el) {
 const xml = (text) => String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const ARTICULATIONS_OUT = { staccato: "staccato", accent: "accent", tenuto: "tenuto", marcato: "strong-accent", staccatissimo: "staccatissimo", portato: "detached-legato" };
 const ORNAMENTS_OUT = { trill: "trill-mark", prall: "inverted-mordent", mordent: "mordent", turn: "turn" };
-const CLEFS_OUT = {
-  treble: ["G", 2, 0], bass: ["F", 4, 0], alto: ["C", 3, 0], tenor: ["C", 4, 0], treble_8: ["G", 2, -1], bass_8: ["F", 4, -1], "treble^8": ["G", 2, 1], "bass^8": ["F", 4, 1], soprano: ["C", 1, 0], percussion: ["percussion", 0, 0],
-};
+// Every clef the model knows, as <clef> writes it: sign, line, octaves.
+const CLEFS_OUT = Object.fromEntries(M.CLEFS.map((clef) => [clef, M.clefShape(clef)]));
 const KIND_OF_CHORD = [
   [/^maj7|^Δ7?/, "major-seventh"], [/^m7b5|^ø/, "half-diminished"], [/^(m|min|-)7/, "minor-seventh"], [/^(dim|°)7/, "diminished-seventh"], [/^(m|min|-)/, "minor"],
   [/^(dim|°)/, "diminished"], [/^(aug|\+)/, "augmented"], [/^7/, "dominant"], [/^sus4/, "suspended-fourth"], [/^sus2/, "suspended-second"], [/^6/, "major-sixth"], [/^9/, "dominant-ninth"],
@@ -1156,11 +1179,15 @@ export function toMusicXML(score) {
       // The attributes: all of them at the start, then what changes.
       const attrs = [];
       if (b === 0) attrs.push(`<divisions>${divisions}</divisions>`);
-      const key = b === 0 ? score.staves[p.staves[0]].key ?? score.key : change?.key;
-      const mode = b === 0 ? score.mode : change?.mode;
+      // The part's first staff's key: the score's, or its own when it changes key apart.
+      const keyHere = b === 0 ? null : M.keyChanges(score, p.staves[0]).find((m) => m.bar === b && m.pos === 0);
+      const key = b === 0 ? M.keyOf(score, p.staves[0], 0) : keyHere?.key;
+      const mode = b === 0 ? score.staves[p.staves[0]].mode ?? score.mode : keyHere?.mode;
       if (key != null && !drums) attrs.push(`<key><fifths>${interval ? writtenKey(key, interval) : key}</fifths>${mode && mode !== "major" ? `<mode>${mode}</mode>` : ""}</key>`);
-      const time = b === 0 ? score.time : change?.time;
-      if (time) attrs.push(`<time><beats>${b === 0 && score.timeParts ? score.timeParts.join("+") : time[0]}</beats><beat-type>${time[1]}</beat-type></time>`);
+      const timeHere = b === 0 ? null : M.timeChanges(score, p.staves[0]).find((m) => m.bar === b);
+      const time = b === 0 ? score.staves[p.staves[0]].time ?? score.time : timeHere?.time;
+      const added = b === 0 ? score.timeParts : timeHere?.parts;
+      if (time) attrs.push(`<time><beats>${added?.length > 1 && added.reduce((x, y) => x + y, 0) === time[0] ? added.join("+") : time[0]}</beats><beat-type>${time[1]}</beat-type></time>`);
       if (b === 0 && p.staves.length > 1) attrs.push(`<staves>${p.staves.length}</staves>`);
       p.staves.forEach((s, k) => {
         const staff = score.staves[s];
@@ -1199,14 +1226,13 @@ export function toMusicXML(score) {
           const staffNo = p.staves.length > 1 ? k + 1 : 0;
           // A clef or a key changed inside the bar (#360): its attributes before the note it falls at, in the first voice.
           const staff = score.staves[p.staves[k]];
-          const own = (staff.key ?? score.key) - score.key;
           const mids = v > 0 || drums ? [] : [
             ...(staff.midClefs ?? []).filter((c) => c.bar === b).map((c) => {
               const [sign, lineNo, octave] = CLEFS_OUT[c.clef] ?? CLEFS_OUT.treble;
               return { pos: c.pos, xml: `<clef${staffNo ? ` number="${staffNo}"` : ""}><sign>${sign}</sign>${lineNo ? `<line>${lineNo}</line>` : ""}${octave ? `<clef-octave-change>${octave}</clef-octave-change>` : ""}</clef>` };
             }),
-            ...(k === 0 ? (score.midKeys ?? []).filter((m) => m.bar === b) : []).map((m) => {
-              const fifths = Math.max(-7, Math.min(7, m.key + own));
+            ...(k === 0 ? M.keyChanges(score, p.staves[k]).filter((m) => m.bar === b && m.pos > 0) : []).map((m) => {
+              const fifths = m.key;
               return { pos: m.pos, xml: `<key><fifths>${interval ? writtenKey(fifths, interval) : fifths}</fifths>${m.mode && m.mode !== "major" ? `<mode>${m.mode}</mode>` : ""}</key>` };
             }),
           ].sort((x, y) => x.pos - y.pos);
@@ -1365,7 +1391,8 @@ function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, 
   const ticks = M.ticksOf(ev);
   const wholeBar = ev.rest && !ev.tuplet && Math.abs(ticks - barLength) < 1e-6;
   const type = `<type>${TYPE_OF[ev.base] ?? "quarter"}</type>${"<dot/>".repeat(ev.dots)}`;
-  const tm = ev.tuplet ? `<time-modification><actual-notes>${ev.tuplet.n}</actual-notes><normal-notes>${ev.tuplet.d}</normal-notes></time-modification>` : "";
+  // A tuplet in a tuplet: the two ratios multiplied.
+  const tm = ev.tuplet ? `<time-modification><actual-notes>${ev.tuplet.n * (ev.tuplet.outer?.n ?? 1)}</actual-notes><normal-notes>${ev.tuplet.d * (ev.tuplet.outer?.d ?? 1)}</normal-notes></time-modification>` : "";
   const tiedFrom = before && before.tie && !before.rest && !ev.rest;
   const heads = ev.rest ? [null] : ev.pitches;
   // Fingerings and strings: a chord's on its note, the others on the first.
@@ -1402,14 +1429,26 @@ function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, 
       // A phrasing slur: a second slur, numbered 2.
       if (ev.phraseEnd) notations.push('<slur type="stop" number="2"/>');
       if (ev.phraseStart) notations.push('<slur type="start" number="2"/>');
-      if (ev.tuplet && !(before?.tuplet?.id === ev.tuplet.id)) notations.push('<tuplet type="start"/>');
-      if (ev.tuplet && !(after?.tuplet?.id === ev.tuplet.id)) notations.push('<tuplet type="stop"/>');
-      const arts = ev.arts.filter((a) => ARTICULATIONS_OUT[a]).map((a) => `<${ARTICULATIONS_OUT[a]}/>`);
+      if (ev.tuplet) {
+        // A tuplet in a tuplet: each bracket numbered, with its own ratio (the notes' is both).
+        const group = M.tupletGroup(ev);
+        const nested = lane.some((x) => M.tupletGroup(x.ev) === group && x.ev.tuplet?.outer);
+        const own = (r, n) => (nested ? ` number="${n}"><tuplet-actual><tuplet-number>${r.n}</tuplet-number></tuplet-actual><tuplet-normal><tuplet-number>${r.d}</tuplet-number></tuplet-normal></tuplet>` : "/>");
+        const outer = ev.tuplet.outer ?? ev.tuplet;
+        const inner = ev.tuplet.outer ? ev.tuplet : null;
+        if (M.tupletGroup(before) !== group) notations.push(`<tuplet type="start"${own(outer, 1)}`);
+        if (inner && before?.tuplet?.id !== inner.id) notations.push(`<tuplet type="start"${own(inner, 2)}`);
+        if (inner && after?.tuplet?.id !== inner.id) notations.push(`<tuplet type="stop"${nested ? ' number="2"/>' : "/>"}`);
+        if (M.tupletGroup(after) !== group) notations.push(`<tuplet type="stop"${nested ? ' number="1"/>' : "/>"}`);
+      }
+      // An articulation written above or below the note says so.
+      const where = (a) => (ev.artDirs?.[a] ? ` placement="${ev.artDirs[a] < 0 ? "above" : "below"}"` : "");
+      const arts = ev.arts.filter((a) => ARTICULATIONS_OUT[a]).map((a) => `<${ARTICULATIONS_OUT[a]}${where(a)}/>`);
       if (arts.length) notations.push(`<articulations>${arts.join("")}</articulations>`);
-      const orns = ev.arts.filter((a) => ORNAMENTS_OUT[a]).map((a) => `<${ORNAMENTS_OUT[a]}/>`);
+      const orns = ev.arts.filter((a) => ORNAMENTS_OUT[a]).map((a) => `<${ORNAMENTS_OUT[a]}${where(a)}/>`);
       if (ev.tremolo && p) orns.push(`<tremolo type="single">${Math.max(1, Math.log2(ev.tremolo / 4))}</tremolo>`);
       if (orns.length) notations.push(`<ornaments>${orns.join("")}</ornaments>`);
-      if (ev.arts.includes("fermata")) notations.push("<fermata/>");
+      if (ev.arts.includes("fermata")) notations.push(ev.artDirs?.fermata ? `<fermata type="${ev.artDirs.fermata < 0 ? "upright" : "inverted"}"/>` : "<fermata/>");
       if (before?.gliss && !ev.rest) notations.push('<glissando type="stop"/>');
       if (ev.gliss && p) notations.push('<glissando type="start"/>');
     }

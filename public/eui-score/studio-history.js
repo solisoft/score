@@ -3,7 +3,7 @@
 
 /** Answers Undo and Redo, and the history kept in this browser. */
 export function install(ctx) {
-  const { options, draftKey, sourceBox, st, H, mergeScores, conflictLines, score_json } = ctx;
+  const { options, draftKey, sourceBox, st, H, mergeScores, conflictLines, parseKept } = ctx;
   const { readText, adoptText, snapshot, restore, saveDraft, replaceText, draw, say, applyMix } = ctx.call;
 
   function undo() {
@@ -31,7 +31,7 @@ export function install(ctx) {
       if (back.snap) restore(back.snap);
       else restoreText(back);
     } else {
-      const merged = mergeScores(back.after, back.text, st.text, { parse: score_json });
+      const merged = mergeScores(back.after, back.text, st.text, { parse: parseKept });
       if (merged.text == null) {
         const where = merged.whole ? "" : `: ${conflictLines(merged.conflicts).join("; ")}`;
         return say(`${name} stops here: the score was changed elsewhere since, where this step changed it too${where}. Those changes stay as they are.`, true);

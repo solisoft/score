@@ -40,6 +40,13 @@ const H = await import(`./undo-history.js${V}`);
 const { mergeScores, conflictLines } = await import(`./merge.js${V}`);
 const { editor_view_lit, score_json, source_spans } = engine;
 
+/** The engraver's reading of a text with where each note is written: what the model keeps as written reads back (merges). */
+function parseKept(text) {
+  const parsed = JSON.parse(score_json(text));
+  parsed.spans = JSON.parse(source_spans(text));
+  return JSON.stringify(parsed);
+}
+
 /** The MusicXML reader and writer, loaded the first time a file needs it. */
 const musicXml = () => import(`./musicxml.js${V}`);
 
@@ -238,7 +245,7 @@ export function startStudio(root, options = {}) {
     root, options, draftKey, sheet, sourceBox, status, state, notice, svgHost, overlay, palette, rollHost, rollScroll,
     playhead, st, quantizeBox, loaded, toMidi, toPdf, download, engine, M, P, R, K, S, X, Vel, mixerPanel, Pr, Sy,
     installInstruments, F, A, Ch, G, automationLane, audioTracks, H, mergeScores, conflictLines, editor_view_lit,
-    score_json, source_spans, musicXml, refuse, say
+    score_json, source_spans, parseKept, musicXml, refuse, say
   };
   // The editor's lifetime: instant navigation swaps the page out without
   // unloading it, so what a part adds to `document` or `window` takes this
@@ -370,5 +377,5 @@ export function startStudio(root, options = {}) {
     if (keptHistoryNote()) say(`${status.textContent} ${keptHistoryNote()}`.trim(), status.classList.contains("studio-error"));
   });
   // `parse`: the engraver's reading of a text (score_json), for the app's merge.
-  return { state: st, ready, source: () => st.text, load, peers: setPeers, parse: (text) => score_json(text), markers: setMarkers, selectPlace, placeLabel, place };
+  return { state: st, ready, source: () => st.text, load, peers: setPeers, parse: (text) => parseKept(text), markers: setMarkers, selectPlace, placeLabel, place };
 }

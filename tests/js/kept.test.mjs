@@ -146,7 +146,10 @@ test("kept: a double bar line between bars, a final one before a coda", () => {
 });
 
 test("kept: what cannot be is named, for the page to say before it goes", () => {
-  assert.deepEqual(read("{ c'2 \\bar \"||\" d'2 e'1 }").lost, ["a double bar line inside a bar"]);
+  // A double bar line inside a bar ends it there, as the engraver ends it (#402): kept.
+  assert.equal(read("{ c'2 \\bar \"||\" d'2 e'1 }").lost, undefined);
+  // A \\tweak on an articulation is not kept (#402 keeps those before a note): named.
+  assert.deepEqual(read("{ c'1-\\tweak color #red -> d'1 }").lost, ["the settings the engraver passes over (\\tweak color)"]);
   // A plain piece has nothing to name.
   assert.equal(read("{ c'1 \\bar \"||\" d'1 }").lost, undefined);
 });

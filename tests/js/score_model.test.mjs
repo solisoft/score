@@ -449,11 +449,12 @@ test("an added-up metre is kept, engraved and read back; a mode is read as its s
   assert.equal(dorian.score.key, 1, "A dorian: one sharp");
 });
 
-test("a tuplet inside a tuplet is engraved, and left to the text", () => {
+test("a tuplet inside a tuplet is engraved, and edited (#402)", () => {
   const src = "{ \\tuplet 5/4 { c'4 \\tuplet 3/2 { d'8 e' f' } g'4 a' b' } }";
   JSON.parse(editor_view(src, 900, 7, -1, -1));
   const read = M.fromParsed(JSON.parse(score_json(src)));
-  assert.ok(read.unsupported.includes("a tuplet inside a tuplet"));
+  assert.ok(read.score, read.unsupported?.join());
+  assert.match(M.toLilyPond(read.score).source, /\\tuplet 5\/4 \{ c'4 \\tuplet 3\/2 \{ d'8 e'8 f'8 \} g'4 a'4 b'4 \}/);
 });
 
 test("four voices on a staff are four lanes, read and written as they were", () => {
@@ -1364,7 +1365,9 @@ test("reading: what the score tools do not write is engraved and named, not lost
   assert.deepEqual(named("{ c''1^\\markup \\fret-diagram-terse \"x;3;2;o;1;o;\" }"), []);
   assert.deepEqual(named("{ c''1^\\markup { \\fret-diagram-terse \"x;3;2;o;1;o;\" C } }"), ["a chord diagram among words"]);
   assert.deepEqual(named("{ \\tiny c'1 }"), ["notes set smaller"]);
-  assert.ok(named("\\addQuote \"f\" { e''1 } { \\cueDuring \"f\" #UP { R1 } }").includes("cue notes"));
+  // Cue notes are kept now (#402): editable.test.mjs.
+  assert.deepEqual(named("\\addQuote \"f\" { e''1 } { \\cueDuring \"f\" #UP { R1 } }"), []);
+  // An ossia is kept from its text, which tells which staff it stands over (#402): without it, named.
   assert.ok(named("\\new Staff = \"m\" { << { c'1 } \\new Staff \\with { alignAboveContext = \"m\" } { e'1 } >> }").includes("an ossia"));
   // Each still engraves.
   for (const src of ["<< \\new Staff { c1 } \\new FiguredBass \\figuremode { <6>1 } >>", "\\new Staff = \"m\" { << { c'1 } \\new Staff \\with { alignAboveContext = \"m\" } { e'1 } >> }"]) {

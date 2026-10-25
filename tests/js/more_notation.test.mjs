@@ -47,7 +47,7 @@ test("clefs: treble^8 and bass^8 read, written back, set and changed, through Mu
   M.setClefAt(blank, 0, 0, "treble^8");
   M.letter(blank, 0, 0, 2);
   assert.equal(blank.staves[0].events[0].pitches[0].d, 23);
-  assert.throws(() => M.setClefAt(blank, 0, 1, "treble^15"), /no such clef/);
+  assert.throws(() => M.setClefAt(blank, 0, 1, "treble^22"), /no such clef/);
   const back = read(X.fromMusicXML(X.toMusicXML(score)).source);
   assert.equal(back.staves[0].clef, "treble^8");
   assert.deepEqual(back.staves[0].clefs, score.staves[0].clefs);

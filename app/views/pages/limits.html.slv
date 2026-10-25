@@ -67,6 +67,16 @@
       <code>\paper</code> settings for widths, indents, ragged lines and pages, the space between systems and the
       number of systems or pages are honoured.
     </p>
+    <p>
+      The score editor now edits what the engraver draws in such files instead of leaving them to the text:
+      staves changing key or metre apart, a tempo, a mark, a bar line or a repeat sign inside a bar,
+      <code>\cadenzaOn</code>, a tuplet inside a tuplet, every clef the engraver draws, <code>\open</code> and
+      <code>\stopped</code>, <code>\tiny</code> and <code>\small</code>, <code>\new TabStaff</code>,
+      <code>\new CueVoice</code> and <code>\cueDuring</code>, and an ossia. <code>\override</code>,
+      <code>\set</code>, <code>\tweak</code>, a staff's <code>\with</code>, <code>\layout</code> and
+      <code>\paper</code> are kept where they are written, and a staff made by <code>\partCombine</code> or
+      <code>\autoChange</code> is kept as written, its notes edited in the text.
+    </p>
     <ul>
       <li><strong>Layout</strong>: vertical spacing does not tighten on a crowded page, a beam across the staves
         is sloped more simply than LilyPond's, and the accidentals of a note moved to the other staff are still

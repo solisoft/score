@@ -56,6 +56,28 @@ class Changelog
           + "put two pairs on one staff. Both parts are played."
         },
         {
+          "area": "editor",
+          "title": "More real LilyPond files open on the score, not only as text",
+          "text": "Pieces that used to open as text only now open in the score editor, and keep what they say "
+          + "through every edit: staves that change key or metre apart from the others (a horn in F, 6/8 beside "
+          + "3/4), a tempo, a rehearsal mark or a mark of words in the middle of a bar, a bar line or a repeat "
+          + "sign inside a bar, a cadenza (\\cadenzaOn), a tuplet inside a tuplet, every clef the engraver "
+          + "draws (French, mezzo-soprano, baritone, sub-bass, 15 above or below…), a brass mute's open and "
+          + "stopped, articulations set above or below, notes set smaller (\\tiny), a tablature "
+          + "(\\new TabStaff), cue notes (\\new CueVoice, \\cueDuring), an ossia over some bars, and "
+          + "tuplets in a line of chord names or a figured bass. Settings the score tools do not offer, "
+          + "\\override, \\set, \\tweak, \\hide or \\omit before a note, a staff's \\with, "
+          + "\\layout and \\paper, stay in the text where they were written instead of being dropped by the "
+          + "first edit."
+        },
+        {
+          "area": "editor",
+          "title": "Two parts on one staff, or one part over a piano's two staves: kept as written",
+          "text": "A staff made by \\partCombine, or a piano staff made by \\autoChange, is kept exactly as "
+          + "its text writes it, with the variables it uses: its notes are shown and played, and edited in the "
+          + "text, while every other staff of the piece is edited on the score."
+        },
+        {
           "area": "site",
           "app": true,
           "title": "Push notifications on your phone and computer",

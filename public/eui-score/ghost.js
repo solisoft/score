@@ -6,24 +6,18 @@
 /** The pen the pointer becomes over the staves in note input: its nib, bottom left, is the hotspot. */
 export const PEN_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M15.5 3.5l5 5L9 20l-6.5 1.5L4 15z" fill="#fff"/><path d="M13 6l5 5"/><path d="M4 15l5 5"/><path d="M2.5 21.5l2-2"/></svg>`;
 
-// Where each clef puts the staff's bottom line, as a pitch's `d` (score-model.js: c' is 7).
-const BOTTOM_LINE = {
-  treble: 9, // e'
-  treble_8: 2, // e
-  "treble^8": 16, // e''
-  bass: -3, // g,
-  bass_8: -10, // g,,
-  "bass^8": 4, // g
-  alto: 3, // f
-  tenor: 1, // d
-  soprano: 7, // c'
-  // A drum staff: where eui-score draws the drums (score-model.js, DRUMS).
-  percussion: 3,
-};
+// Where each clef puts the staff's middle line, as a pitch's `d` (score-model.js: c' is 7):
+// the line its sign names (G g', C c', F f) moved by the line it sits on, and its octaves.
+const SIGN_PITCH = { treble: 13, french: 15, soprano: 11, mezzosoprano: 9, alto: 7, tenor: 5, baritone: 3, varbaritone: 3, bass: 1, subbass: -1 };
+const OCTAVES = { _15: -14, _8: -7, "^8": 7, "^15": 14 };
 
 /** The `d` of clef `clef`'s bottom line (an unknown clef reads as treble). */
 export function bottomLine(clef) {
-  return BOTTOM_LINE[clef] ?? BOTTOM_LINE.treble;
+  // A drum staff: where eui-score draws the drums (score-model.js, DRUMS).
+  if (clef === "percussion") return 3;
+  const m = /^([a-z]+)(_15|_8|\^8|\^15)?$/.exec(String(clef ?? ""));
+  const middle = m && SIGN_PITCH[m[1]] != null ? SIGN_PITCH[m[1]] + (OCTAVES[m[2]] ?? 0) : SIGN_PITCH.treble;
+  return middle - 4;
 }
 
 /** The staff position at drawing height `y`: steps above the bottom line (0 the bottom line, 8 the top one, odd the spaces). */
