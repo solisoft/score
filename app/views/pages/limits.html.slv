@@ -58,7 +58,7 @@
     <p>
       The score editor now edits what the engraver draws in such files instead of leaving them to the text:
       staves changing key or metre apart, a tempo, a mark, a bar line or a repeat sign inside a bar,
-      <code>\cadenzaOn</code>, a tuplet inside a tuplet, every clef above, <code>\open</code> and
+      <code>\cadenzaOn</code>, a tuplet inside a tuplet, every clef the engraver draws, <code>\open</code> and
       <code>\stopped</code>, <code>\tiny</code> and <code>\small</code>, <code>\new TabStaff</code>,
       <code>\new CueVoice</code> and <code>\cueDuring</code>, and an ossia. <code>\override</code>,
       <code>\set</code>, <code>\tweak</code>, a staff's <code>\with</code>, <code>\layout</code> and
