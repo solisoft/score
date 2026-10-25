@@ -42,7 +42,12 @@ const SCORE_NAMES = { key: "Key", mode: "Key", time: "Time signature", tempo: "T
 /** `text` read into the model, its meta line on it; null when the model cannot hold it. */
 function read(text, parse) {
   try {
-    const { score } = M.fromParsed(JSON.parse(parse(text)), text);
+    const parsedOf = (other) => JSON.parse(parse(other));
+    let parsed = null;
+    try {
+      parsed = parsedOf(text);
+    } catch {}
+    const { score } = M.fromParsed(parsed, text, { parse: parsedOf });
     if (!score) return null;
     score.meta = M.readMeta(text);
     return score;

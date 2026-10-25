@@ -32,7 +32,8 @@ export function install(ctx) {
       const at = new Map();
       for (const it of st.view.items) {
         const where = st.items[it.item];
-        if (where) at.set(`${where.staff}:${where.index}`, it);
+        // An \\autoChange's rest on the lower staff stands in for its note: not the note's place.
+        if (where && !where.echo) at.set(`${where.staff}:${where.index}`, it);
       }
       drawn = { view: st.view, at };
     }

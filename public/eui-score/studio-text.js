@@ -9,22 +9,37 @@ export function install(ctx) {
 
   // ---- Model ↔ text ----------------------------------------------------------
 
+  /** The engraver's reading of a text, with where each note is written. */
+  function withSpans(text) {
+    const parsed = JSON.parse(score_json(text));
+    parsed.spans = JSON.parse(source_spans(text));
+    return parsed;
+  }
+
   function readText(text) {
     st.text = text;
     try {
-      const parsed = JSON.parse(score_json(text));
       // Where each note is written: what the model keeps as written (\override …) is read before it.
-      parsed.spans = JSON.parse(source_spans(text));
-      const result = M.fromParsed(parsed, text);
+      let parsed = null;
+      let failure = null;
+      try {
+        parsed = withSpans(text);
+      } catch (error) {
+        failure = error;
+      }
+      // \\partCombine and \\autoChange: the model asks the engraver to read them its way (see
+      // splitCombined) — even used in a variable the engraver does not read, `music = \\partCombine …`.
+      const result = M.fromParsed(parsed, text, { parse: withSpans });
+      if (!parsed && !result.score) throw failure;
       st.score = result.score ?? null;
       // The mixer, the velocities…: on the text's last line, a comment the engraver passes over.
       if (st.score) st.score.meta = M.readMeta(text);
       st.unsupported = result.unsupported ?? [];
       st.lost = result.lost ?? [];
       // What the engraver read and passed over (\\override, \\set …): said when the text is opened.
-      st.passed = M.passedOver(parsed.warnings);
+      st.passed = M.passedOver(parsed?.warnings ?? []);
       // The notes and rests the engraver numbers in this text.
-      st.textItems = 1 + Math.max(-1, ...parsed.staves.flatMap((staff) => staff.events.filter((ev) => ev.k === "Note" || ev.k === "Rest").map((ev) => ev.i)));
+      st.textItems = 1 + Math.max(-1, ...(parsed?.staves ?? []).flatMap((staff) => staff.events.filter((ev) => ev.k === "Note" || ev.k === "Rest").map((ev) => ev.i)));
     } catch (error) {
       st.score = null;
       st.unsupported = [];

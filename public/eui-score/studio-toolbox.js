@@ -109,7 +109,7 @@ export function install(ctx) {
     // What is selected, in words.
     const value = `${({ 1: "whole", 2: "half", 4: "quarter", 8: "eighth", 16: "16th", 32: "32nd" })[st.input.base]}${st.input.dots ? ", dotted" : ""}`;
     if (st.playing) showProgress();
-    else if (st.input.on) state.textContent = `Note input${M.isLower(st.score, st.input.staff) ? ` · voice ${M.voiceOf(st.score, st.input.staff)}` : ""} · ${value} · A–G or a click write, 0 rest, Esc to stop`;
+    else if (st.input.on) state.textContent = `Note input${M.partOfLane(st.score, st.input.staff) ? ` · part ${"I".repeat(M.partOfLane(st.score, st.input.staff))}` : M.isLower(st.score, st.input.staff) ? ` · voice ${M.voiceOf(st.score, st.input.staff)}` : ""} · ${value} · A–G or a click write, 0 rest, Esc to stop`;
     else {
       const r = range();
       if (!r) state.textContent = st.score ? "Click a note to select it · N to write notes" : "Text only";
@@ -117,7 +117,10 @@ export function install(ctx) {
       else {
         const ev = r.staff.events[r.a];
         const len = ({ 1: "whole", 2: "half", 4: "quarter", 8: "eighth", 16: "16th", 32: "32nd" })[ev.base] + (ev.dots ? " dotted" : "") + (ev.tuplet ? ` (${ev.tuplet.n}-tuplet)` : "");
-        state.textContent = (M.isLower(st.score, r.s) ? `Voice ${M.voiceOf(st.score, r.s)} · ` : "") + (ev.rest ? `Rest · ${len}` : `${ev.pitches.length > 1 ? "Chord" : "Note"} ${ev.pitches.map((p, k) => (k === st.sel.head ? `[${M.pitchName(p.d, p.alter)}]` : M.pitchName(p.d, p.alter))).join(" ")} · ${len}`);
+        // On a \\partCombine staff, the part: Part I, Part II.
+        const part = M.partOfLane(st.score, r.s);
+        const voice = part ? `Part ${"I".repeat(part)} · ` : M.isLower(st.score, r.s) ? `Voice ${M.voiceOf(st.score, r.s)} · ` : "";
+        state.textContent = voice + (ev.rest ? `Rest · ${len}` : `${ev.pitches.length > 1 ? "Chord" : "Note"} ${ev.pitches.map((p, k) => (k === st.sel.head ? `[${M.pitchName(p.d, p.alter)}]` : M.pitchName(p.d, p.alter))).join(" ")} · ${len}`);
       }
     }
   }
