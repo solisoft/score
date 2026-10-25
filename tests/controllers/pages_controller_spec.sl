@@ -163,27 +163,78 @@ describe("PagesController") do
 
     test("the site sends to the app, and the playground offers to save there, where it is open") do
       body = res_body(get("/playground"))
-      assert_contains(body, "<a class=\"nav-cta\" href=\"/app\">Open the app</a>")
+      assert_contains(body, "<a href=\"/app\">App</a>")
+      assert_contains(body, "<a class=\"nav-cta\" href=\"/signup\">Start free</a>")
       assert_contains(body, "playground-banner")
       assert_contains(res_body(get("/changelog")), "href=\"/app\">Try it")
     end
   end
 
   describe("the site's header") do
-    # On a phone the links wrap below the brand and "Open the app" stays
-    # beside it: that needs the button after the nav, not among its links.
-    test("puts Open the app after the links, and every link in the nav") do
+    before_each() do
+      logout()
+      clear_cookies()
+    end
+
+    # On a phone the links wrap below the brand and Sign in / Start free stay
+    # beside it: that needs them after the nav, not among its links.
+    test("puts Sign in and Start free after the links; the engraver's pages in the footer") do
       body = res_body(get("/guide"))
       nav_start = body.index_of("<nav class=\"site-nav\"")
       nav_end = body.index_of("</nav>")
-      cta_at = body.index_of("<a class=\"nav-cta\" href=\"/app\">Open the app</a>")
+      signin_at = body.index_of("<a class=\"nav-signin\" href=\"/login\">Sign in</a>")
+      start_at = body.index_of("<a class=\"nav-cta\" href=\"/signup\">Start free</a>")
       assert_gt(nav_start, -1, "the site's nav")
-      assert_gt(cta_at, nav_end, "the button after the nav")
+      assert_gt(signin_at, nav_end, "Sign in after the nav")
+      assert_gt(start_at, signin_at, "Start free after Sign in")
       links = body.substring(nav_start, nav_end)
-      ["/guide", "/syntax", "/examples", "/embed", "/limits", "/changelog", "/playground"].each do |path|
+      ["/app", "/pricing", "/guide", "/changelog"].each do |path|
         assert_contains(links, "href=\"#{path}\"")
       end
+      ["/syntax", "/examples", "/embed", "/limits", "/playground"].each do |path|
+        assert_not(links.includes?("href=\"#{path}\""), "#{path} is in the footer, not the header")
+      end
       assert_not(links.includes?("nav-cta"), "no button among the links")
+      footer = body.substring(body.index_of("<nav class=\"footer-nav\""), body.length)
+      every_page = [
+        "/app",
+        "/playground",
+        "/pricing",
+        "/changelog",
+        "/guide",
+        "/syntax",
+        "/examples",
+        "/embed",
+        "/limits"
+      ]
+      every_page.each do |path|
+        assert_contains(footer, "href=\"#{path}\"")
+      end
+    end
+
+    test("marks Guide as the page for the guide, the syntax, embedding and the limits, and nothing else") do
+      ["/guide", "/syntax", "/embed", "/limits"].each do |path|
+        assert_contains(res_body(get(path)), "<a href=\"/guide\" aria-current=\"page\">Guide</a>")
+      end
+      examples = res_body(get("/examples"))
+      assert_not(examples.contains("aria-current=\"page\">Guide"), "the examples are not the guide")
+      assert_contains(res_body(get("/changelog")), "<a href=\"/changelog\" aria-current=\"page\">Changelog</a>")
+    end
+
+    test("someone signed in is offered the app, not a sign-in") do
+      user = User.new()
+      user.email = "header-#{uuid_v4}@example.com"
+      user.set_password("correct horse battery")
+      user.confirmed_at = DateTime.utc.to_unix
+      user.save
+      post(
+        "/login",
+        {"email": user.email, "password": "correct horse battery"}
+      )
+      body = res_body(get("/"))
+      assert_contains(body, "<a class=\"nav-cta\" href=\"/app\">Open the app</a>")
+      assert_not(body.contains("class=\"nav-signin\""), "no Sign in")
+      assert_not(body.contains("<a class=\"nav-cta\" href=\"/signup\">"), "no Start free in the header")
     end
   end
 end

@@ -35,9 +35,13 @@
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Music&display=swap" rel="stylesheet">
 </head>
 <body>
-    <% nav_items = [["Guide", guide_path()], ["Syntax", syntax_path()], ["Examples", examples_path()],
-                    ["Embed", embed_path()], ["Limits", limits_path()], ["Pricing", pricing_path()],
-                    ["Changelog", changelog_path()]] %>
+    <%# The header leads with the app (#397): App, Pricing, Guide, Changelog;
+        the engraver's own pages (Syntax, Examples, Embed, Limits) are under
+        Guide and in the footer. An item is [label, path, the paths it covers]. %>
+    <% app_path = app_open?() ? app_home_path() : playground_path() %>
+    <% nav_items = [["App", app_path, [app_path]], ["Pricing", pricing_path(), [pricing_path()]],
+                    ["Guide", guide_path(), [guide_path(), syntax_path(), embed_path(), limits_path()]],
+                    ["Changelog", changelog_path(), [changelog_path()]]] %>
     <header class="site-header">
         <div class="wrap">
             <a class="brand" href="<%= root_path() %>" aria-label="EUI Score, home">
@@ -48,19 +52,21 @@
             </a>
             <nav class="site-nav" aria-label="Main navigation">
                 <% for item in nav_items %>
-                    <% here = current_path == item[1] || current_path.starts_with?(item[1] + "/") %>
+                    <% here = item[2].includes?(current_path) || current_path.starts_with?(item[1] + "/") %>
                     <a href="<%= item[1] %>"<%- here ? " aria-current=\"page\"" : "" %>><%= item[0] %></a>
-                <% end %>
-                <% if app_open?() %>
-                    <a href="<%= playground_path() %>"<%- current_path == playground_path() ? " aria-current=\"page\"" : "" %>>Playground</a>
                 <% end %>
             </nav>
             <%# Outside the links' row: on a phone it stays beside the brand while the links wrap below. %>
-            <% if app_open?() %>
-                <a class="nav-cta" href="<%= app_home_path() %>">Open the app</a>
-            <% else %>
-                <a class="nav-cta" href="<%= playground_path() %>">Playground</a>
-            <% end %>
+            <div class="nav-account">
+                <% if !app_open?() %>
+                    <a class="nav-cta" href="<%= playground_path() %>">Playground</a>
+                <% elsif signed_in?() %>
+                    <a class="nav-cta" href="<%= app_home_path() %>">Open the app</a>
+                <% else %>
+                    <a class="nav-signin" href="<%= login_path() %>">Sign in</a>
+                    <a class="nav-cta" href="<%= signup_path() %>">Start free</a>
+                <% end %>
+            </div>
         </div>
     </header>
 
@@ -70,8 +76,20 @@
 
     <footer class="site-footer">
         <div class="wrap">
+            <nav class="footer-nav" aria-label="The site">
+                <a href="<%= app_path %>">App</a>
+                <a href="<%= playground_path() %>">Playground</a>
+                <a href="<%= pricing_path() %>">Pricing</a>
+                <a href="<%= changelog_path() %>">Changelog</a>
+                <a href="<%= guide_path() %>">Guide</a>
+                <a href="<%= syntax_path() %>">Syntax</a>
+                <a href="<%= examples_path() %>">Examples</a>
+                <a href="<%= embed_path() %>">Embed</a>
+                <a href="<%= limits_path() %>">Limits</a>
+            </nav>
             <p>
-                <strong>eui-score</strong> is the engraver of <a href="https://eui.solisoft.net">EUI</a>: the
+                <strong>EUI Score</strong> writes, plays and shares scores in the browser. Its engraver,
+                <strong>eui-score</strong>, is the engraver of <a href="https://eui.solisoft.net">EUI</a>: the
                 LilyPond subset it reads is engraved into paths, played as MIDI and printed as PDF. Every score on
                 this site is engraved on the fly by it — on the server, or in your browser.
             </p>

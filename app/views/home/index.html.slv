@@ -1,110 +1,106 @@
+<%# The home page (#397): the app first, feature by feature, each with a
+    screenshot of the real app (public/images/home/, HomeFeatures); then
+    the engraver for developers, and the plans. No script of its own. %>
+<% start_href = app_open ? signup_path() : playground_path() %>
 <div class="wrap">
-    <section class="hero">
-        <div>
-            <span class="eyebrow">EUI's music engraver</span>
-            <h1>Scores engraved <em>like LilyPond</em>, drawn in an instant.</h1>
-            <p class="lead">
-                <strong>eui-score</strong> reads the LilyPond language and engraves it into vector paths: staves,
-                noteheads, beams, slurs, titles. The same source plays as MIDI and prints as an A4 PDF. A note it
-                cannot engrave is refused, never silently dropped.
-            </p>
-            <div class="hero-actions">
-                <a class="btn btn-primary" href="<%= examples_path() %>">See the <%= example_count %> examples</a>
-                <a class="btn btn-ghost" href="<%= playground_path() %>">Try the playground</a>
-            </div>
-        </div>
-        <div class="hero-sheet">
-            <%- score_figure(hero, {"name": "syntax/home", "sandbox": playground_path(), "source": "closed"}) %>
-        </div>
-    </section>
-
-    <div class="facts">
-        <div class="fact"><strong>10 ms</strong><span>to print Beethoven's Fifth as a PDF — LilyPond 2.24 takes 567 ms on the same file</span></div>
-        <div class="fact"><strong>3 outputs</strong><span>the screen, a MIDI file and an A4 PDF, from a single source</span></div>
-        <div class="fact"><strong>0 fonts</strong><span>every glyph and every letter is an outline, placed where the engraving wants it</span></div>
-        <div class="fact"><strong>2 %</strong><span>width difference with LilyPond 2.24, at the same staff size</span></div>
+  <section class="hero hero-app">
+    <div class="hero-copy">
+      <span class="eyebrow">A score editor in your browser</span>
+      <h1>Write, play and share scores, <em>together</em>, in the browser.</h1>
+      <p class="lead">
+        EUI Score is where you write music: with the mouse or the keyboard, heard as you go, practised with your
+        microphone, and worked on with others, live. Nothing to install.
+      </p>
+      <div class="hero-actions">
+        <% if app_open %>
+          <a class="btn btn-primary" href="<%= signup_path() %>" data-home-start>Start for free</a>
+        <% end %>
+        <a class="btn btn-ghost" href="<%= playground_path() %>">Open the playground</a>
+      </div>
+      <p class="hero-note">Free to write with, no card. <a href="<%= pricing_path() %>">Pro</a> adds AI on your own key, more audio, and sharing with anyone.</p>
     </div>
+    <figure class="app-shot app-shot-hero">
+      <img src="<%= public_path("images/home/hero-editor.jpg") %>" width="<%= shot_width %>" height="<%= shot_height %>" fetchpriority="high"
+        alt="The EUI Score editor: Au clair de la lune for voice and piano, with chord names and lyrics.">
+    </figure>
+  </section>
 
-    <section class="section">
-        <div class="section-head">
-            <span class="eyebrow">One source, three outputs</span>
-            <h2>Write the music once.</h2>
-            <p class="lead">The LilyPond text is the only thing an application keeps. Everything else is computed.</p>
-        </div>
-        <div class="grid-3">
-            <div class="card">
-                <span class="card-num">i.</span>
-                <h3>On screen</h3>
-                <p><code>score(src, opts)</code> draws the score as EUI canvases, one per system: an edit redraws only the system it touches.</p>
-            </div>
-            <div class="card">
-                <span class="card-num">ii.</span>
-                <h3>As MIDI</h3>
-                <p><code>score_midi(src)</code> writes a Standard MIDI File, one track per staff, dynamics and hairpins included, as LilyPond's <code>\midi</code> would.</p>
-            </div>
-            <div class="card">
-                <span class="card-num">iii.</span>
-                <h3>As PDF</h3>
-                <p><code>score_pdf(src)</code> prints the A4 pages as vectors, with LilyPond's margins and page breaks, and no embedded font.</p>
-            </div>
-        </div>
+  <nav class="feature-index" aria-label="What the app does">
+    <% for feature in features %>
+      <a href="#<%= feature["id"] %>"><%= feature["eyebrow"] %></a>
+    <% end %>
+    <a href="#developers">For developers</a>
+  </nav>
+
+  <% for feature, index in features %>
+    <section class="feature<%= index % 2 == 1 ? " feature-flip" : "" %>" id="<%= feature["id"] %>" data-feature="<%= feature["id"] %>">
+      <div class="feature-copy">
+        <span class="eyebrow"><%= feature["eyebrow"] %></span>
+        <h2><%= feature["title"] %></h2>
+        <ul class="feature-lines">
+          <% for line in feature["lines"] %>
+            <li><%= line %></li>
+          <% end %>
+        </ul>
+        <% label = feature["label"] %>
+        <% label = "Try the playground" if feature["link"] == "signup" && !app_open %>
+        <a class="feature-link" href="<%= feature["href"] %>"><%= label %> →</a>
+      </div>
+      <figure class="app-shot">
+        <img src="<%= public_path("images/home/" + feature["image"]) %>" width="<%= shot_width %>" height="<%= shot_height %>"
+          alt="<%= feature["alt"] %>" loading="lazy" decoding="async">
+      </figure>
     </section>
+  <% end %>
 
-    <section class="section">
-        <div class="section-head">
-            <span class="eyebrow">In an EUI view</span>
-            <h2>One line is enough.</h2>
-            <p class="lead">The score is a catalogue widget like a button or a table. It follows the theme: its ink is a colour role.</p>
-        </div>
-<pre class="code-block"><code>score("\\relative c' { \\key g \\major \\time 3/4 g'4( a b) | d2. \\bar \"|.\" }",
-      {"width": 640})</code></pre>
-        <%- score_figure(hello, {"name": "syntax/hello", "sandbox": playground_path(), "source": "none"}) %>
-    </section>
-
-    <section class="section">
-        <div class="section-head">
-            <span class="eyebrow">On any website</span>
-            <h2>Two tags, and your page engraves.</h2>
-            <p class="lead">
-                Compiled to WebAssembly, the same engraver runs in the browser: no server, no account,
-                about 290 KB gzipped, downloaded once.
-            </p>
-        </div>
+  <section class="section dev" id="developers">
+    <div class="dev-copy">
+      <span class="eyebrow">For developers</span>
+      <h2>The engraver inside, yours to embed.</h2>
+      <p class="lead">
+        Every score here is drawn by <strong>eui-score</strong>, the engraver of EUI: it reads LilyPond and
+        engraves it into vector paths, plays it as MIDI and prints it as PDF. Compiled to WebAssembly, it runs
+        on any page with two tags.
+      </p>
 <pre class="code-block"><code>&lt;script type="module" src="https://score.solisoft.net/eui-score.js"&gt;&lt;/script&gt;
+&lt;eui-score src="my-piece.ly"&gt;&lt;/eui-score&gt;</code></pre>
+      <div class="dev-links">
+        <a class="btn btn-ghost" href="<%= guide_path() %>">The guide</a>
+        <a class="btn btn-ghost" href="<%= syntax_path() %>">The syntax</a>
+        <a class="btn btn-ghost" href="<%= embed_path() %>">Embed it</a>
+        <a class="dev-more" href="<%= examples_path() %>">The <%= example_count %> examples →</a>
+      </div>
+    </div>
+    <div class="hero-sheet">
+      <%- score_figure(engraved, {"name": "syntax/home", "sandbox": playground_path(), "source": "closed"}) %>
+    </div>
+  </section>
 
-&lt;eui-score&gt;
-  &lt;script type="text/x-lilypond"&gt; \relative c' { c4 e g c | g1 \bar "|." } &lt;/script&gt;
-&lt;/eui-score&gt;</code></pre>
-        <p><a class="btn btn-ghost" href="<%= embed_path() %>">Embed eui-score in your site →</a></p>
-    </section>
+  <section class="section" id="plans">
+    <div class="section-head">
+      <span class="eyebrow">Plans</span>
+      <h2>Free to write with. Pro for more.</h2>
+    </div>
+    <div class="plans-teaser">
+      <div class="plan-teaser">
+        <h3>Free</h3>
+        <p class="plan-teaser-price">0 € <small>for good</small></p>
+        <p>The editor, playback, PDF and MIDI, versions, comments and sharing. No card.</p>
+      </div>
+      <div class="plan-teaser plan-teaser-pro">
+        <h3>Pro</h3>
+        <p class="plan-teaser-price"><%= pro_price["label"] %> <small>a <%= pro_price["per"] %></small></p>
+        <p>AI on your own key, every audio track and more room for takes, a score shared with anyone.</p>
+      </div>
+    </div>
+    <p><a class="btn btn-ghost" href="<%= pricing_path() %>" data-home-pricing>Compare the plans</a></p>
+  </section>
 
-    <section class="section">
-        <div class="section-head">
-            <span class="eyebrow">How it works</span>
-            <h2>From text to paths, in four steps.</h2>
-        </div>
-        <div class="pipeline">
-            <div class="step"><b>Read</b><span>The LilyPond subset is parsed; anything else is refused with its position.</span></div>
-            <div class="step"><b>Space</b><span>LilyPond's columns: 1.2 staff spaces more each time a duration doubles.</span></div>
-            <div class="step"><b>Place</b><span>Stems, beams quantised to the staff lines, slurs at LilyPond's height, aligned dynamics.</span></div>
-            <div class="step"><b>Draw</b><span>Rectangles and Emmentaler outlines, in pixels: EUI canvas, SVG or PDF.</span></div>
-        </div>
-    </section>
-
-    <section class="section">
-        <div class="section-head">
-            <span class="eyebrow">The gallery</span>
-            <h2>From solos to the orchestra.</h2>
-            <p class="lead">Every example is engraved on demand by the engraver, with its source, its MIDI and its PDF.</p>
-        </div>
-        <div class="grid-3">
-            <% for cat in categories %>
-                <a class="card" href="<%= example_category_path(cat["slug"]) %>">
-                    <h3><%= cat["title"] %></h3>
-                    <p><%= cat["lead"] %></p>
-                    <span class="card-count"><%= cat["count"] %> scores →</span>
-                </a>
-            <% end %>
-        </div>
-    </section>
+  <section class="cta-band">
+    <h2>Your next score starts here.</h2>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="<%= start_href %>"><%= app_open ? "Start for free" : "Open the playground" %></a>
+      <a class="btn btn-ghost" href="<%= pricing_path() %>">See pricing</a>
+    </div>
+  </section>
 </div>

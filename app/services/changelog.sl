@@ -10,20 +10,33 @@
 class Changelog
   static def days
     [
-      {"date": "2026-10-25", "entries": [{
-        "area": "site",
-        "title": "The AI runs on your own key: the site's own AI is no longer offered",
-        "text": "Reading one photo of a score with Claude Opus cost the site about $0.20 to $0.40, too much to "
-        + "keep giving away, so the site no longer runs an AI of its own. Reading photos and the editor's "
-        + "assistant now work only with an AI key of your own, from Anthropic, OpenAI, Google (Gemini), Mistral, "
-        + "DeepSeek, Moonshot (Kimi) or OpenRouter, added on your account page: your requests go to that "
-        + "provider, which bills you. Without a key, the Start page and the editor say so and link to your "
-        + "account before you choose a photo. Once payments open, AI with your own key is part of Pro; until "
-        + "then, anyone signed in can use it. A key of your own still has up to 200 photos and 200 questions a "
-        + "day, a guard against a request running away.",
-        "link": "pricing",
-        "app": true
-      }]},
+      {"date": "2026-10-25", "entries": [
+        {
+          "area": "site",
+          "title": "The home page shows the app: the editor, playing together, practice, sharing",
+          "text": "The home page now says what EUI Score is for: writing, playing and sharing scores, together, in "
+          + "the browser. Section by section, with a picture of the app each time, it shows the editor (mouse, "
+          + "keyboard, voices, chord names, lyrics), the MIDI view, editing with others live and comments on bars, "
+          + "the mixer and its sounds, the microphone and practice, reading a photo with AI, the files that come "
+          + "in and out, and versions and sharing; then the engraver for developers, and the two plans. The menu "
+          + "at the top reads App, Pricing, Guide and Changelog, with Sign in and Start free; the engraver's own "
+          + "pages (Syntax, Examples, Embed, Limits) are under Guide and at the foot of every page."
+        },
+        {
+          "area": "site",
+          "title": "The AI runs on your own key: the site's own AI is no longer offered",
+          "text": "Reading one photo of a score with Claude Opus cost the site about $0.20 to $0.40, too much to "
+          + "keep giving away, so the site no longer runs an AI of its own. Reading photos and the editor's "
+          + "assistant now work only with an AI key of your own, from Anthropic, OpenAI, Google (Gemini), Mistral, "
+          + "DeepSeek, Moonshot (Kimi) or OpenRouter, added on your account page: your requests go to that "
+          + "provider, which bills you. Without a key, the Start page and the editor say so and link to your "
+          + "account before you choose a photo. Once payments open, AI with your own key is part of Pro; until "
+          + "then, anyone signed in can use it. A key of your own still has up to 200 photos and 200 questions a "
+          + "day, a guard against a request running away.",
+          "link": "pricing",
+          "app": true
+        }
+      ]},
       {"date": "2026-10-24", "entries": [
         {
           "area": "site",
