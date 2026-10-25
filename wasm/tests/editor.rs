@@ -199,7 +199,9 @@ fn a_redraw_of_the_same_source_lights_anew_and_an_edit_draws_anew() {
     let edited = TUNE.replace("g'4 a'", "g'4 c''");
     let other = view_lit(&edited, 600.0, 8.0, &json!({})).unwrap();
     assert_ne!(other["items"][1]["box"], none["items"][1]["box"]);
-    assert_ne!(view_lit(TUNE, 300.0, 8.0, &json!({})).unwrap()["width"], none["width"], "and at another width, its own drawing");
+    // A tune that fits on one line keeps its natural width at any page width, as LilyPond sets it (#406);
+    // at another staff size it is drawn anew.
+    assert_ne!(view_lit(TUNE, 600.0, 6.0, &json!({})).unwrap()["width"], none["width"], "and at another size, its own drawing");
 }
 
 #[test]
