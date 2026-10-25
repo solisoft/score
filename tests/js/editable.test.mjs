@@ -290,3 +290,35 @@ test("staves changing metre apart, their bars as long: 6/8 beside 3/4", () => {
   // Bars of different lengths are the engraver's to refuse.
   assert.ok(parse("<< \\new Staff { \\time 4/4 c'1 | \\time 3/4 c'2. } \\new Staff { \\time 4/4 c'1 | \\time 2/4 c'2 } >>").unsupported);
 });
+
+// ---- A tuplet in a tuplet -------------------------------------------------------------------
+
+test("a tuplet in a tuplet: read, written back nested, its notes edited, the whole replaced or undone", () => {
+  const { score, source } = roundTrip("{ \\tuplet 3/2 { c''4 \\tuplet 3/2 { d''8 e''8 f''8 } g''4 } c''2 | \\tuplet 5/4 { c''8 \\tuplet 3/2 { d''16 e'' f'' } g''8 a'' b'' } c''2 }");
+  const ev = score.staves[0].events;
+  assert.deepEqual(ev[1].tuplet.outer && { n: ev[1].tuplet.n, d: ev[1].tuplet.d, outer: { n: ev[1].tuplet.outer.n, d: ev[1].tuplet.outer.d } }, { n: 3, d: 2, outer: { n: 3, d: 2 } });
+  assert.equal(ev[0].tuplet.outer, undefined);
+  // Each inner eighth lasts a third of two thirds of a quarter.
+  assert.equal(M.ticksOf(ev[1]), (M.notated(8) * 4) / 9);
+  assert.equal(M.starts(score.staves[0])[5], h);
+  assert.match(source, /\\tuplet 3\/2 \{ c''4 \\tuplet 3\/2 \{ d''8 e''8 f''8 \} g''4 \} c''2 \| \\tuplet 5\/4 \{ c''8 \\tuplet 3\/2 \{ d''16 e''16 f''16 \} g''8 a''8 b''8 \} c''2/);
+  // A note of the inner one changed, then transposed: still nested.
+  M.letter(score, 0, 2, 0);
+  M.transpose(score, { steps: 1, semitones: 2 });
+  assert.match(engrave(score), /\\tuplet 3\/2 \{ d''4 \\tuplet 3\/2 \{ e''8 d''8 g''8 \} a''4 \}/);
+  // Written over, the whole outer tuplet goes: a half note in its place.
+  M.write(score, 0, 0, h, A4);
+  assert.match(engrave(score), /^ {2}a'2 d''2 \|/m);
+  // Undone as one plain value from any of its notes, inner or outer.
+  const i = score.staves[0].events.findIndex((x) => x.tuplet?.outer);
+  M.removeTuplet(score, 0, i);
+  assert.ok(score.staves[0].events.every((x) => !x.tuplet));
+  assert.match(engrave(score), /\| d''2 d''2/);
+});
+
+test("a tuplet in a tuplet goes out to MusicXML with its whole ratio", () => {
+  const score = read("{ \\tuplet 3/2 { c''4 \\tuplet 3/2 { d''8 e''8 f''8 } g''4 } c''2 }");
+  const xml = X.toMusicXML(score);
+  assert.match(xml, /<actual-notes>9<\/actual-notes><normal-notes>4<\/normal-notes>/);
+  assert.equal((xml.match(/<tuplet type="start"\/>/g) ?? []).length, 1);
+});

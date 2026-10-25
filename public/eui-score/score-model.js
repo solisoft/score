@@ -86,10 +86,21 @@ export function notated(base, dots = 0) {
   return ticks;
 }
 
-/** The ticks an event lasts: its written value, scaled by its tuplet. */
+/** The ticks an event lasts: its written value, scaled by its tuplet (and the tuplet around that one). */
 export function ticksOf(ev) {
   const written = notated(ev.base, ev.dots);
-  return ev.tuplet ? (written * ev.tuplet.d) / ev.tuplet.n : written;
+  if (!ev.tuplet) return written;
+  const outer = ev.tuplet.outer;
+  return (written * ev.tuplet.d * (outer ? outer.d : 1)) / (ev.tuplet.n * (outer ? outer.n : 1));
+}
+
+// A tuplet in a tuplet (a triplet in a quintuplet): the inner one is the
+// event's `tuplet`, the one around it its `tuplet.outer`; an event of the
+// outer one only has it as its `tuplet`. Edits treat the outer one whole.
+
+/** The id of the outermost tuplet an event is in, or null. */
+export function tupletGroup(ev) {
+  return ev?.tuplet ? ev.tuplet.outer?.id ?? ev.tuplet.id : null;
 }
 
 // ---- Bars --------------------------------------------------------------------------
@@ -670,12 +681,12 @@ export function eventAt(staff, t) {
 
 /** The first and last index of the tuplet event `index` is in. */
 function tupletBounds(staff, index) {
-  const id = staff.events[index]?.tuplet?.id;
+  const id = tupletGroup(staff.events[index]);
   if (id == null) return [index, index];
   let a = index;
   let b = index;
-  while (a > 0 && staff.events[a - 1].tuplet?.id === id) a--;
-  while (b < staff.events.length - 1 && staff.events[b + 1].tuplet?.id === id) b++;
+  while (a > 0 && tupletGroup(staff.events[a - 1]) === id) a--;
+  while (b < staff.events.length - 1 && tupletGroup(staff.events[b + 1]) === id) b++;
   return [a, b];
 }
 
@@ -1176,7 +1187,7 @@ export function toggleBeam(score, s, a, b) {
   if (staff.events[from].rest || staff.events[to].rest) throw new Error("a beam starts and ends on a note");
   if (events.some((ev) => !ev.rest && ev.base < 8)) throw new Error("only eighths and shorter notes are beamed");
   if (barAt(score, at[from]) !== barAt(score, at[to])) throw new Error("a beam stays in its bar");
-  if (events.some((ev) => ev.tuplet?.id !== events[0].tuplet?.id)) throw new Error("a beam stays in its tuplet");
+  if (events.some((ev) => tupletGroup(ev) !== tupletGroup(events[0]))) throw new Error("a beam stays in its tuplet");
   for (const ev of events) {
     delete ev.beamStart;
     delete ev.beamEnd;
@@ -2971,7 +2982,7 @@ export function handBeams(score, staff) {
   const beam = staff.events.map(() => "");
   let open = -1;
   staff.events.forEach((ev, i) => {
-    if (open >= 0 && (barAt(score, at[i]) !== barAt(score, at[open]) || ev.tuplet?.id !== staff.events[open].tuplet?.id || (!ev.rest && ev.base < 8))) open = -1;
+    if (open >= 0 && (barAt(score, at[i]) !== barAt(score, at[open]) || tupletGroup(ev) !== tupletGroup(staff.events[open]) || (!ev.rest && ev.base < 8))) open = -1;
     if (ev.beamEnd && open >= 0 && i > open && !ev.rest) {
       beam[open] = "[";
       beam[i] = "]";
@@ -3032,6 +3043,7 @@ function staffBars(score, staff, s) {
   let current = { parts: [], items: [], events: [] };
   let t = 0;
   let open = null;
+  let inner = null;
   // The bar whose cadenza has been opened.
   let cadenzaIn = -1;
   // The staff the notes are drawn on: each bar starts and ends on its own.
@@ -3041,6 +3053,8 @@ function staffBars(score, staff, s) {
   const close = () => {
     if (drawnOn !== null) change(null);
     drawnOn = null;
+    if (inner !== null) current.parts.push("}");
+    inner = null;
     if (open !== null) current.parts.push("}");
     open = null;
     bars.push({ text: current.parts.join(" "), items: current.items, events: current.events });
@@ -3049,7 +3063,13 @@ function staffBars(score, staff, s) {
   staff.events.forEach((ev, i) => {
     current.items.push({ staff: s, index: i });
     current.events.push(ev);
-    const tid = ev.tuplet?.id ?? null;
+    // The tuplet it is in (the outer one, when they nest), and the one inside that.
+    const tid = tupletGroup(ev);
+    const iid = ev.tuplet?.outer ? ev.tuplet.id : null;
+    if (inner !== null && (iid !== inner || tid !== open)) {
+      current.parts.push("}");
+      inner = null;
+    }
     if (open !== null && tid !== open) {
       current.parts.push("}");
       open = null;
@@ -3065,8 +3085,13 @@ function staffBars(score, staff, s) {
       cadenzaIn = b;
     }
     if (tid !== null && open === null) {
-      current.parts.push(`\\tuplet ${ev.tuplet.n}/${ev.tuplet.d} {`);
+      const around = ev.tuplet.outer ?? ev.tuplet;
+      current.parts.push(`\\tuplet ${around.n}/${around.d} {`);
       open = tid;
+    }
+    if (iid !== null && inner === null) {
+      current.parts.push(`\\tuplet ${ev.tuplet.n}/${ev.tuplet.d} {`);
+      inner = iid;
     }
     const on = crossOf(score, s, ev);
     if (on !== drawnOn) change(on);
@@ -4776,8 +4801,6 @@ export function fromParsed(parsed, source = null) {
     for (const ev of staff.events) {
       // A cadenza is kept as a bar of its own length.
       ev.unsupported.filter((u) => u !== "a cadenza").forEach((u) => unsupported.add(u));
-      // A tuplet in a tuplet is engraved and played; the score tools write one level.
-      if (ev.tuplet_outer) unsupported.add("a tuplet inside a tuplet");
       const k = ev.k;
       // A change after the first note is the bar's it starts: the first staff
       // writes the score's changes, the others must change with it.
@@ -4979,6 +5002,12 @@ export function fromParsed(parsed, source = null) {
           const [tid, n, d] = ev.tuplet;
           if (!tuplets.has(tid)) tuplets.set(tid, newId());
           tuplet = { id: tuplets.get(tid), n, d };
+          // The tuplet around it, when they nest.
+          if (ev.tuplet_outer) {
+            const [oid, on, od] = ev.tuplet_outer;
+            if (!tuplets.has(oid)) tuplets.set(oid, newId());
+            tuplet.outer = { id: tuplets.get(oid), n: on, d: od };
+          }
         }
         const all = ev.texts.map(([text, dir, italic, bold]) => ({ text, dir, ...(italic ? { italic: true } : {}), ...(bold ? { bold: true } : {}) }));
         // A chord diagram (\fret-diagram) is its shape, not words.

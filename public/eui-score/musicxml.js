@@ -1374,7 +1374,8 @@ function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, 
   const ticks = M.ticksOf(ev);
   const wholeBar = ev.rest && !ev.tuplet && Math.abs(ticks - barLength) < 1e-6;
   const type = `<type>${TYPE_OF[ev.base] ?? "quarter"}</type>${"<dot/>".repeat(ev.dots)}`;
-  const tm = ev.tuplet ? `<time-modification><actual-notes>${ev.tuplet.n}</actual-notes><normal-notes>${ev.tuplet.d}</normal-notes></time-modification>` : "";
+  // A tuplet in a tuplet: the two ratios multiplied.
+  const tm = ev.tuplet ? `<time-modification><actual-notes>${ev.tuplet.n * (ev.tuplet.outer?.n ?? 1)}</actual-notes><normal-notes>${ev.tuplet.d * (ev.tuplet.outer?.d ?? 1)}</normal-notes></time-modification>` : "";
   const tiedFrom = before && before.tie && !before.rest && !ev.rest;
   const heads = ev.rest ? [null] : ev.pitches;
   // Fingerings and strings: a chord's on its note, the others on the first.
@@ -1411,8 +1412,8 @@ function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, 
       // A phrasing slur: a second slur, numbered 2.
       if (ev.phraseEnd) notations.push('<slur type="stop" number="2"/>');
       if (ev.phraseStart) notations.push('<slur type="start" number="2"/>');
-      if (ev.tuplet && !(before?.tuplet?.id === ev.tuplet.id)) notations.push('<tuplet type="start"/>');
-      if (ev.tuplet && !(after?.tuplet?.id === ev.tuplet.id)) notations.push('<tuplet type="stop"/>');
+      if (ev.tuplet && !(M.tupletGroup(before) === M.tupletGroup(ev))) notations.push('<tuplet type="start"/>');
+      if (ev.tuplet && !(M.tupletGroup(after) === M.tupletGroup(ev))) notations.push('<tuplet type="stop"/>');
       // An articulation written above or below the note says so.
       const where = (a) => (ev.artDirs?.[a] ? ` placement="${ev.artDirs[a] < 0 ? "above" : "below"}"` : "");
       const arts = ev.arts.filter((a) => ARTICULATIONS_OUT[a]).map((a) => `<${ARTICULATIONS_OUT[a]}${where(a)}/>`);

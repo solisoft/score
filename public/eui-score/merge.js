@@ -64,6 +64,11 @@ function plain(events) {
     if (ev.tuplet) {
       if (!tuplets.has(ev.tuplet.id)) tuplets.set(ev.tuplet.id, tuplets.size);
       rest.tuplet = { ...ev.tuplet, id: tuplets.get(ev.tuplet.id) };
+      // The tuplet around it, numbered the same way.
+      if (ev.tuplet.outer) {
+        if (!tuplets.has(ev.tuplet.outer.id)) tuplets.set(ev.tuplet.outer.id, tuplets.size);
+        rest.tuplet.outer = { ...ev.tuplet.outer, id: tuplets.get(ev.tuplet.outer.id) };
+      }
     }
     return rest;
   });
