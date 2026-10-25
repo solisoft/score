@@ -56,12 +56,20 @@ const feelTools = () => import(`./feel-tools.js${V}`);
 // The editor's parts, one job each. startStudio makes what they share — the
 // elements, the state (`st`), say — and installs them in turn:
 // - studio-text.js: the score as a model and as text; the undoable edit;
+// - studio-selection.js: the selection, the note the tools act on, heard;
 // - studio-history.js: Undo and Redo, the history kept in this browser;
-// - studio-source.js: the source box, linked to the drawing, typed in.
-const [Text, History, Source] = await Promise.all([
+// - studio-source.js: the source box, linked to the drawing, typed in;
+// - studio-input.js: note input, durations, the cursor moved, voices;
+// - studio-clipboard.js: copy, cut and paste, of notes and of sections;
+// - studio-words.js: lyrics, chord symbols, figures and texts, typed in.
+const [Text, Selection, History, Source, Input, Clipboard, Words] = await Promise.all([
   import(`./studio-text.js${V}`),
+  import(`./studio-selection.js${V}`),
   import(`./studio-history.js${V}`),
   import(`./studio-source.js${V}`),
+  import(`./studio-input.js${V}`),
+  import(`./studio-clipboard.js${V}`),
+  import(`./studio-words.js${V}`),
 ]);
 
 const COLOURS = { selection: "#b4373a", head: "#e0662a", cursor: "#2563c9", playing: "#0f9d47" };
@@ -211,16 +219,18 @@ export function startStudio(root, options = {}) {
   // What the parts share: the elements, the state, the libraries — and each
   // part's functions, added as it is installed (`install(ctx)` answers them).
   const ctx = {
-    root, options, draftKey, sourceBox, status, st, M, Vel, H, mergeScores, conflictLines, editor_view_lit, score_json,
-    source_spans, range, draw, say, mixFromMeta, applyMix
+    root, options, draftKey, sheet, sourceBox, status, st, M, P, Vel, H, mergeScores, conflictLines, editor_view_lit,
+    score_json, source_spans, geometry, draw, say, mixFromMeta, applyMix, laneChannel
   };
   // A part calls another's functions through `ctx.call`, which finds them when
   // called: whichever part is installed first, `draw` reaches `showState`.
   const asked = new Set();
   ctx.call = new Proxy({}, { get: (_, name) => (asked.add(name), (...args) => ctx[name](...args)) });
   const {
-    readText, adoptText, writeText, snapshot, restore, edit, barsEdit, undo, redo, restoreHistory, saveDraft, open,
-    load, passedText, showInText, keptHistoryNote
+    barNo, readText, adoptText, writeText, snapshot, restore, edit, barsEdit, undo, redo, restoreHistory, saveDraft,
+    open, load, passedText, changeBar, staffOf, range, select, showInText, hear, target, need, keepOn, inputTicks,
+    setInput, inputWrite, inputBack, inputTuplet, selectedBarsOrNull, selectedBars, duration, toggleDot, step,
+    chordHead, copy, insertCopied, paste, openWords, placeWords, toVoice, keptHistoryNote
   } = ctx.call;
 
   /** A refusal of the text: its line, and a button that selects that place in the source. */
@@ -388,210 +398,10 @@ export function startStudio(root, options = {}) {
   // The parts, installed in turn: each makes its elements and adds its
   // listeners, in the order the editor always set them up.
   Object.assign(ctx, Text.install(ctx));
-  /** Bar `b`'s number as the score shows it: after a pickup, the pickup is bar 0. */
-  function barNo(b) {
-    return st.score ? M.barNumber(st.score, b) : b + 1;
-  }
-
+  Object.assign(ctx, Selection.install(ctx));
   Object.assign(ctx, History.install(ctx));
-  // ---- Selection, in times -------------------------------------------------------
-
-  /** The bar the changes section acts on: the cursor's, or the selection's first; null when none. */
-  function changeBar() {
-    if (!st.score) return null;
-    if (st.input.on) return Math.min(M.barAt(st.score, st.input.t), M.barsOf(st.score) - 1);
-    if (!st.sel) return null;
-    return st.sel.bars?.[0] ?? M.barAt(st.score, Math.min(st.sel.t0, st.sel.t1));
-  }
-
-  function staffOf() {
-    return st.input.on ? st.input.staff : st.sel?.staff ?? 0;
-  }
-
-  /** The selected events' indices, first and last, or null. */
-  function range() {
-    if (!st.sel || !st.score) return null;
-    const staff = st.score.staves[st.sel.staff];
-    if (!staff) return null;
-    const at = M.starts(staff);
-    const indexAt = (t) => {
-      let found = -1;
-      at.forEach((start, i) => {
-        if (start <= t) found = i;
-      });
-      return found;
-    };
-    const a = indexAt(st.sel.t0);
-    const b = indexAt(st.sel.t1);
-    return a < 0 ? null : { s: st.sel.staff, a: Math.min(a, b), b: Math.max(a, b), staff };
-  }
-
-  function select(s, index, head = -1, extend = false) {
-    const staff = st.score?.staves[s];
-    if (!staff) {
-      st.sel = null;
-      return draw();
-    }
-    const t = M.starts(staff)[index];
-    if (extend && st.sel && st.sel.staff === s) st.sel = { ...st.sel, t1: t, head: -1 };
-    else st.sel = { staff: s, t0: t, t1: t, head };
-    say("");
-    draw();
-    showInText(true);
-    if (!extend) hear();
-  }
-
   Object.assign(ctx, Source.install(ctx));
-  // ---- Hearing the notes ----------------------------------------------------------
-
-  const HEAR = "eui-score-studio-hear";
-  const hearBox = root.querySelector("[data-hear]");
-  try {
-    if (hearBox && localStorage.getItem(HEAR) === "off") hearBox.checked = false;
-  } catch (error) {}
-  hearBox?.addEventListener("change", () => {
-    try {
-      localStorage.setItem(HEAR, hearBox.checked ? "on" : "off");
-    } catch (error) {}
-  });
-
-  /** Sounds the note the tools act on — its selected head, or the whole chord — with its staff's instrument. */
-  function hear() {
-    if (!hearBox?.checked || st.playing || !st.score) return;
-    const t = target();
-    const ev = t && st.score.staves[t.s]?.events[t.i];
-    if (!ev || ev.rest || !ev.pitches.length) return;
-    const heads = t.head >= 0 && ev.pitches[t.head] ? [ev.pitches[t.head]] : ev.pitches;
-    const sound = st.score.staves[M.upperOf(st.score, t.s)]?.instrument;
-    const drums = M.isDrums(st.score, t.s);
-    const keys = heads.map((p) => (drums ? M.drumKey(p.drum) : M.midiKey(p.d, p.alter)));
-    if (!P.preview(keys, M.programOf(sound), { drums, channel: laneChannel(t.s) }) && !P.isReady()) {
-      say("Loading the sounds, to hear the notes… (38 MB, once)");
-      P.prepare().then(() => say("The notes sound as you write them; Hear the notes turns it off.")).catch(() => {});
-    }
-  }
-
-  /** The one event the tools act on: the selection's first, or the note just written. */
-  function target() {
-    if (st.input.on && st.input.last) {
-      const staff = st.score.staves[st.input.last.staff];
-      const i = M.eventAt(staff, st.input.last.t);
-      if (i >= 0) return { s: st.input.last.staff, i, head: -1 };
-    }
-    const r = range();
-    return r ? { s: r.s, i: r.a, head: st.sel.head } : null;
-  }
-
-  function need() {
-    const t = target();
-    if (!t) throw new Error("Select a note first — click it, or press N to write notes");
-    return t;
-  }
-
-  /** The selection kept on the event that now starts at `t`. */
-  function keepOn(s, t) {
-    st.sel = { staff: s, t0: t, t1: t, head: st.sel?.head ?? -1 };
-  }
-
-  // ---- Note input ---------------------------------------------------------------
-
-  function inputTicks() {
-    return M.notated(st.input.base, st.input.dots);
-  }
-
-  function setInput(on) {
-    if (on && st.score) {
-      const r = range();
-      st.input.staff = r ? r.s : 0;
-      st.input.t = r ? M.starts(r.staff)[r.a] : 0;
-      st.input.last = null;
-    }
-    st.input.on = Boolean(on && st.score);
-    draw();
-  }
-
-  /** Writes at the cursor: `step` a letter (0–6), a drum's name, a MIDI key played ({ key }), or null for a rest. */
-  function inputWrite(step, add) {
-    const drum = typeof step === "string";
-    const played = step !== null && typeof step === "object";
-    return edit((score) => {
-      const s = st.input.staff;
-      if (step !== null && drum !== M.isDrums(score, s)) {
-        throw new Error(drum ? "Drums go on a drum staff: add one with + Staff, Drum kit" : "A drum staff has drums, not pitches: the drum buttons write them");
-      }
-      const pitch = () => M.pitchOfKey(step.key, M.keyOf(score, s, st.input.t));
-      const strike = (lane, i, extra) => {
-        if (drum) return M.drumHit(score, lane, i, step, extra);
-        if (played) return M.setPitch(score, lane, i, pitch(), extra);
-        return M.letter(score, lane, i, step, extra);
-      };
-      if (add) {
-        // The note just written; else the note at the cursor, or the one before it.
-        const staff = score.staves[s];
-        const at = M.starts(staff);
-        const last = st.input.last && M.eventAt(score.staves[st.input.last.staff], st.input.last.t);
-        let lane = s;
-        let i = -1;
-        if (st.input.last && last >= 0) [lane, i] = [st.input.last.staff, last];
-        else {
-          const here = at.findLastIndex((t) => t <= st.input.t);
-          const before = at.findLastIndex((t) => t < st.input.t);
-          i = staff.events[here] && !staff.events[here].rest && at[here] === st.input.t ? here : before;
-        }
-        if (i < 0 || score.staves[lane].events[i].rest) throw new Error("Shift+letter adds to a note's chord: write a note, or put the cursor on one");
-        strike(lane, i, true);
-        st.input.last = { staff: lane, t: M.starts(score.staves[lane])[i] };
-        return;
-      }
-      const staff = score.staves[s];
-      M.ensureLength(score, st.input.t + 1);
-      let i = M.eventAt(staff, st.input.t);
-      const ev = staff.events[i];
-      if (ev?.tuplet) {
-        // Into a tuplet's slot: the slot keeps its value.
-        if (step === null) M.remove(score, s, i);
-        else {
-          if (!ev.rest) M.remove(score, s, i);
-          i = M.eventAt(staff, st.input.t);
-          strike(s, i, false);
-        }
-        const len = M.ticksOf(staff.events[M.eventAt(staff, st.input.t)]);
-        st.input.last = step === null ? null : { staff: s, t: st.input.t };
-        st.input.t += len;
-      } else {
-        const near = M.previousPitch(score, s, i < 0 ? staff.events.length : i);
-        const content = step === null ? { rest: true } : { rest: false, pitches: [drum ? M.drumPitch(step) : played ? pitch() : M.nearestPitch(step, near, M.keyOf(score, s))] };
-        M.write(score, s, st.input.t, inputTicks(), content);
-        st.input.last = step === null ? null : { staff: s, t: st.input.t };
-        st.input.t += inputTicks();
-      }
-      // Always room to write into.
-      M.ensureLength(score, st.input.t + 1);
-    });
-  }
-
-  function inputBack() {
-    edit((score) => {
-      const staff = score.staves[st.input.staff];
-      const at = M.starts(staff);
-      const i = at.findLastIndex((t) => t < st.input.t);
-      if (i < 0) return;
-      M.remove(score, st.input.staff, i);
-      st.input.t = at[i];
-      st.input.last = null;
-    });
-  }
-
-  function inputTuplet(n) {
-    edit((score) => {
-      const s = st.input.staff;
-      const staff = score.staves[s];
-      const i = M.eventAt(staff, st.input.t);
-      if (i >= 0 && staff.events[i].tuplet) throw new Error("already in a tuplet");
-      M.tupletAt(score, s, st.input.t, inputTicks(), n);
-    });
-  }
-
+  Object.assign(ctx, Input.install(ctx));
   // ---- Actions ------------------------------------------------------------------
 
   // What changes or moves to a note sounds it, as the person works.
@@ -1018,343 +828,8 @@ export function startStudio(root, options = {}) {
     }
   }
 
-  /** The selected bars, or null when nothing is selected. */
-  function selectedBarsOrNull() {
-    try {
-      return selectedBars();
-    } catch (error) {
-      return null;
-    }
-  }
-
-  /** The bars the selection (or the input cursor) spans, first and last. */
-  function selectedBars() {
-    if (st.input.on) {
-      const b = M.barAt(st.score, st.input.t);
-      return [b, b];
-    }
-    if (!st.sel) throw new Error("Select the bars — drag across them, or click the first and Shift+click the last");
-    if (st.sel.bars) return st.sel.bars;
-    const a = M.barAt(st.score, Math.min(st.sel.t0, st.sel.t1));
-    const b = M.barAt(st.score, Math.max(st.sel.t0, st.sel.t1));
-    return [a, b];
-  }
-
-  function duration(base, dots) {
-    st.input.base = base;
-    st.input.dots = dots;
-    if (st.input.on || !range()) return draw();
-    edit((score) => {
-      const t = need();
-      const start = M.starts(score.staves[t.s])[t.i];
-      M.setDuration(score, t.s, t.i, base, dots);
-      keepOn(t.s, start);
-    });
-  }
-
-  function toggleDot() {
-    if (st.input.on || !range()) {
-      st.input.dots = st.input.dots ? 0 : 1;
-      return draw();
-    }
-    const t = target();
-    const ev = st.score.staves[t.s].events[t.i];
-    duration(ev.base, ev.dots ? 0 : 1);
-  }
-
-  function step(by, extend) {
-    if (!st.score) return;
-    if (st.input.on) {
-      const staff = st.score.staves[st.input.staff];
-      const at = M.starts(staff);
-      const i = at.findLastIndex((t) => t <= st.input.t);
-      const next = Math.max(0, Math.min(at.length - 1, i + by));
-      st.input.t = at[next];
-      st.input.last = null;
-      return draw();
-    }
-    const r = range();
-    if (!r) return select(0, 0);
-    const edge = extend ? M.starts(r.staff).indexOf(st.sel.t1) : by > 0 ? r.b : r.a;
-    const next = Math.max(0, Math.min(r.staff.events.length - 1, edge + by));
-    select(r.s, next, -1, extend);
-  }
-
-  function chordHead(by) {
-    const t = target();
-    if (!t) return;
-    const ev = st.score.staves[t.s].events[t.i];
-    if (ev.pitches.length < 2) return;
-    const head = st.sel?.head ?? -1;
-    const next = head < 0 ? (by > 0 ? ev.pitches.length - 1 : 0) : Math.max(0, Math.min(ev.pitches.length - 1, head + by));
-    st.sel = { ...st.sel, head: next };
-    draw();
-  }
-
-  // The clipboard is the system's too: what is copied goes there as
-  // LilyPond, for another page or program; what another program copied is
-  // pasted when it reads as music. The same text back is this page's own
-  // clip, which keeps what the text cannot say.
-  //
-  // Selected bars are copied as a section — every track the selection
-  // covers, bar for bar — which pastes over bars or goes in as new ones.
-  function copy(cut) {
-    if (st.sel?.bars && st.score) return copySection(cut);
-    const r = range();
-    if (!r) return say("Select what to copy", true);
-    try {
-      st.clip = M.copy(st.score, r.s, r.a, r.b);
-      st.clipText = M.clipText(st.clip);
-      say(`${r.b - r.a + 1} copied`);
-    } catch (error) {
-      return say(error.message, true);
-    }
-    navigator.clipboard?.writeText(st.clipText).catch(() => {});
-    if (cut) edit((score) => {
-      for (let i = r.b; i >= r.a; i--) M.remove(score, r.s, i);
-    });
-  }
-
-  function copySection(cut) {
-    const [a, b] = st.sel.bars;
-    const lanes = st.sel.lanes ?? [st.sel.staff];
-    let section;
-    try {
-      section = M.copySection(st.score, lanes, a, b);
-    } catch (error) {
-      return say(error.message, true);
-    }
-    st.clip = { section };
-    st.clipText = M.sectionText(section);
-    navigator.clipboard?.writeText(st.clipText).catch(() => {});
-    const what = `${section.bars === 1 ? "1 bar" : `${section.bars} bars`} of ${lanes.length === 1 ? "1 track" : `${lanes.length} tracks`}`;
-    if (!cut) return say(`${what} copied`);
-    edit((score) => {
-      const [t0, t1] = [M.barStart(score, a), M.barStart(score, b + 1)];
-      for (const s of lanes) {
-        const at = M.starts(score.staves[s]);
-        for (let i = at.length - 1; i >= 0; i--) if (at[i] >= t0 && at[i] < t1 && !score.staves[s].events[i].rest) M.remove(score, s, i);
-      }
-    });
-    say(`${what} cut`);
-  }
-
-  /** Where a section goes: the selected bar of the selected track (or the cursor's). */
-  function sectionPlace() {
-    if (st.input.on) return { lane: st.input.staff, bar: M.barAt(st.score, st.input.t) };
-    if (!st.sel) return null;
-    return { lane: st.sel.lanes?.[0] ?? st.sel.staff, bar: selectedBars()[0] };
-  }
-
-  function sectionSaid(skipped) {
-    return skipped ? ` (${skipped === 1 ? "one track" : `${skipped} tracks`} had no staff below to go to)` : "";
-  }
-
-  /** The copied bars put in before the selected bar, as new bars: nothing written over. */
-  async function insertCopied() {
-    if (!st.score) return say("Inserting bars needs the score tools: this piece is edited in its text.", true);
-    const place = sectionPlace();
-    if (!place) return say("Select the bar to put the copied bars before", true);
-    const clip = await clipboard().catch(() => null);
-    if (!clip?.section) return say("Copy bars first: select them (drag across them), then Ctrl+C", true);
-    let skipped = 0;
-    barsEdit((score) => {
-      skipped = M.insertSection(score, place.lane, place.bar, clip.section);
-      selectSectionQuietly(score, place.bar, place.bar + clip.section.bars - 1, place.lane, clip.section);
-      return { at: place.bar, removed: 0, added: clip.section.bars };
-    });
-    const n = clip.section.bars;
-    say(`${n === 1 ? "1 bar" : `${n} bars`} put in as bar${n === 1 ? "" : "s"} ${barNo(place.bar)}${n === 1 ? "" : `–${barNo(place.bar + n - 1)}`}${sectionSaid(skipped)}`);
-  }
-
-  /** After a paste or an insert: the bars written selected, on the tracks they went to. */
-  function selectSectionQuietly(score, a, b, lane, section) {
-    const lanes = M.sectionLanes(score, lane, section);
-    if (!lanes.length) return;
-    const at = M.starts(score.staves[lanes[0]]);
-    const last = Math.max(...at.filter((t) => t < M.barStart(score, b + 1)));
-    st.sel = { staff: lanes[0], t0: M.barStart(score, a), t1: last, head: -1, bars: [a, b], lanes };
-  }
-
-  /** What to paste: the system clipboard's music, else this page's clip; null when there is none. */
-  async function clipboard() {
-    let text = "";
-    try {
-      text = (await navigator.clipboard?.readText())?.trim() ?? "";
-    } catch (error) {}
-    if (!text || text === st.clipText) return st.clip;
-    return M.clipFromText(text, score_json);
-  }
-
-  async function paste() {
-    const s = st.input.on ? st.input.staff : st.sel?.staff;
-    const t = st.input.on ? st.input.t : st.sel?.t0;
-    if (s == null || t == null) return say("Select where to paste", true);
-    let clip;
-    try {
-      clip = await clipboard();
-    } catch (error) {
-      return say(`The clipboard's text is not music this reads: ${error.message ?? error}`, true);
-    }
-    if (!clip) return say("Nothing copied yet", true);
-    if (clip.section) {
-      if (!st.score) return say("Pasting bars needs the score tools", true);
-      const place = sectionPlace();
-      let skipped = 0;
-      edit((score) => {
-        skipped = M.pasteSection(score, place.lane, place.bar, clip.section);
-        selectSectionQuietly(score, place.bar, place.bar + clip.section.bars - 1, place.lane, clip.section);
-      });
-      return say(`Pasted over bar${clip.section.bars === 1 ? "" : "s"} ${barNo(place.bar)}${clip.section.bars === 1 ? "" : `–${barNo(place.bar + clip.section.bars - 1)}`}${sectionSaid(skipped)}`);
-    }
-    edit((score) => {
-      M.paste(score, s, t, clip);
-      const end = t + clip.reduce((sum, p) => sum + p.ticks, 0);
-      if (st.input.on) st.input.t = end;
-    });
-  }
-
-  // ---- Lyrics and chord symbols ----------------------------------------------------
-
-  let wordsBox = null;
-
-  function openWords(kind) {
-    let t = target();
-    if (!t || !st.score) return say("Select a note first", true);
-    closeWords();
-    if (kind === "lyric") {
-      const staff = st.score.staves[t.s];
-      const skip = M.melismata(staff);
-      if (staff.events[t.i].rest) return say("A syllable goes under a note: select a note", true);
-      if (skip[t.i]) {
-        // A note held from an earlier one (a tie, a slur) sings that note's syllable.
-        let i = t.i;
-        while (i > 0 && skip[i]) i--;
-        t = { ...t, i };
-        st.sel = { staff: t.s, t0: M.starts(staff)[i], t1: M.starts(staff)[i], head: -1 };
-        say("That note is held from the one before (tie or slur): its syllable goes here.");
-        draw();
-      }
-    }
-    if (kind === "fret" && st.score.staves[t.s].events[t.i].rest) return say("A chord diagram goes over a note: select a note", true);
-    // A chord symbol over a staff under a line of chord names goes on the line, at that time; figures on the figured bass under it.
-    const time = M.starts(st.score.staves[t.s])[t.i];
-    const line = kind === "chord" ? M.chordLineOver(st.score, t.s) : kind === "figure" ? M.figureLineUnder(st.score, t.s) : -1;
-    if (kind === "figure" && line < 0) return say("Add a figured bass under the staff first: Insert › A figured bass under the staff", true);
-    const lane = line >= 0 ? line : t.s;
-    const at = M.eventAt(st.score.staves[lane], time);
-    const ev = at >= 0 ? st.score.staves[lane].events[at] : null;
-    const box = Object.assign(document.createElement("input"), { type: "text", className: `studio-words studio-words-${kind}` });
-    box.value = ev ? wordsOf(ev, kind) : "";
-    box.placeholder = { lyric: "syllable", chord: "Am7", text: "solo", expression: "dolce", figure: "6 4", fret: "x32010" }[kind];
-    box.setAttribute("aria-label", {
-      lyric: "Syllable — Space next note, - hyphen, Enter done",
-      chord: "Chord symbol — Space next note, Enter done",
-      text: "Staff text — Enter done",
-      expression: "Expression, in italics — Enter done",
-      figure: "Figures, as 6 4 or 7+ — Space next beat, Enter done",
-      fret: "Guitar chord, low E first: x32010 — Enter done",
-    }[kind]);
-    sheet.appendChild(box);
-    wordsBox = { box, kind, s: lane, t: time, anchor: t.s };
-    placeWords();
-    box.focus();
-    box.select();
-    box.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        closeWords();
-        sheet.focus();
-      } else if (event.key === "Enter") {
-        event.preventDefault();
-        commitWords();
-        closeWords();
-        sheet.focus();
-      } else if ((event.key === " " && (kind === "lyric" || kind === "chord" || kind === "figure")) || event.key === "Tab" || (event.key === "-" && kind === "lyric")) {
-        event.preventDefault();
-        commitWords({ hyphen: event.key === "-", next: true });
-        nextWords();
-      }
-    });
-    box.addEventListener("blur", () => setTimeout(() => {
-      if (wordsBox?.box === box && document.activeElement !== box) {
-        commitWords();
-        closeWords();
-      }
-    }, 0));
-  }
-
-  /** The verse the lyrics box writes: the Verse menu's, 1 the first. */
-  function verse() {
-    return Number(root.querySelector("[data-verse]")?.value) || 1;
-  }
-
-  /** What a words box shows for `ev`: its syllable, chord symbol, staff text or expression. */
-  function wordsOf(ev, kind) {
-    if (kind === "lyric") return M.syllableOf(ev, verse())?.text ?? "";
-    if (kind === "chord") return ev.chord ?? "";
-    if (kind === "figure") return ev.figure ?? "";
-    if (kind === "fret") return ev.fret ? M.fretText(ev.fret) : "";
-    return M.textOf(ev, kind === "text" ? "staff" : "expression");
-  }
-
-  function commitWords(extra = {}) {
-    if (!wordsBox) return;
-    const { box, kind, s, t } = wordsBox;
-    const value = box.value;
-    edit((score) => {
-      const i = M.eventAt(score.staves[s], t);
-      if (kind === "lyric") {
-        if (score.staves[s].events[i].rest) return;
-        M.setLyric(score, s, i, value, Boolean(extra.hyphen), false, verse());
-      } else if (kind === "chord" && M.isChords(score, s)) {
-        // On a line of chord names: from this beat on, the line cut there.
-        if (value.trim() || i >= 0) M.setChordAt(score, s, t, value);
-      } else if (kind === "chord") M.setChordSymbol(score, s, i, value);
-      else if (kind === "figure") {
-        if (value.trim() || i >= 0) M.setFigureAt(score, s, t, value);
-      } else if (kind === "fret") M.setFretDiagram(score, s, i, value);
-      else M.setText(score, s, i, kind === "text" ? "staff" : "expression", value);
-    });
-  }
-
-  function nextWords() {
-    if (!wordsBox) return;
-    const { kind, s, t } = wordsBox;
-    const staff = st.score.staves[s];
-    const at = M.starts(staff);
-    if (M.isChords(st.score, s) || M.isFigures(st.score, s)) {
-      // A line of chord names goes beat by beat, the staff under it selected where a note starts.
-      const next = M.nextBeat(st.score, t);
-      if (next >= M.lengthOf(staff)) return closeWords();
-      const under = st.score.staves[wordsBox.anchor];
-      const k = M.eventAt(under, next);
-      if (k >= 0) st.sel = { staff: wordsBox.anchor, t0: next, t1: next, head: -1 };
-      draw();
-      const i = M.eventAt(staff, next);
-      wordsBox.t = next;
-      wordsBox.box.value = i >= 0 ? wordsOf(staff.events[i], kind) : "";
-      placeWords();
-      wordsBox.box.focus();
-      wordsBox.box.select();
-      return;
-    }
-    let i = M.eventAt(staff, t) + 1;
-    // Lyrics skip rests, tied-to notes and the notes under a slur (as
-    // LilyPond sets them); a chord symbol goes on any note.
-    const skip = M.melismata(staff);
-    while (i < staff.events.length && (staff.events[i].rest || (kind === "lyric" && skip[i]))) i++;
-    if (i >= staff.events.length) return closeWords();
-    st.sel = { staff: s, t0: at[i], t1: at[i], head: -1 };
-    draw();
-    const ev = staff.events[i];
-    wordsBox.t = at[i];
-    wordsBox.box.value = wordsOf(ev, kind);
-    placeWords();
-    wordsBox.box.focus();
-    wordsBox.box.select();
-  }
-
+  Object.assign(ctx, Clipboard.install(ctx));
+  Object.assign(ctx, Words.install(ctx));
   /** Where the drawing is: its origin in the sheet's pixels, and its scale. */
   function geometry() {
     const svg = svgHost.querySelector("svg");
@@ -1369,32 +844,6 @@ export function startStudio(root, options = {}) {
       // A point of the drawing, in the sheet's pixels.
       at: (x, y) => ({ x: rect.left - frame.left + sheet.scrollLeft + x * scale, y: rect.top - frame.top + sheet.scrollTop + (y - y0) * scale }),
     };
-  }
-
-  function closeWords() {
-    wordsBox?.box.remove();
-    wordsBox = null;
-  }
-
-  function placeWords() {
-    if (!wordsBox || !st.view) return;
-    const k = st.items.findIndex((it) => it.staff === wordsBox.s && M.starts(st.score.staves[it.staff])[it.index] === wordsBox.t);
-    // A beat of a line of chord names with nothing drawn: over the staff's note sounding then.
-    const under = (it) => {
-      if (it.staff !== wordsBox.anchor || it.staff === wordsBox.s) return false;
-      const at = M.starts(st.score.staves[it.staff]);
-      return at[it.index] <= wordsBox.t && at[it.index] + M.ticksOf(st.score.staves[it.staff].events[it.index]) > wordsBox.t;
-    };
-    const item = st.view.items.find((it) => it.item === k) ?? st.view.items.find((it) => under(st.items[it.item] ?? {}));
-    const g = geometry();
-    if (!item || !g) return;
-    const [x0, y0, , y1] = item.box;
-    const below = wordsBox.kind === "lyric" || wordsBox.kind === "expression" || wordsBox.kind === "figure";
-    const corner = g.at(x0, below ? y1 : y0);
-    wordsBox.box.style.left = `${corner.x - 6}px`;
-    // A later verse's box a line lower, as its words stand.
-    const line = wordsBox.kind === "lyric" ? (verse() - 1) * 26 * st.zoom : 0;
-    wordsBox.box.style.top = below ? `${corner.y + 8 + line}px` : `${Math.max(0, corner.y - 36)}px`;
   }
 
   // ---- Drawing ------------------------------------------------------------------
@@ -2010,40 +1459,6 @@ export function startStudio(root, options = {}) {
     for (let bar = Math.min(M.barAt(st.score, t0), last); bar <= Math.min(M.barAt(st.score, t1), last); bar++) out.push({ staff: s, bar });
     return out;
   }
-
-  /** The cursor or the selection moved to voice `voice` (1 to 4) of its staff, at the same time; the voice made when needed. */
-  function toVoice(voice) {
-    if (!st.score) return;
-    const s = staffOf();
-    const upper = M.upperOf(st.score, s);
-    let lane = M.laneOfVoice(st.score, upper, voice);
-    if (lane < 0) {
-      // Voices of rests (voice 3 brings voice 2): nothing in the text changes, so no step to undo.
-      const had = M.voiceLanes(st.score, upper).length;
-      lane = M.addVoice(st.score, upper, voice);
-      const added = M.voiceLanes(st.score, upper).length - had;
-      if (st.input.on && st.input.staff >= upper + had) st.input.staff += added;
-    }
-    if (st.input.on) {
-      st.input.staff = lane;
-      st.input.last = null;
-    } else if (st.sel) {
-      const at = M.starts(st.score.staves[lane]);
-      const t = Math.min(st.sel.t0, st.sel.t1);
-      const start = Math.max(...at.filter((x) => x <= t));
-      st.sel = { staff: lane, t0: start, t1: start, head: -1 };
-    } else {
-      st.sel = { staff: lane, t0: 0, t1: 0, head: -1 };
-    }
-    say(VOICE_SAID[voice] ?? "Voice 1");
-    draw();
-  }
-
-  const VOICE_SAID = {
-    2: "Voice 2: notes written now go under voice 1, stems down",
-    3: "Voice 3: notes written now go beside voice 1, stems up",
-    4: "Voice 4: notes written now go beside voice 2, stems down",
-  };
 
   function showState() {
     root.classList.toggle("studio-input", st.input.on);
