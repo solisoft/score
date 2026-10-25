@@ -44,11 +44,12 @@ class PagesController < Controller
   def pricing
     @monthly = Plan.price("monthly")
     @title = "Pricing"
-    @description = "EUI Score is free to write with. Pro, #{this.monthly["label"]} a month, reads more photos, "
-    + "records more audio and shares with anyone."
+    @description = "EUI Score is free to write with. Pro, #{this.monthly["label"]} a month, records more audio, "
+    + "runs the AI on your own key and shares with anyone."
     @plans = Plan.catalog
     @annual = Plan.price("annual")
     @payments_open = Stripe.configured?
+    @ai_note = Plan.ai_note(@payments_open)
   end
 
   # GET /changelog — what changed lately, on the site and in the engraver

@@ -66,8 +66,8 @@
   <% summary = user.plan_summary() %>
   <p data-plan-name>You are on <strong><%= user.plan_name() %></strong>.<% unless summary.nil? %> <%= summary %><% end %></p>
   <% unless user.pro?() %>
-    <p class="muted">Pro reads more photos and answers more questions on the site's AI, records on every audio track
-      with far more room for takes, and shares a score with anyone: <%= offer["monthly"]["label"] %> a
+    <p class="muted">Pro runs the AI on your own key, records on every audio track with far more room for takes,
+      and shares a score with anyone: <%= offer["monthly"]["label"] %> a
       month or <%= offer["annual"]["label"] %> a year. <a href="<%= pricing_path() %>">Compare the plans</a></p>
     <div class="account-plan-actions">
       <form action="<%= app_billing_checkout_path() %>" method="POST">
@@ -93,6 +93,12 @@
   <% end %>
 
   <h2 id="ai">AI for photos and the assistant</h2>
+  <p class="muted" data-ai-own-key>The AI runs on your own key: the site has no AI of its own. Your requests go to
+    the provider you choose, and that provider bills you for them.</p>
+  <% ai_plan_note = user.ai_plan_note() %>
+  <% unless ai_plan_note.nil? %>
+    <p class="form-error" data-ai-plan><%= ai_plan_note %> <a href="<%= pricing_path() %>">See the plans</a></p>
+  <% end %>
   <% if user.own_ai?() %>
     <p>Photos of scores are read, and the editor's assistant answers, with <strong><%= user.ai_provider_name() %></strong>, model
       <code><%= user.ai_model %></code>, with your key ending in <code>…<%= user.ai_key_hint %></code>.</p>
@@ -104,7 +110,7 @@
   <% else %>
     <p class="muted">An AI model reads photos of scores and answers the editor's assistant. Bring a key of your own
       from one of these providers to use the model you choose: the site keeps it encrypted, uses it only for your
-      photos and the assistant, and never shows it again.</p>
+      photos and the assistant, and never shows it again. Without one, there is no AI.</p>
   <% end %>
   <% if locals["ai_error"].present? %>
     <p class="form-error" role="alert"><%= locals["ai_error"] %></p>

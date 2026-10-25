@@ -1,8 +1,10 @@
 # The plans (#393): Free, what the site has always offered, and Pro, paid
 # through Stripe (StripeBilling). Every limit a plan sets is read here,
-# through `Plan.limits(user)`: the AI on the server's key, the audio takes,
-# the people a score is shared with. A person's own AI key is never limited
-# by the plan (ScoreReading / ScoreSuggestion keep their own day for it).
+# through `Plan.limits(user)`: whether the AI may run on one's own key, the
+# audio takes, the people a score is shared with. The site has no AI of its
+# own (#396, AiClient): "own_key_ai" says whether a person's own key may be
+# used. Its day (ScoreReading / ScoreSuggestion, 200 each) is not the plan's:
+# it guards against a runaway loop, the provider's bill being theirs.
 #
 # The prices are provisional, and kept here only: the Pricing page and the
 # account show them from PLAN_PRICES. What Stripe charges is the Price its
@@ -17,8 +19,6 @@ const PLAN_PRICES = {"monthly": {
   "label": "60 €",
   "per": "year"
 }}
-# What Pro multiplies the free AI day by (#365's 20 photos and 30 questions).
-const PLAN_PRO_AI_FACTOR = 5
 const PLAN_MEGABYTE = 1000000
 
 class Plan
@@ -44,42 +44,39 @@ class Plan
   end
 
   # What everyone not on Pro has while payments are not open: the site as it
-  # was before the plans (#365's AI day, every audio track, a take capped
-  # only by SCORE_TAKE_MAX_BYTES, anyone a score is shared with).
+  # was before the plans (AI with one's own key, every audio track, a take
+  # capped only by SCORE_TAKE_MAX_BYTES, anyone a score is shared with).
   static def today_limits
     {
       "plan": "free",
       "upgrade": false,
-      "readings_per_day": SCORE_READINGS_PER_DAY,
-      "suggestions_per_day": SCORE_SUGGESTIONS_PER_DAY,
+      "own_key_ai": true,
       "take_tracks": SCORE_TAKE_TRACKS,
       "take_bytes": nil,
       "people_per_score": nil
     }
   end
 
-  # Free, once payments are open: the AI day of #365, one audio track a
-  # score and 50 MB of takes, three people a score.
+  # Free, once payments are open: no AI, one audio track a score and 50 MB
+  # of takes, three people a score.
   static def free_limits
     {
       "plan": "free",
       "upgrade": true,
-      "readings_per_day": SCORE_READINGS_PER_DAY,
-      "suggestions_per_day": SCORE_SUGGESTIONS_PER_DAY,
+      "own_key_ai": false,
       "take_tracks": 1,
       "take_bytes": 50 * PLAN_MEGABYTE,
       "people_per_score": 3
     }
   end
 
-  # Pro: five times the AI, every audio track (SCORE_TAKE_TRACKS) and 2 GB
-  # of takes, anyone a score is shared with.
+  # Pro: AI with one's own key, every audio track (SCORE_TAKE_TRACKS) and
+  # 2 GB of takes, anyone a score is shared with.
   static def pro_limits
     {
       "plan": "pro",
       "upgrade": false,
-      "readings_per_day": SCORE_READINGS_PER_DAY * PLAN_PRO_AI_FACTOR,
-      "suggestions_per_day": SCORE_SUGGESTIONS_PER_DAY * PLAN_PRO_AI_FACTOR,
+      "own_key_ai": true,
       "take_tracks": SCORE_TAKE_TRACKS,
       "take_bytes": 2000 * PLAN_MEGABYTE,
       "people_per_score": nil
@@ -101,12 +98,25 @@ class Plan
     {
       "name": name,
       "slug": limits["plan"],
-      "readings": "#{limits["readings_per_day"]} photos read a day",
-      "suggestions": "#{limits["suggestions_per_day"]} questions to the assistant a day",
+      "ai": Plan.ai_text(limits["own_key_ai"]),
       "tracks": limits["take_tracks"] == 1 ? "1 audio track a score" : "#{limits["take_tracks"]} audio tracks a score",
       "storage": "#{Plan.size_text(limits["take_bytes"])} of audio takes",
       "people": Plan.people_text(limits["people_per_score"])
     }
+  end
+
+  # What the Pricing page adds about the AI: while payments are closed,
+  # that anyone may use it with their own key (today_limits); nil once open.
+  static def ai_note(open)
+    return nil if open
+
+    "Until payments open, anyone signed in can use the AI with their own key."
+  end
+
+  static def ai_text(own_key_ai)
+    return "No AI" unless own_key_ai
+
+    "AI (photo reading, assistant) with your own key from Anthropic, OpenAI, Gemini, Mistral, DeepSeek, Kimi…"
   end
 
   static def people_text(most)

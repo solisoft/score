@@ -1,21 +1,24 @@
 # Reading a photo of a score from the Start page: sent, asked after, its
-# owner's only.
+# owner's only; and only on the person's own AI key (#396), the server's
+# never, whatever its environment holds.
 
 const READING_PASSWORD = "correct horse battery"
 const SMALL_PNG = "iVBORw0KGgoAAAANSUhEUgAAACgAAAAUCAAAAADaLSBnAAAAFUlEQVR42mP4TyRgGFU4qnBUIQgAAIy4"
 + "HQ6Y693OAAAAAElFTkSuQmCC"
 
-def reading_user
+# Someone signed in, with a key of their own unless `keyless`.
+def reading_user(keyless = false)
   user = User.new()
   user.email = "photo-#{uuid_v4}@example.com"
   user.set_password(READING_PASSWORD)
   user.confirmed_at = DateTime.utc.to_unix
   user.save
+  user.keep_ai_key("mistral", "pixtral-large-latest", "sk-mistral-2222") unless keyless
   post(
     "/login",
     {"email": user.email, "password": READING_PASSWORD}
   )
-  user
+  User.find(user._key)
 end
 
 def send_picture(picture)
@@ -29,8 +32,24 @@ def readings_of(user)
   ScoreReading.where({"user_id": user._key}).count
 end
 
-# Whose readings fill the server key's day in a spec: theirs go after it.
-const SITE_BUSY_READER = "site-busy-readings-spec"
+# The reading jobs waiting in the queue (`soli test` runs no worker).
+def queued_reading_jobs
+  Job.list().filter do |job|
+    str(job["handler"]).contains("ScoreReading")
+  end.length
+end
+
+# `count` readings `user` started in the last day.
+def past_readings(user, count)
+  rows = (0 .. count).map do |_|
+    {
+      "user_id": user._key,
+      "state": "done",
+      "created_at": DateTime.utc.to_unix
+    }
+  end
+  ScoreReading.create_many(rows) if count > 0
+end
 
 describe("AppScoreReadingsController") do
   before_each() do
@@ -39,19 +58,29 @@ describe("AppScoreReadingsController") do
     clear_headers()
   end
 
-  after_each() do
-    ScoreReading.where({"user_id": SITE_BUSY_READER}).delete_all
-  end
-
-  test("the Start page offers it, with the day's readings left") do
+  test("the Start page offers it with one's own key, with the day's readings left") do
     reading_user()
     page = res_body(get("/app"))
     assert_contains(page, "From a photo")
-    assert_contains(page, "<span data-photos-left>#{SCORE_READINGS_PER_DAY}</span> left today")
+    assert_contains(page, "read by Mistral, pixtral-large-latest")
+    assert_contains(page, "<span data-photos-left>#{SCORE_READINGS_OWN_PER_DAY}</span> left today")
+    assert_contains(page, "data-photo hidden>")
+  end
+
+  test("without a key, the Start page links the way to one before any photo is chosen") do
+    assert(getenv("ANTHROPIC_API_KEY").present?, "the server's key is set, and still not offered")
+    reading_user(true)
+    page = res_body(get("/app"))
+    assert_contains(page, "data-photos-refused")
+    assert_contains(page, "the site has no AI of its own")
+    assert_contains(page, "href=\"/app/account#ai\">Add an AI key</a>")
+    assert_not(page.contains("data-photo hidden"), "no photo to choose")
+    assert_not(page.contains("read by Claude"))
   end
 
   test("starts a reading of a picture, shrunk to a JPEG, kept for the job") do
     user = reading_user()
+    jobs_before = queued_reading_jobs()
     response = send_picture(SMALL_PNG)
     assert_eq(res_status(response), 202)
     answer = res_json(response)
@@ -59,7 +88,28 @@ describe("AppScoreReadingsController") do
     stored = ScoreReading.find(answer["id"])
     assert_eq(stored.user_id, user._key)
     assert(stored.picture.starts_with?("/9j/"), "re-encoded as JPEG")
+    assert_eq(queued_reading_jobs(), jobs_before + 1)
     assert_eq(res_json(get("/app/readings/#{answer["id"]}")), {"state": "reading"})
+  end
+
+  test("without a key of one's own: refused with the way to Account, nothing kept or queued") do
+    assert(getenv("ANTHROPIC_API_KEY").present?, "the server's key is set, and still not used")
+    user = reading_user(true)
+    jobs_before = queued_reading_jobs()
+    refused = send_picture(SMALL_PNG)
+    assert_eq(res_status(refused), 403)
+    assert_eq(
+      res_json(refused),
+      {
+        "error": "Add your own AI key in Account to read photos and use the assistant.",
+        "link": "/app/account#ai",
+        "link_text": "Add your key in Account"
+      }
+    )
+    assert_eq(readings_of(user), 0)
+    assert_eq(queued_reading_jobs(), jobs_before)
+    # Refused before the picture is even looked at.
+    assert_eq(res_status(send_picture("")), 403)
   end
 
   test("refuses no picture, or what is not one, and starts nothing") do
@@ -75,79 +125,20 @@ describe("AppScoreReadingsController") do
     assert_eq(readings_of(user), 0)
   end
 
-  test("refuses past the day's readings") do
+  test("one's own key: the 200th photo of the day is read, the 201st refused, nothing kept") do
     user = reading_user()
-    (0 .. SCORE_READINGS_PER_DAY).each do |_|
-      ScoreReading.create({
-        "user_id": user._key,
-        "state": "done",
-        "created_at": DateTime.utc.to_unix
-      })
-    end
-    response = send_picture(SMALL_PNG)
-    assert_eq(res_status(response), 429)
-    assert_eq(
-      res_json(response)["error"],
-      "You have read the 20 photos a day the site's AI reads: try again tomorrow, "
-      + "or add your own AI key on your account page to read more."
-    )
-    # Payments not open (#393): nothing to buy, so no way to Pricing.
-    assert_null(res_json(response)["upgrade"])
-    assert_eq(readings_of(user), SCORE_READINGS_PER_DAY)
-    assert_contains(res_body(get("/app")), "data-photo hidden disabled")
-  end
-
-  test("with one's own key, past the site's 20, up to the own key's day") do
-    user = reading_user()
-    user.keep_ai_key("mistral", "pixtral-large-latest", "sk-mistral-2222")
-    rows = (0 .. SCORE_READINGS_OWN_PER_DAY - 1).map do |_|
-      {
-        "user_id": user._key,
-        "state": "done",
-        "own": true,
-        "created_at": DateTime.utc.to_unix
-      }
-    end
-    ScoreReading.create_many(rows)
+    assert_eq(SCORE_READINGS_OWN_PER_DAY, 200)
+    past_readings(user, SCORE_READINGS_OWN_PER_DAY - 1)
     last = send_picture(SMALL_PNG)
     assert_eq(res_status(last), 202)
-    assert_eq(ScoreReading.find(res_json(last)["id"]).own, true)
+    jobs_before = queued_reading_jobs()
     refused = send_picture(SMALL_PNG)
     assert_eq(res_status(refused), 429)
     assert_eq(res_json(refused)["error"], "You have read all of today's photos: try again tomorrow.")
+    assert_null(res_json(refused)["link"])
     assert_eq(readings_of(user), SCORE_READINGS_OWN_PER_DAY)
-  end
-
-  test("once the site's AI has answered its day, a photo on the server's key is refused, nothing kept") do
-    user = reading_user()
-    # Exactly the day's, with what other specs asked of the server's key.
-    rows = (0 .. AI_SERVER_ASKS_PER_DAY - AiClient.server_used_today).map do |_|
-      {
-        "user_id": SITE_BUSY_READER,
-        "state": "done",
-        "own": false,
-        "created_at": DateTime.utc.to_unix
-      }
-    end
-    ScoreReading.create_many(rows)
-    refused = send_picture(SMALL_PNG)
-    assert_eq(res_status(refused), 429)
-    assert_eq(
-      res_json(refused)["error"],
-      "The site's AI is busy for today: add your own key in Account to keep going."
-    )
-    assert_eq(readings_of(user), 0)
-    # Taken back when written for the last slot after the check passed.
-    ScoreReading.where({"user_id": SITE_BUSY_READER}).limit(1).all[0].delete
-    assert_null(ScoreReading.refusal(user))
-    ScoreReading.create({
-      "user_id": SITE_BUSY_READER,
-      "state": "done",
-      "own": false,
-      "created_at": DateTime.utc.to_unix
-    })
-    assert_eq(ScoreReading.start(user, "abc"), "busy")
-    assert_eq(readings_of(user), 0)
+    assert_eq(queued_reading_jobs(), jobs_before)
+    assert_contains(res_body(get("/app")), "data-photo hidden disabled")
   end
 
   test("answers the music once read, engraved") do
@@ -209,12 +200,18 @@ describe("An AI key of one's own, on the account page") do
   end
 
   test("offers the providers, and keeps a key encrypted, shown by its end") do
-    user = reading_user()
+    user = reading_user(true)
     page = res_body(get("/app/account"))
     # The key serves photos and the editor's assistant: the page says both.
     assert_contains(page, "<h2 id=\"ai\">AI for photos and the assistant</h2>")
     assert_contains(page, "the editor's assistant")
     assert_not(page.contains("AI for reading photos"))
+    # Whose AI it is, and who pays for it.
+    assert_contains(page, "The AI runs on your own key: the site has no AI of its own.")
+    assert_contains(page, "that provider bills you for them.")
+    assert_contains(page, "Without one, there is no AI.")
+    # Payments not open: no plan stands in the way.
+    assert_not(page.contains("data-ai-plan"))
     providers = ["Anthropic (Claude)", "OpenAI (GPT)", "Google (Gemini)", "Mistral", "DeepSeek", "Moonshot (Kimi)"]
     (providers + ["OpenRouter"]).each do |name|
       assert_contains(page, name)
@@ -240,8 +237,25 @@ describe("An AI key of one's own, on the account page") do
     assert_contains(start, "<span data-photos-left>#{SCORE_READINGS_OWN_PER_DAY}</span> left today")
   end
 
+  test("once payments open, Free is told AI with one's own key is Pro's; the key stays, unused") do
+    free = reading_user()
+    assert_eq(
+      free.ai_plan_note(true),
+      "AI with your own key is part of Pro. Your key stays kept, unused, until then; you can remove it."
+    )
+    assert_null(free.ai_plan_note(false))
+    keyless = reading_user(true)
+    assert_eq(keyless.ai_plan_note(true), "AI with your own key is part of Pro.")
+    pro = reading_user()
+    pro.plan = "pro"
+    pro.plan_status = "active"
+    pro.current_period_end = DateTime.utc.to_unix + 86400
+    pro.update()
+    assert_null(User.find(pro._key).ai_plan_note(true))
+  end
+
   test("refuses an unknown provider or a missing key, and keeps nothing") do
-    user = reading_user()
+    user = reading_user(true)
     response = post(
       "/app/account/ai",
       {
@@ -265,20 +279,15 @@ describe("An AI key of one's own, on the account page") do
     assert_not(User.find(user._key).own_ai?)
   end
 
-  test("removes the key: back to the site's Claude") do
+  test("removes the key: no AI until another one, not the site's") do
     user = reading_user()
-    post(
-      "/app/account/ai",
-      {
-        "provider": "mistral",
-        "model": "pixtral-large-latest",
-        "key": "sk-mistral-0000"
-      }
-    )
     assert(User.find(user._key).own_ai?)
     assert_eq(res_location(post("/app/account/ai/remove", {})), "/app/account")
     assert_not(User.find(user._key).own_ai?)
-    assert_contains(res_body(get("/app")), "read by Claude")
+    start = res_body(get("/app"))
+    assert_contains(start, "Add an AI key")
+    assert_not(start.contains("read by Claude"))
+    assert_eq(res_status(send_picture(SMALL_PNG)), 403)
   end
 
   test("a guest cannot keep one") do

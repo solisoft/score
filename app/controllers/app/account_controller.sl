@@ -85,7 +85,7 @@ class AppAccountController < AppBaseController
     redirect(app_account_path())
   end
 
-  # POST /app/account/ai/remove — back to the site's own AI, if it has one
+  # POST /app/account/ai/remove — the key forgotten: no AI until another one
   def forget_ai_key
     current_user().forget_ai_key()
     flash("notice", "Your AI key is removed.")

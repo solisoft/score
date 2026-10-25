@@ -1,9 +1,9 @@
 # A photo of a score being read into LilyPond by an AI model (ScoreReader),
 # in a job (ScoreReadingJob): "reading", then "done" with its `source` or
 # "failed" with its `error`. The picture is kept only while it is read.
-# A person may start SCORE_READINGS_PER_DAY in any 24 hours on the server's
-# key on Free (Pro: Plan), SCORE_READINGS_OWN_PER_DAY on a key of their own.
-const SCORE_READINGS_PER_DAY = 20
+# Read only with a person's own AI key, when their plan allows it
+# (AiClient.refusal, #396). SCORE_READINGS_OWN_PER_DAY in any 24 hours: their
+# provider bills them, so this only stops a runaway loop.
 const SCORE_READINGS_OWN_PER_DAY = 200
 # A reading or a suggestion still at work after this many seconds was cut off
 # (a restart, a deploy: their jobs are not retried) and never will finish:
@@ -22,15 +22,18 @@ class ScoreReading < Model
   # when it may not be, why (`refusal`), with nothing kept and nothing
   # queued. Counted once written: of two asked at once for the last one,
   # neither passes unseen by the other.
-  static def start(user, picture)
+  # `open`: whether payments are open (Plan.open? when nil).
+  static def start(user, picture, open = nil)
+    refusal = AiClient.refusal(user, open)
+    return refusal unless refusal.nil?
+
     reading = ScoreReading.create({
       "user_id": user._key,
       "state": "reading",
       "picture": picture,
-      "own": user.own_ai?(),
       "created_at": DateTime.utc.to_unix
     })
-    refusal = ScoreReading.refusal(user, 1)
+    refusal = ScoreReading.refusal(user, 1, open)
     unless refusal.nil?
       reading.delete
       return refusal
@@ -40,43 +43,20 @@ class ScoreReading < Model
     reading
   end
 
-  # Why `user` may not start one more reading now, or nil: "used_up" (their
-  # day's), "busy" (the server key's day, AI_SERVER_ASKS_PER_DAY, for those
-  # without a key of their own). `counted`: 1 once the reading is written,
-  # as it then counts itself.
-  static def refusal(user, counted = 0)
-    return "used_up" if ScoreReading.used_today(user) - counted >= ScoreReading.limit_for(user)
-    return nil if user.own_ai?()
-    return "busy" if AiClient.server_used_today - counted >= AI_SERVER_ASKS_PER_DAY
+  # Why `user` may not start one more reading now, or nil: AiClient.refusal
+  # ("plan", "no_key"), or "used_up" (the day's SCORE_READINGS_OWN_PER_DAY).
+  # `counted`: 1 once the reading is written, as it then counts itself.
+  static def refusal(user, counted = 0, open = nil)
+    ai = AiClient.refusal(user, open)
+    return ai unless ai.nil?
+    return "used_up" if ScoreReading.used_today(user) - counted >= SCORE_READINGS_OWN_PER_DAY
 
     nil
   end
 
   # How many more readings `user` may start now.
   static def left_today(user)
-    [ScoreReading.limit_for(user) - ScoreReading.used_today(user), 0].max()
-  end
-
-  # What someone on `limits` (Plan.limits) reads once their day on the
-  # site's key is used up: on Free with payments open, the way to Pro.
-  static def used_up_text(limits)
-    day = limits["readings_per_day"]
-    more = "or add your own AI key on your account page to read more."
-    if limits["upgrade"]
-      return "You have read the #{day} photos a day the site's AI reads on Free: try again tomorrow, "
-      + "move to Pro for #{Plan.pro_limits["readings_per_day"]} a day, "
-      + more
-    end
-
-    if limits["plan"] == "pro"
-      return "You have read the #{day} photos a day the site's AI reads on Pro: try again tomorrow, " + more
-    end
-
-    "You have read the #{day} photos a day the site's AI reads: try again tomorrow, " + more
-  end
-
-  static def limit_for(user)
-    user.own_ai?() ? SCORE_READINGS_OWN_PER_DAY : Plan.limits(user)["readings_per_day"]
+    [SCORE_READINGS_OWN_PER_DAY - ScoreReading.used_today(user), 0].max()
   end
 
   # The readings `user` started in the last 24 hours.
@@ -124,10 +104,12 @@ class ScoreReading < Model
     @save
   end
 
-  # What the AI answered, or why there is no answer.
+  # What the AI answered, or why there is no answer: asked again here, as
+  # the key or the plan may have gone since the reading was queued.
   def _outcome
-    settings = User.find(@user_id).ai_settings
-    return {"error": "There is no AI key to read photos with."} if settings.nil?
+    user = User.find(@user_id)
+    settings = AiClient.settings_for(user)
+    return {"error": AiClient.refusal_text(AiClient.refusal(user))} if settings.nil?
 
     ScoreReader.read(@picture.to_s, settings)
   end

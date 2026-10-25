@@ -1,4 +1,4 @@
-<%- partial("shared/studio", {"examples": examples, "figure": figure, "source": source, "app": true, "owner": owner}) %>
+<%- partial("shared/studio", {"examples": examples, "figure": figure, "source": source, "app": true, "owner": owner, "ai_link": ai_link}) %>
 
 <%# Comments on the score's bars (#385): the panel the editor's script
     fills (public/eui-score/comments.js), beside the score. %>
@@ -19,8 +19,9 @@
 </form>
 
 <%# The AI assistant (AI menu): what to ask, then the explanation beside the
-    proposed score, to apply or discard. %>
-<dialog class="studio-keys studio-parts studio-ai" data-ai aria-labelledby="studio-ai-title">
+    proposed score, to apply or discard. Without a usable AI key (#396,
+    data-ai-refused) it says why and links the way to one, and sends nothing. %>
+<dialog class="studio-keys studio-parts studio-ai" data-ai aria-labelledby="studio-ai-title"<%= ai_link ? " data-ai-refused" : "" %>>
   <form method="dialog" data-ai-form>
     <div class="studio-keys-head">
       <h2 id="studio-ai-title" data-ai-title>AI</h2>
@@ -28,7 +29,7 @@
     </div>
     <p class="muted studio-parts-note" data-ai-about></p>
     <textarea class="studio-ai-request" data-ai-request rows="3" maxlength="<%= ai_request_limit %>"></textarea>
-    <p class="muted studio-parts-note" data-ai-with><%= ai_with %><% unless ai_left.nil? %> <span data-ai-left><%= ai_left %></span> questions left today.<% end %></p>
+    <p class="muted studio-parts-note" data-ai-with><%= ai_with %><% unless ai_left.nil? %> <span data-ai-left><%= ai_left %></span> questions left today.<% end %><% if ai_link %> <a href="<%= ai_link["href"] %>"><%= ai_link["text"] %></a><% end %></p>
     <p class="studio-parts-note" data-ai-status hidden></p>
     <p class="form-error" data-ai-error hidden></p>
     <div class="studio-ai-result" data-ai-result hidden>
@@ -615,8 +616,9 @@
     setTimeout(() => (event.target.textContent = "Keep a version"), 2500);
   });
 
-  // File › Open a photo…: read by the server's or the person's AI; what was
-  // read opens as a new score.
+  // File › Open a photo…: read on the person's own AI key; what was read
+  // opens as a new score. (Without a usable key, the menu links the way to
+  // one instead: data-photo-refused.)
   document.querySelector("[data-photo-open]")?.addEventListener("change", async (event) => {
     const file = event.target.files[0];
     event.target.closest("details")?.removeAttribute("open");
@@ -628,11 +630,11 @@
       await openAsNew(answer.source);
     } catch (problem) {
       show("Photo not read", "conflict");
-      // Past the Free plan's day (#393): the Pricing page, if they want it.
-      if (problem.upgrade && confirm(`${problem.message}
+      // The key or the plan (#396): the page that lifts it, if they want it.
+      if (problem.link && confirm(`${problem.message}
 
-See the plans?`)) location.href = problem.upgrade;
-      else if (!problem.upgrade) alert(problem.message);
+${problem.linkText}?`)) location.href = problem.link;
+      else if (!problem.link) alert(problem.message);
     } finally {
       event.target.value = "";
     }
@@ -651,12 +653,14 @@ See the plans?`)) location.href = problem.upgrade;
   };
   let aiAction = "chords";
   let aiAnswer = null;
+  // No usable AI key (#396): the dialog says why and links the way to one; nothing is sent.
+  const aiRefused = ai.hasAttribute("data-ai-refused");
   const aiReset = () => {
     aiAnswer = null;
     for (const name of ["status", "error", "result", "apply", "again"]) aiPart(name).hidden = true;
     aiPart("send").hidden = false;
-    aiPart("send").disabled = false;
-    aiPart("request").disabled = false;
+    aiPart("send").disabled = aiRefused;
+    aiPart("request").disabled = aiRefused;
   };
   document.querySelectorAll("[data-ai-ask]").forEach((button) => button.addEventListener("click", () => {
     button.closest("details")?.removeAttribute("open");
@@ -668,17 +672,18 @@ See the plans?`)) location.href = problem.upgrade;
     aiPart("request").value = "";
     aiReset();
     ai.showModal();
-    aiPart("request").focus();
+    if (!aiRefused) aiPart("request").focus();
   }));
   aiPart("close").addEventListener("click", () => ai.close());
   aiPart("again").addEventListener("click", aiReset);
   aiPart("form").addEventListener("submit", async (event) => {
     event.preventDefault();
-    // `upgrade`: the Pricing page, linked when the Free plan's day is used up (#393).
-    const fail = (message, upgrade) => {
+    if (aiRefused) return;
+    // `link`: the page that lifts a refusal (Account for a key, Pricing for Pro, #396).
+    const fail = (message, link, linkText) => {
       aiPart("status").hidden = true;
       aiPart("error").textContent = message;
-      if (upgrade) aiPart("error").append(" ", Object.assign(document.createElement("a"), { href: upgrade, textContent: "See the plans" }));
+      if (link) aiPart("error").append(" ", Object.assign(document.createElement("a"), { href: link, textContent: linkText || "See the plans" }));
       aiPart("error").hidden = false;
       aiPart("send").disabled = false;
       aiPart("request").disabled = false;
@@ -695,7 +700,7 @@ See the plans?`)) location.href = problem.upgrade;
         body: JSON.stringify({ action: aiAction, request: aiPart("request").value, source: studio.source() }),
       });
       const started = await sent.json();
-      if (sent.status !== 202) return fail(started.error, started.upgrade);
+      if (sent.status !== 202) return fail(started.error, started.link, started.link_text);
       const left = aiPart("left");
       if (left) left.textContent = Math.max(0, Number(left.textContent) - 1);
       // Five minutes, then the page stops waiting.

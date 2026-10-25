@@ -1,4 +1,4 @@
-// A photo of a score, read into LilyPond by the server (POST /app/readings,
+// A photo of a score, read into LilyPond on the person's own AI key (POST /app/readings,
 // then GET /app/readings/:id until it is done). Used by the app's Start page
 // and its editor; no state of its own, so instant navigation needs nothing.
 
@@ -18,7 +18,8 @@ export async function shrunk(file) {
 
 // Sends `file`, calls `started()` once the server took it, and resolves to
 // {source, svg}; rejects with an Error whose message the page can show (and,
-// past the Free plan's day, its `upgrade`: the Pricing page to link to).
+// when it is the AI key or the plan, its `link` and `linkText`: the account's
+// AI section or the Pricing page, #396).
 export async function readPhoto(file, { readings = "/app/readings", started = () => {} } = {}) {
   let sent;
   try {
@@ -31,8 +32,7 @@ export async function readPhoto(file, { readings = "/app/readings", started = ()
     throw new Error("The photo could not be sent. Check your connection and try again.");
   }
   const answer = await sent.json();
-  // `upgrade`: the Pricing page, when it is the Free plan's day that is used up (#393).
-  if (sent.status !== 202) throw Object.assign(new Error(answer.error), { upgrade: answer.upgrade });
+  if (sent.status !== 202) throw Object.assign(new Error(answer.error), { link: answer.link, linkText: answer.link_text });
   started();
   // Five minutes, then the page stops waiting.
   for (let tries = 0; tries < 100; tries++) {

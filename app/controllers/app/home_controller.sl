@@ -15,16 +15,22 @@ class AppHomeController < AppBaseController
 
   private
 
-  # What the photo card says: whether photos can be read, with what, and how
-  # many more today.
+  # What the photo card says: whether photos can be read, with what and how
+  # many more today; or why not (AiClient.refusal), and the page that lifts it.
   def _photos(user)
-    settings = user.ai_settings
-    return {"ready": false} if settings.nil?
+    refusal = AiClient.refusal(user)
+    unless refusal.nil?
+      return {
+        "ready": false,
+        "refusal": refusal,
+        "text": AiClient.refusal_text(refusal),
+        "link": @_ai_link(refusal)
+      }
+    end
 
-    with = settings["own"] ? "#{AiClient.provider_name(settings["provider"])}, #{settings["model"]}" : "Claude"
     {
       "ready": true,
-      "with": with,
+      "with": "#{AiClient.provider_name(user.ai_provider)}, #{user.ai_model}",
       "left": ScoreReading.left_today(user)
     }
   end

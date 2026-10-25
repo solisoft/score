@@ -1,17 +1,19 @@
-# Calls an AI model: the server's Claude Opus (ANTHROPIC_API_KEY), or the
-# provider, model and key a person set on their account (User#ai_settings).
-# Keys stay on the server. Used by ScoreReader (photos) and ScoreAssistant
-# (chords, harmony, improvements).
+# Calls an AI model with the provider, model and key a person set on their
+# account (User#ai_settings), and decides whether they may (#396). Keys stay
+# on the server. Used by ScoreReader (photos) and ScoreAssistant (chords,
+# harmony, improvements).
+#
+# The site has no AI of its own any more: reading one photo with Claude Opus
+# cost it $0.20–0.40. Whatever the server's environment holds
+# (ANTHROPIC_API_KEY included), a request is sent only with the person's own
+# key, and their provider bills them. Once payments are open, that is part
+# of Pro (Plan, "own_key_ai").
 #
 # A conversation is a list of turns, {"role": "user" | "assistant", "text",
 # "image"?}: the image a base64 JPEG, sent before the text.
 
-const AI_SERVER_MODEL = "claude-opus-5-5"
-# What the server's key answers in any 24 hours, for everyone together:
-# photo readings and the assistant's questions. Past it, only those with a
-# key of their own are answered.
-const AI_SERVER_ASKS_PER_DAY = 400
-const AI_SERVER_BUSY = "The site's AI is busy for today: add your own key in Account to keep going."
+const AI_NO_KEY = "Add your own AI key in Account to read photos and use the assistant."
+const AI_PRO_ONLY = "AI with your own key is part of Pro."
 
 # The providers a person may bring a key for. "anthropic" speaks Anthropic's
 # Messages API; "openai" the chat-completions API the others share. `models`
@@ -63,28 +65,52 @@ const AI_PROVIDERS = {
 }
 
 class AiClient
-  # The server's own key: Claude Opus for whoever has no key of their own.
-  static def available?
-    getenv("ANTHROPIC_API_KEY").present?
+  # Why `user` may not use the AI now, or nil: "plan" (payments are open and
+  # AI with one's own key is part of Pro: a key kept on Free stays kept,
+  # unused), "no_key" (no key of their own: the site's is never used).
+  # `open`: whether payments are open, Plan.open? when nil.
+  static def refusal(user, open = nil)
+    return "plan" unless Plan.limits(user, open)["own_key_ai"]
+    return "no_key" unless user.own_ai?
+
+    nil
   end
 
-  # What the server asks with, as User#ai_settings answers for a person.
-  static def server_settings
-    {
-      "provider": "anthropic",
-      "model": AI_SERVER_MODEL,
-      "key": getenv("ANTHROPIC_API_KEY").to_s,
-      "own": false
+  # What `user`'s request is sent with: their own provider, model and key;
+  # nil when they may not ask (AiClient.refusal).
+  static def settings_for(user, open = nil)
+    return nil unless AiClient.refusal(user, open).nil?
+
+    user.ai_settings
+  end
+
+  # What a refusal says, and the page that lifts it: the account's AI
+  # section for a key (`account`), Pricing for Pro (`pricing`). The paths
+  # come from the controllers (AppBaseController#_ai_link), where the
+  # route helpers are.
+  static def refusal_text(refusal)
+    refusal == "plan" ? AI_PRO_ONLY : AI_NO_KEY
+  end
+
+  static def refusal_link(refusal, account, pricing)
+    if refusal == "plan"
+      return {"href": pricing, "text": "See the plans"}
+    end
+
+    {"href": account, "text": "Add your key in Account"}
+  end
+
+  # The JSON body refusing an AI request: the sentence, its `link`
+  # (refusal_link), and on "plan" the `upgrade` the plan's other limits
+  # answer with (#393).
+  static def refusal_answer(refusal, link)
+    answer = {
+      "error": AiClient.refusal_text(refusal),
+      "link": link["href"],
+      "link_text": link["text"]
     }
-  end
-
-  # The readings and suggestions asked of the server's key in the last 24
-  # hours, everyone's (each one written with `own`: false).
-  static def server_used_today
-    since = DateTime.utc.to_unix - 86400
-    condition = "doc.own == false AND doc.created_at > @since"
-    ScoreReading.where(condition, {"since": since}).count
-    + ScoreSuggestion.where(condition, {"since": since}).count
+    answer["upgrade"] = link["href"] if refusal == "plan"
+    answer
   end
 
   # The provider's name as a page says it.
@@ -109,12 +135,10 @@ class AiClient
         "content-type": "application/json",
         "timeout": 300
       }
-      body = AiClient.anthropic_body(settings, turns)
-      headers["anthropic-beta"] = "server-side-fallback-2026-07-01" unless body["fallbacks"].nil?
       return {
         "url": provider["url"],
         "headers": headers,
-        "body": body
+        "body": AiClient.anthropic_body(settings, turns)
       }
     end
 
@@ -129,9 +153,8 @@ class AiClient
     }
   end
 
-  # Anthropic's Messages API. The server's Opus thinks hard and may fall
-  # back; a person's own Claude model gets the parameters every Claude model
-  # takes.
+  # Anthropic's Messages API, with the parameters every Claude model takes
+  # (the person's model may be any of them).
   static def anthropic_body(settings, turns)
     messages = turns.map do |turn|
       if turn["image"].nil?
@@ -147,18 +170,11 @@ class AiClient
         ]}
       end
     end
-    body = {
+    {
       "model": settings["model"],
       "max_tokens": 32000,
       "messages": messages
     }
-    return body if settings["own"]
-
-    body.merge({
-      "thinking": {"type": "adaptive"},
-      "output_config": {"effort": "high"},
-      "fallbacks": "default"
-    })
   end
 
   # The chat-completions API (OpenAI and the providers that copy it).
@@ -211,9 +227,8 @@ class AiClient
         "said": AiClient.provider_words(body)
       }
     )
-    own = settings["own"]
-    return "#{who} refused your API key. Check it on your account page." if [401, 403].includes?(status) && own
-    if own && [400, 404, 413, 422].includes?(status)
+    return "#{who} refused your API key. Check it on your account page." if [401, 403].includes?(status)
+    if [400, 404, 413, 422].includes?(status)
       return "#{who} could not answer with the model you chose. Try another one on your account page."
     end
 

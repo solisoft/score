@@ -10,6 +10,20 @@
 class Changelog
   static def days
     [
+      {"date": "2026-10-25", "entries": [{
+        "area": "site",
+        "title": "The AI runs on your own key: the site's own AI is no longer offered",
+        "text": "Reading one photo of a score with Claude Opus cost the site about $0.20 to $0.40, too much to "
+        + "keep giving away, so the site no longer runs an AI of its own. Reading photos and the editor's "
+        + "assistant now work only with an AI key of your own, from Anthropic, OpenAI, Google (Gemini), Mistral, "
+        + "DeepSeek, Moonshot (Kimi) or OpenRouter, added on your account page: your requests go to that "
+        + "provider, which bills you. Without a key, the Start page and the editor say so and link to your "
+        + "account before you choose a photo. Once payments open, AI with your own key is part of Pro; until "
+        + "then, anyone signed in can use it. A key of your own still has up to 200 photos and 200 questions a "
+        + "day, a guard against a request running away.",
+        "link": "pricing",
+        "app": true
+      }]},
       {"date": "2026-10-24", "entries": [
         {
           "area": "site",

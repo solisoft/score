@@ -1,15 +1,17 @@
 # The editor's AI assistant: what it asks for each action, how it reads the
-# answer, and the suggestions kept per person.
+# answer, and the suggestions kept per person, on their own AI key (#396).
 
 const MELODY = "\\header { title = \"Tune\" }\n{ c'4 d' e' f' | g'1 }"
 
-def assistant_user
+# Someone with a key of their own unless `keyless`.
+def assistant_user(keyless = false)
   user = User.new()
   user.email = "assistant-#{uuid_v4}@example.com"
   user.set_password("correct horse battery")
   user.confirmed_at = DateTime.utc.to_unix
   user.save
-  user
+  user.keep_ai_key("openai", "gpt-5", "sk-own-key-5555") unless keyless
+  User.find(user._key)
 end
 
 describe("ScoreAssistant") do
@@ -64,8 +66,8 @@ describe("ScoreSuggestion") do
   test("starts working on a score, counted against the day's questions, in a job") do
     user = assistant_user()
     score = Score.start(user, MELODY)
-    assert_eq(ScoreSuggestion.left_today(user), SCORE_SUGGESTIONS_PER_DAY)
-    suggestion = ScoreSuggestion.start(user, score, "chords", "  jazz ", MELODY)
+    assert_eq(ScoreSuggestion.left_today(user), SCORE_SUGGESTIONS_OWN_PER_DAY)
+    suggestion = ScoreSuggestion.start(user, score, "chords", "  jazz ", MELODY, false)
     stored = ScoreSuggestion.find(suggestion._key)
     assert_eq(stored.state, "working")
     assert_eq(stored.request, "jazz")
@@ -74,31 +76,68 @@ describe("ScoreSuggestion") do
     assert(stored.owned_by?(user))
     assert_not(stored.owned_by?(assistant_user()))
     assert_not(stored.owned_by?(nil))
-    assert_eq(ScoreSuggestion.left_today(user), SCORE_SUGGESTIONS_PER_DAY - 1)
+    assert_eq(ScoreSuggestion.left_today(user), SCORE_SUGGESTIONS_OWN_PER_DAY - 1)
     assert_eq(Score.find(score._key).source, MELODY, "the score itself unchanged")
   end
 
-  test("allows more with a key of one's own, none once the day's are used") do
-    user = assistant_user()
-    user.keep_ai_key("openai", "gpt-5", "sk-own-key-5555")
-    assert_eq(ScoreSuggestion.left_today(User.find(user._key)), SCORE_SUGGESTIONS_OWN_PER_DAY)
+  test("payments open: Pro's own key asks, Free's is refused for the plan, nothing kept or queued") do
+    pro = assistant_user()
+    pro.plan = "pro"
+    pro.plan_status = "active"
+    pro.current_period_end = DateTime.utc.to_unix + 86400
+    pro.update()
+    pro = User.find(pro._key)
+    score = Score.start(pro, MELODY)
+    assert_not_null(ScoreSuggestion.start(pro, score, "chords", "", MELODY, true)._key)
+    free = assistant_user()
+    theirs = Score.start(free, MELODY)
+    jobs_before = Job.list().length
+    assert_eq(ScoreSuggestion.start(free, theirs, "chords", "", MELODY, true), "plan")
+    assert_eq(ScoreSuggestion.where({"user_id": free._key}).count, 0)
+    assert_eq(Job.list().length, jobs_before)
+    keyless = assistant_user(true)
+    mine = Score.start(keyless, MELODY)
+    assert_eq(ScoreSuggestion.start(keyless, mine, "chords", "", MELODY, false), "no_key")
+    assert_eq(ScoreSuggestion.where({"user_id": keyless._key}).count, 0)
+    assert_eq(Job.list().length, jobs_before)
+  end
+
+  test("a suggestion queued for someone whose key is gone fails, with no one asked") do
+    user = assistant_user(true)
+    suggestion = ScoreSuggestion.create({
+      "user_id": user._key,
+      "score_id": "s",
+      "action": "chords",
+      "state": "working",
+      "original": "{ c'4 }",
+      "created_at": DateTime.utc.to_unix
+    })
+    ScoreSuggestionJob.perform({"suggestion_id": suggestion._key})
+    stored = ScoreSuggestion.find(suggestion._key)
+    assert_eq(stored.state, "failed")
+    assert_eq(stored.error, AI_NO_KEY)
+  end
+
+  test("none left once the day's are used, counted per person") do
     other = assistant_user()
-    (0 .. SCORE_SUGGESTIONS_PER_DAY).each do |_|
-      ScoreSuggestion.create({
+    rows = (0 .. SCORE_SUGGESTIONS_OWN_PER_DAY).map do |_|
+      {
         "user_id": other._key,
         "score_id": "s",
         "action": "improve",
         "state": "done",
         "created_at": DateTime.utc.to_unix
-      })
+      }
     end
+    ScoreSuggestion.create_many(rows)
     assert_eq(ScoreSuggestion.left_today(other), 0)
+    assert_eq(ScoreSuggestion.left_today(assistant_user()), SCORE_SUGGESTIONS_OWN_PER_DAY)
   end
 
   test("one written for the last slot after the check, by another request: this one is taken back") do
     user = assistant_user()
     score = Score.start(user, MELODY)
-    rows = (0 .. SCORE_SUGGESTIONS_PER_DAY - 1).map do |_|
+    rows = (0 .. SCORE_SUGGESTIONS_OWN_PER_DAY - 1).map do |_|
       {
         "user_id": user._key,
         "score_id": score._key,
@@ -108,7 +147,7 @@ describe("ScoreSuggestion") do
       }
     end
     ScoreSuggestion.create_many(rows)
-    assert_null(ScoreSuggestion.refusal(user), "the check passes: one left")
+    assert_null(ScoreSuggestion.refusal(user, 0, false), "the check passes: one left")
     # The other request writes its suggestion in between.
     ScoreSuggestion.create({
       "user_id": user._key,
@@ -117,9 +156,9 @@ describe("ScoreSuggestion") do
       "state": "working",
       "created_at": DateTime.utc.to_unix
     })
-    assert_eq(ScoreSuggestion.start(user, score, "chords", "", MELODY), "used_up")
-    assert_eq(ScoreSuggestion.where({"user_id": user._key}).count, SCORE_SUGGESTIONS_PER_DAY)
-    assert_eq(ScoreSuggestion.refusal(user), "used_up")
+    assert_eq(ScoreSuggestion.start(user, score, "chords", "", MELODY, false), "used_up")
+    assert_eq(ScoreSuggestion.where({"user_id": user._key}).count, SCORE_SUGGESTIONS_OWN_PER_DAY)
+    assert_eq(ScoreSuggestion.refusal(user, 0, false), "used_up")
   end
 
   test("a suggestion already finished is not asked again") do

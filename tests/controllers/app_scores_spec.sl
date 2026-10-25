@@ -399,9 +399,10 @@ describe("AppScoresController") do
       assert_contains(page, "fetch(\"/app/scores/#{score._key}/room_ticket\"")
       assert_contains(page, "data-room")
       assert_contains(page, "href=\"/app/scores/#{score._key}/versions\"")
-      # File › Open a photo…, read on the account's AI.
-      assert_contains(page, "Open a photo… <kbd>read by AI</kbd>")
-      assert_contains(page, "data-photo-open")
+      # File › Open a photo…: without an AI key of one's own (#396), the way to
+      # one (with a key: AppScoreSuggestionsController's spec).
+      assert_contains(page, "data-photo-refused>Open a photo… <kbd>Add your key in Account</kbd>")
+      assert_not(page.contains("data-photo-open"))
       # New, Open and the examples make a new score, never over this one.
       assert_contains(page, "data-open-form")
       assert_contains(page, "onOpen: openAsNew")

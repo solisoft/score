@@ -628,21 +628,32 @@ class User < Model
     this.update()
   end
 
-  # What this person's photos are read with: their own key, else the
-  # server's; nil when there is neither.
+  # This person's own provider, model and key; nil without one. The site
+  # has no key of its own to fall back on (#396); whether this one may be
+  # used now is AiClient.refusal's.
   def ai_settings
-    if this.own_ai?()
-      return {
-        "provider": this.ai_provider,
-        "model": this.ai_model,
-        "key": Crypto.decrypt(this.ai_key, getenv("SOLI_ENCRYPTION_KEY")),
-        "own": true
-      }
-    end
+    return nil unless @own_ai?
 
-    return nil unless AiClient.available?()
+    {
+      "provider": @ai_provider,
+      "model": @ai_model,
+      "key": Crypto.decrypt(@ai_key, getenv("SOLI_ENCRYPTION_KEY"))
+    }
+  end
 
-    AiClient.server_settings()
+  # Why the AI cannot run for them now (AiClient.refusal), or nil: for the
+  # pages, which cannot reach AiClient.
+  def ai_refusal(open = nil)
+    AiClient.refusal(this, open)
+  end
+
+  # What the account's AI section says when the plan stands in the way
+  # (payments open, not on Pro), or nil: a kept key stays kept, unused.
+  def ai_plan_note(open = nil)
+    return nil unless @ai_refusal(open) == "plan"
+    return AI_PRO_ONLY unless @own_ai?
+
+    "#{AI_PRO_ONLY} Your key stays kept, unused, until then; you can remove it."
   end
 
   # --- Notification e-mails (#385) ---------------------------------------------

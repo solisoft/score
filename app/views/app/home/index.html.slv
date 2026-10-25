@@ -77,11 +77,16 @@
             <label class="btn btn-ghost start-file">Choose a photo…
               <input type="file" accept="image/*" data-photo hidden<%= photos["left"] == 0 ? " disabled" : "" %>>
             </label>
+          <% elsif photos["refusal"] == "plan" %>
+            <p class="muted" data-photos-refused>A photo or scan of printed or handwritten music, read by an AI model
+              on your own key. <%= photos["text"] %></p>
+            <a class="btn btn-ghost start-file" href="<%= photos["link"]["href"] %>"><%= photos["link"]["text"] %></a>
           <% else %>
-            <p class="muted">A photo or scan of printed or handwritten music, read by an AI model. Add a key from
-              Anthropic (Claude), OpenAI (GPT), Google (Gemini), Mistral, DeepSeek, Moonshot (Kimi) or OpenRouter
-              to read photos with it.</p>
-            <a class="btn btn-ghost start-file" href="<%= app_account_path() %>#ai">Add an AI key</a>
+            <p class="muted" data-photos-refused>A photo or scan of printed or handwritten music, read by an AI model
+              on your own key: the site has no AI of its own. Add a key from Anthropic (Claude), OpenAI (GPT),
+              Google (Gemini), Mistral, DeepSeek, Moonshot (Kimi) or OpenRouter to read photos with it; that
+              provider bills you.</p>
+            <a class="btn btn-ghost start-file" href="<%= photos["link"]["href"] %>">Add an AI key</a>
           <% end %>
         </div>
 
@@ -238,10 +243,10 @@
       error.hidden = keep.hidden = true;
       reading.hidden = false;
       reading.scrollIntoView({ behavior: "smooth", block: "start" });
-      // `upgrade`: the Pricing page, linked when the Free plan's day is used up (#393).
-      const fail = (message, upgrade) => {
+      // `link`: the page that lifts the refusal (Account for a key, Pricing for Pro, #396).
+      const fail = (message, link, linkText) => {
         error.textContent = message;
-        if (upgrade) error.append(" ", Object.assign(document.createElement("a"), { href: upgrade, textContent: "See the plans" }));
+        if (link) error.append(" ", Object.assign(document.createElement("a"), { href: link, textContent: linkText || "See the plans" }));
         error.hidden = false;
         status.textContent = "";
       };
@@ -258,7 +263,7 @@
         keep.hidden = false;
         keep.onclick = () => begin(answer.source, name);
       } catch (problem) {
-        fail(problem.message, problem.upgrade);
+        fail(problem.message, problem.link, problem.linkText);
       } finally {
         photoInput.value = "";
       }

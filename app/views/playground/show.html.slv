@@ -6,8 +6,8 @@
     <a href="<%= app_home_path() %>">Save it in the app</a> to keep it in an account, with its history, on every device.
   </p>
   <p class="playground-app-only" data-app-only>
-    The MIDI view and the AI features (reading a photo of a score, the assistant) are in the app only, for signed-in
-    people: <a href="<%= signup_path() %>">sign up</a>.
+    The MIDI view and the AI features (reading a photo of a score, the assistant, on your own AI key) are in the app
+    only, for signed-in people: <a href="<%= signup_path() %>">sign up</a>.
   </p>
 <% end %>
 <%- partial("shared/studio", {"examples": examples, "figure": figure, "source": source}) %>

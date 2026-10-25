@@ -78,8 +78,23 @@ describe("The plans") do
       page = res_body(response)
       assert_contains(page, "data-plan=\"free\"")
       assert_contains(page, "data-plan=\"pro\"")
-      assert_contains(page, "20 photos read a day on the site's AI")
-      assert_contains(page, "100 photos read a day on the site's AI")
+      # The site's own AI is gone (#396): Free has none, Pro's runs on one's own key.
+      assert_contains(page, "<li data-plan-ai>No AI</li>")
+      assert_contains(
+        page,
+        "<li data-plan-ai>AI (photo reading, assistant) with your own key from Anthropic, OpenAI, Gemini, "
+        + "Mistral, DeepSeek, Kimi…</li>"
+      )
+      assert_not(page.contains("site's AI"))
+      assert_not(page.contains("photos read a day"))
+      # Payments closed: anyone may use their own key today.
+      assert_contains(
+        page,
+        "<p class=\"muted\" data-ai-today>Until payments open, anyone signed in can use the AI with their own key.</p>"
+      )
+      assert_eq(assigns()["ai_note"], Plan.ai_note(false))
+      # Once open, the note goes: the cards say who has the AI.
+      assert_null(Plan.ai_note(true))
       assert_contains(page, "1 audio track a score")
       assert_contains(page, "2 GB of audio takes")
       assert_contains(page, "Share a score with up to 3 people")

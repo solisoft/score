@@ -17,7 +17,10 @@
           <div class="studio-dropdown-items" role="menu">
             <button type="button" role="menuitem" data-act="new">New… <kbd>from a template</kbd></button>
             <label role="menuitem" class="studio-dropdown-file">Open a file… <kbd>.ly, MusicXML, MIDI</kbd><input type="file" accept=".ly,.ily,.txt,.musicxml,.mxl,.xml,.mid,.midi,text/plain,audio/midi" data-act="open" hidden></label>
-            <% if locals["app"] %>
+            <% if locals["app"] && locals["ai_link"] %>
+              <%# No usable AI key (#396): the way to one, before any photo is chosen. %>
+              <a role="menuitem" class="studio-dropdown-file" href="<%= locals["ai_link"]["href"] %>" data-photo-refused>Open a photo… <kbd><%= locals["ai_link"]["text"] %></kbd></a>
+            <% elsif locals["app"] %>
               <label role="menuitem" class="studio-dropdown-file">Open a photo… <kbd>read by AI</kbd><input type="file" accept="image/*" data-photo-open hidden></label>
             <% end %>
             <label class="studio-dropdown-select">Open an example

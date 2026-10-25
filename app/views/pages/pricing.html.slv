@@ -4,9 +4,12 @@
     <h1>Free to write with. Pro for more.</h1>
     <p class="lead">
       Everything EUI Score does is on Free: the editor, playback, PDF and MIDI, versions, comments, sharing.
-      Pro reads more photos and answers more questions on the site's AI, records more audio, and shares a score
-      with anyone. With an AI key of your own, the AI is yours on either plan.
+      Pro records more audio, shares a score with anyone, and runs the AI (reading photos, the assistant) on your
+      own key: your provider bills you for it, the site has no AI of its own.
     </p>
+    <% unless ai_note.nil? %>
+      <p class="muted" data-ai-today><%= ai_note %></p>
+    <% end %>
   </header>
 
   <div class="pricing-grid">
@@ -21,8 +24,7 @@
           <p class="muted">No card, no time limit.</p>
         <% end %>
         <ul>
-          <li><%= plan["readings"] %> on the site's AI</li>
-          <li><%= plan["suggestions"] %></li>
+          <li data-plan-ai><%= plan["ai"] %></li>
           <li><%= plan["tracks"] %></li>
           <li><%= plan["storage"] %></li>
           <li><%= plan["people"] %></li>
@@ -32,7 +34,7 @@
             <% if payments_open %>
               <a class="btn btn-primary" href="<%= app_account_path() %>#plan">Upgrade from your account</a>
             <% else %>
-              <p class="muted" data-payments-closed>Payments are not open yet: Pro will be on sale soon. Until then, everyone keeps what the site allows today, every audio track and as many people as you like included.</p>
+              <p class="muted" data-payments-closed>Payments are not open yet: Pro will be on sale soon. Until then, everyone keeps what the site allows today, every audio track, as many people as you like and the AI with your own key included.</p>
             <% end %>
           <% elsif app_open?() %>
             <a class="btn btn-ghost" href="<%= signup_path() %>">Start free</a>
@@ -48,7 +50,12 @@
     <h2>Questions</h2>
     <h3>What happens to my work if I stop paying?</h3>
     <p>Nothing is deleted. Your scores, audio takes and shares stay as they are; past a Free limit you can still open,
-      play and listen to everything, and only new recordings, new invitations and more AI that day wait for Pro.</p>
+      play and listen to everything, and only new recordings, new invitations and the AI wait for Pro. Your AI key
+      stays kept, unused, until then; you can remove it from your account.</p>
+    <h3>Why does the AI need my own key?</h3>
+    <p>Reading one photo with a model like Claude Opus costs about $0.20 to $0.40, so the site no longer runs an AI
+      of its own. Add a key from Anthropic, OpenAI, Google (Gemini), Mistral, DeepSeek, Moonshot (Kimi) or OpenRouter
+      on your account page: your requests go to that provider, which bills you directly.</p>
     <h3>How is it paid?</h3>
     <p>By card through Stripe: the site never sees your card. Manage billing, on your account page, changes the card,
       moves between monthly and yearly, or cancels; a cancelled plan runs to the end of the period paid.</p>

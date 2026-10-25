@@ -1,7 +1,7 @@
 # The plans (#393): Plan.limits reads every limit, User#pro? says which
 # plan applies — a Pro subscription active or on trial whose period has not
-# ended, nothing else — and the AI day, the audio takes and the people a
-# score is shared with each follow it, at their boundaries.
+# ended, nothing else — and the AI on one's own key (#396), the audio takes and
+# the people a score is shared with each follow it, at their boundaries.
 
 const PLAN_DAY = 86400
 
@@ -89,21 +89,22 @@ describe("Plan") do
   end
 
   describe("Plan.limits") do
-    test("Free: #365's AI day, one audio track and 50 MB, three people") do
+    test("Free: no AI, one audio track and 50 MB, three people") do
       limits = Plan.limits(plan_user(), true)
       assert_eq(limits["plan"], "free")
-      assert_eq(limits["readings_per_day"], 20)
-      assert_eq(limits["suggestions_per_day"], 30)
+      assert_eq(limits["own_key_ai"], false)
+      assert_null(limits["readings_per_day"], "the site's AI day is gone (#396)")
+      assert_null(limits["suggestions_per_day"])
       assert_eq(limits["take_tracks"], 1)
       assert_eq(limits["take_bytes"], 50000000)
       assert_eq(limits["people_per_score"], 3)
     end
 
-    test("Pro: five times the AI, four tracks and 2 GB, anyone") do
+    test("Pro: AI with one's own key, four tracks and 2 GB, anyone") do
       limits = Plan.limits(plan_pro(), true)
       assert_eq(limits["plan"], "pro")
-      assert_eq(limits["readings_per_day"], 100)
-      assert_eq(limits["suggestions_per_day"], 150)
+      assert_eq(limits["own_key_ai"], true)
+      assert_null(limits["readings_per_day"])
       assert_eq(limits["take_tracks"], 4)
       assert_eq(limits["take_bytes"], 2000000000)
       assert_null(limits["people_per_score"])
@@ -120,8 +121,12 @@ describe("Plan") do
     test("the catalog puts each plan's limits in words, from the same numbers") do
       plans = Plan.catalog
       assert_eq(plans.map(&:slug), ["free", "pro"])
-      assert_eq(plans[0]["readings"], "20 photos read a day")
-      assert_eq(plans[1]["suggestions"], "150 questions to the assistant a day")
+      assert_eq(plans[0]["ai"], "No AI")
+      assert_eq(
+        plans[1]["ai"],
+        "AI (photo reading, assistant) with your own key from Anthropic, OpenAI, Gemini, Mistral, DeepSeek, Kimi…"
+      )
+      assert_null(plans[0]["readings"])
       assert_eq(plans[0]["tracks"], "1 audio track a score")
       assert_eq(plans[1]["tracks"], "4 audio tracks a score")
       assert_eq(plans[0]["storage"], "50 MB of audio takes")
@@ -146,17 +151,17 @@ describe("Plan") do
       [Plan.limits(user), Plan.limits(user, false), Plan.limits(nil)].each do |limits|
         assert_eq(limits["plan"], "free")
         assert_eq(limits["upgrade"], false)
-        assert_eq(limits["readings_per_day"], 20)
-        assert_eq(limits["suggestions_per_day"], 30)
+        assert_eq(limits["own_key_ai"], true)
         assert_eq(limits["take_tracks"], SCORE_TAKE_TRACKS)
         assert_null(limits["take_bytes"])
         assert_null(limits["people_per_score"])
       end
       assert_eq(Plan.limits(user, true)["take_tracks"], 1)
       assert_eq(Plan.limits(user, true)["upgrade"], true)
+      assert_eq(Plan.limits(user, true)["own_key_ai"], false)
       # A Pro subscription keeps Pro, open or not.
       assert_eq(Plan.limits(plan_pro(), false)["plan"], "pro")
-      assert_eq(Plan.limits(plan_pro())["readings_per_day"], 100)
+      assert_eq(Plan.limits(plan_pro())["own_key_ai"], true)
     end
 
     test("audio takes: every track, and no account total, as #390 allowed") do
@@ -178,79 +183,49 @@ describe("Plan") do
       assert_null(ScoreShare.plan_refusal(score, "sixth@example.com", false))
       assert_not_null(ScoreShare.plan_refusal(score, "sixth@example.com", true))
     end
-
-    test("the AI's used-up day says Pro only when it can be bought") do
-      closed = ScoreReading.used_up_text(Plan.today_limits)
-      assert_eq(
-        closed,
-        "You have read the 20 photos a day the site's AI reads: try again tomorrow, "
-        + "or add your own AI key on your account page to read more."
-      )
-      assert_eq(
-        ScoreReading.used_up_text(Plan.free_limits),
-        "You have read the 20 photos a day the site's AI reads on Free: try again tomorrow, "
-        + "move to Pro for 100 a day, or add your own AI key on your account page to read more."
-      )
-      assert_eq(
-        ScoreReading.used_up_text(Plan.pro_limits),
-        "You have read the 100 photos a day the site's AI reads on Pro: try again tomorrow, "
-        + "or add your own AI key on your account page to read more."
-      )
-      assert_eq(
-        ScoreSuggestion.used_up_text(Plan.free_limits),
-        "You have asked the 30 questions a day the site's AI answers on Free: try again tomorrow, "
-        + "move to Pro for 150 a day, or add your own AI key on your account page to ask more."
-      )
-      assert_contains(
-        ScoreSuggestion.used_up_text(Plan.pro_limits),
-        "the 150 questions a day the site's AI answers on Pro"
-      )
-      assert_contains(
-        ScoreSuggestion.used_up_text(Plan.today_limits),
-        "the 30 questions a day the site's AI answers: try"
-      )
-    end
   end
 
-  describe("the AI day") do
-    test("Free: the 20th photo is read, the 21st refused") do
+  describe("the AI day, on one's own key") do
+    test("payments closed, on Free: the 200th photo is read, the 201st refused") do
       user = plan_user()
-      plan_readings(user, 19)
-      assert_null(ScoreReading.refusal(user))
+      user.keep_ai_key("mistral", "pixtral-large-latest", "sk-mistral-2222")
+      user = User.find(user._key)
+      plan_readings(user, SCORE_READINGS_OWN_PER_DAY - 1)
+      assert_null(ScoreReading.refusal(user, 0, false))
       assert_eq(ScoreReading.left_today(user), 1)
       plan_readings(user, 1)
-      assert_eq(ScoreReading.refusal(user), "used_up")
+      assert_eq(ScoreReading.refusal(user, 0, false), "used_up")
       assert_eq(ScoreReading.left_today(user), 0)
     end
 
-    test("Pro: five times as many photos and questions, to the boundary") do
+    test("payments open, on Pro: the same day, kept as it was, for questions too") do
       user = plan_pro()
+      user.keep_ai_key("mistral", "mistral-medium-latest", "sk-mistral-3333")
+      user = User.find(user._key)
       score = Score.start(user, Score.blank_source("Pro"))
-      plan_readings(user, 99)
-      assert_null(ScoreReading.refusal(user))
-      plan_readings(user, 1)
-      assert_eq(ScoreReading.refusal(user), "used_up")
-      plan_suggestions(user, score, 149)
-      assert_null(ScoreSuggestion.refusal(user))
+      assert_eq(SCORE_SUGGESTIONS_OWN_PER_DAY, 200)
+      plan_suggestions(user, score, SCORE_SUGGESTIONS_OWN_PER_DAY - 1)
+      assert_null(ScoreSuggestion.refusal(user, 0, true))
       plan_suggestions(user, score, 1)
-      assert_eq(ScoreSuggestion.refusal(user), "used_up")
+      assert_eq(ScoreSuggestion.refusal(user, 0, true), "used_up")
+      assert_eq(ScoreSuggestion.left_today(user), 0)
     end
 
-    test("Pro lapsed: back to the Free day") do
-      user = plan_pro("canceled")
-      plan_readings(user, 20)
-      assert_eq(ScoreReading.refusal(user), "used_up")
-      assert_eq(ScoreSuggestion.limit_for(user), 30)
-    end
-
-    test("one's own key keeps its own day, whatever the plan") do
+    test("payments open, on Free or a lapsed Pro: refused for the plan, whatever is left of the day") do
       free = plan_user()
-      free.keep_ai_key("mistral", "mistral-medium-latest", "sk-mistral-2222")
-      pro = plan_pro()
-      pro.keep_ai_key("mistral", "mistral-medium-latest", "sk-mistral-3333")
-      assert_eq(ScoreReading.limit_for(User.find(free._key)), SCORE_READINGS_OWN_PER_DAY)
-      assert_eq(ScoreReading.limit_for(User.find(pro._key)), SCORE_READINGS_OWN_PER_DAY)
-      assert_eq(ScoreSuggestion.limit_for(User.find(pro._key)), SCORE_SUGGESTIONS_OWN_PER_DAY)
+      free.keep_ai_key("mistral", "mistral-medium-latest", "sk-mistral-4444")
+      free = User.find(free._key)
+      assert_eq(ScoreReading.refusal(free, 0, true), "plan")
+      assert_eq(ScoreSuggestion.refusal(free, 0, true), "plan")
+      assert_eq(ScoreReading.left_today(free), SCORE_READINGS_OWN_PER_DAY)
+      lapsed = plan_pro("canceled")
+      lapsed.keep_ai_key("mistral", "mistral-medium-latest", "sk-mistral-5555")
+      assert_eq(ScoreReading.refusal(User.find(lapsed._key), 0, true), "plan")
+    end
+
+    test("without a key of one's own: refused, open or not, on any plan") do
+      assert_eq(ScoreReading.refusal(plan_user(), 0, false), "no_key")
+      assert_eq(ScoreSuggestion.refusal(plan_pro(), 0, true), "no_key")
     end
   end
 

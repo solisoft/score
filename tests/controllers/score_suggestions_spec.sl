@@ -1,20 +1,23 @@
 # The editor's AI assistant over HTTP: asked from the editor, asked after,
-# each suggestion its owner's, and only on a score one may change.
+# each suggestion its owner's, only on a score one may change, and only on
+# the person's own AI key (#396), the server's never.
 
 const SUGGEST_PASSWORD = "correct horse battery"
 const SUGGEST_SOURCE = "{ c'4 d' e' f' | g'1 }"
 
-def suggest_user
+# Someone signed in, with a key of their own unless `keyless`.
+def suggest_user(keyless = false)
   user = User.new()
   user.email = "suggest-#{uuid_v4}@example.com"
   user.set_password(SUGGEST_PASSWORD)
   user.confirmed_at = DateTime.utc.to_unix
   user.save
+  user.keep_ai_key("mistral", "mistral-medium-latest", "sk-mistral-1111") unless keyless
   post(
     "/login",
     {"email": user.email, "password": SUGGEST_PASSWORD}
   )
-  user
+  User.find(user._key)
 end
 
 def ask_assistant(score, body)
@@ -50,24 +53,6 @@ def queued_suggestion_jobs
   end.length
 end
 
-# Whose suggestions fill the server key's day in a spec: theirs go after it.
-const SITE_BUSY_ASKER = "site-busy-suggestions-spec"
-
-# The day's AI_SERVER_ASKS_PER_DAY asked of the server's key, by someone else.
-def fill_site_day
-  rows = (0 .. AI_SERVER_ASKS_PER_DAY).map do |_|
-    {
-      "user_id": SITE_BUSY_ASKER,
-      "score_id": "s",
-      "action": "improve",
-      "state": "done",
-      "own": false,
-      "created_at": DateTime.utc.to_unix
-    }
-  end
-  ScoreSuggestion.create_many(rows)
-end
-
 describe("AppScoreSuggestionsController") do
   before_each() do
     as_guest()
@@ -75,11 +60,7 @@ describe("AppScoreSuggestionsController") do
     clear_headers()
   end
 
-  after_each() do
-    ScoreSuggestion.where({"user_id": SITE_BUSY_ASKER}).delete_all
-  end
-
-  test("the editor offers the AI menu, and says which AI answers") do
+  test("the editor offers the AI menu and the photo, and says which AI answers") do
     user = suggest_user()
     score = Score.start(user, SUGGEST_SOURCE)
     page = res_body(get("/app/scores/#{score._key}"))
@@ -87,14 +68,32 @@ describe("AppScoreSuggestionsController") do
     assert_contains(page, "data-ai-ask=\"harmonize\"")
     assert_contains(
       page,
-      "Answered by Claude. <span data-ai-left>#{SCORE_SUGGESTIONS_PER_DAY}</span> questions left today."
-    )
-    user.keep_ai_key("mistral", "mistral-medium-latest", "sk-mistral-1111")
-    assert_contains(
-      res_body(get("/app/scores/#{score._key}")),
       "Answered by Mistral, mistral-medium-latest, with your key. "
       + "<span data-ai-left>#{SCORE_SUGGESTIONS_OWN_PER_DAY}</span> questions left today."
     )
+    assert_contains(page, "data-photo-open hidden")
+    assert_not(page.contains("data-ai-refused"))
+    assert_not(page.contains("data-photo-refused"))
+  end
+
+  test("without a key, the editor's photo and assistant explain and link the way to one, before anything is sent") do
+    assert(getenv("ANTHROPIC_API_KEY").present?, "the server's key is set, and still not offered")
+    user = suggest_user(true)
+    score = Score.start(user, SUGGEST_SOURCE)
+    page = res_body(get("/app/scores/#{score._key}"))
+    # The menus stay, their hooks too; the dialog says why and sends nothing.
+    assert_contains(page, "data-ai-ask=\"chords\"")
+    assert_contains(page, "data-ai-refused")
+    assert_contains(
+      page,
+      "Add your own AI key in Account to read photos and use the assistant. "
+      + "<a href=\"/app/account#ai\">Add your key in Account</a></p>"
+    )
+    assert_not(page.contains("data-ai-left"))
+    assert_not(page.contains("Answered by Claude"))
+    # File › Open a photo… links to the account instead of taking a file.
+    assert_contains(page, "href=\"/app/account#ai\" data-photo-refused>Open a photo…")
+    assert_not(page.contains("data-photo-open"))
   end
 
   test("starts a suggestion from the editor's text, leaving the score as it is") do
@@ -141,11 +140,11 @@ describe("AppScoreSuggestionsController") do
     assert_eq(suggestions_of(user), 0)
   end
 
-  test("on the site's AI: the 30th question goes, the 31st is refused, nothing written or queued") do
+  test("one's own key: the 200th question of the day goes, the 201st is refused, nothing written or queued") do
     user = suggest_user()
     score = Score.start(user, SUGGEST_SOURCE)
-    assert_eq(SCORE_SUGGESTIONS_PER_DAY, 30)
-    past_suggestions(user, score, SCORE_SUGGESTIONS_PER_DAY - 1)
+    assert_eq(SCORE_SUGGESTIONS_OWN_PER_DAY, 200)
+    past_suggestions(user, score, SCORE_SUGGESTIONS_OWN_PER_DAY - 1)
     # An older one no longer counts.
     past_suggestions(user, score, 1, DateTime.utc.to_unix - 86400 - 60)
     assert_contains(res_body(get("/app/scores/#{score._key}")), "<span data-ai-left>1</span> questions left today.")
@@ -153,39 +152,17 @@ describe("AppScoreSuggestionsController") do
     last = ask_assistant(score, {"action": "chords"})
     assert_eq(res_status(last), 202)
     assert_eq(queued_suggestion_jobs(), jobs_before + 1)
-    assert_eq(suggestions_of(user), SCORE_SUGGESTIONS_PER_DAY + 1)
+    assert_eq(suggestions_of(user), SCORE_SUGGESTIONS_OWN_PER_DAY + 1)
     assert_contains(res_body(get("/app/scores/#{score._key}")), "<span data-ai-left>0</span> questions left today.")
     refused = ask_assistant(
       score,
       {"action": "ask", "request": "a coda"}
     )
     assert_eq(res_status(refused), 429)
-    assert_eq(
-      res_json(refused)["error"],
-      "You have asked the 30 questions a day the site's AI answers: try again tomorrow, "
-      + "or add your own AI key on your account page to ask more."
-    )
-    # Payments not open (#393): nothing to buy, so no way to Pricing.
-    assert_null(res_json(refused)["upgrade"])
-    assert_eq(suggestions_of(user), SCORE_SUGGESTIONS_PER_DAY + 1)
-    assert_eq(queued_suggestion_jobs(), jobs_before + 1)
-  end
-
-  test("with one's own key: past the site's 30, up to the own key's day") do
-    user = suggest_user()
-    score = Score.start(user, SUGGEST_SOURCE)
-    user.keep_ai_key("mistral", "mistral-medium-latest", "sk-mistral-1111")
-    past_suggestions(user, score, SCORE_SUGGESTIONS_PER_DAY)
-    beyond = ask_assistant(score, {"action": "chords"})
-    assert_eq(res_status(beyond), 202)
-    assert_eq(suggestions_of(user), SCORE_SUGGESTIONS_PER_DAY + 1)
-    past_suggestions(user, score, SCORE_SUGGESTIONS_OWN_PER_DAY - SCORE_SUGGESTIONS_PER_DAY - 1)
-    jobs_before = queued_suggestion_jobs()
-    refused = ask_assistant(score, {"action": "chords"})
-    assert_eq(res_status(refused), 429)
     assert_eq(res_json(refused)["error"], "You have asked all of today's questions: try again tomorrow.")
-    assert_eq(suggestions_of(user), SCORE_SUGGESTIONS_OWN_PER_DAY)
-    assert_eq(queued_suggestion_jobs(), jobs_before)
+    assert_null(res_json(refused)["link"])
+    assert_eq(suggestions_of(user), SCORE_SUGGESTIONS_OWN_PER_DAY + 1)
+    assert_eq(queued_suggestion_jobs(), jobs_before + 1)
   end
 
   test("refuses a request longer than the limit, and writes nothing") do
@@ -207,28 +184,27 @@ describe("AppScoreSuggestionsController") do
     assert_eq(res_status(longest), 202)
   end
 
-  test("once the site's AI has answered its day, the server's key is refused; one's own key is not") do
-    user = suggest_user()
+  test("without a key of one's own: refused with the way to Account, nothing written or queued") do
+    assert(getenv("ANTHROPIC_API_KEY").present?, "the server's key is set, and still not used")
+    user = suggest_user(true)
     score = Score.start(user, SUGGEST_SOURCE)
-    assert_eq(AI_SERVER_ASKS_PER_DAY, 400)
-    fill_site_day()
     jobs_before = queued_suggestion_jobs()
     refused = ask_assistant(score, {"action": "chords"})
-    assert_eq(res_status(refused), 429)
+    assert_eq(res_status(refused), 403)
     assert_eq(
-      res_json(refused)["error"],
-      "The site's AI is busy for today: add your own key in Account to keep going."
+      res_json(refused),
+      {
+        "error": "Add your own AI key in Account to read photos and use the assistant.",
+        "link": "/app/account#ai",
+        "link_text": "Add your key in Account"
+      }
     )
     assert_eq(suggestions_of(user), 0)
     assert_eq(queued_suggestion_jobs(), jobs_before)
-    # Asked with one's own key: answered, and not counted against the site.
-    site_used = AiClient.server_used_today
-    assert(site_used >= AI_SERVER_ASKS_PER_DAY)
+    # A key added: answered.
     user.keep_ai_key("mistral", "mistral-medium-latest", "sk-mistral-1111")
-    own = ask_assistant(score, {"action": "chords"})
-    assert_eq(res_status(own), 202)
-    assert_eq(ScoreSuggestion.find(res_json(own)["id"]).own, true)
-    assert_eq(AiClient.server_used_today, site_used)
+    assert_eq(res_status(ask_assistant(score, {"action": "chords"})), 202)
+    assert_eq(suggestions_of(user), 1)
   end
 
   test("answers the suggestion once ready, engraved, with its explanation; or why it failed") do

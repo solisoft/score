@@ -68,26 +68,70 @@ end
 describe("ScoreReading") do
   test("starts reading, counted against the day's readings, in a job") do
     user = reader_user()
-    assert_eq(ScoreReading.left_today(user), SCORE_READINGS_PER_DAY)
-    reading = ScoreReading.start(user, "abc")
+    user.keep_ai_key("mistral", "pixtral-large-latest", "sk-mistral-8888")
+    user = User.find(user._key)
+    assert_eq(ScoreReading.left_today(user), SCORE_READINGS_OWN_PER_DAY)
+    reading = ScoreReading.start(user, "abc", false)
     stored = ScoreReading.find(reading._key)
     assert_eq(stored.state, "reading")
     assert_eq(stored.picture, "abc")
+    assert_null(stored.own, "no server key to tell apart any more")
     assert(stored.owned_by?(user))
     assert_not(stored.owned_by?(reader_user()))
     assert_not(stored.owned_by?(nil))
-    assert_eq(ScoreReading.left_today(user), SCORE_READINGS_PER_DAY - 1)
+    assert_eq(ScoreReading.left_today(user), SCORE_READINGS_OWN_PER_DAY - 1)
+  end
+
+  test("payments open: Pro's own key reads, Free's is refused for the plan, nothing kept or queued") do
+    pro = reader_user()
+    pro.plan = "pro"
+    pro.plan_status = "active"
+    pro.current_period_end = DateTime.utc.to_unix + 86400
+    pro.update()
+    pro.keep_ai_key("mistral", "pixtral-large-latest", "sk-mistral-pro-1")
+    pro = User.find(pro._key)
+    assert_not_null(ScoreReading.start(pro, "abc", true)._key)
+    free = reader_user()
+    free.keep_ai_key("mistral", "pixtral-large-latest", "sk-mistral-free-1")
+    free = User.find(free._key)
+    jobs_before = Job.list().length
+    assert_eq(ScoreReading.start(free, "abc", true), "plan")
+    assert_eq(ScoreReading.where({"user_id": free._key}).count, 0)
+    assert_eq(Job.list().length, jobs_before)
+    # Payments closed: the same key reads.
+    assert_not_null(ScoreReading.start(free, "abc", false)._key)
+    # No key at all: refused, open or not.
+    keyless = reader_user()
+    assert_eq(ScoreReading.start(keyless, "abc", false), "no_key")
+    assert_eq(ScoreReading.where({"user_id": keyless._key}).count, 0)
+    assert_eq(Job.list().length, jobs_before + 1)
+  end
+
+  test("a reading queued for someone whose key is gone fails, with no one asked") do
+    user = reader_user()
+    reading = ScoreReading.create({
+      "user_id": user._key,
+      "state": "reading",
+      "picture": "abc",
+      "created_at": DateTime.utc.to_unix
+    })
+    ScoreReadingJob.perform({"reading_id": reading._key})
+    stored = ScoreReading.find(reading._key)
+    assert_eq(stored.state, "failed")
+    assert_eq(stored.error, AI_NO_KEY)
+    assert_null(stored.picture)
   end
 
   test("leaves none once the day's are used, and counts only the last 24 hours") do
     user = reader_user()
-    (0 .. SCORE_READINGS_PER_DAY).each do |_|
-      ScoreReading.create({
+    rows = (0 .. SCORE_READINGS_OWN_PER_DAY).map do |_|
+      {
         "user_id": user._key,
         "state": "done",
         "created_at": DateTime.utc.to_unix
-      })
+      }
     end
+    ScoreReading.create_many(rows)
     assert_eq(ScoreReading.left_today(user), 0)
     other = reader_user()
     ScoreReading.create({
@@ -95,7 +139,7 @@ describe("ScoreReading") do
       "state": "done",
       "created_at": DateTime.utc.to_unix - 90000
     })
-    assert_eq(ScoreReading.left_today(other), SCORE_READINGS_PER_DAY)
+    assert_eq(ScoreReading.left_today(other), SCORE_READINGS_OWN_PER_DAY)
   end
 
   test("a reading already finished is not read again") do
@@ -110,9 +154,9 @@ describe("ScoreReading") do
     assert_eq(ScoreReading.find(reading._key).source, "{ c4 }")
   end
 
-  test("reads with a key of one's own, with more readings a day") do
+  test("reads with a key of one's own, and with none once it is removed") do
     user = reader_user()
-    assert_eq(user.ai_settings, AiClient.server_settings)
+    assert_null(user.ai_settings, "no key: nothing, not the server's")
     assert_null(user.keep_ai_key("moonshot", "kimi-latest", "sk-moonshot-secret-9876"))
     stored = User.find(user._key)
     assert(stored.own_ai?)
@@ -124,8 +168,7 @@ describe("ScoreReading") do
       {
         "provider": "moonshot",
         "model": "kimi-latest",
-        "key": "sk-moonshot-secret-9876",
-        "own": true
+        "key": "sk-moonshot-secret-9876"
       }
     )
     assert_eq(ScoreReading.left_today(stored), SCORE_READINGS_OWN_PER_DAY)
@@ -133,7 +176,7 @@ describe("ScoreReading") do
     gone = User.find(user._key)
     assert_not(gone.own_ai?)
     assert_null(gone.ai_key)
-    assert_eq(gone.ai_settings["provider"], "anthropic")
+    assert_null(gone.ai_settings)
   end
 
   test("refuses a key without a known provider, a model or the key itself") do

@@ -1,14 +1,14 @@
-# Calling an AI model: the request built for each provider, the answer read,
-# and each way it can fail named. No request leaves: the HTTP call itself
-# is the one line not run here.
+# Calling an AI model: who may (#396: one's own key only, and on Pro once
+# payments are open; the server's key never), the request built for each
+# provider, the answer read, and each way it can fail named. No request
+# leaves: the HTTP call itself is the one line not run here.
 
 # Settings as a person's own key gives them.
 def own_settings(provider, model)
   {
     "provider": provider,
     "model": model,
-    "key": "sk-own-key-1234",
-    "own": true
+    "key": "sk-own-key-1234"
   }
 end
 
@@ -16,23 +16,121 @@ def provider_said(status, body)
   {"status": status, "body": JSON.stringify(body)}
 end
 
+# Someone signed up, with `key` of their own (nil: none), on Pro if `pro`.
+def ai_person(key = nil, pro = false)
+  user = User.new()
+  user.email = "ai-#{uuid_v4}@example.com"
+  user.set_password("correct horse battery")
+  user.confirmed_at = DateTime.utc.to_unix
+  if pro
+    user.plan = "pro"
+    user.plan_status = "active"
+    user.current_period_end = DateTime.utc.to_unix + 86400
+  end
+  user.save
+  user.keep_ai_key("mistral", "mistral-medium-latest", key) unless key.nil?
+  User.find(user._key)
+end
+
 describe("AiClient") do
+  describe("who may ask") do
+    test("the server's key is never used, even when ANTHROPIC_API_KEY is set") do
+      # .env.test sets one, as a server that once offered its own AI does.
+      assert(getenv("ANTHROPIC_API_KEY").present?, "the spec runs with the server's key set")
+      keyless = ai_person()
+      [false, true].each do |open|
+        assert_null(AiClient.settings_for(keyless, open))
+      end
+      assert_null(keyless.ai_settings)
+      assert_eq(AiClient.refusal(keyless, false), "no_key")
+      pro_keyless = ai_person(nil, true)
+      assert_eq(AiClient.refusal(pro_keyless, true), "no_key")
+      assert_null(AiClient.settings_for(pro_keyless, true))
+      # With a key of their own, theirs is the only one sent.
+      own = ai_person("sk-mistral-own-7777")
+      settings = AiClient.settings_for(own, false)
+      assert_eq(settings["key"], "sk-mistral-own-7777")
+      request = AiClient.request(settings, [{
+        "role": "user",
+        "text": "Hi"
+      }])
+      assert_eq(request["headers"]["Authorization"], "Bearer sk-mistral-own-7777")
+      assert_not(JSON.stringify(request).contains(getenv("ANTHROPIC_API_KEY")), "the server's key is never sent")
+    end
+
+    test("payments closed: anyone with a key of their own, whatever the plan") do
+      assert_null(AiClient.refusal(ai_person("sk-mistral-free-1111"), false))
+      assert_null(AiClient.refusal(ai_person("sk-mistral-pro-2222", true), false))
+      assert_eq(AiClient.settings_for(ai_person("sk-mistral-free-3333"), false)["model"], "mistral-medium-latest")
+    end
+
+    test("payments open: Pro with a key, not Free, whose key stays kept but unused") do
+      assert_null(AiClient.refusal(ai_person("sk-mistral-pro-4444", true), true))
+      free = ai_person("sk-mistral-free-5555")
+      assert_eq(AiClient.refusal(free, true), "plan")
+      assert_null(AiClient.settings_for(free, true))
+      assert(free.own_ai?, "the key is still kept")
+      assert_eq(free.ai_refusal(true), "plan")
+      assert_null(free.ai_refusal(false))
+      # Free without a key: Pro is what lifts it, not a key.
+      assert_eq(AiClient.refusal(ai_person(), true), "plan")
+      # A lapsed Pro is on Free.
+      lapsed = ai_person("sk-mistral-gone-6666", true)
+      lapsed.current_period_end = DateTime.utc.to_unix - 60
+      lapsed.update()
+      assert_eq(AiClient.refusal(User.find(lapsed._key), true), "plan")
+    end
+
+    test("a refusal says why, and links the page that lifts it") do
+      assert_eq(AI_NO_KEY, "Add your own AI key in Account to read photos and use the assistant.")
+      assert_eq(AI_PRO_ONLY, "AI with your own key is part of Pro.")
+      key_link = AiClient.refusal_link("no_key", "/app/account#ai", "/pricing")
+      assert_eq(
+        key_link,
+        {"href": "/app/account#ai", "text": "Add your key in Account"}
+      )
+      plan_link = AiClient.refusal_link("plan", "/app/account#ai", "/pricing")
+      assert_eq(
+        plan_link,
+        {"href": "/pricing", "text": "See the plans"}
+      )
+      assert_eq(AiClient.refusal_text("no_key"), AI_NO_KEY)
+      assert_eq(AiClient.refusal_text("plan"), AI_PRO_ONLY)
+      assert_eq(
+        AiClient.refusal_answer("no_key", key_link),
+        {
+          "error": AI_NO_KEY,
+          "link": "/app/account#ai",
+          "link_text": "Add your key in Account"
+        }
+      )
+      assert_eq(
+        AiClient.refusal_answer("plan", plan_link),
+        {
+          "error": AI_PRO_ONLY,
+          "link": "/pricing",
+          "link_text": "See the plans",
+          "upgrade": "/pricing"
+        }
+      )
+    end
+  end
+
   describe("the request") do
-    test("sends the server's Opus the turns, thinking, with its fallback") do
+    test("a Claude model of one's own gets the image first, and what every Claude model takes") do
       turns = [{
         "role": "user",
         "image": "abc",
         "text": "Read this"
       }]
-      request = AiClient.request(AiClient.server_settings, turns)
+      request = AiClient.request(own_settings("anthropic", "claude-opus-5-5"), turns)
       assert_eq(request["url"], "https://api.anthropic.com/v1/messages")
-      assert_eq(request["headers"]["x-api-key"], "test-key-never-sent")
-      assert_eq(request["headers"]["anthropic-beta"], "server-side-fallback-2026-07-01")
+      assert_eq(request["headers"]["x-api-key"], "sk-own-key-1234")
+      assert_null(request["headers"]["anthropic-beta"])
       body = request["body"]
       assert_eq(body["model"], "claude-opus-5-5")
-      assert_eq(body["thinking"]["type"], "adaptive")
-      assert_eq(body["output_config"]["effort"], "high")
-      assert_eq(body["fallbacks"], "default")
+      assert_null(body["thinking"])
+      assert_null(body["fallbacks"])
       assert_null(body["temperature"])
       content = body["messages"][0]["content"]
       assert_eq(
@@ -49,19 +147,14 @@ describe("AiClient") do
       )
     end
 
-    test("a turn without an image is plain text; a Claude model of one's own gets what every Claude takes") do
+    test("a turn without an image is plain text") do
       turns = [
         {"role": "user", "text": "Harmonize"},
         {"role": "assistant", "text": "{ c4 }"},
         {"role": "user", "text": "Again"}
       ]
-      request = AiClient.request(own_settings("anthropic", "claude-sonnet-5-5"), turns)
-      assert_eq(request["headers"]["x-api-key"], "sk-own-key-1234")
-      assert_null(request["headers"]["anthropic-beta"])
-      body = request["body"]
+      body = AiClient.request(own_settings("anthropic", "claude-sonnet-5-5"), turns)["body"]
       assert_eq(body["model"], "claude-sonnet-5-5")
-      assert_null(body["thinking"])
-      assert_null(body["fallbacks"])
       assert_eq(body["messages"], [
         {"role": "user", "content": "Harmonize"},
         {"role": "assistant", "content": "{ c4 }"},
@@ -107,7 +200,7 @@ describe("AiClient") do
           {"type": "text", "text": "d' }"}
         ]}
       )
-      assert_eq(AiClient.answer(said, AiClient.server_settings), {"text": "{ c'4 d' }"})
+      assert_eq(AiClient.answer(said, own_settings("anthropic", "claude-opus-5-5")), {"text": "{ c'4 d' }"})
     end
 
     test("is the message of a chat-completions answer, as text or as parts") do
@@ -126,21 +219,21 @@ describe("AiClient") do
     end
 
     test("names each way it can fail, and whose") do
-      server = AiClient.server_settings
+      claude = own_settings("anthropic", "claude-opus-5-5")
       assert_eq(
-        AiClient.answer(nil, server)["error"],
+        AiClient.answer(nil, claude)["error"],
         "Anthropic (Claude) could not be reached. Try again in a moment."
       )
       [529, 429, 500].each do |status|
-        assert_contains(AiClient.answer(provider_said(status, {}), server)["error"], "busy")
+        assert_contains(AiClient.answer(provider_said(status, {}), claude)["error"], "busy")
       end
       assert_eq(
-        AiClient.answer(provider_said(401, {}), server)["error"],
-        "Anthropic (Claude) could not answer this time. Try again in a moment."
+        AiClient.answer(provider_said(403, {}), claude)["error"],
+        "Anthropic (Claude) refused your API key. Check it on your account page."
       )
       assert_contains(AiClient.answer(
         {"status": 200, "body": "not json"},
-        server
+        claude
       )["error"], "could not be read")
       refused = provider_said(
         200,
@@ -149,7 +242,7 @@ describe("AiClient") do
           "text": "{ c4 }"
         }]}
       )
-      assert_eq(AiClient.answer(refused, server)["error"], "Anthropic (Claude) declined the request.")
+      assert_eq(AiClient.answer(refused, claude)["error"], "Anthropic (Claude) declined the request.")
       filtered = provider_said(200, {"choices": [{
         "finish_reason": "content_filter",
         "message": {"content": ""}
@@ -196,9 +289,7 @@ describe("AiClient") do
     assert_contains(AiClient.problem("\\relax { c4 }"), "relax")
   end
 
-  test("is offered when the server has a key, and names providers") do
-    assert(AiClient.available?())
-    assert_eq(AiClient.server_settings["provider"], "anthropic")
+  test("names providers") do
     assert_eq(AiClient.provider_name("moonshot"), "Moonshot (Kimi)")
     assert_eq(AiClient.provider_name("unknown"), "unknown")
   end
