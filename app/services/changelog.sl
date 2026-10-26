@@ -14,6 +14,7 @@ class Changelog
         {
           "area": "engine",
           "title": "Pages spaced and beams sloped as LilyPond sets them",
+          "sample": "beams-and-spacing",
           "text": "A crowded page now squeezes its systems toward their least distance before one moves to the next "
           + "page, and a page with room spreads them, as LilyPond's springs do; ink of one staff never runs into "
           + "the next. The \\paper and \\layout spacings (system-system, top-system, last-bottom, staff-staff) are "
@@ -23,6 +24,7 @@ class Changelog
         {
           "area": "engine",
           "title": "Smaller staves, a metre changed mid-bar, polymetre, voices inside a voice",
+          "sample": "metre-and-small-staves",
           "text": "Ossia and cue staves are drawn smaller (\\magnifyStaff, StaffSymbol.staff-space with fontSize). "
           + "A \\time may come in the middle of a bar and a \\partial later in a piece; a \\time written in "
           + "one staff applies to the whole score. With \\enablePolymeter, staves keep their own metres when "
@@ -33,6 +35,7 @@ class Changelog
         {
           "area": "editor",
           "title": "The metre wherever it is written, edited on the score",
+          "sample": "metre-and-small-staves",
           "text": "Pieces that change metre in the middle of a bar (\\time after the first notes), that write a "
           + "\\partial after the first bar, that write a \\time in one staff only, or that set a metre beside "
           + "another with bars as long (\\set Staff.timeSignatureFraction with \\scaleDurations, or "
@@ -45,6 +48,7 @@ class Changelog
         {
           "area": "editor",
           "title": "\\partCombine and \\autoChange edited on the score",
+          "sample": "autochange",
           "text": "Two parts set on one staff by \\partCombine are now edited on the score: each part is a voice of "
           + "the staff, part I and part II, and everything that works on a voice works on each part — notes "
           + "typed, deleted, copied and pasted, moved in the MIDI view, transposed, bars put in or taken away, a "
@@ -60,6 +64,7 @@ class Changelog
         {
           "area": "engine",
           "title": "The piano's two staves crossed: beams, slurs and ties from one hand to the other",
+          "sample": "cross-staff",
           "text": "Notes moved to the other staff with \\change Staff now share one beam drawn between the staves, "
           + "upper stems down to it and lower stems up; a voice may cross in the middle of a beam. Slurs, phrasing "
           + "slurs and ties go from a note on one staff to a note on the other. \\autoChange shares one voice "
@@ -69,6 +74,7 @@ class Changelog
         {
           "area": "engine",
           "title": "Lines and pages laid out as LilyPond lays them out",
+          "sample": "lines-and-pages",
           "text": "Line breaks are chosen over the whole piece, so the last line is no longer a lonely bar or two, and "
           + "a last page of one system takes one from the page before. \\noBreak and \\noPageBreak are followed. "
           + "The \\paper settings are read: line-width, indent and short-indent, ragged-right, ragged-last and "
@@ -78,6 +84,7 @@ class Changelog
         {
           "area": "engine",
           "title": "\\override, \\set and \\tweak followed",
+          "sample": "overrides",
           "text": "The settings real files use most are followed instead of passed over: the direction of stems, "
           + "slurs, ties, dynamics, words, fingerings and tuplets; offsets, padding and alignment of words and "
           + "marks; sizes and \\magnifyMusic; beam grouping (beatStructure, subdivideBeams, Beam.positions); boxed, "
@@ -88,6 +95,7 @@ class Changelog
         {
           "area": "engine",
           "title": "Empty staves hidden: \\RemoveEmptyStaves",
+          "sample": "empty-staves",
           "text": "With \\RemoveEmptyStaves, in a \\layout or a staff's \\with, a staff that only rests for a whole "
           + "system is not drawn on that system, as in an orchestral score: the staves below move up, names turn "
           + "to their short forms, brackets and braces shrink, and bar numbers and marks go over the first staff "
@@ -96,6 +104,7 @@ class Changelog
         {
           "area": "engine",
           "title": "Two parts on one staff: \\partCombine",
+          "sample": "part-combine",
           "text": "\\partCombine sets two parts on one staff as LilyPond does: the same notes once, with a2 where "
           + "the parts join; chords when they move together; Solo or Solo II when one rests; two voices otherwise. "
           + "\\partCombineApart, Chords, Unisono, SoloI and SoloII force a choice, and \\partCombineUp and Down "
@@ -104,6 +113,7 @@ class Changelog
         {
           "area": "editor",
           "title": "More real LilyPond files open on the score, not only as text",
+          "sample": "editable-files",
           "text": "Pieces that used to open as text only now open in the score editor, and keep what they say "
           + "through every edit: staves that change key or metre apart from the others (a horn in F, 6/8 beside "
           + "3/4), a tempo, a rehearsal mark or a mark of words in the middle of a bar, a bar line or a repeat "
@@ -227,6 +237,7 @@ class Changelog
         {
           "area": "editor",
           "title": "Figured bass, guitar chord diagrams, fingered grace notes, clefs with an 8 above",
+          "sample": "fig-diagrams-graces",
           "text": "Four more things open in the editor instead of as text only. A figured bass (\\figuremode): "
           + "Insert › A figured bass under the staff, then Insert › Figures on a note and type 6 4, 7+ or _ 5-, "
           + "Space for the next beat. A guitar chord diagram over a note (\\fret-diagram): Insert › Guitar chord "
@@ -240,6 +251,7 @@ class Changelog
         {
           "area": "editor",
           "title": "Stems, beams by hand, and C♯ spelled D♭",
+          "sample": "stems-and-beams",
           "text": "Three commands the editor lacked, in the Insert menu, the tools and the keyboard: stems up, down "
           + "or as the voice wants over the selected notes (X flips them), the selected eighths beamed by hand "
           + "(Alt+B, again to take the beam away; beams it reaches into are joined) and a beam broken before a "
@@ -251,6 +263,7 @@ class Changelog
         {
           "area": "editor",
           "title": "A line of chord names, edited beat by beat",
+          "sample": "chord-names",
           "text": "A score with a line of chord names over its music (\\new ChordNames \\chordmode) now opens in "
           + "the editor, each chord written back as it was written. Insert › A line of chord names puts one over "
           + "the selected staff; then select a note under it, press K and type a chord (Am7, Bbmaj7, G7/B, "
@@ -262,6 +275,7 @@ class Changelog
         {
           "area": "editor",
           "title": "Notes on the other staff, and words under the second voice",
+          "sample": "other-staff-and-verses",
           "text": "A piano score whose right hand reaches into the bass staff (\\change Staff) now opens in the "
           + "editor instead of as text only: select the notes and press Ctrl+Shift+↓ (or ↑), or use Insert, to "
           + "draw them on the staff below or above; again brings them back. They still play with their own "
@@ -287,6 +301,7 @@ class Changelog
         {
           "area": "editor",
           "title": "Grace notes after a note (\\afterGrace)",
+          "sample": "after-grace",
           "text": "A score that writes grace notes after a note, \\afterGrace d2 { e16 f }, is no longer refused "
           + "once the engraver that reads it is on the site: the grace notes are drawn small after the note, just "
           + "before the next one, and played in the last quarter of the note (or from the point written, "
@@ -465,6 +480,7 @@ class Changelog
         {
           "area": "engine",
           "title": "A clef or a key can change in the middle of a bar",
+          "sample": "mid-bar-clef-and-key",
           "text": "Write \\clef bass or \\key d \\major between two notes of a bar: the new clef is drawn small "
           + "before the note, the new key cancels the old one's sharps and flats, as LilyPond draws them. The "
           + "editor keeps these changes through every edit, the notes you type after a new key are spelled in "
@@ -474,6 +490,7 @@ class Changelog
         {
           "area": "engine",
           "title": "Parts gather their bars of rest",
+          "sample": "gathered-rests",
           "text": "A printed part now shows a long rest as one bar with its count over it, as players expect, "
           + "instead of every empty bar one after another. In your own scores, \\compressMMRests gathers bars "
           + "of rest written R1*8, and the editor keeps it through every edit; \\compressFullBarRests and "
@@ -498,6 +515,7 @@ class Changelog
         {
           "area": "site",
           "title": "Three and four voices on one staff",
+          "sample": "four-voices",
           "text": "A staff can now hold up to four voices in the editor, instead of two: a score with a third or "
           + "fourth voice opens in the editor instead of as text only. Voices 1 and 3 have their stems up, 2 and "
           + "4 down. Pick a voice with Ctrl+Alt+1 to 4, from the toolbox or the Add menu, write in it, and take "
@@ -508,6 +526,7 @@ class Changelog
         {
           "area": "site",
           "title": "Ottava lines, fingerings and phrasing slurs in the editor",
+          "sample": "voices-ottava-fingerings",
           "text": "A score with an 8va line, fingerings, string numbers or phrasing slurs now opens in the editor "
           + "instead of as text only, and keeps them through every edit. Add them from the tools or the Insert "
           + "menu: 8va and 8vb over the selected notes, fingers 1 to 5 (Alt+1 to 5), strings 1 to 6, and a "
