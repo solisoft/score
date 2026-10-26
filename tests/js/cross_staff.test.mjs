@@ -214,13 +214,15 @@ test("merge: two people editing different bars keep the words under the alto", (
 test("musicxml: words under the second voice go out on its notes and come back under it", () => {
   const score = read(SATB);
   const xml = X.toMusicXML(score);
-  assert.match(xml, /<voice>2<\/voice>.*<lyric number="1"><syllabic>begin<\/syllabic><text>Al<\/text>/s);
+  // Each <lyric> names the voice it is sung to (#415): \\lyricsto "alto" comes back as itself.
+  assert.match(xml, /<voice>2<\/voice>.*<lyric number="1" name="alto"><syllabic>begin<\/syllabic><text>Al<\/text>/s);
   const { source, warnings } = X.fromMusicXML(xml);
   assert.deepEqual(warnings, []);
   const back = read(source);
   assert.equal(back.staves[0].lyricsVoice, 2);
   assert.deepEqual(back.staves[1].events.map((ev) => ev.lyric?.text ?? null), ["Al", "le", "lu", "ia"]);
-  // The same score but the names of the voice and the staves, which MusicXML does not carry.
-  const named = (s) => M.toLilyPond({ ...s, staves: s.staves.map((st) => ({ ...st, lyricsName: undefined, id: undefined })) }).source;
+  assert.equal(back.staves[0].lyricsName, score.staves[0].lyricsName);
+  // The same score but the names of the staves, which MusicXML does not carry.
+  const named = (s) => M.toLilyPond({ ...s, staves: s.staves.map((st) => ({ ...st, id: undefined })) }).source;
   assert.equal(named(back), named(score));
 });

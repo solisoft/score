@@ -9,6 +9,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import init, { editor_view, midi, pdf, score_json } from "../../public/eui-score/eui_score_web.js";
 import * as M from "../../public/eui-score/score-model.js";
 import { onsetSeconds } from "./midi_onsets.mjs";
+import * as F from "../../public/eui-score/feel.js";
 
 await init({ module_or_path: readFileSync(new URL("../../public/eui-score/eui_score_web_bg.wasm", import.meta.url)) });
 
@@ -1069,16 +1070,19 @@ test("playing: every gallery piece is lit as the MIDI file sounds it", () => {
       if (!read.score) continue;
       const s = read.score;
       const passes = M.playback(s);
-      // Each note lit from its start to when it is heard: its grace notes, before it, are lit with it.
+      // Each note lit from its start to when it is heard: its grace notes, before it, are lit with it;
+      // so are the strokes after it of grace notes after it and of a trill (heardUntil).
       const shown = s.staves.flatMap((staff, lane) => {
         const at = M.starts(staff);
         return staff.events.flatMap((ev, k) => {
           if (ev.rest) return [];
-          const heardAt = M.heardAt(s, passes, lane, k, at[k]);
+          const heardAt = M.heardUntil(s, passes, lane, k, at[k]);
           return M.playedAt(s, passes, at[k]).map((x, n) => [x, heardAt[n]]);
         });
       });
-      for (const h of onsetSeconds(midi(M.toLilyPond(s, { unfold: true }).source, 100, 4, 0))) {
+      // The engraver's MIDI with its rit. and accel. gliding, as the studio plays them (feel.js; the passes glide too).
+      const bytes = F.feel(midi(M.toLilyPond(s, { unfold: true }).source, 100, 4, 0), { score: s, passes, ...F.feelOf(s.meta) });
+      for (const h of onsetSeconds(bytes)) {
         assert.ok(shown.some(([from, to]) => h > from - 1e-3 && h < to + 1e-3), `${group}/${file}: a note heard at ${h.toFixed(2)} s is lit then`);
       }
     }

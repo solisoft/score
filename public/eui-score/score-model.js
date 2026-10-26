@@ -4426,6 +4426,11 @@ export function setBreak(score, bar, kind) {
 }
 
 /** What goes before the music: the staff size, then \\paper. */
+/** The page as the score's text sets it (\\paper, the staff size, \\layout): what MusicXML carries for this editor (#415). */
+export function pageSettings(score) {
+  return pageText(score);
+}
+
 function pageText(score) {
   const p = score.paper ?? {};
   const lines = [];
@@ -4723,6 +4728,22 @@ export function heardAt(score, passes, s, i, t = starts(score.staves[s])[i]) {
   return playedAt(score, passes, t).map((sec, k) => {
     const p = passes.filter((x) => x.bar === barAt(score, t))[k];
     return sec + (stolen / M_TICKS(p.base)) * (60 / p.bpm);
+  });
+}
+
+/**
+ * Until when lane `s`'s note `i` is struck again, on each pass through its
+ * bar: when it is heard (heardAt), or — for a note whose MIDI plays more than
+ * its one stroke, grace notes after it (\\afterGrace) or a trill — its end,
+ * every stroke of those being the note's (#415).
+ */
+export function heardUntil(score, passes, s, i, t = starts(score.staves[s])[i]) {
+  const ev = score.staves[s].events[i];
+  const heard = heardAt(score, passes, s, i, t);
+  if (ev.rest || !(ev.afterGraces?.length || ev.arts.includes("trill"))) return heard;
+  return heard.map((sec, k) => {
+    const p = passes.filter((x) => x.bar === barAt(score, t))[k];
+    return playedAt(score, passes, t)[k] + (ticksOf(ev) / M_TICKS(p.base)) * (60 / p.bpm);
   });
 }
 
@@ -6062,6 +6083,10 @@ function applyMoment(score, m) {
  * the first staff, the next bar's metre; or { kind: "partial", pos, ticks };
  * null for a cadenza or a bar a bar line ends.
  */
+export function oddBarWriting(score, b) {
+  return isOddBar(score, b) ? oddWriting(score, b) : null;
+}
+
 function oddWriting(score, b) {
   const c = changeAt(score, b);
   if (!c?.len || c.cadenza != null || (c.timeAt == null && c.partialAt == null)) return null;
@@ -6416,6 +6441,8 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
         // A mark over a bar line: a jump over the end of the bar before it
         // (or of the last bar), else the bar's own mark.
         if (!first) continue;
+        // How the engraver draws it (a box, an offset…) rides before its words: kept by the \\set or \\override that says so, not its words.
+        if (ev.mark?.text) ev.mark = { ...ev.mark, text: ev.mark.text.replace(/^\u0001\S*\s?/, "") };
         const jump = Object.keys(JUMPS).find((id) => JUMPS[id] === ev.mark?.text);
         const own = ev.mark?.glyph === "segno" ? "segno" : ev.mark?.glyph === "coda" ? "coda" : /^[A-Z]{1,2}$/.test(ev.mark?.text ?? "") ? "letter" : null;
         // Words of its own (\mark "Trio", \mark \markup \bold "Allegro"): kept as words.

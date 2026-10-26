@@ -225,7 +225,9 @@ export function fromMusicXML(text) {
   if (!parts.length) throw new Error("This MusicXML score has no part.");
   // The staff names given so far (\\change Staff, \\lyricsto): each once in the score.
   const taken = new Set();
-  const blocks = parts.map((part, p) => readPart(part, { ...(partInfo.get(part.attrs.id) ?? { name: "", short: "", sound: null, drums: new Map() }), taken, index: p }, p === 0, warnings));
+  // A file this editor wrote: its <stem> are the stems \\stemUp and \\stemDown turned (others write every note's).
+  const ours = kids(kid(kid(root, "identification"), "encoding"), "software").some((s) => s.text.trim() === "eui-score");
+  const blocks = parts.map((part, p) => readPart(part, { ...(partInfo.get(part.attrs.id) ?? { name: "", short: "", sound: null, drums: new Map() }), taken, index: p, ours }, p === 0, warnings));
   const head = header.length ? `\\header {\n  ${header.join("\n  ")}\n}\n` : "";
   const indent = (text) => text.replace(/^/gm, "  ");
   // Parts `from`…`to`, each group that starts there around its parts.
@@ -256,10 +258,14 @@ export function fromMusicXML(text) {
   const valid = groups.filter((g) => g.first <= g.last && g.last < blocks.length);
   const whole = valid.find((g) => g.first === 0 && g.last === blocks.length - 1 && g.first < g.last);
   // One staff whose words follow a voice: its Lyrics line beside it, inside << >>.
-  const body = blocks.length === 1 ? (/\\lyricsto|\\new FiguredBass/.test(blocks[0]) ? `<<\n${indent(blocks[0])}\n>>` : blocks[0]) : whole ? nest(0, blocks.length - 1, valid) : `<<\n${indent(nest(0, blocks.length - 1, valid))}\n>>`;
+  // A piano's part is a group of its own already: its words are inside it.
+  const grouped = /^\\new [A-Za-z]+Staff (\\with \{[^}]*\} )?<</.test(blocks[0] ?? "");
+  const body = blocks.length === 1 ? (!grouped && /\\lyricsto|\\new FiguredBass/.test(blocks[0]) ? `<<\n${indent(blocks[0])}\n>>` : blocks[0]) : whole ? nest(0, blocks.length - 1, valid) : `<<\n${indent(nest(0, blocks.length - 1, valid))}\n>>`;
   // Bars of rest drawn as one (<multiple-rest>): gathered, as \\compressMMRests gathers them.
   const gathered = parts.some((part) => kids(part, "measure").some((m) => kids(m, "attributes").some((a) => kid(kid(a, "measure-style"), "multiple-rest"))));
-  return { source: `${head}${gathered ? "\\compressMMRests " : ""}${body}\n`, warnings: [...warnings] };
+  // The page this editor set, in a file it wrote.
+  const page = ours ? kids(kid(kid(root, "identification"), "miscellaneous"), "miscellaneous-field").find((f) => f.attrs.name === "lilypond-page")?.text.trim() : "";
+  return { source: `${page ? `${page}\n` : ""}${head}${gathered ? "\\compressMMRests " : ""}${body}\n`, warnings: [...warnings] };
 }
 
 /** One part's staves, as LilyPond. */
@@ -294,6 +300,12 @@ function readPart(part, info, first, warnings) {
   const figuresRead = [];
   let figureNext = null;
   const voiceHome = new Map();
+  // Voices numbered by staff, 1–4 the first's and 5–8 the second's (as MuseScore and this editor write
+  // them): a voice's staff is its number's, even when its first note is drawn on the other (#415).
+  const byNumber = kids(part, "measure").some((m) => kids(m, "note").some((n) => Number(textIn(n, "voice") ?? 1) >= 5));
+  const numberedHome = new Set();
+  // Each lane's stems as its last note turned them.
+  const stems = new Map();
   const lastCross = new Map();
   const crossing = new Set();
   // "up" and "down" for a piano, as the editor names them; a later piano's "up2", "down2".
@@ -426,8 +438,9 @@ function readPart(part, info, first, warnings) {
             name = "percussion";
             at(s).drums = true;
           } else if (sign === "TAB") {
-            warnings.add("tablature, read as notes");
-            name = "treble_8";
+            // A tablature: its notes, drawn as frets (\\new TabStaff), with no clef.
+            at(s).tab = true;
+            continue;
           } else name = CLEFS_IN[sign + line];
           if (!name) {
             warnings.add(`the clef ${sign} on line ${line}, read as a treble clef`);
@@ -547,7 +560,7 @@ function readPart(part, info, first, warnings) {
     const metre = (4 * time[0] * divisions) / time[1];
     const filled = Math.max(measureLength, ...lanes.flatMap((st) => st.pos.map((p) => p - measureStart)));
     const length = filled > 0 ? filled : metre;
-    if (firstMeasure && length < metre - 1e-9 && measure.attrs.implicit === "yes") {
+    if (length < metre - 1e-9 && measure.attrs.implicit === "yes") {
       // Its length as \\partial writes it: one value, or a count of one (8*3).
       let partial = null;
       try {
@@ -558,7 +571,10 @@ function readPart(part, info, first, warnings) {
       // Just before the first note, after the clef, key and metre.
       if (partial) {
         for (const st of lanes) {
-          const k = st.lanes[0].findIndex((x) => x && !x.startsWith("\\"));
+          // Its first note in this measure: a later bar's (#408) or the first's.
+          const from = firstMeasure ? 0 : st.measureFrom ?? 0;
+          const found = st.lanes[0].slice(from).findIndex((x) => x && !x.startsWith("\\"));
+          const k = found < 0 ? -1 : from + found;
           st.lanes[0].splice(k < 0 ? st.lanes[0].length : k, 0, `\\partial ${partial}`);
         }
       }
@@ -633,12 +649,17 @@ function readPart(part, info, first, warnings) {
       // A voice is its first note's staff's. A note of it on the other staff,
       // going on from where the voice is there, is drawn on that staff
       // (\\change Staff); a voice the other staff has as its own stays there.
-      if (!voiceHome.has(voiceId)) voiceHome.set(voiceId, s);
+      if (!voiceHome.has(voiceId)) {
+        const numbered = byNumber && /^\d+$/.test(voiceId) ? Math.floor((Number(voiceId) - 1) / 4) + 1 : 0;
+        voiceHome.set(voiceId, numbered >= 1 && numbered <= staves ? numbered : s);
+        if (numbered >= 1 && numbered <= staves && numbered !== s) numberedHome.add(voiceId);
+      }
       const home = voiceHome.get(voiceId);
       let drawnOn = null;
       if (home !== s && s <= staves && !at(s).voices.includes(voiceId)) {
         const k = at(home).voices.indexOf(voiceId);
-        const goesOn = isChord ? lastCross.get(voiceId) === s : k >= 0 && at(home).pos[k] <= cursor + 1e-9;
+        // A voice its number puts on its staff starts there even when it starts drawn on the other.
+        const goesOn = isChord ? lastCross.get(voiceId) === s : k >= 0 ? at(home).pos[k] <= cursor + 1e-9 : numberedHome.has(voiceId);
         if (goesOn) {
           drawnOn = s;
           s = home;
@@ -735,6 +756,12 @@ function readPart(part, info, first, warnings) {
         return;
       }
       fill(staff, v, start);
+      // A stem turned by hand, in a file this editor wrote: \\stemUp, \\stemDown, \\stemNeutral where it changes.
+      if (info.ours && !rest) {
+        const dir = { up: 1, down: -1 }[textIn(note, "stem")] ?? 0;
+        if (dir !== (stems.get(key) ?? 0)) staff.lanes[v].push(["\\stemNeutral", "\\stemUp", "\\stemDown"][dir === 0 ? 0 : dir > 0 ? 1 : 2]);
+        stems.set(key, dir);
+      }
       const notations = kids(note, "notations");
       const has = (name) => notations.some((n) => kids(n, name).length);
       const each = (name) => notations.flatMap((n) => kids(n, name));
@@ -883,6 +910,8 @@ function readPart(part, info, first, warnings) {
       // Its words, a verse each: a staff sings them to one voice, the first that has some.
       const words = rest ? [] : kids(note, "lyric").filter((lyric) => textIn(lyric, "text") != null);
       if (words.length && staff.lyricLane == null) staff.lyricLane = v;
+      // The voice's name the words were sung to, when the file says it (<lyric name>).
+      if (words.length && staff.lyricLane === v && !staff.lyricName) staff.lyricName = words.find((w) => w.attrs.name)?.attrs.name ?? null;
       if (words.length && staff.lyricLane !== v) warnings.add("words under two voices of one staff: the second voice's left out");
       if ((staff.lyricLane ?? v) === v && !rest) {
         // Counted on every voice until one has words: they line up with its notes.
@@ -931,7 +960,7 @@ function readPart(part, info, first, warnings) {
     const say = voices.length > 2 && silent ? (k) => `\\voice${["One", "Two", "Three", "Four"][k]} ` : () => "";
     const ordinal = (n) => ["One", "Two", "Three", "Four"][n];
     // Words sung to a lower voice: the voices side by side, that one named for \\lyricsto.
-    const sungTo = st.lyrics.size && st.lyricLane > 0 && st.lyricLane < voices.length ? voiceName(k + 1, st.lyricLane) : null;
+    const sungTo = st.lyrics.size && st.lyricLane > 0 && st.lyricLane < voices.length ? (st.lyricName && /^[A-Za-z][A-Za-z0-9]*$/.test(st.lyricName) ? unique(st.lyricName) : voiceName(k + 1, st.lyricLane)) : null;
     const music = sungTo
       ? `<< { \\voiceOne ${one} } ${voices.slice(1).map((m, n) => `\\new Voice${n + 1 === st.lyricLane ? ` = "${sungTo}"` : ""} { \\voice${ordinal(n + 1)} ${m} }`).join(" ")} >>`
       : voices.length > 1 ? `<< ${voices.map((m, k) => `{ ${say(k)}${m} }`).join(" \\\\ ")} >>` : one;
@@ -944,6 +973,7 @@ function readPart(part, info, first, warnings) {
     const verses = [...st.lyrics.keys()].sort((a, b) => a - b).map((n) => `${sungTo ? `\\new Lyrics \\lyricsto "${sungTo}"` : "\\addlyrics"} { ${st.lyrics.get(n).join(" ")} }`);
     if (st.drums) return `\\new DrumStaff${withBlock} \\drummode { ${music.replace(/\\clef [^ ]+ /g, "").replace(/\\key [a-z]+ \\[a-z]+ ?/g, "")} }`;
     const id = crossing.has(k + 1) ? ` = "${staffName(k + 1)}"` : "";
+    if (st.tab) return [`\\new TabStaff${id}${withBlock} { ${music.replace(/\\clef [^ ]+ /g, "")} }`, ...verses].join("\n");
     return [`\\new Staff${id}${withBlock} { ${music} }`, ...verses].join("\n");
   };
   const blocks = lanes.map(staffText);
@@ -1079,7 +1109,12 @@ export function toMusicXML(score) {
   if (h.arranger) out.push(`<creator type="arranger">${xml(h.arranger)}</creator>`);
   if (h.poet) out.push(`<creator type="lyricist">${xml(h.poet)}</creator>`);
   if (h.copyright) out.push(`<rights>${xml(h.copyright)}</rights>`);
-  out.push("<encoding><software>eui-score</software></encoding></identification>");
+  out.push("<encoding><software>eui-score</software></encoding>");
+  // The page as this editor sets it, its \\paper and \\layout as written: read back by this editor (the others read <defaults>).
+  const page = M.pageSettings(score).trim();
+  if (page) out.push(`<miscellaneous><miscellaneous-field name="lilypond-page">${xml(page)}</miscellaneous-field></miscellaneous>`);
+  out.push("</identification>");
+  out.push(...defaultsXml(score.paper ?? {}));
   if (h.subtitle) out.push(`<credit page="1"><credit-type>subtitle</credit-type><credit-words>${xml(h.subtitle)}</credit-words></credit>`);
   // The groups of staves, as groups of the parts holding them; a piano's own brace is its part.
   const partOfStaff = (k) => parts.findIndex((p) => p.staves.includes(uppers[k]));
@@ -1172,7 +1207,9 @@ export function toMusicXML(score) {
       const change = M.changeAt(score, b);
       const brk = score.breaks?.[b - 1];
       // A pickup is measure 0, shorter than its metre says.
-      out.push(`<measure number="${M.barNumber(score, b)}"${b === 0 && score.pickup > 0 ? ' implicit="yes"' : ""}>`);
+      // A bar a \\partial makes as long as it is: a measure of its own length, as a pickup's.
+      const short = b > 0 && M.oddBarWriting(score, b)?.kind === "partial" && M.oddBarWriting(score, b).pos === 0;
+      out.push(`<measure number="${M.barNumber(score, b)}"${(b === 0 && score.pickup > 0) || short ? ' implicit="yes"' : ""}>`);
       if (b > 0 && brk) out.push(brk === "page" ? '<print new-page="yes"/>' : '<print new-system="yes"/>');
       const bl = lines[b]?.left;
       if (bl?.length) out.push(`<barline location="left">${bl.join("")}</barline>`);
@@ -1184,18 +1221,28 @@ export function toMusicXML(score) {
       const key = b === 0 ? M.keyOf(score, p.staves[0], 0) : keyHere?.key;
       const mode = b === 0 ? score.staves[p.staves[0]].mode ?? score.mode : keyHere?.mode;
       if (key != null && !drums) attrs.push(`<key><fifths>${interval ? writtenKey(key, interval) : key}</fifths>${mode && mode !== "major" ? `<mode>${mode}</mode>` : ""}</key>`);
-      const timeHere = b === 0 ? null : M.timeChanges(score, p.staves[0]).find((m) => m.bar === b);
+      // A metre whose \\time is written inside the bar before (#408): there, not here.
+      const timeHere = b === 0 || M.oddBarWriting(score, b - 1)?.kind === "time" ? null : M.timeChanges(score, p.staves[0]).find((m) => m.bar === b);
       const time = b === 0 ? score.staves[p.staves[0]].time ?? score.time : timeHere?.time;
       const added = b === 0 ? score.timeParts : timeHere?.parts;
       if (time) attrs.push(`<time><beats>${added?.length > 1 && added.reduce((x, y) => x + y, 0) === time[0] ? added.join("+") : time[0]}</beats><beat-type>${time[1]}</beat-type></time>`);
       if (b === 0 && p.staves.length > 1) attrs.push(`<staves>${p.staves.length}</staves>`);
+      // Each staff's lines after every clef, as MusicXML orders them.
+      const details = [];
       p.staves.forEach((s, k) => {
         const staff = score.staves[s];
+        // A tablature: MusicXML's TAB clef on six lines.
+        if (staff.tab) {
+          if (b === 0) attrs.push(`<clef${p.staves.length > 1 ? ` number="${k + 1}"` : ""}><sign>TAB</sign><line>5</line></clef>`);
+          if (b === 0) details.push(`<staff-details${p.staves.length > 1 ? ` number="${k + 1}"` : ""}><staff-lines>6</staff-lines></staff-details>`);
+          return;
+        }
         const clef = b === 0 ? (staff.drums ? "percussion" : staff.clef) : staff.clefs?.find((c) => c.bar === b)?.clef;
         if (!clef) return;
         const [sign, lineNo, octave] = CLEFS_OUT[clef] ?? CLEFS_OUT.treble;
         attrs.push(`<clef${p.staves.length > 1 ? ` number="${k + 1}"` : ""}><sign>${sign}</sign>${lineNo ? `<line>${lineNo}</line>` : ""}${octave ? `<clef-octave-change>${octave}</clef-octave-change>` : ""}</clef>`);
       });
+      attrs.push(...details);
       if (b === 0 && interval) attrs.push(`<transpose><diatonic>${-(interval.diatonic % 7)}</diatonic><chromatic>${-(interval.chromatic % 12)}</chromatic>${Math.trunc(interval.diatonic / 7) ? `<octave-change>${-Math.trunc(interval.diatonic / 7)}</octave-change>` : ""}</transpose>`);
       if (gathered[b]) attrs.push(`<measure-style><multiple-rest>${gathered[b]}</multiple-rest></measure-style>`);
       if (attrs.length) out.push(`<attributes>${attrs.join("")}</attributes>`);
@@ -1235,12 +1282,18 @@ export function toMusicXML(score) {
               const fifths = m.key;
               return { pos: m.pos, xml: `<key><fifths>${interval ? writtenKey(fifths, interval) : fifths}</fifths>${m.mode && m.mode !== "major" ? `<mode>${m.mode}</mode>` : ""}</key>` };
             }),
+            // A \\time inside the bar (#408): the next bar's metre, where it is written.
+            ...[M.oddBarWriting(score, b)].filter((w) => k === 0 && w?.kind === "time").map((w) => ({
+              pos: w.pos,
+              xml: `<time><beats>${w.parts?.length > 1 ? w.parts.join("+") : w.time[0]}</beats><beat-type>${w.time[1]}</beat-type></time>`,
+            })),
           ].sort((x, y) => x.pos - y.pos);
+          const order = (m) => (m.xml.startsWith("<key") ? 0 : m.xml.startsWith("<time") ? 1 : 2);
           const start = M.barStart(score, b);
           for (const item of lane.filter((x) => x.bar === b)) {
             const due = mids.filter((m) => !m.done && m.pos <= item.t - start + 1e-6);
             // Keys first, then clefs, as MusicXML orders the attributes.
-            if (due.length) out.push(`<attributes>${[...due.filter((m) => m.xml.startsWith("<key")), ...due.filter((m) => !m.xml.startsWith("<key"))].map((m) => m.xml).join("")}</attributes>`);
+            if (due.length) out.push(`<attributes>${[...due].sort((x, y) => order(x) - order(y)).map((m) => m.xml).join("")}</attributes>`);
             for (const m of due) m.done = true;
             // The figures of a figured bass under the part, before the note of its last staff they start on.
             if (p.figures != null && v === 0 && k === p.staves.length - 1) {
@@ -1254,8 +1307,13 @@ export function toMusicXML(score) {
             // A note drawn on the part's other staff (\\change Staff) is that staff's <staff>, in its own voice.
             const crossed = staffNo ? p.staves.findIndex((u) => score.staves[u].id && score.staves[u].id === M.crossOf(score, item.lane, item.ev)) : -1;
             const sung = M.lyricsLane(score, item.lane) === item.lane;
-            out.push(...noteXml(lane, item, { voice, staffNo: crossed >= 0 ? crossed + 1 : staffNo, dur, barLength, interval, drums, firstLane: v === 0, sung, part: p.id }));
+            // The name of the voice the words are sung to (\\lyricsto "alto"), on its <lyric>s.
+            const sungName = sung && M.isLower(score, item.lane) ? score.staves[M.upperOf(score, item.lane)].lyricsName ?? null : null;
+            out.push(...noteXml(lane, item, { voice, staffNo: crossed >= 0 ? crossed + 1 : staffNo, dur, barLength, interval, drums, firstLane: v === 0, sung, sungName, part: p.id }));
           }
+          // What falls at the bar's very end (a \\time that ends it): after its last note.
+          const late = mids.filter((m) => !m.done);
+          if (late.length) out.push(`<attributes>${late.sort((x, y) => order(x) - order(y)).map((m) => m.xml).join("")}</attributes>`);
         });
       });
       if (p === parts[0] && change?.jump) {
@@ -1333,7 +1391,7 @@ function fingeringText(notations) {
 }
 
 /** One event of a lane as <note> elements (a chord's heads one after the other), with its directions before. */
-function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, firstLane, sung, part }) {
+function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, firstLane, sung, sungName = null, part }) {
   const { ev, i } = item;
   const before = lane[i - 1]?.ev;
   const after = lane[i + 1]?.ev;
@@ -1456,7 +1514,7 @@ function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, 
     if (p && technical(k)) notations.push(`<technical>${technical(k)}</technical>`);
     if (notations.length) n.push(`<notations>${notations.join("")}</notations>`);
     // The words, under the voice the staff sings them to.
-    if (k === 0 && p && sung) n.push(...lyricsXml(lane, i));
+    if (k === 0 && p && sung) n.push(...lyricsXml(lane, i, sungName));
     // A spacer takes its time and is not printed.
     out.push(`<note${ev.rest && ev.spacer ? ' print-object="no"' : ""}>${n.join("")}</note>`);
   });
@@ -1478,8 +1536,26 @@ function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, 
   return out;
 }
 
+/** Paper sizes in mm, height × width. */
+const PAPER_MM = { a4: [297, 210], letter: [279.4, 215.9], a3: [420, 297], a5: [210, 148], legal: [355.6, 215.9], tabloid: [431.8, 279.4] };
+
+/**
+ * <defaults> for the other programs: the staff's size (40 tenths a staff's
+ * height), the paper and its margins, when the score sets them.
+ */
+function defaultsXml(paper) {
+  const mm = ((paper.staffSize ?? 20) * 25.4) / 72;
+  const tenths = (x) => Math.round((x * 40 * 100) / mm) / 100;
+  const size = PAPER_MM[paper.size ?? "a4"];
+  const margin = (field, name) => (paper[field] != null ? `<${name}>${tenths(paper[field])}</${name}>` : "");
+  const margins = margin("left", "left-margin") + margin("right", "right-margin") + margin("top", "top-margin") + margin("bottom", "bottom-margin");
+  if (!paper.staffSize && !paper.size && !margins) return [];
+  const layout = size ? `<page-layout><page-height>${tenths(size[0])}</page-height><page-width>${tenths(size[1])}</page-width>${margins ? `<page-margins type="both">${["left", "right", "top", "bottom"].map((f) => `<${f}-margin>${tenths(paper[f] ?? 10)}</${f}-margin>`).join("")}</page-margins>` : ""}</page-layout>` : "";
+  return [`<defaults><scaling><millimeters>${Math.round(mm * 1000) / 1000}</millimeters><tenths>40</tenths></scaling>${layout}</defaults>`];
+}
+
 /** An event's syllables, a <lyric> a verse. */
-function lyricsXml(lane, i) {
+function lyricsXml(lane, i, name = null) {
   const out = [];
   const ev = lane[i].ev;
   const syllables = [ev.lyric, ...(ev.verses ?? [])];
@@ -1491,7 +1567,7 @@ function lyricsXml(lane, i) {
     for (let j = i - 1; j >= 0 && !previous; j--) previous = (verse === 1 ? lane[j].ev.lyric : lane[j].ev.verses?.[verse - 2]) ?? null;
     const inside = Boolean(previous?.hyphen);
     const syllabic = inside ? (syl.hyphen ? "middle" : "end") : syl.hyphen ? "begin" : "single";
-    out.push(`<lyric number="${verse}"><syllabic>${syllabic}</syllabic><text>${xml(syl.text)}</text>${syl.extend ? "<extend/>" : ""}</lyric>`);
+    out.push(`<lyric number="${verse}"${name ? ` name="${xml(name)}"` : ""}><syllabic>${syllabic}</syllabic><text>${xml(syl.text)}</text>${syl.extend ? "<extend/>" : ""}</lyric>`);
   });
   return out;
 }
