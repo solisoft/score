@@ -10,6 +10,15 @@
 class Changelog
   static def days
     [
+      {"date": "2026-10-26", "entries": [{
+        "area": "editor",
+        "title": "Chord symbols stay in sight while you edit them",
+        "text": "The small palette over a selected note (arrows, accidentals, marks) now opens under the note "
+        + "when chord symbols stand over the staff, and steps away while a chord, a lyric or a text is typed, so "
+        + "it no longer hides them. Under a line of chord names, a chord written on the note itself (^\"Am7\") "
+        + "is the one Ctrl+K shows and edits; once typed, it moves onto the line, drawn like the other chord "
+        + "names."
+      }]},
       {"date": "2026-10-25", "entries": [
         {
           "area": "engine",

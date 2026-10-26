@@ -23,6 +23,12 @@ def caret_on(token)
   sleep(0.4)
 end
 
+# Where the note palette stands: "above" or "below" the selected note, or "hidden".
+def palette_side
+  evaluate("(() => { const p = document.querySelector('.studio-palette');"
+  + " return !p || p.hidden ? 'hidden' : p.dataset.side; })()")
+end
+
 # Types `words` into the open words box, then presses `key` ("Enter", " ").
 def type_chord(words, key)
   evaluate("(() => { const box = document.querySelector('.studio-words'); box.value = #{JSON.stringify(words)};"
@@ -311,6 +317,35 @@ describe("The playground, in a browser") do
     sleep(0.3)
     type_chord("blue", "Enter")
     assert_eq(playground_text(), before)
+    assert_no_page_errors()
+  end
+
+  test("the note palette stands under a note with chord symbols over it, and leaves while one is typed (#416)") do
+    type_source("{ \\time 4/4 c'4 d'4 e'4 f'4 | g'1 }")
+    caret_on("d'4")
+    # No chord yet: the palette is over the note.
+    assert_eq(palette_side(), "above")
+    evaluate("document.querySelector(\"[data-act='chord']\").click()")
+    sleep(0.3)
+    # Typing a chord: the palette is out of the way of the words box.
+    assert_eq(palette_side(), "hidden")
+    type_chord("Am7", "Enter")
+    assert_contains(playground_text(), "d'4^\"Am7\"")
+    # Back on the note: the palette is under it, the chord over it seen.
+    caret_on("d'4")
+    assert_eq(palette_side(), "below")
+    note_bottom = evaluate("(() => { const st = document.getElementById('studio').studio;"
+    + " const box = document.querySelector('.studio-svg svg').getBoundingClientRect();"
+    + " const scale = box.width / st.view.width;"
+    + " const k = st.items.findIndex((it) => it.staff === st.sel.staff && it.index === 1);"
+    + " const item = st.view.items.find((it) => it.item === k);"
+    + " return box.top + (item.box[3] - (st.view.y0 ?? 0)) * scale; })()")
+    palette_top = evaluate("document.querySelector('.studio-palette').getBoundingClientRect().top")
+    assert(palette_top > note_bottom, "the palette starts under the note: #{palette_top} > #{note_bottom}")
+    # A note of a staff with no chord symbol keeps it over.
+    type_source("{ \\time 4/4 c'4 d'4 e'4 f'4 | g'1 }")
+    caret_on("e'4")
+    assert_eq(palette_side(), "above")
     assert_no_page_errors()
   end
 

@@ -7,7 +7,7 @@ const COLOURS = { selection: "#b4373a", head: "#e0662a", cursor: "#2563c9", play
 /** Answers the drawing: the score engraved, and what goes over it. */
 export function install(ctx) {
   const { root, options, sheet, svgHost, overlay, palette, playhead, st, loaded, M, editor_view_lit } = ctx;
-  const { range, showInText, placeWords, tellPlace, placePeers, placeMarkers, placeGhost, drawRoll, showState, refuse } = ctx.call;
+  const { range, showInText, placeWords, wordsOpen, tellPlace, placePeers, placeMarkers, placeGhost, drawRoll, showState, refuse } = ctx.call;
 
   // ---- Drawing ------------------------------------------------------------------
 
@@ -87,22 +87,26 @@ export function install(ctx) {
     return out;
   }
 
-  /** The note palette, beside the selection: above it, kept inside the sheet. */
+  /** The note palette, beside the selection: above it, kept inside the sheet;
+   *  below it where chord symbols stand over the staff (its own, or a line of
+   *  chord names), so it never hides them. Hidden while words are typed. */
   function placePalette() {
     const g = geometry();
     const sel = st.sel;
     const hide = () => {
       palette.hidden = true;
     };
-    if (!g || !st.score || st.input.on || st.playing || !sel || sel.bars || sel.t0 !== sel.t1) return hide();
+    if (!g || !st.score || st.input.on || st.playing || !sel || sel.bars || sel.t0 !== sel.t1 || wordsOpen()) return hide();
     const starts = M.starts(st.score.staves[sel.staff]);
     const k = M.drawnItem(st.items, st.items.findIndex((it) => it.staff === sel.staff && starts[it.index] === sel.t0));
     const item = st.view?.items.find((it) => it.item === k);
     if (!item) return hide();
-    const corner = g.at(item.box[0], item.box[1]);
+    const below = M.chordsOver(st.score, sel.staff);
+    const corner = g.at(item.box[0], item.box[below ? 3 : 1]);
     palette.hidden = false;
+    palette.dataset.side = below ? "below" : "above";
     palette.style.left = `${Math.max(4, corner.x - 10)}px`;
-    palette.style.top = `${Math.max(4, corner.y - 48)}px`;
+    palette.style.top = below ? `${corner.y + 10}px` : `${Math.max(4, corner.y - 48)}px`;
   }
 
   function placeOverlay() {

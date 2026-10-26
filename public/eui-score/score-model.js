@@ -2181,6 +2181,22 @@ export function staffLanes(score) {
   return score.staves.map((_, s) => s).filter((s) => !isLower(score, s));
 }
 
+/**
+ * Whether chord symbols stand over lane `s`'s staff: a chord written on any
+ * of its lanes' notes, or a line of chord names (addChordStaff) right above
+ * it. The editor's note palette then opens under the note, not over them.
+ */
+export function chordsOver(score, s) {
+  const u = upperOf(score, s);
+  if (!score.staves[u] || score.staves[u].chords) return false;
+  const lanes = [u];
+  for (let k = u + 1; k < score.staves.length && isLower(score, k); k++) lanes.push(k);
+  if (lanes.some((k) => score.staves[k].events.some((ev) => ev.chord))) return true;
+  const n = staffLanes(score).indexOf(u);
+  const above = n > 0 ? score.staves[staffLanes(score)[n - 1]] : null;
+  return Boolean(above?.chords);
+}
+
 /** Which staff lane `s` is on, counted from 0. */
 export function staffNumber(score, s) {
   return staffLanes(score).indexOf(upperOf(score, s));

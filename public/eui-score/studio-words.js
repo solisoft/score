@@ -36,8 +36,12 @@ export function install(ctx) {
     const lane = line >= 0 ? line : t.s;
     const at = M.eventAt(st.score.staves[lane], time);
     const ev = at >= 0 ? st.score.staves[lane].events[at] : null;
+    // A chord symbol written on the note itself (^"Am7"), under a line of
+    // chord names: it is the one shown and edited, and it moves onto the
+    // line when typed, a chord name like the others (#416).
+    const noteChord = kind === "chord" && line >= 0 ? st.score.staves[t.s].events[t.i].chord || null : null;
     const box = Object.assign(document.createElement("input"), { type: "text", className: `studio-words studio-words-${kind}` });
-    box.value = ev ? wordsOf(ev, kind) : "";
+    box.value = noteChord ?? (ev ? wordsOf(ev, kind) : "");
     box.placeholder = { lyric: "syllable", chord: "Am7", text: "solo", expression: "dolce", figure: "6 4", fret: "x32010" }[kind];
     box.setAttribute("aria-label", {
       lyric: "Syllable — Space next note, - hyphen, Enter done",
@@ -48,7 +52,9 @@ export function install(ctx) {
       fret: "Guitar chord, low E first: x32010 — Enter done",
     }[kind]);
     sheet.appendChild(box);
-    wordsBox = { box, kind, s: lane, t: time, anchor: t.s };
+    wordsBox = { box, kind, s: lane, t: time, anchor: t.s, noteChord: noteChord ? { s: t.s, i: t.i } : null };
+    // The note palette steps out of the box's way while it is open.
+    ctx.call.placeOverlay();
     placeWords();
     box.focus();
     box.select();
@@ -92,9 +98,13 @@ export function install(ctx) {
 
   function commitWords(extra = {}) {
     if (!wordsBox) return;
-    const { box, kind, s, t } = wordsBox;
+    const { box, kind, s, t, noteChord } = wordsBox;
     const value = box.value;
+    wordsBox.noteChord = null;
     edit((score) => {
+      // The note's own chord symbol leaves it: the line holds it now. A
+      // value the line refuses refuses the whole edit, the note's kept.
+      if (noteChord) M.setChordSymbol(score, noteChord.s, noteChord.i, "");
       const i = M.eventAt(score.staves[s], t);
       if (kind === "lyric") {
         if (score.staves[s].events[i].rest) return;
@@ -150,6 +160,13 @@ export function install(ctx) {
   function closeWords() {
     wordsBox?.box.remove();
     wordsBox = null;
+    // The note palette, hidden while the words were typed, comes back.
+    ctx.call.placeOverlay();
+  }
+
+  /** Whether words are being typed over the score (the palette stays out of their way). */
+  function wordsOpen() {
+    return wordsBox !== null;
   }
 
   function placeWords() {
@@ -173,5 +190,5 @@ export function install(ctx) {
     wordsBox.box.style.top = below ? `${corner.y + 8 + line}px` : `${Math.max(0, corner.y - 36)}px`;
   }
 
-  return { openWords, placeWords };
+  return { openWords, placeWords, wordsOpen };
 }
