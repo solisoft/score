@@ -2171,6 +2171,38 @@ export function laneOfVoice(score, s, voice) {
   return voiceLanes(score, s)[voice - 1] ?? -1;
 }
 
+/**
+ * Voices 1 and 2 of lane `s`'s staff exchanged over bars `a`…`b` (#417):
+ * what voice 1 holds there (notes, rests, marks) goes to voice 2 and the
+ * other way round, the stems turning with them. For voices written crossed,
+ * the high notes under the low ones. Refused on a staff of one voice, and
+ * where a note of either voice crosses the selection's edge.
+ */
+export function swapVoices(score, s, a, b) {
+  const one = laneOfVoice(score, s, 1);
+  const two = laneOfVoice(score, s, 2);
+  if (two < 0) throw new Error("This staff has one voice: add a second voice to swap them");
+  const t0 = barStart(score, Math.min(a, b));
+  const t1 = barStart(score, Math.max(a, b) + 1);
+  const span = (lane) => {
+    const staff = score.staves[lane];
+    const at = starts(staff);
+    const i = at.indexOf(t0);
+    let j = i;
+    while (j >= 0 && j + 1 < staff.events.length && at[j + 1] < t1) j++;
+    if (i < 0 || at[j] + ticksOf(staff.events[j]) !== t1) {
+      throw new Error("A note of a voice crosses the selection's first or last bar line: select whole bars of both voices");
+    }
+    return [i, j];
+  };
+  const [a1, b1] = span(one);
+  const [a2, b2] = span(two);
+  const first = copy(score, one, a1, b1);
+  const second = copy(score, two, a2, b2);
+  paste(score, one, t0, second);
+  paste(score, two, t0, first);
+}
+
 /** The staff's second voice's lane, or −1. */
 export function lowerOf(score, s) {
   return laneOfVoice(score, s, 2);

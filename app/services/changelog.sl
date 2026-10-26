@@ -10,15 +10,34 @@
 class Changelog
   static def days
     [
-      {"date": "2026-10-26", "entries": [{
-        "area": "editor",
-        "title": "Chord symbols stay in sight while you edit them",
-        "text": "The small palette over a selected note (arrows, accidentals, marks) now opens under the note "
-        + "when chord symbols stand over the staff, and steps away while a chord, a lyric or a text is typed, so "
-        + "it no longer hides them. Under a line of chord names, a chord written on the note itself (^\"Am7\") "
-        + "is the one Ctrl+K shows and edits; once typed, it moves onto the line, drawn like the other chord "
-        + "names."
-      }]},
+      {"date": "2026-10-26", "entries": [
+        {
+          "area": "editor",
+          "title": "Swap voices 1 and 2",
+          "sample": "swapped-voices",
+          "text": "Two voices written crossed (the high notes in voice 2, the low in voice 1) draw their stems "
+          + "into each other. Edit › Swap voices 1 and 2, or the button under the voices in the toolbox, exchanges "
+          + "what the two voices hold in the selected bars: the high notes go to voice 1, stems up, the low to "
+          + "voice 2, stems down. One undo puts them back."
+        },
+        {
+          "area": "site",
+          "title": "The editor opens faster on a slow connection",
+          "text": "The score editor is some forty files, and each asked for the next only once it had arrived: on a "
+          + "slow or distant connection that was dozens of round trips one after another before the score "
+          + "showed. The editor's page now names them all at once, with the engraver, and the browser fetches "
+          + "them together."
+        },
+        {
+          "area": "editor",
+          "title": "Chord symbols stay in sight while you edit them",
+          "text": "The small palette over a selected note (arrows, accidentals, marks) now opens under the note "
+          + "when chord symbols stand over the staff, and steps away while a chord, a lyric or a text is typed, so "
+          + "it no longer hides them. Under a line of chord names, a chord written on the note itself (^\"Am7\") "
+          + "is the one Ctrl+K shows and edits; once typed, it moves onto the line, drawn like the other chord "
+          + "names."
+        }
+      ]},
       {"date": "2026-10-25", "entries": [
         {
           "area": "engine",

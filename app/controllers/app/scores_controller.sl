@@ -67,6 +67,7 @@ class AppScoresController < AppBaseController
     @figure = ScoreSvg.figure(@source, 1000, 7)
     @examples = ScoreLibrary.examples
     @eui_version = ScoreAssets.version
+    @studio_preloads = ScoreAssets.studio_preloads
     @editing_score = @score
     @_ai_entry(current_user())
     @ai_request_limit = SCORE_SUGGESTION_REQUEST_LIMIT

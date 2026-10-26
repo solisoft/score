@@ -344,6 +344,12 @@ export function install(ctx) {
         const t = need();
         M.setPedal(score, t.s, t.i, data.how);
       });
+      // Edit ▸ Swap voices 1 and 2: crossed voices put back, high notes in voice 1 (#417).
+      case "swap-voices": return edit((score) => {
+        const [a, b] = selectedBars();
+        M.swapVoices(score, staffOf(), a, b);
+        say(`Voices 1 and 2 swapped in bar${a === b ? ` ${barNo(a)}` : `s ${barNo(a)}–${barNo(b)}`}`);
+      });
       case "repeat": return edit((score) => {
         const [a, b] = selectedBars();
         M.toggleRepeat(score, a, b);

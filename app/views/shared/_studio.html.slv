@@ -2,7 +2,15 @@
     studio.js (startStudio) drives it through its data-* attributes.
     Locals: `examples` (the gallery, for the Examples menu), `figure` (the
     first picture, engraved on the server so the page shows a score before
-    the module loads), `source` (the LilyPond it opens with). %>
+    the module loads), `source` (the LilyPond it opens with). The page's
+    `@studio_preloads` (ScoreAssets.studio_preloads, #418) names every module
+    the editor loads as it starts, and the engraver, so the browser fetches
+    them together instead of one after another. %>
+<% for module_href in studio_preloads["modules"] %>
+<link rel="modulepreload" href="<%= module_href %>">
+<% end %>
+<link rel="modulepreload" href="<%= studio_preloads["engine"] %>">
+<link rel="preload" href="<%= studio_preloads["wasm"] %>" as="fetch" type="application/wasm" crossorigin>
 <div class="studio" id="studio" data-no-nav>
   <%# The menu bar: menus as an application has them (File, Edit, View,
       Insert, Play — each item its shortcut), and the few commands used all
@@ -79,6 +87,7 @@
             <hr>
             <button type="button" role="menuitem" data-act="transpose" data-scope="selection">Transpose the selection</button>
             <button type="button" role="menuitem" data-act="transpose" data-scope="score">Transpose the score</button>
+            <button type="button" role="menuitem" data-act="swap-voices">Swap voices 1 and 2 <kbd>the selected bars</kbd></button>
             <hr>
             <button type="button" role="menuitem" data-act="drum-grid">Drum grid… <kbd>a drum staff's bar</kbd></button>
             <button type="button" role="menuitem" data-act="arpeggiate">Arpeggiate the selected chords…</button>
@@ -563,6 +572,9 @@
         </div>
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="voice-remove" title="Take the voice the cursor is in away, its notes with it; from voice 1, the staff's last voice">Remove a voice</button>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="swap-voices" title="Voices 1 and 2 exchanged in the selected bars: crossed voices put back, the high notes in voice 1">Swap voices 1 and 2</button>
         </div>
         <p class="tool-hint">Voices 1 and 3 have their stems up, 2 and 4 down, on one staff. A bar shows its voices where one past the first has notes.</p>
       </details>

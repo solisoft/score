@@ -9,6 +9,7 @@ class PlaygroundController < Controller
     @examples = ScoreLibrary.examples
     @figure = ScoreSvg.figure(@source, 1000, 7)
     @eui_version = ScoreAssets.version
+    @studio_preloads = ScoreAssets.studio_preloads
     @title = "Playground"
     @description = "Type LilyPond, and eui-score engraves it in your browser as you type."
   end

@@ -62,6 +62,21 @@ describe("PlaygroundController") do
       assert_contains(body, "/eui-score/studio.js?v=#{version}")
     end
 
+    test("names every module the editor starts with, and the engraver, for the browser to fetch together (#418)") do
+      page = res_body(get("/playground"))
+      version = ScoreAssets.version
+      ["studio.js", "studio-draw.js", "score-model.js", "player.js", "audio-ui.js", "pitch.js"].each do |name|
+        assert_contains(page, "<link rel=\"modulepreload\" href=\"/eui-score/#{name}?v=#{version}\">")
+      end
+      wasm = File.read("public/eui-score/wasm.version").trim
+      assert_contains(page, "<link rel=\"modulepreload\" href=\"/eui-score/eui_score_web.js?v=#{wasm}\">")
+      assert_contains(
+        page,
+        "href=\"/eui-score/eui_score_web_bg.wasm?v=#{wasm}\" as=\"fetch\" type=\"application/wasm\" crossorigin>"
+      )
+      assert_not(page.contains("modulepreload\" href=\"/eui-score/musicxml.js"), "MusicXML loads when asked for")
+    end
+
     test("opens a gallery piece or a syntax snippet") do
       get("/playground?source=guitar/blues")
       assert_contains(assigns()["source"], "Blues in E")

@@ -349,6 +349,32 @@ describe("The playground, in a browser") do
     assert_no_page_errors()
   end
 
+  test("Edit › Swap voices 1 and 2 puts crossed voices back, the high notes in voice 1, one undo away (#417)") do
+    type_source("{ \\time 4/4 d'1 | << { f4 f c' c' } \\\\ { f'4 f' d' f' } >> | e'1 }")
+    crossed = playground_text()
+    caret_on("c'4")
+    evaluate("document.querySelector(\"[data-act='swap-voices']\").click()")
+    sleep(0.5)
+    swapped = playground_text()
+    assert_ne(swapped, crossed)
+    # Voice 1 (first in the << >>) now opens on the high f', voice 2 on the low f.
+    first = swapped.index_of("f'4")
+    second = swapped.index_of("f4")
+    assert(first >= 0 && second >= 0 && first < second, "the high notes come first: #{swapped}")
+    evaluate("document.querySelector(\"[data-act='undo']\").click()")
+    sleep(0.5)
+    assert_eq(playground_text(), crossed)
+    # A staff of one voice: refused, said, nothing changed.
+    type_source("{ c'4 d'4 e'4 f'4 | g'1 }")
+    single = playground_text()
+    caret_on("d'4")
+    evaluate("document.querySelector(\"[data-act='swap-voices']\").click()")
+    sleep(0.4)
+    assert_eq(playground_text(), single)
+    assert_contains(evaluate("document.querySelector('.studio').innerText"), "one voice")
+    assert_no_page_errors()
+  end
+
   test("stems turned, a beam by hand and a note spelled the other way, from the keys (#375)") do
     type_source("{ c''8 d'' e'' f'' cis''2 | g''1 }")
     caret_on("cis''2")
