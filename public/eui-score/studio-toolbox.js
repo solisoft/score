@@ -4,6 +4,24 @@
 // (showState, fillFields) and the score's settings their fields change
 // (onField).
 
+/** The Playback and Recording panels' width, as the CSS has it. */
+const PANEL_WIDTH = 340;
+
+/** The sections open until the person folds or opens them: those written with all the time. */
+export const OPEN_AT_FIRST = new Set(["mode", "duration", "notes", "pitch"]);
+
+/** Whether the toolbox's section `name` is open: as the person left it (`folded`, name → folded), or as at first. */
+export function sectionOpen(name, folded) {
+  return name in folded ? !folded[name] : OPEN_AT_FIRST.has(name);
+}
+
+/** The section whose tools a selection needs, or null: the bars' for bars, the words' on a line of chord names. */
+export function neededSection(score, sel) {
+  if (!score || !sel) return null;
+  if (score.staves[sel.staff]?.chords) return "words";
+  return sel.bars ? "bars-and-staves" : null;
+}
+
 /** The toolbox and the menus set up; answers what shows the state in them, and what their fields change. */
 export function install(ctx) {
   const { root, state, notice, st, M, K } = ctx;
@@ -22,21 +40,61 @@ export function install(ctx) {
     for (const el of root.querySelectorAll("[title]")) el.title = K.keyLabel(el.title, true);
   }
 
-  // The toolbox's sections fold, and stay as the person left them.
+  // The toolbox's sections fold, and stay as the person left them; until
+  // then, those written with all the time are open and the rest folded
+  // (sectionOpen). Only a fold by hand is kept: a section opened for a
+  // selection (showState) is not.
   const FOLDED = "eui-score-studio-folded";
   let folded = {};
   try {
     folded = JSON.parse(localStorage.getItem(FOLDED) || "{}");
   } catch (error) {}
-  for (const section of root.querySelectorAll("details[data-section]")) {
-    if (folded[section.dataset.section]) section.open = false;
-    section.addEventListener("toggle", () => {
-      folded[section.dataset.section] = !section.open;
+  const sections = [...root.querySelectorAll("details[data-section]")];
+  for (const section of sections) {
+    section.open = sectionOpen(section.dataset.section, folded);
+    section.querySelector("summary").addEventListener("click", () => {
+      // Clicked, it is about to change: folded if it was open.
+      folded[section.dataset.section] = section.open;
       try {
         localStorage.setItem(FOLDED, JSON.stringify(folded));
       } catch (error) {}
     });
   }
+  let neededBefore = null;
+
+  // The Playback and Recording panels (#419) open under the arrow that
+  // opens them; on a phone, as a sheet from the bottom (the CSS's).
+  const narrow = matchMedia("(max-width: 899px)");
+  for (const panel of root.querySelectorAll(".studio-panel[popover]")) {
+    panel.addEventListener("beforetoggle", (event) => {
+      if (event.newState !== "open") return;
+      const opener = root.querySelector(`[popovertarget="${panel.id}"]`)?.closest(".studio-split");
+      if (!opener || narrow.matches) {
+        panel.style.removeProperty("top");
+        panel.style.removeProperty("left");
+        return;
+      }
+      const at = opener.getBoundingClientRect();
+      const width = Math.min(PANEL_WIDTH, innerWidth - 16);
+      panel.style.top = `${Math.round(at.bottom + 6)}px`;
+      panel.style.left = `${Math.round(Math.max(8, Math.min(at.left, innerWidth - width - 8)))}px`;
+    });
+  }
+  // The editor's own keys and presses come first (Escape stops note input; a
+  // press on the score selects): they close an open panel too, back on its arrow.
+  const openPanel = () => root.querySelector(".studio-panel:popover-open");
+  document.addEventListener("keydown", (event) => {
+    const panel = event.key === "Escape" && openPanel();
+    if (!panel) return;
+    event.stopPropagation();
+    event.preventDefault();
+    panel.hidePopover();
+    root.querySelector(`[popovertarget="${panel.id}"]`)?.focus();
+  }, { capture: true, signal: ctx.signal });
+  document.addEventListener("pointerdown", (event) => {
+    const panel = openPanel();
+    if (panel && !panel.contains(event.target) && !event.target.closest?.(`[popovertarget="${panel.id}"]`)) panel.hidePopover();
+  }, { capture: true, signal: ctx.signal });
 
   // The drum palette, for a drum staff: a button for each drum of the kit.
   const drumRow = root.querySelector("[data-drums]");
@@ -71,6 +129,14 @@ export function install(ctx) {
 
   function showState() {
     root.classList.toggle("studio-input", st.input.on);
+    root.classList.toggle("studio-playing", Boolean(st.playing));
+    // The tools a selection needs, opened when it comes to them.
+    const needed = neededSection(st.score, st.sel);
+    if (needed !== neededBefore && needed) {
+      const section = sections.find((it) => it.dataset.section === needed);
+      if (section) section.open = true;
+    }
+    neededBefore = needed;
     root.classList.toggle("studio-text-only", !st.score);
     // File ▸ Print as PDF names the paper the PDF is printed on: the score's \paper.
     const paper = root.querySelector("[data-pdf-paper]");

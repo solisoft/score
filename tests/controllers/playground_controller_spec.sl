@@ -19,7 +19,11 @@ describe("PlaygroundController") do
       assert_contains(body, "data-act=\"zoom-in\">Larger <kbd>Ctrl++</kbd>")
       # Recording from a MIDI keyboard, its grid sixteenths to begin with.
       assert_contains(body, "data-act=\"record\" data-record aria-pressed=\"false\"")
-      assert_contains(body, "class=\"studio-record-group\"")
+      assert_contains(body, "class=\"studio-split studio-record-group\"")
+      # The grid and the dynamics behind the arrow beside Rec, the playback behind Play's (#419).
+      assert_contains(body, "popovertarget=\"studio-recording\"")
+      assert_contains(body, "popovertarget=\"studio-playback\"")
+      assert_not(body.includes?("data-section=\"playback\""), "no Playback section in the toolbox")
       assert_contains(body, "<option value=\"sixteenth\" selected>sixteenths</option>")
       assert_contains(body, "<option value=\"eighth-triplet\">eighth triplets</option>")
       assert_contains(body, "data-record-dynamics checked")

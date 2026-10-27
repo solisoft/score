@@ -190,21 +190,31 @@
         <% if locals["app"] %>
           <button type="button" class="studio-menu" data-act="midi-view" data-midi-button title="Switch between the score and the MIDI view" aria-pressed="false">MIDI</button>
         <% end %>
-        <button type="button" class="studio-menu studio-play" data-act="play" title="Play from the selection, or from the start; pause (Space)">▶ Play</button>
-        <button type="button" class="studio-menu" data-act="stop" title="Stop, back to the start" hidden>■ Stop</button>
-        <%# Recording from the MIDI keyboard chosen in Mode: the grid it is fitted to, and its dynamics. %>
-        <span class="studio-record-group" role="group" aria-label="Recording">
-          <button type="button" class="studio-menu studio-record" data-act="record" data-record aria-pressed="false" title="Play live on the MIDI keyboard: from the selected bar of the selected staff, after a bar of count-in (R)">● Rec</button>
-          <select class="studio-menu-select" data-quantize aria-label="Quantize" title="Quantize: the finest step a recording keeps; each note's start and end move to it">
-            <option value="quarter">quarters</option>
-            <option value="eighth">eighths</option>
-            <option value="eighth-triplet">eighth triplets</option>
-            <option value="sixteenth" selected>sixteenths</option>
-            <option value="sixteenth-triplet">sixteenth triplets</option>
-            <option value="thirty-second">32nds</option>
-          </select>
-          <label class="studio-menu-check" title="Write the dynamics of how hard the keys are struck, where they change"><input type="checkbox" data-record-dynamics checked> Dynamics</label>
+        <%# Play, and beside it the arrow to the Playback panel (#419). %>
+        <span class="studio-split">
+          <button type="button" class="studio-menu studio-play" data-act="play" title="Play from the selection, or from the start; pause (Space)">▶ Play</button>
+          <button type="button" class="studio-menu studio-play studio-split-more" popovertarget="studio-playback" aria-label="Playback settings" title="Speed, loop, metronome, MIDI">▾</button>
         </span>
+        <button type="button" class="studio-menu" data-act="stop" title="Stop, back to the start" hidden>■ Stop</button>
+        <%# Recording from the MIDI keyboard chosen under Playback ▸ MIDI; the
+            arrow beside it, the grid it is fitted to, and its dynamics. %>
+        <span class="studio-split studio-record-group" role="group" aria-label="Recording">
+          <button type="button" class="studio-menu studio-record" data-act="record" data-record aria-pressed="false" title="Play live on the MIDI keyboard: from the selected bar of the selected staff, after a bar of count-in (R)">● Rec</button>
+          <button type="button" class="studio-menu studio-split-more" popovertarget="studio-recording" aria-label="Recording settings" title="How a recording is written">▾</button>
+        </span>
+        <div class="studio-panel studio-recording" id="studio-recording" popover aria-label="Recording">
+          <label class="tool-field" title="The finest step a recording keeps; each note's start and end move to it">Fit notes to
+            <select data-quantize aria-label="Quantize">
+              <option value="quarter">quarters</option>
+              <option value="eighth">eighths</option>
+              <option value="eighth-triplet">eighth triplets</option>
+              <option value="sixteenth" selected>sixteenths</option>
+              <option value="sixteenth-triplet">sixteenth triplets</option>
+              <option value="thirty-second">32nds</option>
+            </select>
+          </label>
+          <label class="tool-check" title="Write the dynamics of how hard the keys are struck, where they change"><input type="checkbox" data-record-dynamics checked> Write the dynamics played</label>
+        </div>
         <span class="studio-zoom">
           <button type="button" class="studio-menu" data-act="zoom-out" title="Smaller (Ctrl+−)" aria-label="Zoom out">−</button>
           <span data-zoom-label>100 %</span>
@@ -212,101 +222,116 @@
         </span>
       </div>
     </div>
-    <div class="studio-state" aria-live="polite" data-state></div>
   </div>
+  <%# Playback (#419): opened from the arrow beside Play. Its fields keep
+      their data-* names, so the parts that read them find them as before. %>
+  <div class="studio-panel studio-playback" id="studio-playback" popover aria-label="Playback">
+    <section class="studio-panel-group">
+      <h3>Speed and key</h3>
+      <label class="tool-field">Speed
+        <select data-play="rate" title="Slower or faster, at the same pitch">
+          <option value="0.25">25 %</option><option value="0.5">50 %</option><option value="0.75">75 %</option><option value="0.9">90 %</option>
+          <option value="1" selected>100 %</option><option value="1.1">110 %</option><option value="1.25">125 %</option>
+          <option value="1.5">150 %</option><option value="1.75">175 %</option><option value="2">200 %</option>
+        </select>
+      </label>
+      <%# Practice (public/eui-score/practice.js, #391), kept in this browser. %>
+      <label class="tool-field" title="The keys moved as they are played, not in the score: the same speed, another key">Play transposed
+        <select data-practice="transpose">
+          <option value="-12">−12 semitones</option><option value="-11">−11 semitones</option><option value="-10">−10 semitones</option>
+          <option value="-9">−9 semitones</option><option value="-8">−8 semitones</option><option value="-7">−7 semitones</option>
+          <option value="-6">−6 semitones</option><option value="-5">−5 semitones</option><option value="-4">−4 semitones</option>
+          <option value="-3">−3 semitones</option><option value="-2">−2 semitones</option><option value="-1">−1 semitone</option>
+          <option value="0" selected>as written</option><option value="1">+1 semitone</option><option value="2">+2 semitones</option>
+          <option value="3">+3 semitones</option><option value="4">+4 semitones</option><option value="5">+5 semitones</option>
+          <option value="6">+6 semitones</option><option value="7">+7 semitones</option><option value="8">+8 semitones</option>
+          <option value="9">+9 semitones</option><option value="10">+10 semitones</option><option value="11">+11 semitones</option>
+          <option value="12">+12 semitones</option>
+        </select>
+      </label>
+      <label class="tool-check" title="Save the sound and Save as MIDI at the speed and in the key chosen here, not as written"><input type="checkbox" data-practice="exports"> Saved files too</label>
+    </section>
+    <section class="studio-panel-group">
+      <h3>Practice</h3>
+      <label class="tool-check"><input type="checkbox" data-play="loop"> Loop the selected bars</label>
+      <label class="tool-check"><input type="checkbox" data-play="metronome"> Metronome</label>
+      <label class="tool-field">Clicks
+        <select data-play="subdivide" title="The metronome's clicks: the beats, or the eighths or sixteenths between them, softer">
+          <option value="0">beats</option><option value="8">eighths</option><option value="16">sixteenths</option>
+        </select>
+      </label>
+      <label class="tool-check"><input type="checkbox" data-play="accent" checked> Accent the first beat</label>
+      <label class="tool-check"><input type="checkbox" data-play="count-in"> Count in one bar</label>
+      <details class="tool-practice" data-practice-box>
+        <summary>Practice loop</summary>
+        <label class="tool-check" title="The loop played slow first, faster each time round"><input type="checkbox" data-practice="ramp"> Faster each pass</label>
+        <div class="tool-practice-row">
+          <label>From <input type="number" data-practice="from" min="25" max="200" step="1" value="70"> %</label>
+          <label>add <input type="number" data-practice="step" min="1" max="100" step="1" value="5"> %</label>
+          <label>to <input type="number" data-practice="to" min="25" max="200" step="1" value="100"> %</label>
+        </div>
+        <label class="tool-field">At the target
+          <select data-practice="at"><option value="stop">stop</option><option value="loop">keep looping</option></select>
+        </label>
+        <output class="tool-practice-now" data-practice-now aria-live="polite">Set a loop (Play ▸ Loop, or the MIDI view's ruler), then Play.</output>
+      </details>
+    </section>
+    <section class="studio-panel-group">
+      <h3>MIDI</h3>
+      <label class="tool-field">MIDI keyboard
+        <select data-midi-in title="Play a key to write its note; keys held together make a chord">
+          <option value="">none</option><option value="find">find keyboards…</option>
+        </select>
+      </label>
+      <label class="tool-check" title="A keyboard that gives each note its own bend and pressure (MPE). Found by itself when the keyboard says so; tick it for one that does not"><input type="checkbox" data-mpe> MPE keyboard</label>
+      <label class="tool-field">Sound to
+        <select data-play="output" title="This browser's sounds, or a MIDI device: GarageBand, Logic…">
+          <option value="">this browser</option><option value="find">MIDI devices…</option>
+        </select>
+      </label>
+      <%# MIDI clock and latency (public/eui-score/midi-sync.js), kept in this browser. %>
+      <label class="tool-check" title="24 pulses a quarter, Start, Stop and Song Position, to the device in Sound to: GarageBand, Logic or a drum machine play in time"><input type="checkbox" data-sync="clock-out"> Send MIDI clock</label>
+      <label class="tool-check" title="Start, Stop and the tempo of a clock coming in on the MIDI keyboard chosen in Mode"><input type="checkbox" data-sync="clock-in"> Follow a MIDI clock</label>
+      <label class="tool-field" title="How late the device in Sound to sounds what it is sent: recordings are moved back by it">MIDI device latency, ms
+        <input type="number" min="-500" max="500" step="1" value="0" data-sync="delay">
+      </label>
+      <button type="button" class="tool tool-wide" data-act="midi-learn">MIDI learn…</button>
+    </section>
+    <section class="studio-panel-group">
+      <h3>Staves</h3>
+      <div class="tool-staves" data-play="staves" aria-label="Mute or solo a staff"></div>
+      <button type="button" class="tool tool-mixer" data-act="mixer" title="Each staff's volume, pan and effects, and the master">Mixer…</button>
+    </section>
+  </div>
+
 
   <div class="studio-body">
     <aside class="studio-toolbox" id="studio-toolbox" aria-label="Tools">
-      <details class="tool-section" data-section="mode" open>
-        <summary><h3>Mode</h3></summary>
-        <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="mode-select" title="Select and change notes (Esc)" aria-pressed="true">Select</button>
-          <button type="button" class="tool tool-wide" data-act="mode-input" title="Write notes at the cursor (N)" aria-pressed="false"><svg class="pen-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M15.5 3.5l5 5L9 20l-6.5 1.5L4 15z"/><path d="M13 6l5 5"/><path d="M4 15l5 5"/></svg> Note input</button>
-        </div>
-        <label class="tool-field">MIDI keyboard
-          <select data-midi-in title="Play a key to write its note; keys held together make a chord">
-            <option value="">none</option><option value="find">find keyboards…</option>
-          </select>
-        </label>
-        <label class="tool-check" title="A keyboard that gives each note its own bend and pressure (MPE). Found by itself when the keyboard says so; tick it for one that does not"><input type="checkbox" data-mpe> MPE keyboard</label>
-      </details>
-
-      <details class="tool-section" data-section="playback" open>
-        <summary><h3>Playback</h3></summary>
-        <label class="tool-field">Speed
-          <select data-play="rate" title="Slower or faster, at the same pitch">
-            <option value="0.25">25 %</option><option value="0.5">50 %</option><option value="0.75">75 %</option><option value="0.9">90 %</option>
-            <option value="1" selected>100 %</option><option value="1.1">110 %</option><option value="1.25">125 %</option>
-            <option value="1.5">150 %</option><option value="1.75">175 %</option><option value="2">200 %</option>
-          </select>
-        </label>
-        <%# Practice (public/eui-score/practice.js, #391), kept in this browser. %>
-        <label class="tool-field" title="The keys moved as they are played, not in the score: the same speed, another key">Play transposed
-          <select data-practice="transpose">
-            <option value="-12">−12 semitones</option><option value="-11">−11 semitones</option><option value="-10">−10 semitones</option>
-            <option value="-9">−9 semitones</option><option value="-8">−8 semitones</option><option value="-7">−7 semitones</option>
-            <option value="-6">−6 semitones</option><option value="-5">−5 semitones</option><option value="-4">−4 semitones</option>
-            <option value="-3">−3 semitones</option><option value="-2">−2 semitones</option><option value="-1">−1 semitone</option>
-            <option value="0" selected>as written</option><option value="1">+1 semitone</option><option value="2">+2 semitones</option>
-            <option value="3">+3 semitones</option><option value="4">+4 semitones</option><option value="5">+5 semitones</option>
-            <option value="6">+6 semitones</option><option value="7">+7 semitones</option><option value="8">+8 semitones</option>
-            <option value="9">+9 semitones</option><option value="10">+10 semitones</option><option value="11">+11 semitones</option>
-            <option value="12">+12 semitones</option>
-          </select>
-        </label>
-        <label class="tool-check" title="Save the sound and Save as MIDI at the speed and in the key chosen here, not as written"><input type="checkbox" data-practice="exports"> Saved files too</label>
-        <details class="tool-practice" data-practice-box>
-          <summary>Practice loop</summary>
-          <label class="tool-check" title="The loop played slow first, faster each time round"><input type="checkbox" data-practice="ramp"> Faster each pass</label>
-          <div class="tool-practice-row">
-            <label>From <input type="number" data-practice="from" min="25" max="200" step="1" value="70"> %</label>
-            <label>add <input type="number" data-practice="step" min="1" max="100" step="1" value="5"> %</label>
-            <label>to <input type="number" data-practice="to" min="25" max="200" step="1" value="100"> %</label>
+      <%# Mode and Duration stay in sight as the rest scrolls. %>
+      <div class="tool-sticky">
+        <details class="tool-section" data-section="mode" open>
+          <summary><h3>Mode</h3></summary>
+          <div class="tool-row">
+            <button type="button" class="tool tool-wide" data-act="mode-select" title="Select and change notes (Esc)" aria-pressed="true">Select</button>
+            <button type="button" class="tool tool-wide" data-act="mode-input" title="Write notes at the cursor (N)" aria-pressed="false"><svg class="pen-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M15.5 3.5l5 5L9 20l-6.5 1.5L4 15z"/><path d="M13 6l5 5"/><path d="M4 15l5 5"/></svg> Note input</button>
           </div>
-          <label class="tool-field">At the target
-            <select data-practice="at"><option value="stop">stop</option><option value="loop">keep looping</option></select>
-          </label>
-          <output class="tool-practice-now" data-practice-now aria-live="polite">Set a loop (Play ▸ Loop, or the MIDI view's ruler), then Play.</output>
         </details>
-        <label class="tool-check"><input type="checkbox" data-play="loop"> Loop the selected bars</label>
-        <label class="tool-check"><input type="checkbox" data-play="metronome"> Metronome</label>
-        <label class="tool-field">Clicks
-          <select data-play="subdivide" title="The metronome's clicks: the beats, or the eighths or sixteenths between them, softer">
-            <option value="0">beats</option><option value="8">eighths</option><option value="16">sixteenths</option>
-          </select>
-        </label>
-        <label class="tool-check"><input type="checkbox" data-play="accent" checked> Accent the first beat</label>
-        <label class="tool-check"><input type="checkbox" data-play="count-in"> Count in one bar</label>
-        <label class="tool-field">Sound to
-          <select data-play="output" title="This browser's sounds, or a MIDI device: GarageBand, Logic…">
-            <option value="">this browser</option><option value="find">MIDI devices…</option>
-          </select>
-        </label>
-        <%# MIDI clock and latency (public/eui-score/midi-sync.js), kept in this browser. %>
-        <label class="tool-check" title="24 pulses a quarter, Start, Stop and Song Position, to the device in Sound to: GarageBand, Logic or a drum machine play in time"><input type="checkbox" data-sync="clock-out"> Send MIDI clock</label>
-        <label class="tool-check" title="Start, Stop and the tempo of a clock coming in on the MIDI keyboard chosen in Mode"><input type="checkbox" data-sync="clock-in"> Follow a MIDI clock</label>
-        <label class="tool-field" title="How late the device in Sound to sounds what it is sent: recordings are moved back by it">MIDI device latency, ms
-          <input type="number" min="-500" max="500" step="1" value="0" data-sync="delay">
-        </label>
-        <button type="button" class="tool tool-wide" data-act="midi-learn">MIDI learn…</button>
-        <div class="tool-staves" data-play="staves" aria-label="Mute or solo a staff"></div>
-        <button type="button" class="tool tool-mixer" data-act="mixer" title="Each staff's volume, pan and effects, and the master">Mixer…</button>
-      </details>
 
-      <details class="tool-section" data-section="duration" open>
-        <summary><h3>Duration</h3></summary>
-        <div class="tool-row">
-          <button type="button" class="tool tool-glyph" data-act="duration" data-base="1" title="Whole note (7)">𝅝</button>
-          <button type="button" class="tool tool-glyph" data-act="duration" data-base="2" title="Half note (6)">𝅗𝅥</button>
-          <button type="button" class="tool tool-glyph" data-act="duration" data-base="4" title="Quarter note (5)">𝅘𝅥</button>
-          <button type="button" class="tool tool-glyph" data-act="duration" data-base="8" title="Eighth note (4)">𝅘𝅥𝅮</button>
-          <button type="button" class="tool tool-glyph" data-act="duration" data-base="16" title="Sixteenth note (3)">𝅘𝅥𝅯</button>
-          <button type="button" class="tool tool-glyph" data-act="duration" data-base="32" title="Thirty-second note (2)">𝅘𝅥𝅰</button>
-          <button type="button" class="tool" data-act="duration" data-base="64" title="Sixty-fourth note">64</button>
-          <button type="button" class="tool" data-act="duration" data-base="128" title="Hundred twenty-eighth note">128</button>
-          <button type="button" class="tool" data-act="dot" title="Dotted (.)">•</button>
-        </div>
-      </details>
+        <details class="tool-section" data-section="duration" open>
+          <summary><h3>Duration</h3></summary>
+          <div class="tool-row">
+            <button type="button" class="tool tool-glyph" data-act="duration" data-base="1" title="Whole note (7)">𝅝</button>
+            <button type="button" class="tool tool-glyph" data-act="duration" data-base="2" title="Half note (6)">𝅗𝅥</button>
+            <button type="button" class="tool tool-glyph" data-act="duration" data-base="4" title="Quarter note (5)">𝅘𝅥</button>
+            <button type="button" class="tool tool-glyph" data-act="duration" data-base="8" title="Eighth note (4)">𝅘𝅥𝅮</button>
+            <button type="button" class="tool tool-glyph" data-act="duration" data-base="16" title="Sixteenth note (3)">𝅘𝅥𝅯</button>
+            <button type="button" class="tool tool-glyph" data-act="duration" data-base="32" title="Thirty-second note (2)">𝅘𝅥𝅰</button>
+            <button type="button" class="tool" data-act="duration" data-base="64" title="Sixty-fourth note">64</button>
+            <button type="button" class="tool" data-act="duration" data-base="128" title="Hundred twenty-eighth note">128</button>
+            <button type="button" class="tool" data-act="dot" title="Dotted (.)">•</button>
+          </div>
+        </details>
+      </div>
 
       <details class="tool-section" data-section="notes" open>
         <summary><h3>Notes</h3></summary>
@@ -358,18 +383,7 @@
         </div>
       </details>
 
-      <details class="tool-section" data-section="tuplets" open>
-        <summary><h3>Tuplets</h3></summary>
-        <div class="tool-row">
-          <button type="button" class="tool" data-act="tuplet" data-n="3" title="Triplet (Ctrl+3)">3</button>
-          <button type="button" class="tool" data-act="tuplet" data-n="5" title="Quintuplet (Ctrl+5)">5</button>
-          <button type="button" class="tool" data-act="tuplet" data-n="6" title="Sextuplet (Ctrl+6)">6</button>
-          <button type="button" class="tool" data-act="tuplet" data-n="7" title="Septuplet (Ctrl+7)">7</button>
-          <button type="button" class="tool tool-wide" data-act="untuplet" title="Make the tuplet one note again">Remove</button>
-        </div>
-      </details>
-
-      <details class="tool-section" data-section="ties-and-lines" open>
+      <details class="tool-section" data-section="ties-and-lines">
         <summary><h3>Ties &amp; lines</h3></summary>
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="tie" title="Tie to the next note (T)">⁀ Tie</button>
@@ -399,7 +413,7 @@
         </div>
       </details>
 
-      <details class="tool-section" data-section="articulations" open>
+      <details class="tool-section" data-section="articulations">
         <summary><h3>Articulations</h3></summary>
         <div class="tool-row">
           <button type="button" class="tool" data-act="art" data-name="staccato" title="Staccato">·</button>
@@ -417,7 +431,82 @@
         </div>
       </details>
 
-      <details class="tool-section" data-section="fingering" open>
+      <details class="tool-section" data-section="dynamics">
+        <summary><h3>Dynamics</h3></summary>
+        <div class="tool-row tool-dynamics">
+          <% dynamics = {"ppp": "pianississimo", "pp": "pianissimo", "p": "piano", "mp": "mezzo-piano"} %>
+          <% dynamics = dynamics.merge({"mf": "mezzo-forte", "f": "forte", "ff": "fortissimo", "fff": "fortississimo"}) %>
+          <% dynamics = dynamics.merge({"sfz": "sforzando", "fp": "forte-piano"}) %>
+          <% for dynamic in dynamics.keys %>
+            <% word = dynamics[dynamic] %>
+            <button type="button" class="tool tool-dyn" data-act="dynamic" data-name="<%= dynamic %>"
+              title="<%= word %>" aria-label="<%= word %>"><%= dynamic %></button>
+          <% end %>
+        </div>
+      </details>
+
+      <details class="tool-section" data-section="words">
+        <summary><h3>Words</h3></summary>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="lyrics" title="Lyrics under the notes (Ctrl+L)">Lyrics</button>
+          <select class="tool-select" data-verse aria-label="Verse the lyrics go in" title="Each verse is a line under the one before">
+            <option value="1">Verse 1</option><option value="2">Verse 2</option><option value="3">Verse 3</option>
+            <option value="4">Verse 4</option><option value="5">Verse 5</option><option value="6">Verse 6</option>
+          </select>
+          <button type="button" class="tool tool-wide" data-act="chord" title="A chord symbol above (Ctrl+K)">Chord symbol</button>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="text" title="Words above the staff: solo, pizz.…">Staff text</button>
+          <button type="button" class="tool tool-wide" data-act="expression" title="Words in italics under the staff: dolce, espressivo…">Expression</button>
+        </div>
+      </details>
+
+      <details class="tool-section" data-section="tuplets">
+        <summary><h3>Tuplets</h3></summary>
+        <div class="tool-row">
+          <button type="button" class="tool" data-act="tuplet" data-n="3" title="Triplet (Ctrl+3)">3</button>
+          <button type="button" class="tool" data-act="tuplet" data-n="5" title="Quintuplet (Ctrl+5)">5</button>
+          <button type="button" class="tool" data-act="tuplet" data-n="6" title="Sextuplet (Ctrl+6)">6</button>
+          <button type="button" class="tool" data-act="tuplet" data-n="7" title="Septuplet (Ctrl+7)">7</button>
+          <button type="button" class="tool tool-wide" data-act="untuplet" title="Make the tuplet one note again">Remove</button>
+        </div>
+      </details>
+
+      <details class="tool-section" data-section="grace-notes">
+        <summary><h3>Grace notes</h3></summary>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="grace" data-kind="acciaccatura" title="Acciaccatura: a quick slashed note before the selected one">Acciacc.</button>
+          <button type="button" class="tool tool-wide" data-act="grace" data-kind="appoggiatura" title="Appoggiatura: a leaning note that takes time from the selected one">Appogg.</button>
+          <button type="button" class="tool tool-wide" data-act="grace" data-kind="grace" title="Grace note: a small plain note before the selected one">Grace</button>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="grace-add" title="One more grace note, a step above the last">+ Note</button>
+          <button type="button" class="tool" data-act="grace-move" data-by="1" title="Last grace note a step up" aria-label="Last grace note a step up">↑</button>
+          <button type="button" class="tool" data-act="grace-move" data-by="-1" title="Last grace note a step down" aria-label="Last grace note a step down">↓</button>
+          <button type="button" class="tool tool-wide" data-act="grace-remove" title="Take the grace notes away">Remove</button>
+        </div>
+      </details>
+
+      <details class="tool-section" data-section="ornaments">
+        <summary><h3>Ornaments</h3></summary>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="art" data-name="trill" title="Trill: the note and the one above, quickly in turn">tr Trill</button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="prall" title="Short trill: the note, the one above, the note">Short tr.</button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="mordent" title="Mordent: the note, the one below, the note">Mordent</button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="turn" title="Turn: above, the note, below, the note">Turn</button>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="arpeggio" title="Arpeggio: the chord rolled from its lowest note up">Arpeggio</button>
+          <button type="button" class="tool tool-wide" data-act="gliss" title="Glissando: slide from this note to the next">Glissando</button>
+        </div>
+        <div class="tool-row" aria-label="Tremolo">
+          <button type="button" class="tool tool-wide" data-act="tremolo" data-value="8" title="Tremolo: the note repeated in eighths">Trem. 8</button>
+          <button type="button" class="tool tool-wide" data-act="tremolo" data-value="16" title="Tremolo: the note repeated in sixteenths">16</button>
+          <button type="button" class="tool tool-wide" data-act="tremolo" data-value="32" title="Tremolo: the note repeated in thirty-seconds">32</button>
+        </div>
+      </details>
+
+      <details class="tool-section" data-section="fingering">
         <summary><h3>Fingering</h3></summary>
         <div class="tool-row" aria-label="Finger">
           <button type="button" class="tool" data-act="finger" data-n="1" title="Finger 1 on the selected note (Alt+1); again to take it away">1</button>
@@ -437,71 +526,7 @@
         </div>
       </details>
 
-      <details class="tool-section" data-section="ornaments" open>
-        <summary><h3>Ornaments</h3></summary>
-        <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="art" data-name="trill" title="Trill: the note and the one above, quickly in turn">tr Trill</button>
-          <button type="button" class="tool tool-wide" data-act="art" data-name="prall" title="Short trill: the note, the one above, the note">Short tr.</button>
-          <button type="button" class="tool tool-wide" data-act="art" data-name="mordent" title="Mordent: the note, the one below, the note">Mordent</button>
-          <button type="button" class="tool tool-wide" data-act="art" data-name="turn" title="Turn: above, the note, below, the note">Turn</button>
-        </div>
-        <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="arpeggio" title="Arpeggio: the chord rolled from its lowest note up">Arpeggio</button>
-          <button type="button" class="tool tool-wide" data-act="gliss" title="Glissando: slide from this note to the next">Glissando</button>
-        </div>
-        <div class="tool-row" aria-label="Tremolo">
-          <button type="button" class="tool tool-wide" data-act="tremolo" data-value="8" title="Tremolo: the note repeated in eighths">Trem. 8</button>
-          <button type="button" class="tool tool-wide" data-act="tremolo" data-value="16" title="Tremolo: the note repeated in sixteenths">16</button>
-          <button type="button" class="tool tool-wide" data-act="tremolo" data-value="32" title="Tremolo: the note repeated in thirty-seconds">32</button>
-        </div>
-      </details>
-
-      <details class="tool-section" data-section="grace-notes" open>
-        <summary><h3>Grace notes</h3></summary>
-        <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="grace" data-kind="acciaccatura" title="Acciaccatura: a quick slashed note before the selected one">Acciacc.</button>
-          <button type="button" class="tool tool-wide" data-act="grace" data-kind="appoggiatura" title="Appoggiatura: a leaning note that takes time from the selected one">Appogg.</button>
-          <button type="button" class="tool tool-wide" data-act="grace" data-kind="grace" title="Grace note: a small plain note before the selected one">Grace</button>
-        </div>
-        <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="grace-add" title="One more grace note, a step above the last">+ Note</button>
-          <button type="button" class="tool" data-act="grace-move" data-by="1" title="Last grace note a step up" aria-label="Last grace note a step up">↑</button>
-          <button type="button" class="tool" data-act="grace-move" data-by="-1" title="Last grace note a step down" aria-label="Last grace note a step down">↓</button>
-          <button type="button" class="tool tool-wide" data-act="grace-remove" title="Take the grace notes away">Remove</button>
-        </div>
-      </details>
-
-      <details class="tool-section" data-section="dynamics" open>
-        <summary><h3>Dynamics</h3></summary>
-        <div class="tool-row tool-dynamics">
-          <% dynamics = {"ppp": "pianississimo", "pp": "pianissimo", "p": "piano", "mp": "mezzo-piano"} %>
-          <% dynamics = dynamics.merge({"mf": "mezzo-forte", "f": "forte", "ff": "fortissimo", "fff": "fortississimo"}) %>
-          <% dynamics = dynamics.merge({"sfz": "sforzando", "fp": "forte-piano"}) %>
-          <% for dynamic in dynamics.keys %>
-            <% word = dynamics[dynamic] %>
-            <button type="button" class="tool tool-dyn" data-act="dynamic" data-name="<%= dynamic %>"
-              title="<%= word %>" aria-label="<%= word %>"><%= dynamic %></button>
-          <% end %>
-        </div>
-      </details>
-
-      <details class="tool-section" data-section="words" open>
-        <summary><h3>Words</h3></summary>
-        <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="lyrics" title="Lyrics under the notes (Ctrl+L)">Lyrics</button>
-          <select class="tool-select" data-verse aria-label="Verse the lyrics go in" title="Each verse is a line under the one before">
-            <option value="1">Verse 1</option><option value="2">Verse 2</option><option value="3">Verse 3</option>
-            <option value="4">Verse 4</option><option value="5">Verse 5</option><option value="6">Verse 6</option>
-          </select>
-          <button type="button" class="tool tool-wide" data-act="chord" title="A chord symbol above (Ctrl+K)">Chord symbol</button>
-        </div>
-        <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="text" title="Words above the staff: solo, pizz.…">Staff text</button>
-          <button type="button" class="tool tool-wide" data-act="expression" title="Words in italics under the staff: dolce, espressivo…">Expression</button>
-        </div>
-      </details>
-
-      <details class="tool-section" data-section="marks" open>
+      <details class="tool-section" data-section="marks">
         <summary><h3>Marks &amp; jumps</h3></summary>
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="mark" data-mark="letter" title="A rehearsal letter over the selected bar: A, B, C…">Rehearsal A</button>
@@ -524,7 +549,7 @@
         <p class="tool-hint">The jumps are played: D.S. and D.C. go back to the segno or the start, on to the Fine, or from To Coda to the coda.</p>
       </details>
 
-      <details class="tool-section" data-section="repeats" open>
+      <details class="tool-section" data-section="repeats">
         <summary><h3>Repeats</h3></summary>
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="repeat" title="Repeat the selected bars — the same bars again take it away">𝄆 Repeat 𝄇</button>
@@ -541,7 +566,7 @@
         </p>
       </details>
 
-      <details class="tool-section" data-section="bars-and-staves" open>
+      <details class="tool-section" data-section="bars-and-staves">
         <summary><h3>Bars &amp; staves</h3></summary>
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="add-bar" title="A bar at the end (])">+ Bar</button>
@@ -560,7 +585,7 @@
         </div>
       </details>
 
-      <details class="tool-section" data-section="voices" open>
+      <details class="tool-section" data-section="voices">
         <summary><h3>Voices</h3></summary>
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="voice" data-voice="1" title="Write and select in the first voice, stems up (Ctrl+Alt+1)">Voice 1</button>
@@ -579,7 +604,7 @@
         <p class="tool-hint">Voices 1 and 3 have their stems up, 2 and 4 down, on one staff. A bar shows its voices where one past the first has notes.</p>
       </details>
 
-      <details class="tool-section" data-section="this-staff" open>
+      <details class="tool-section" data-section="this-staff">
         <summary><h3>This staff</h3></summary>
         <label class="tool-field">Instrument
           <select data-field="staff-instrument" data-instruments="staff" title="Its sound, its clef, and its name unless you gave it one"></select>
@@ -605,7 +630,7 @@
         </label>
       </details>
 
-      <details class="tool-section" data-changes data-section="from-bar" open>
+      <details class="tool-section" data-changes data-section="from-bar">
         <summary><h3>From bar <span data-change-bar>—</span></h3></summary>
         <p class="tool-hint" data-change-hint>Select a bar, or put the cursor in it: what changes here goes on to the next change.</p>
         <label class="tool-field">Key
@@ -639,7 +664,6 @@
         <label class="tool-check"><input type="checkbox" data-field="change-double"> Double bar line before it</label>
       </details>
 
-
     </aside>
 
     <main class="studio-canvas">
@@ -647,7 +671,11 @@
       <div class="studio-sheet" data-sheet tabindex="0" aria-label="The score: click a note to select it">
         <%- figure["svg"].to_s %>
       </div>
-      <div class="studio-status" data-status aria-live="polite"></div>
+      <%# What is selected, and what was last said (#419): one bar under the score. %>
+      <div class="studio-statusbar">
+        <div class="studio-state" aria-live="polite" data-state></div>
+        <div class="studio-status" data-status aria-live="polite"></div>
+      </div>
     </main>
   </div>
 

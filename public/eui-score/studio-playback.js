@@ -66,7 +66,7 @@ export function install(ctx) {
   } catch (error) {}
   /** The metronome's first beat of each bar accented (Playback), as it always was unless turned off. */
   const accent = () => playOption("accent")?.checked ?? true;
-  root.querySelector('[data-section="playback"]')?.addEventListener("change", (event) => {
+  root.querySelector("#studio-playback")?.addEventListener("change", (event) => {
     if (event.target.dataset.play === "output") return chooseOutput(event.target);
     if (event.target.dataset.play === "rate" && st.playing?.handle) st.playing.handle.rate = rate();
     try {
@@ -90,7 +90,7 @@ export function install(ctx) {
       else if (el) el.value = value;
     }
   } catch (error) {}
-  root.querySelector("[data-practice-box]")?.closest(".tool-section")?.addEventListener("change", (event) => {
+  root.querySelector("#studio-playback")?.addEventListener("change", (event) => {
     const name = event.target.dataset?.practice;
     if (!name) return;
     // The audio takes (#390) are sound, not notes: they keep their pitch.

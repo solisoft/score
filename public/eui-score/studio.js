@@ -372,7 +372,7 @@ export function startStudio(root, options = {}) {
     else if (shared && sharedText == null) say(`That link holds no score: here is ${draft ? "your last one" : "the starting one"}.`, true);
     else if (sharedText != null) say("A shared score. Your changes stay in this browser; Share makes a new link.");
     else if (!fromExample && start !== sourceBox.defaultValue) say("Your last score, kept in this browser. New starts afresh.");
-    else say("Click a note to select it, or press N and type A–G to write.");
+    // Otherwise nothing: the bar beside it already says how to start (#419).
     // After what was said on opening, not in its place.
     if (keptHistoryNote()) say(`${status.textContent} ${keptHistoryNote()}`.trim(), status.classList.contains("studio-error"));
   });

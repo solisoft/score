@@ -371,7 +371,7 @@ describe("Account data") do
     test("says the MIDI view and the AI are in the app, with a way to sign up") do
       page = res_body(get("/playground"))
       assert_contains(page, "data-app-only")
-      assert_contains(page, "The MIDI view and the AI features")
+      assert_contains(page, "the MIDI view and the AI features")
       assert_contains(page, "href=\"/signup\"")
     end
   end

@@ -347,7 +347,7 @@
     shareUrl: <%- owner ? "\"" + app_score_share_path(score) + "\"" : "null" %>,
     scoreUrl: "<%= app_score_path(score) %>",
     source: root.querySelector("[data-source]").value,
-    greeting: "Click a note to select it, or press N and type A–G to write. Your changes save themselves.",
+    greeting: "Your changes save themselves.",
     onChange(text) {
       if (applyingRemote) return;
       // Whatever happens to the saves, what is typed is kept here.

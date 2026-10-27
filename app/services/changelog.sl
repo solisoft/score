@@ -10,6 +10,16 @@
 class Changelog
   static def days
     [
+      {"date": "2026-10-27", "entries": [{
+        "area": "editor",
+        "title": "The editor puts the score and the writing tools first",
+        "text": "The toolbox now opens on what you write with: Mode and Duration stay in sight as it scrolls, "
+        + "Notes and Pitch come next, and the other sections start folded (a section you open or fold stays as "
+        + "you left it). Speed, the practice loop, the metronome and the MIDI settings moved to a Playback "
+        + "panel, opened by the arrow beside Play; the arrow beside Rec holds how a recording is written. What "
+        + "is selected now shows in one bar under the score, and note input draws a blue band along the top of "
+        + "the sheet. In the playground, the two notices over the editor became one line you can close."
+      }]},
       {"date": "2026-10-26", "entries": [
         {
           "area": "editor",

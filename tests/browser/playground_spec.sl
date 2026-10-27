@@ -120,6 +120,17 @@ def midi_in(bytes)
 end
 
 # What a selector's element says.
+# Opens the Playback panel from the arrow beside Play, as a click on it does (#419).
+def open_playback
+  click("[popovertarget=\"studio-playback\"]")
+  sleep(0.2)
+end
+
+# Whether the toolbox's section `name` is open.
+def section_open?(name)
+  evaluate("document.querySelector('[data-section=\"#{name}\"]').open")
+end
+
 def text_of(selector)
   evaluate("document.querySelector(#{JSON.stringify(selector)})?.textContent ?? null")
 end
@@ -349,6 +360,130 @@ describe("The playground, in a browser") do
     assert_no_page_errors()
   end
 
+  test("the arrow beside Play opens the Playback panel; Escape closes it, back on the arrow (#419)") do
+    assert_not(evaluate("document.getElementById('studio-playback').matches(':popover-open')"))
+    open_playback()
+    assert(evaluate("document.getElementById('studio-playback').matches(':popover-open')"), "the panel opens")
+    # Under the arrow, its speed, practice and MIDI fields in it.
+    panel_top = evaluate("document.getElementById('studio-playback').getBoundingClientRect().top")
+    arrow = "document.querySelector('[popovertarget=\"studio-playback\"]')"
+    arrow_bottom = evaluate("#{arrow}.getBoundingClientRect().bottom")
+    assert(panel_top >= arrow_bottom, "under the arrow: #{panel_top} >= #{arrow_bottom}")
+    fields = [
+      "[data-play='rate']",
+      "[data-play='metronome']",
+      "[data-midi-in]",
+      "[data-sync='clock-out']",
+      "[data-act='mixer']"
+    ]
+    fields.each do |field|
+      assert(evaluate("Boolean(document.querySelector(\"#studio-playback #{field}\"))"), "#{field} in the panel")
+    end
+    # Its fields work from there: the speed set is the one played.
+    evaluate("(() => { const box = document.querySelector('[data-play=\"rate\"]'); box.value = '0.5';"
+    + " box.dispatchEvent(new Event('change', { bubbles: true })); })()")
+    assert_eq(evaluate("document.querySelector('[data-play=\"rate\"]').value"), "0.5")
+    press("Escape")
+    sleep(0.2)
+    assert_not(evaluate("document.getElementById('studio-playback').matches(':popover-open')"))
+    # The toolbox has no Playback section any more.
+    assert_not(evaluate("Boolean(document.querySelector('[data-section=\"playback\"]'))"))
+    assert_no_page_errors()
+  end
+
+  test("the arrow beside Rec holds the grid a recording is fitted to, and its dynamics (#419)") do
+    assert_eq(evaluate("document.querySelector('[data-quantize]').closest('[popover]')?.id"), "studio-recording")
+    click("[popovertarget=\"studio-recording\"]")
+    sleep(0.2)
+    assert(evaluate("document.getElementById('studio-recording').matches(':popover-open')"), "the panel opens")
+    assert_contains(text_of("#studio-recording"), "Fit notes to")
+    assert_contains(text_of("#studio-recording"), "Write the dynamics played")
+    # A click elsewhere closes it.
+    click("[data-sheet]")
+    sleep(0.2)
+    assert_not(evaluate("document.getElementById('studio-recording').matches(':popover-open')"))
+    assert_no_page_errors()
+  end
+
+  test("the toolbox opens on the tools written with, folds the rest, and keeps a fold by hand (#419)") do
+    ["mode", "duration", "notes", "pitch"].each do |name|
+      assert(section_open?(name), "#{name} open")
+    end
+    ["articulations", "ornaments", "bars-and-staves", "from-bar"].each do |name|
+      assert_not(section_open?(name), "#{name} folded")
+    end
+    # Mode and Duration first, Duration on screen on a laptop without scrolling.
+    order = evaluate("[...document.querySelectorAll('[data-section]')].map((it) => it.dataset.section).slice(0, 4)")
+    assert_eq(order, [
+      "mode",
+      "duration",
+      "notes",
+      "pitch"
+    ])
+    viewport(1024, 768)
+    sleep(0.3)
+    duration_bottom = evaluate("document.querySelector('[data-section=\"duration\"]').getBoundingClientRect().bottom")
+    assert(duration_bottom < 768, "Duration in sight: #{duration_bottom}")
+    # Pitch folded and Ornaments opened by hand: kept after a reload.
+    click("[data-section=\"pitch\"] > summary")
+    click("[data-section=\"ornaments\"] > summary")
+    sleep(0.2)
+    visit("/playground")
+    wait_for("[data-source]")
+    sleep(1)
+    assert_not(section_open?("pitch"), "Pitch stays folded")
+    assert(section_open?("ornaments"), "Ornaments stays open")
+    evaluate("localStorage.removeItem('eui-score-studio-folded')")
+    assert_no_page_errors()
+  end
+
+  test("bars selected open Bars & staves without changing what is kept folded (#419)") do
+    evaluate("localStorage.removeItem('eui-score-studio-folded')")
+    assert_not(section_open?("bars-and-staves"))
+    evaluate("(() => { const st = document.getElementById('studio').studio;"
+    + " st.sel = { staff: 0, t0: 0, t1: 0, bars: [0, 0] };"
+    + " document.querySelector('[data-act=\"zoom-in\"]').click(); })()")
+    sleep(0.3)
+    assert(section_open?("bars-and-staves"), "opened for the bars")
+    assert_eq(evaluate("localStorage.getItem('eui-score-studio-folded')"), nil)
+    assert_no_page_errors()
+  end
+
+  test("note input shows on the score: a blue band along its top, and the bar under it says so (#419)") do
+    band = "getComputedStyle(document.querySelector('[data-sheet]'), '::before').backgroundColor"
+    assert_eq(evaluate(band), "rgba(0, 0, 0, 0)")
+    click(".studio-toolbox [data-act=\"mode-input\"]")
+    sleep(0.2)
+    assert_eq(evaluate(band), "rgb(37, 99, 201)")
+    # The bar under the score, not the menu bar, says what is going on.
+    assert_eq(evaluate("document.querySelector('[data-state]').closest('.studio-statusbar') !== null"), true)
+    assert_contains(text_of("[data-state]"), "Note input")
+    press("Escape")
+    sleep(0.2)
+    assert_eq(evaluate(band), "rgba(0, 0, 0, 0)")
+    assert_no_page_errors()
+  end
+
+  test("the playground says once that the score stays in this browser, and hides it for good (#419)") do
+    evaluate("localStorage.removeItem('eui-score-playground-banner-hidden')")
+    visit("/playground")
+    wait_for("[data-source]")
+    assert_eq(evaluate("document.querySelectorAll('.playground-banner').length"), 1)
+    assert_contains(text_of(".playground-banner"), "Your score stays in this browser")
+    # Said once: not again under the score.
+    studio_text = evaluate("document.querySelector('.studio').innerText")
+    assert_not(studio_text.includes?("Click a note to select it, or press N"))
+    click("[data-banner-close]")
+    sleep(0.2)
+    assert_eq(evaluate("document.querySelectorAll('.playground-banner').length"), 0)
+    visit("/playground")
+    wait_for("[data-source]")
+    sleep(0.5)
+    assert_eq(evaluate("document.querySelectorAll('.playground-banner').length"), 0)
+    evaluate("localStorage.removeItem('eui-score-playground-banner-hidden')")
+    assert_no_page_errors()
+  end
+
   test("Edit › Swap voices 1 and 2 puts crossed voices back, the high notes in voice 1, one undo away (#417)") do
     type_source("{ \\time 4/4 d'1 | << { f4 f c' c' } \\\\ { f'4 f' d' f' } >> | e'1 }")
     crossed = playground_text()
@@ -513,7 +648,8 @@ describe("The playground, in a browser") do
     + " box.dispatchEvent(new Event('change', { bubbles: true })); })()")
     sleep(0.4)
     assert_eq(evaluate("document.querySelector('[data-midi-in]').value"), "fake-kb")
-    click("[data-section=\"playback\"] [data-act=\"midi-learn\"]")
+    open_playback()
+    click("#studio-playback [data-act=\"midi-learn\"]")
     sleep(0.3)
     assert(evaluate("document.querySelector('[data-midi-learn]').open"), "the dialog opens")
     targets = evaluate("[...document.querySelectorAll('.midi-learn-row')].map((row) => row.dataset.target)")
@@ -551,6 +687,7 @@ describe("The playground, in a browser") do
 
   test("the MIDI clock and the device's latency are kept in the browser") do
     evaluate("localStorage.removeItem('eui-score-midi-sync')")
+    open_playback()
     click("[data-sync=\"clock-out\"]")
     evaluate("(() => { const box = document.querySelector('[data-sync=\"delay\"]'); box.value = '25';"
     + " box.dispatchEvent(new Event('change', { bubbles: true })); })()")
