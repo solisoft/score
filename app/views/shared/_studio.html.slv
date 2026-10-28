@@ -109,6 +109,8 @@
             <% if locals["app"] %>
               <button type="button" role="menuitem" data-act="midi-view" data-midi-label>MIDI view <kbd>tracks, piano roll</kbd></button>
             <% end %>
+            <%# The source beside the score, on a wide screen (#420); kept in this browser. %>
+            <button type="button" role="menuitem" data-act="source-side" data-source-side-label>Source beside the score <kbd>wide screens</kbd></button>
             <button type="button" role="menuitem" data-act="written" data-written-label>Written pitch <kbd>clarinets, horns, saxes</kbd></button>
             <button type="button" role="menuitem" data-act="keys">Keyboard shortcuts <kbd>?</kbd></button>
           </div>

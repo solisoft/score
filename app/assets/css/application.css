@@ -904,7 +904,7 @@
 
   .studio-source { border-top: 1px solid var(--line); background: var(--sheet); padding: 12px 16px 18px; }
   .studio-source-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-bottom: 8px; }
-  .studio-source-head h2 { font: 700 12px/1 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  .studio-source-head h2 { font: 600 13px/1.2 var(--font-sans); color: var(--ink-soft); margin: 0; }
   .studio-source-head .muted { font-size: 13px; }
   /* The note selected on the score, marked behind the text: a textarea
      shows no selection while the score has the focus. */
@@ -974,6 +974,22 @@
   }
   @media (max-width: 899px) and (prefers-reduced-motion: reduce) {
     .studio-toolbox, .studio-tools-open .studio-toolbox { transition: none; }
+  }
+
+  /* View ▸ Source beside the score (#420): on a wide screen, the text in a
+     column on the right, as tall as the window under the menu bar. */
+  @media (min-width: 1200px) {
+    .studio.studio-source-side { display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 32%); align-items: start; }
+    .studio-source-side > * { grid-column: 1 / -1; }
+    .studio-source-side > .studio-menubar { grid-row: 1; }
+    .studio-source-side > .studio-progress { grid-row: 2; }
+    .studio-source-side > .studio-body { grid-column: 1; grid-row: 3; }
+    .studio-source-side > .studio-source {
+      grid-column: 2; grid-row: 3; position: sticky; top: 117px; height: calc(100vh - 117px);
+      display: flex; flex-direction: column; border-top: 0; border-left: 1px solid var(--line); padding: 12px 14px 14px;
+    }
+    .studio-source-side .studio-source-box { flex: 1; min-height: 0; }
+    .studio-source-side .studio-source textarea { height: 100%; min-height: 0; resize: none; }
   }
 
   @media (min-width: 900px) {

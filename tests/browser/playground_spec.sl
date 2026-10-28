@@ -464,6 +464,44 @@ describe("The playground, in a browser") do
     assert_no_page_errors()
   end
 
+  test("View › Source beside the score puts the text on the right of a wide screen, kept after a reload (#420)") do
+    evaluate("localStorage.removeItem('eui-score-source-side')")
+    viewport(1440, 900)
+    sleep(0.3)
+    source_box = "document.querySelector('.studio-source').getBoundingClientRect()"
+    sheet_box = "document.querySelector('[data-sheet]').getBoundingClientRect()"
+    # Under the score at first.
+    assert(evaluate("#{source_box}.top") >= evaluate("#{sheet_box}.bottom"), "the source starts under the score")
+    evaluate("document.querySelector('[data-act=\"source-side\"]').click()")
+    sleep(0.3)
+    assert(evaluate("#{source_box}.left") >= evaluate("#{sheet_box}.right"), "the source beside the score")
+    assert(evaluate("#{source_box}.top") < evaluate("#{sheet_box}.bottom"), "level with the score")
+    assert_eq(
+      evaluate("document.querySelector('[data-source-side-label]').firstChild.textContent"),
+      "Source under the score "
+    )
+    # The text still follows the score: a caret in it selects the note.
+    caret_on("e'2")
+    assert_text("Note E4 · half")
+    # Kept after a reload.
+    visit("/playground")
+    wait_for("[data-source]")
+    sleep(1)
+    assert(evaluate("#{source_box}.left") >= evaluate("#{sheet_box}.right"), "still beside after a reload")
+    # A narrower window keeps it under the score, and says why.
+    viewport(1024, 768)
+    sleep(0.3)
+    assert(evaluate("#{source_box}.top") >= evaluate("#{sheet_box}.bottom"), "under the score on a laptop")
+    evaluate("document.querySelector('[data-act=\"source-side\"]').click()")
+    sleep(0.2)
+    assert_contains(text_of("[data-status]"), "The source under the score")
+    evaluate("document.querySelector('[data-act=\"source-side\"]').click()")
+    sleep(0.2)
+    assert_contains(text_of("[data-status]"), "on a wider window")
+    evaluate("localStorage.removeItem('eui-score-source-side')")
+    assert_no_page_errors()
+  end
+
   test("the playground says once that the score stays in this browser, and hides it for good (#419)") do
     evaluate("localStorage.removeItem('eui-score-playground-banner-hidden')")
     visit("/playground")

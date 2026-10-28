@@ -10,6 +10,14 @@
 class Changelog
   static def days
     [
+      {"date": "2026-10-28", "entries": [{
+        "area": "editor",
+        "title": "The LilyPond source beside the score",
+        "text": "View › Source beside the score puts the LilyPond text in a column on the right of a wide "
+        + "screen, as tall as the window, instead of under the score: the score and its text in sight together, "
+        + "each following the other as before. The choice is kept in this browser; on a narrower window the "
+        + "text stays under the score."
+      }]},
       {"date": "2026-10-27", "entries": [{
         "area": "editor",
         "title": "The editor puts the score and the writing tools first",

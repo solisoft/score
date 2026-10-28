@@ -9,6 +9,9 @@ const patternTools = () => import(`./pattern-tools.js${V}`);
 const feelTools = () => import(`./feel-tools.js${V}`);
 
 /** The keys, the buttons and the menus wired; answers act, what each of them does. */
+/** The windows wide enough for the source beside the score, as the CSS has it (#420). */
+const SIDE_WIDTH = "(min-width: 1200px)";
+
 export function install(ctx) {
   const { root, options, sheet, st, mac, newDialog, toPdf, download, M, P, K, X, musicXml } = ctx;
   const {
@@ -24,6 +27,18 @@ export function install(ctx) {
   const SOUNDING = new Set(["letter", "drum", "move", "alter", "head-up", "head-down", "next", "previous"]);
   let patterns = null;
   let feel = null;
+
+  // View ▸ Source beside the score (#420): the LilyPond text in a column on
+  // the right of a wide screen, not under the score; kept in this browser.
+  const SOURCE_SIDE = "eui-score-source-side";
+  function placeSource(beside) {
+    root.classList.toggle("studio-source-side", beside);
+    const label = root.querySelector("[data-source-side-label]");
+    if (label) label.firstChild.textContent = beside ? "Source under the score " : "Source beside the score ";
+  }
+  try {
+    placeSource(localStorage.getItem(SOURCE_SIDE) === "1");
+  } catch (error) {}
 
   function act(name, data = {}) {
     const done = doAct(name, data);
@@ -55,6 +70,15 @@ export function install(ctx) {
       case "midi-learn": return ctx.sync.open();
       case "set-loop": return setLoop(selectedBarsOrNull());
       case "clear-loop": return setLoop(null);
+      case "source-side": {
+        const beside = !root.classList.contains("studio-source-side");
+        placeSource(beside);
+        try {
+          localStorage.setItem(SOURCE_SIDE, beside ? "1" : "0");
+        } catch (error) {}
+        const wide = matchMedia(SIDE_WIDTH).matches;
+        return say(beside ? (wide ? "The source beside the score: View ▸ Source under the score puts it back." : "The source goes beside the score on a wider window; here it stays under it.") : "The source under the score.");
+      }
       case "written": {
         if (!st.score) return say("Written pitch needs the score tools: this piece is edited in its text.", true);
         st.written = !st.written;
