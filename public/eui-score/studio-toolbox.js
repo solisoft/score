@@ -61,6 +61,15 @@ export function install(ctx) {
     });
   }
   let neededBefore = null;
+  // What scrolls into the toolbox's view (a button tabbed to, or clicked by
+  // a test) stops under the sticky Mode and Duration, not behind them.
+  const toolbox = root.querySelector(".studio-toolbox");
+  const sticky = root.querySelector(".tool-sticky");
+  if (toolbox && sticky && typeof ResizeObserver === "function") {
+    const headSize = new ResizeObserver(() => { toolbox.style.scrollPaddingTop = `${sticky.offsetHeight}px`; });
+    headSize.observe(sticky);
+    ctx.observers.push(headSize);
+  }
 
   // The Playback and Recording panels (#419) open under the arrow that
   // opens them; on a phone, as a sheet from the bottom (the CSS's).

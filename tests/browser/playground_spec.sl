@@ -464,6 +464,65 @@ describe("The playground, in a browser") do
     assert_no_page_errors()
   end
 
+  test("the toolbox groups its buttons by kind, each row named, the values and the letters on one line (#421)") do
+    viewport(1280, 800)
+    sleep(0.3)
+    # Each button in the section of its kind; the old mixed section is gone.
+    homes = {
+      "pitch": ["enharmonic"],
+      "dynamics": ["hairpin"],
+      "stems-and-beams": [
+        "stem",
+        "beam",
+        "beam-break",
+        "cross"
+      ],
+      "fingering": ["finger", "string-number", "pedal"],
+      "repeats": ["repeat", "ending", "mark", "jump"],
+      "ties-and-lines": [
+        "tie",
+        "slur",
+        "phrase",
+        "ottava"
+      ]
+    }
+    for name in homes.keys
+      homes[name].each do |act|
+        found = evaluate("document.querySelectorAll('[data-section=\"#{name}\"] [data-act=\"#{act}\"]').length")
+        assert(found > 0, "#{act} under #{name}")
+      end
+    end
+    strays = ":is([data-act=\"stem\"], [data-act=\"hairpin\"], [data-act=\"enharmonic\"])"
+    tie_lines = "[data-section=\"ties-and-lines\"] #{strays}"
+    assert_eq(evaluate("document.querySelectorAll('#{tie_lines}').length"), 0)
+    assert_not(evaluate("Boolean(document.querySelector('[data-section=\"marks\"]'))"), "Marks joined Repeats")
+    assert_contains(text_of("[data-section=\"pitch\"]"), "Accidentals")
+    assert_contains(text_of("[data-section=\"pitch\"]"), "Transpose")
+    # The six values and the dot on one line; the seven letters and the rest on one line.
+    for row in [".tool-row-7", "[data-section=\"notes\"] .tool-row-8"]
+      tops = evaluate("[...document.querySelectorAll('#{row} .tool')]"
+      + ".map((it) => Math.round(it.getBoundingClientRect().top))")
+      assert_eq(tops.filter(&{ |top|
+        top != tops[0]
+      }).length, 0, "#{row} on one line: #{tops}")
+    end
+    # Respelling sits with the accidentals, and works from there.
+    type_source("{ cis'4 d'4 e'4 f'4 }")
+    caret_on("cis'4")
+    click("[data-section=\"pitch\"] [data-act=\"enharmonic\"]")
+    sleep(0.4)
+    assert_contains(playground_text(), "des'4")
+    # The Edit menu has it by Transpose; Insert is in groups, as the toolbox.
+    by_transpose = ".studio-dropdown [data-act=\"transpose\"] ~ [data-act=\"enharmonic\"]"
+    assert(evaluate("Boolean(document.querySelector('#{by_transpose}'))"))
+    assert_eq(
+      evaluate("[...document.querySelectorAll('.studio-dropdown')]"
+      + ".find((it) => it.innerText.startsWith('Insert')).querySelectorAll('hr').length"),
+      4
+    )
+    assert_no_page_errors()
+  end
+
   test("View › Source beside the score puts the text on the right of a wide screen, kept after a reload (#420)") do
     evaluate("localStorage.removeItem('eui-score-source-side')")
     viewport(1440, 900)

@@ -24,6 +24,10 @@ describe("PlaygroundController") do
       assert_contains(body, "popovertarget=\"studio-recording\"")
       assert_contains(body, "popovertarget=\"studio-playback\"")
       assert_not(body.includes?("data-section=\"playback\""), "no Playback section in the toolbox")
+      # The toolbox's sections by kind, each row named (#421).
+      assert_contains(body, "data-section=\"stems-and-beams\"")
+      assert_contains(body, "<p class=\"tool-sub\">Accidentals</p>")
+      assert_not(body.includes?("data-section=\"marks\""), "the marks joined the repeats")
       # View › Source beside the score (#420).
       assert_contains(body, "data-act=\"source-side\" data-source-side-label>Source beside the score")
       assert_contains(body, "<option value=\"sixteenth\" selected>sixteenths</option>")

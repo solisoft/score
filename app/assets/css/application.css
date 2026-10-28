@@ -639,6 +639,16 @@
   .tool-dyn { font: italic 700 14px/1 Georgia, serif; min-width: 36px; }
   .studio-input .tool[data-act="mode-input"] { background: #2563c9; border-color: #2563c9; }
   .tool-hint { font-size: 12px; line-height: 1.4; color: var(--muted); margin: 4px 0 0; }
+  /* A row's name inside a section (#421): Accidentals, Ottava, Stems… */
+  .tool-sub { margin: 8px 0 4px; font-size: 12px; line-height: 1.2; color: var(--muted); }
+  .tool-section > summary + .tool-sub { margin-top: 0; }
+  /* Rows of one kind as even columns: the seven values with the dot, the
+     seven letters with the rest — nothing left alone on a second line. */
+  .tool-row-7, .tool-row-8 { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .tool-row-8 { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+  .tool-row-7 .tool, .tool-row-8 .tool { min-width: 0; padding: 0; }
+  /* The 64th and 128th, kept but small. */
+  .tool-row-rare .tool { height: 26px; min-width: 0; padding: 0 8px; font-size: 12px; font-weight: 500; color: var(--ink-soft); }
   .tool-check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-soft); margin-top: 6px; }
   .tool-field { display: grid; grid-template-columns: 78px minmax(0, 1fr); align-items: center; gap: 8px; font-size: 13px; color: var(--ink-soft); margin: 5px 0; }
   .tool-field input, .tool-field select, .tool-select {
@@ -992,7 +1002,12 @@
     .studio-source-side .studio-source textarea { height: 100%; min-height: 0; resize: none; }
   }
 
+  /* In the editor, what is brought into view comes at once, and clear of the
+     sticky header and menu bar (#421). */
+  html:has(.studio) { scroll-behavior: auto; }
+
   @media (min-width: 900px) {
+    html:has(.studio) { scroll-padding-top: 125px; }
     .studio-tools-toggle { display: none; }
     .studio-body { grid-template-columns: 300px minmax(0, 1fr); }
     .studio-toolbox { border-bottom: 0; border-right: 1px solid var(--line); position: sticky; top: 117px; align-self: start; max-height: calc(100vh - 117px); }

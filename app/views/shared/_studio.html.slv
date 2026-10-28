@@ -87,6 +87,7 @@
             <hr>
             <button type="button" role="menuitem" data-act="transpose" data-scope="selection">Transpose the selection</button>
             <button type="button" role="menuitem" data-act="transpose" data-scope="score">Transpose the score</button>
+            <button type="button" role="menuitem" data-act="enharmonic">Spell the other way (C♯ ↔ D♭) <kbd>J</kbd></button>
             <button type="button" role="menuitem" data-act="swap-voices">Swap voices 1 and 2 <kbd>the selected bars</kbd></button>
             <hr>
             <button type="button" role="menuitem" data-act="drum-grid">Drum grid… <kbd>a drum staff's bar</kbd></button>
@@ -124,15 +125,16 @@
             <button type="button" role="menuitem" data-act="ottava" data-value="1">8va above the selection</button>
             <button type="button" role="menuitem" data-act="ottava" data-value="-1">8vb below the selection</button>
             <button type="button" role="menuitem" data-act="ottava-end">End the ottava line here</button>
+            <hr>
             <button type="button" role="menuitem" data-act="stem" data-dir="1">Stems up</button>
             <button type="button" role="menuitem" data-act="stem" data-dir="-1">Stems down</button>
             <button type="button" role="menuitem" data-act="stem" data-dir="0">Stems as the voice wants</button>
             <button type="button" role="menuitem" data-act="stem-flip">Flip the stems <kbd>X</kbd></button>
             <button type="button" role="menuitem" data-act="beam">Beam the selected notes <kbd>Alt+B</kbd></button>
             <button type="button" role="menuitem" data-act="beam-break">Break the beam before the note <kbd>Alt+Shift+B</kbd></button>
-            <button type="button" role="menuitem" data-act="enharmonic">Spell the other way (C♯ ↔ D♭) <kbd>J</kbd></button>
             <button type="button" role="menuitem" data-act="cross" data-dir="-1">Notes on the staff above <kbd>Ctrl+Shift+↑</kbd></button>
             <button type="button" role="menuitem" data-act="cross" data-dir="1">Notes on the staff below <kbd>Ctrl+Shift+↓</kbd></button>
+            <hr>
             <button type="button" role="menuitem" data-act="lyrics">Lyrics <kbd>Ctrl+L</kbd></button>
             <button type="button" role="menuitem" data-act="chord">Chord symbol <kbd>Ctrl+K</kbd></button>
             <button type="button" role="menuitem" data-act="figures">Figures (figured bass)</button>
@@ -321,23 +323,25 @@
 
         <details class="tool-section" data-section="duration" open>
           <summary><h3>Duration</h3></summary>
-          <div class="tool-row">
+          <div class="tool-row tool-row-7">
             <button type="button" class="tool tool-glyph" data-act="duration" data-base="1" title="Whole note (7)">𝅝</button>
             <button type="button" class="tool tool-glyph" data-act="duration" data-base="2" title="Half note (6)">𝅗𝅥</button>
             <button type="button" class="tool tool-glyph" data-act="duration" data-base="4" title="Quarter note (5)">𝅘𝅥</button>
             <button type="button" class="tool tool-glyph" data-act="duration" data-base="8" title="Eighth note (4)">𝅘𝅥𝅮</button>
             <button type="button" class="tool tool-glyph" data-act="duration" data-base="16" title="Sixteenth note (3)">𝅘𝅥𝅯</button>
             <button type="button" class="tool tool-glyph" data-act="duration" data-base="32" title="Thirty-second note (2)">𝅘𝅥𝅰</button>
+            <button type="button" class="tool" data-act="dot" title="Dotted (.)">•</button>
+          </div>
+          <div class="tool-row tool-row-rare">
             <button type="button" class="tool" data-act="duration" data-base="64" title="Sixty-fourth note">64</button>
             <button type="button" class="tool" data-act="duration" data-base="128" title="Hundred twenty-eighth note">128</button>
-            <button type="button" class="tool" data-act="dot" title="Dotted (.)">•</button>
           </div>
         </details>
       </div>
 
       <details class="tool-section" data-section="notes" open>
         <summary><h3>Notes</h3></summary>
-        <div class="tool-row">
+        <div class="tool-row tool-row-8">
           <button type="button" class="tool" data-act="letter" data-step="0" title="C">C</button>
           <button type="button" class="tool" data-act="letter" data-step="1" title="D">D</button>
           <button type="button" class="tool" data-act="letter" data-step="2" title="E">E</button>
@@ -354,7 +358,8 @@
 
       <details class="tool-section" data-section="pitch" open>
         <summary><h3>Pitch</h3></summary>
-        <div class="tool-row">
+        <p class="tool-sub">Move</p>
+        <div class="tool-row" aria-label="Move">
           <button type="button" class="tool" data-act="move" data-how="step" data-by="1" title="A step up (↑)">↑</button>
           <button type="button" class="tool" data-act="move" data-how="step" data-by="-1" title="A step down (↓)">↓</button>
           <button type="button" class="tool" data-act="move" data-how="semitone" data-by="1" title="A semitone up (Shift+↑)">½↑</button>
@@ -362,17 +367,21 @@
           <button type="button" class="tool" data-act="move" data-how="octave" data-by="1" title="An octave up (Ctrl+↑)">8↑</button>
           <button type="button" class="tool" data-act="move" data-how="octave" data-by="-1" title="An octave down (Ctrl+↓)">8↓</button>
         </div>
-        <div class="tool-row">
+        <p class="tool-sub">Accidentals</p>
+        <div class="tool-row" aria-label="Accidentals">
           <button type="button" class="tool" data-act="alter" data-alter="-2" title="Double flat">𝄫</button>
           <button type="button" class="tool" data-act="alter" data-alter="-1" title="Flat (−)">♭</button>
           <button type="button" class="tool" data-act="alter" data-alter="0" title="Natural (=)">♮</button>
           <button type="button" class="tool" data-act="alter" data-alter="1" title="Sharp (+)">♯</button>
           <button type="button" class="tool" data-act="alter" data-alter="2" title="Double sharp">𝄪</button>
+          <button type="button" class="tool" data-act="enharmonic" title="Spell the selected notes the other way: C♯ ↔ D♭ (J)">♯↔♭</button>
         </div>
-        <div class="tool-row" aria-label="Reminder accidentals">
+        <p class="tool-sub">Accidental shown</p>
+        <div class="tool-row" aria-label="Accidental shown">
           <button type="button" class="tool tool-wide" data-act="reminder" data-kind="forced" title="Print the accidental whatever the key and the bar say (cis!); again to take it away">Show ♯♭♮</button>
           <button type="button" class="tool tool-wide" data-act="reminder" data-kind="cautionary" title="A cautionary accidental, in parentheses (cis?); again to take it away">(♯♭♮)</button>
         </div>
+        <p class="tool-sub">Transpose</p>
         <div class="tool-row tool-transpose">
           <select class="tool-select" data-transpose-interval aria-label="Interval to transpose by"></select>
           <select class="tool-select" data-transpose-way aria-label="Up or down">
@@ -382,36 +391,6 @@
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="transpose" data-scope="selection" title="Transpose the selected notes">Transpose notes</button>
           <button type="button" class="tool tool-wide" data-act="transpose" data-scope="score" title="Transpose the whole score, its key and chord symbols">Transpose score</button>
-        </div>
-      </details>
-
-      <details class="tool-section" data-section="ties-and-lines">
-        <summary><h3>Ties &amp; lines</h3></summary>
-        <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="tie" title="Tie to the next note (T)">⁀ Tie</button>
-          <button type="button" class="tool tool-wide" data-act="slur" title="Slur the selected notes (S)">⌒ Slur</button>
-          <button type="button" class="tool tool-wide" data-act="phrase" title="Phrasing slur over the selected notes (Shift+S)">⌒ Phrase</button>
-        </div>
-        <div class="tool-row" aria-label="Ottava">
-          <button type="button" class="tool tool-wide" data-act="ottava" data-value="1" title="8va: the selected notes drawn an octave lower, under a line; again to take it away">8va</button>
-          <button type="button" class="tool tool-wide" data-act="ottava" data-value="-1" title="8vb: the selected notes drawn an octave higher, over a line; again to take it away">8vb</button>
-          <button type="button" class="tool tool-wide" data-act="ottava-end" title="End the ottava line before the selected note">End 8va</button>
-        </div>
-        <div class="tool-row" aria-label="Stems and beams">
-          <button type="button" class="tool" data-act="stem" data-dir="1" title="Stems up over the selection">↑</button>
-          <button type="button" class="tool" data-act="stem" data-dir="-1" title="Stems down over the selection">↓</button>
-          <button type="button" class="tool" data-act="stem" data-dir="0" title="Stems as the voice wants">↕</button>
-          <button type="button" class="tool tool-wide" data-act="beam" title="Beam the selected notes by hand (Alt+B); again to take the beam away">⌐ Beam</button>
-          <button type="button" class="tool tool-wide" data-act="beam-break" title="Break the beam before the selected note (Alt+Shift+B)">Break</button>
-          <button type="button" class="tool tool-wide" data-act="enharmonic" title="Spell the selected notes the other way: C♯ ↔ D♭ (J)">♯↔♭</button>
-        </div>
-        <div class="tool-row" aria-label="Cross-staff">
-          <button type="button" class="tool tool-wide" data-act="cross" data-dir="-1" title="Draw the selected notes on the staff above (Ctrl+Shift+↑); again to bring them back">↥ Staff above</button>
-          <button type="button" class="tool tool-wide" data-act="cross" data-dir="1" title="Draw the selected notes on the staff below (Ctrl+Shift+↓); again to bring them back">↧ Staff below</button>
-        </div>
-        <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="hairpin" data-kind="&lt;" title="Crescendo over the selection">𝆒 cresc.</button>
-          <button type="button" class="tool tool-wide" data-act="hairpin" data-kind="&gt;" title="Diminuendo over the selection">𝆓 dim.</button>
         </div>
       </details>
 
@@ -425,9 +404,8 @@
           <button type="button" class="tool" data-act="art" data-name="staccatissimo" title="Staccatissimo">▾</button>
           <button type="button" class="tool" data-act="art" data-name="fermata" title="Fermata">𝄐</button>
         </div>
-        <div class="tool-row" aria-label="Bowings and breaths">
-          <button type="button" class="tool" data-act="art" data-name="downbow" title="Down-bow (\downbow)">⊓</button>
-          <button type="button" class="tool" data-act="art" data-name="upbow" title="Up-bow (\upbow)">V</button>
+        <p class="tool-sub">Breaths</p>
+        <div class="tool-row" aria-label="Breaths">
           <button type="button" class="tool" data-act="breath" data-kind="breathe" title="Breath mark after the note (\breathe); again to take it away">,</button>
           <button type="button" class="tool" data-act="breath" data-kind="caesura" title="Caesura after the note (\caesura); again to take it away">//</button>
         </div>
@@ -444,6 +422,26 @@
             <button type="button" class="tool tool-dyn" data-act="dynamic" data-name="<%= dynamic %>"
               title="<%= word %>" aria-label="<%= word %>"><%= dynamic %></button>
           <% end %>
+        </div>
+        <p class="tool-sub">Hairpins</p>
+        <div class="tool-row" aria-label="Hairpins">
+          <button type="button" class="tool tool-wide" data-act="hairpin" data-kind="&lt;" title="Crescendo over the selection">𝆒 cresc.</button>
+          <button type="button" class="tool tool-wide" data-act="hairpin" data-kind="&gt;" title="Diminuendo over the selection">𝆓 dim.</button>
+        </div>
+      </details>
+
+      <details class="tool-section" data-section="ties-and-lines">
+        <summary><h3>Ties, slurs &amp; 8va</h3></summary>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="tie" title="Tie to the next note (T)">⁀ Tie</button>
+          <button type="button" class="tool tool-wide" data-act="slur" title="Slur the selected notes (S)">⌒ Slur</button>
+          <button type="button" class="tool tool-wide" data-act="phrase" title="Phrasing slur over the selected notes (Shift+S)">⌒ Phrase</button>
+        </div>
+        <p class="tool-sub">Ottava</p>
+        <div class="tool-row" aria-label="Ottava">
+          <button type="button" class="tool tool-wide" data-act="ottava" data-value="1" title="8va: the selected notes drawn an octave lower, under a line; again to take it away">8va</button>
+          <button type="button" class="tool tool-wide" data-act="ottava" data-value="-1" title="8vb: the selected notes drawn an octave higher, over a line; again to take it away">8vb</button>
+          <button type="button" class="tool tool-wide" data-act="ottava-end" title="End the ottava line before the selected note">End 8va</button>
         </div>
       </details>
 
@@ -508,9 +506,30 @@
         </div>
       </details>
 
+      <details class="tool-section" data-section="stems-and-beams">
+        <summary><h3>Stems &amp; beams</h3></summary>
+        <p class="tool-sub">Stems</p>
+        <div class="tool-row" aria-label="Stems">
+          <button type="button" class="tool" data-act="stem" data-dir="1" title="Stems up over the selection">↑</button>
+          <button type="button" class="tool" data-act="stem" data-dir="-1" title="Stems down over the selection">↓</button>
+          <button type="button" class="tool" data-act="stem" data-dir="0" title="Stems as the voice wants">↕</button>
+        </div>
+        <p class="tool-sub">Beams</p>
+        <div class="tool-row" aria-label="Beams">
+          <button type="button" class="tool tool-wide" data-act="beam" title="Beam the selected notes by hand (Alt+B); again to take the beam away">⌐ Beam</button>
+          <button type="button" class="tool tool-wide" data-act="beam-break" title="Break the beam before the selected note (Alt+Shift+B)">Break</button>
+        </div>
+        <p class="tool-sub">Cross-staff</p>
+        <div class="tool-row" aria-label="Cross-staff">
+          <button type="button" class="tool tool-wide" data-act="cross" data-dir="-1" title="Draw the selected notes on the staff above (Ctrl+Shift+↑); again to bring them back">↥ Staff above</button>
+          <button type="button" class="tool tool-wide" data-act="cross" data-dir="1" title="Draw the selected notes on the staff below (Ctrl+Shift+↓); again to bring them back">↧ Staff below</button>
+        </div>
+      </details>
+
       <details class="tool-section" data-section="fingering">
-        <summary><h3>Fingering</h3></summary>
-        <div class="tool-row" aria-label="Finger">
+        <summary><h3>Fingering &amp; technique</h3></summary>
+        <p class="tool-sub">Fingers</p>
+        <div class="tool-row" aria-label="Fingers">
           <button type="button" class="tool" data-act="finger" data-n="1" title="Finger 1 on the selected note (Alt+1); again to take it away">1</button>
           <button type="button" class="tool" data-act="finger" data-n="2" title="Finger 2 (Alt+2)">2</button>
           <button type="button" class="tool" data-act="finger" data-n="3" title="Finger 3 (Alt+3)">3</button>
@@ -518,7 +537,8 @@
           <button type="button" class="tool" data-act="finger" data-n="5" title="Finger 5 (Alt+5)">5</button>
           <button type="button" class="tool tool-wide" data-act="finger-remove" title="Take the fingerings and string numbers away">Remove</button>
         </div>
-        <div class="tool-row" aria-label="String">
+        <p class="tool-sub">Strings</p>
+        <div class="tool-row" aria-label="Strings">
           <button type="button" class="tool" data-act="string-number" data-n="1" title="Played on string 1">①</button>
           <button type="button" class="tool" data-act="string-number" data-n="2" title="Played on string 2">②</button>
           <button type="button" class="tool" data-act="string-number" data-n="3" title="Played on string 3">③</button>
@@ -526,33 +546,21 @@
           <button type="button" class="tool" data-act="string-number" data-n="5" title="Played on string 5">⑤</button>
           <button type="button" class="tool" data-act="string-number" data-n="6" title="Played on string 6">⑥</button>
         </div>
-      </details>
-
-      <details class="tool-section" data-section="marks">
-        <summary><h3>Marks &amp; jumps</h3></summary>
-        <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="mark" data-mark="letter" title="A rehearsal letter over the selected bar: A, B, C…">Rehearsal A</button>
-          <button type="button" class="tool tool-glyph" data-act="mark" data-mark="segno" title="Segno over the selected bar" aria-label="Segno">𝄋</button>
-          <button type="button" class="tool tool-glyph" data-act="mark" data-mark="coda" title="Coda over the selected bar" aria-label="Coda">𝄌</button>
+        <p class="tool-sub">Bowing</p>
+        <div class="tool-row" aria-label="Bowing">
+          <button type="button" class="tool" data-act="art" data-name="downbow" title="Down-bow (\downbow)">⊓</button>
+          <button type="button" class="tool" data-act="art" data-name="upbow" title="Up-bow (\upbow)">V</button>
         </div>
-        <div class="tool-row tool-transpose">
-          <select class="tool-select" data-jump aria-label="Jump at the end of the selected bar">
-            <option value="ds-coda">D.S. al Coda</option><option value="ds-fine">D.S. al Fine</option><option value="ds">D.S.</option>
-            <option value="dc-coda">D.C. al Coda</option><option value="dc-fine">D.C. al Fine</option><option value="dc">D.C.</option>
-            <option value="to-coda">To Coda</option><option value="fine">Fine</option>
-          </select>
-          <button type="button" class="tool" data-act="jump" title="Put it at the end of the selected bar; again takes it away">At bar end</button>
-        </div>
-        <div class="tool-row">
+        <p class="tool-sub">Pedal</p>
+        <div class="tool-row" aria-label="Pedal">
           <button type="button" class="tool tool-wide" data-act="pedal" data-how="on" title="Press the sustain pedal on this note">Ped.</button>
           <button type="button" class="tool" data-act="pedal" data-how="off" title="Let the pedal go on this note">*</button>
           <button type="button" class="tool tool-wide" data-act="pedal" data-how="change" title="Let go and press again on this note">* Ped.</button>
         </div>
-        <p class="tool-hint">The jumps are played: D.S. and D.C. go back to the segno or the start, on to the Fine, or from To Coda to the coda.</p>
       </details>
 
       <details class="tool-section" data-section="repeats">
-        <summary><h3>Repeats</h3></summary>
+        <summary><h3>Repeats &amp; jumps</h3></summary>
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="repeat" title="Repeat the selected bars — the same bars again take it away">𝄆 Repeat 𝄇</button>
           <button type="button" class="tool tool-wide" data-act="ending" title="The selected bars become the next ending: 1., then 2.…">Ending 1. 2.</button>
@@ -566,6 +574,22 @@
           for 1., again for 2. On the score, drag a repeat's handles to another bar line to change where it starts,
           ends, and how long each ending is.
         </p>
+        <p class="tool-sub">Marks</p>
+        <div class="tool-row" aria-label="Marks">
+          <button type="button" class="tool tool-wide" data-act="mark" data-mark="letter" title="A rehearsal letter over the selected bar: A, B, C…">Rehearsal A</button>
+          <button type="button" class="tool tool-glyph" data-act="mark" data-mark="segno" title="Segno over the selected bar" aria-label="Segno">𝄋</button>
+          <button type="button" class="tool tool-glyph" data-act="mark" data-mark="coda" title="Coda over the selected bar" aria-label="Coda">𝄌</button>
+        </div>
+        <p class="tool-sub">Jumps</p>
+        <div class="tool-row tool-transpose">
+          <select class="tool-select" data-jump aria-label="Jump at the end of the selected bar">
+            <option value="ds-coda">D.S. al Coda</option><option value="ds-fine">D.S. al Fine</option><option value="ds">D.S.</option>
+            <option value="dc-coda">D.C. al Coda</option><option value="dc-fine">D.C. al Fine</option><option value="dc">D.C.</option>
+            <option value="to-coda">To Coda</option><option value="fine">Fine</option>
+          </select>
+          <button type="button" class="tool" data-act="jump" title="Put it at the end of the selected bar; again takes it away">At bar end</button>
+        </div>
+        <p class="tool-hint">The jumps are played: D.S. and D.C. go back to the segno or the start, on to the Fine, or from To Coda to the coda.</p>
       </details>
 
       <details class="tool-section" data-section="bars-and-staves">
