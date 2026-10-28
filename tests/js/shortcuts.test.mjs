@@ -36,6 +36,18 @@ test("shortcuts: the keys the audit found missing are handled, and listed", () =
     [press("m", { ctrl: true, alt: true, code: "KeyM" }), "comment", "Ctrl+Alt+M"],
   ];
   assert.equal(resolveKey(press("m", { ctrl: true }))?.[0], undefined, "Ctrl+M alone is not a comment");
+  // R (#423): a rest in note input, as 0 is; recording out of it.
+  assert.equal(resolveKey(press("r"), { inputOn: true })?.[0], "rest");
+  assert.equal(resolveKey(press("r"))?.[0], "record");
+  assert.equal(entryOf(press("r"), { inputOn: true })?.keys, "0 / R");
+  assert.equal(entryOf(press("R", { shift: true }), { inputOn: true })?.keys, "0 / R");
+  assert.equal(entryOf(press("0"))?.keys, "0 / R");
+  assert.equal(entryOf(press("r"))?.keys, "R");
+  assert.equal(entryOf(press("r", { ctrl: true }), { inputOn: true }), undefined, "Ctrl+R is the browser's");
+  // I turns note input on and off, as N does (#423); S stays the slur.
+  assert.equal(resolveKey(press("i"))?.[0], "mode-input");
+  assert.equal(resolveKey(press("i"), { inputOn: true })?.[0], "mode-select");
+  assert.equal(resolveKey(press("s"))?.[0], "slur");
   for (const [event, act, keys] of cases) {
     assert.equal(resolveKey(event)?.[0], act, `${event.key} does ${act}`);
     assert.equal(entryOf(event)?.keys, keys, `${event.key} is listed as ${keys}`);

@@ -71,7 +71,7 @@
             <button type="button" role="menuitem" data-act="redo">Redo <kbd>Ctrl+Y</kbd></button>
             <hr>
             <button type="button" role="menuitem" data-act="mode-select">Select notes <kbd>Esc</kbd></button>
-            <button type="button" role="menuitem" data-act="mode-input"><svg class="pen-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M15.5 3.5l5 5L9 20l-6.5 1.5L4 15z"/><path d="M13 6l5 5"/><path d="M4 15l5 5"/></svg> Write notes <kbd>N</kbd></button>
+            <button type="button" role="menuitem" data-act="mode-input"><svg class="pen-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M15.5 3.5l5 5L9 20l-6.5 1.5L4 15z"/><path d="M13 6l5 5"/><path d="M4 15l5 5"/></svg> Write notes <kbd>N or I</kbd></button>
             <hr>
             <button type="button" role="menuitem" data-act="copy">Copy <kbd>Ctrl+C</kbd></button>
             <button type="button" role="menuitem" data-act="cut">Cut <kbd>Ctrl+X</kbd></button>
@@ -317,7 +317,7 @@
           <summary><h3>Mode</h3></summary>
           <div class="tool-row">
             <button type="button" class="tool tool-wide" data-act="mode-select" title="Select and change notes (Esc)" aria-pressed="true">Select</button>
-            <button type="button" class="tool tool-wide" data-act="mode-input" title="Write notes at the cursor (N)" aria-pressed="false"><svg class="pen-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M15.5 3.5l5 5L9 20l-6.5 1.5L4 15z"/><path d="M13 6l5 5"/><path d="M4 15l5 5"/></svg> Note input</button>
+            <button type="button" class="tool tool-wide" data-act="mode-input" title="Write notes at the cursor (N or I)" aria-pressed="false"><svg class="pen-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M15.5 3.5l5 5L9 20l-6.5 1.5L4 15z"/><path d="M13 6l5 5"/><path d="M4 15l5 5"/></svg> Note input</button>
           </div>
         </details>
 
@@ -349,7 +349,7 @@
           <button type="button" class="tool" data-act="letter" data-step="4" title="G">G</button>
           <button type="button" class="tool" data-act="letter" data-step="5" title="A">A</button>
           <button type="button" class="tool" data-act="letter" data-step="6" title="B">B</button>
-          <button type="button" class="tool" data-act="rest" title="Rest (0)">𝄽</button>
+          <button type="button" class="tool" data-act="rest" title="Rest (0, or R in note input)">𝄽</button>
         </div>
         <div class="tool-row tool-drums" data-drums hidden aria-label="Drums"></div>
         <label class="tool-check" title="Ticked, a letter adds to the note just written (the first one writes the chord's first note), and a click on the staff adds to the note there"><input type="checkbox" data-chord-mode> Add to the chord <span class="muted">(Shift+letter, Alt+click)</span></label>

@@ -13,6 +13,12 @@ class Changelog
       {"date": "2026-10-28", "entries": [
         {
           "area": "editor",
+          "title": "R for a rest, I for note input",
+          "text": "In note input, R now writes a rest, as 0 does; out of note input R still records from the MIDI "
+          + "keyboard. I turns note input on and off, as N does, and Esc still goes back to selecting."
+        },
+        {
+          "area": "editor",
           "title": "Chords with the mouse",
           "text": "Add to the chord, in the toolbox's Notes, now works with the mouse too. Ticked, in note input, a "
           + "click on the staff over a note adds that pitch to it, and the letter buttons write a chord's first "

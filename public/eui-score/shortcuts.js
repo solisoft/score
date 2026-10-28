@@ -16,11 +16,12 @@ const lower = (k) => k.key.toLowerCase();
 
 export const SHORTCUTS = [
   {
-    keys: "N / Esc",
-    does: "note input / select",
+    keys: "N or I / Esc",
+    does: "note input on and off / select",
     match: (k, ctx) => {
       if (k.mod) return null;
-      if (lower(k) === "n") return [ctx.inputOn ? "mode-select" : "mode-input"];
+      // I as well as N (#423).
+      if (lower(k) === "n" || (lower(k) === "i" && !k.altKey)) return [ctx.inputOn ? "mode-select" : "mode-input"];
       return k.key === "Escape" ? ["escape"] : null;
     },
   },
@@ -32,7 +33,8 @@ export const SHORTCUTS = [
       return k.mod || k.altKey || step === undefined ? null : ["letter", { step, add: k.shiftKey }];
     },
   },
-  { keys: "0", does: "rest", match: (k) => (!k.mod && k.key === "0" ? ["rest"] : null) },
+  // R as well as 0 in note input (#423): out of it, R records (below).
+  { keys: "0 / R", does: "rest (R: in note input)", match: (k, ctx) => (!k.mod && (k.key === "0" || (ctx.inputOn && lower(k) === "r")) ? ["rest"] : null) },
   {
     keys: "2–7 / .",
     does: "32nd … whole / dot",
@@ -152,7 +154,7 @@ export const SHORTCUTS = [
       return k.key === "-" || k.key === "_" ? ["zoom-out"] : null;
     },
   },
-  { keys: "R", does: "record from the MIDI keyboard", match: (k) => (!k.mod && lower(k) === "r" ? ["record"] : null) },
+  { keys: "R", does: "record from the MIDI keyboard (out of note input)", match: (k, ctx) => (!k.mod && !ctx.inputOn && lower(k) === "r" ? ["record"] : null) },
   { keys: "Space", does: "play / pause", match: (k, ctx) => (k.key === " " && !ctx.onButton ? ["play"] : null) },
   { keys: "?", does: "this sheet", match: (k) => (k.key === "?" ? ["keys"] : null) },
 ];

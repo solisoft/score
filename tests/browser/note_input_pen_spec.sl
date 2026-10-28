@@ -249,4 +249,28 @@ describe("Note input's pen and ghost note, in a browser") do
     evaluate("document.querySelector('[data-chord-mode]').click()")
     assert_no_page_errors()
   end
+
+  test("R writes a rest in note input, as 0 does, out of it none; I turns note input on and off (#423)") do
+    press("n")
+    sleep(0.3)
+    press("r")
+    sleep(0.4)
+    assert_contains(pen_text(), "r4 d'4 e'4 f'4")
+    assert_contains(evaluate("document.querySelector('[data-state]').textContent"), "0 or R rest")
+    # Out of note input, R is the recording's: no rest is written.
+    press("Escape")
+    sleep(0.3)
+    before = pen_text()
+    press("r")
+    sleep(0.4)
+    assert_eq(pen_text(), before)
+    # I turns note input on, and off again, as N does.
+    press("i")
+    sleep(0.3)
+    assert(evaluate("document.getElementById('studio').studio.input.on"), "I starts note input")
+    press("i")
+    sleep(0.3)
+    assert_not(evaluate("document.getElementById('studio').studio.input.on"), "I ends note input")
+    assert_no_page_errors()
+  end
 end
