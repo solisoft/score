@@ -2281,7 +2281,8 @@
     border-radius: 12px;
     box-shadow: 0 14px 36px rgb(29 25 20 / .16);
   }
-  .studio-dropdown-items > button, .studio-dropdown-items > label {
+  .studio-dropdown-items > button, .studio-dropdown-items > label, .studio-dropdown-items > a {
+    text-decoration: none;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -2296,7 +2297,7 @@
     cursor: pointer;
     white-space: nowrap;
   }
-  .studio-dropdown-items > button:hover, .studio-dropdown-items > label:hover, .studio-dropdown-items > button:focus-visible {
+  .studio-dropdown-items > :is(button, label, a):hover, .studio-dropdown-items > :is(button, label, a):focus-visible {
     background: var(--paper-deep);
     outline: none;
   }
@@ -5122,7 +5123,7 @@
       border-radius: 14px 14px 0 0;
       padding: 8px 8px calc(12px + env(safe-area-inset-bottom, 0px));
     }
-    .studio-dropdown-items > button, .studio-dropdown-items > label {
+    .studio-dropdown-items > button, .studio-dropdown-items > label, .studio-dropdown-items > a {
       padding: 12px;
       white-space: normal;
     }

@@ -318,8 +318,9 @@
   .studio-dropdown > summary::-webkit-details-marker { display: none; }
   .studio-dropdown[open] > summary { background: var(--paper-deep); color: var(--ink); }
   .studio-dropdown-items { position: absolute; top: calc(100% + 4px); left: 0; z-index: 40; min-width: 260px; max-height: min(70vh, 560px); overflow-y: auto; display: grid; padding: 6px; background: var(--sheet); border: 1px solid var(--line-strong); border-radius: 12px; box-shadow: 0 14px 36px rgb(29 25 20 / .16); }
-  .studio-dropdown-items > button, .studio-dropdown-items > label { display: flex; justify-content: space-between; align-items: center; gap: 18px; text-align: left; font: 500 14px/1.3 var(--font-sans); color: var(--ink); background: none; border: 0; border-radius: 8px; padding: 8px 10px; cursor: pointer; white-space: nowrap; }
-  .studio-dropdown-items > button:hover, .studio-dropdown-items > label:hover, .studio-dropdown-items > button:focus-visible { background: var(--paper-deep); outline: none; }
+  /* An item is a button, a label (Open a file…) or a link (Open a photo… with no AI key, #424): all alike. */
+  .studio-dropdown-items > button, .studio-dropdown-items > label, .studio-dropdown-items > a { text-decoration: none; display: flex; justify-content: space-between; align-items: center; gap: 18px; text-align: left; font: 500 14px/1.3 var(--font-sans); color: var(--ink); background: none; border: 0; border-radius: 8px; padding: 8px 10px; cursor: pointer; white-space: nowrap; }
+  .studio-dropdown-items > :is(button, label, a):hover, .studio-dropdown-items > :is(button, label, a):focus-visible { background: var(--paper-deep); outline: none; }
   .studio-dropdown-items > button:disabled { color: var(--muted); cursor: default; background: none; }
   .studio-dropdown-items kbd { font: 400 12px/1 var(--font-sans); color: var(--muted); }
   .studio-dropdown-items hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
@@ -980,7 +981,7 @@
       position: fixed; top: auto; left: 0; right: 0; bottom: 0; z-index: 45; min-width: 0; max-height: 62vh;
       border-radius: 14px 14px 0 0; padding: 8px 8px calc(12px + env(safe-area-inset-bottom, 0px));
     }
-    .studio-dropdown-items > button, .studio-dropdown-items > label { padding: 12px; white-space: normal; }
+    .studio-dropdown-items > button, .studio-dropdown-items > label, .studio-dropdown-items > a { padding: 12px; white-space: normal; }
   }
   @media (max-width: 899px) and (prefers-reduced-motion: reduce) {
     .studio-toolbox, .studio-tools-open .studio-toolbox { transition: none; }

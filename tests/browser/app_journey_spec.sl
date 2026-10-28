@@ -371,6 +371,25 @@ describe("The app, in a browser") do
     assert_no_page_errors()
   end
 
+  test("with no AI key, File › Open a photo… is a menu item like the others, not an underlined link (#424)") do
+    sign_up_in_browser(journey_email())
+    choose("input[value='string-quartet']")
+    fill_in("#new-title", "Menu check")
+    click_button("Create the score")
+    wait_for("[data-save-state]")
+    viewport(1280, 800)
+    sleep(0.3)
+    click(".studio-dropdown:first-child > summary")
+    sleep(0.3)
+    style = "(selector) => { const it = getComputedStyle(document.querySelector(selector));"
+    + " return [it.textDecorationLine, it.color, it.paddingLeft, it.display].join(' | '); }"
+    photo = evaluate("(#{style})('[data-photo-refused]')")
+    other = evaluate("(#{style})('.studio-dropdown-items [data-act=\"new\"]')")
+    assert_eq(photo, other)
+    assert_contains(photo, "none")
+    assert_no_page_errors()
+  end
+
   test("import a MusicXML file: what it leaves out is named first, then the score is created") do
     sign_up_in_browser(journey_email())
     import_in_browser("imported.musicxml", VIOLIN_XML)

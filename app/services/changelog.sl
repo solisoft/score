@@ -13,6 +13,13 @@ class Changelog
       {"date": "2026-10-28", "entries": [
         {
           "area": "editor",
+          "title": "File › Open a photo… looks like the menu's other items",
+          "text": "In the app, with no AI key yet, File › Open a photo… is a link to the account page, and it was "
+          + "drawn as one: red, underlined and out of line with the items around it. It now looks like the other "
+          + "items of the menu, its note on the right."
+        },
+        {
+          "area": "editor",
           "title": "R for a rest, I for note input",
           "text": "In note input, R now writes a rest, as 0 does; out of note input R still records from the MIDI "
           + "keyboard. I turns note input on and off, as N does, and Esc still goes back to selecting."
