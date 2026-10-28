@@ -8,9 +8,18 @@ def journey_email
   "journey-#{uuid_v4}@example.com"
 end
 
-# The score open in the editor: the LilyPond its source box holds.
+# The score open in the editor: the LilyPond its source box holds. It waits
+# for the box a moment, and says which page it was on when there is none.
 def editor_source
-  evaluate("document.querySelector('[data-source]').value")
+  source = nil
+  20.times do
+    source = evaluate("document.querySelector('[data-source]')?.value ?? null")
+    break unless source.nil?
+
+    sleep(0.25)
+  end
+  assert_not_null(source, "the editor's text, on #{page_path}: #{evaluate("document.title")}")
+  source
 end
 
 # Waits for the editor to have read its score: its tools are off until then.
