@@ -465,13 +465,41 @@
   .app-room-person::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--peer); box-shadow: 0 0 0 1.5px #fff; }
   .app-doc-action { font: 500 13px/1 var(--font-sans); color: var(--ink-soft); background: none; border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; cursor: pointer; white-space: nowrap; }
   .app-doc-action:hover { border-color: var(--ink); color: var(--ink); text-decoration: none; }
+  /* The score's actions, in the header (#427): a popover element shown in
+     place while there is room, and Score ▾ hidden. */
+  .app-doc-more { display: none; }
+  .app-doc-actions[popover] {
+    display: flex; align-items: center; gap: 10px; position: static; inset: auto; margin: 0; padding: 0;
+    border: 0; background: none; color: inherit; overflow: visible; width: auto; height: auto;
+  }
+  /* Narrower, the title keeps its room: the brand's name goes, and the
+     actions go under Score ▾, as a menu. */
+  @media (max-width: 1180px) {
+    .app-header:has(.app-doc) .brand > span:last-child, .app-header:has(.app-doc) .app-nav a:first-child { display: none; }
+    .app-doc-more { display: inline-flex; flex: none; }
+    .app-doc-actions[popover]:not(:popover-open) { display: none; }
+    .app-doc-actions:popover-open {
+      display: grid; position: fixed; top: 58px; inset-inline-end: auto; gap: 4px; width: 220px; padding: 6px; margin: 0;
+      background: var(--sheet); border: 1px solid var(--line-strong); border-radius: 12px; box-shadow: 0 14px 36px rgb(29 25 20 / .16);
+    }
+    .app-doc-actions:popover-open .app-doc-action { border: 0; border-radius: 8px; padding: 10px 12px; text-align: left; font-size: 14px; }
+    .app-doc-actions:popover-open .app-doc-action:hover { background: var(--paper-deep); }
+  }
   @media (max-width: 760px) {
-    .app-doc-action, .app-nav a:first-child { display: none; }
+    .app-nav a:first-child { display: none; }
     /* The score's title and save state before the brand's name. */
     .app-header { gap: 8px; padding: 0 12px; }
     .app-header:has(.app-doc) .brand > span:last-child { display: none; }
     .app-doc { margin-left: 0; }
     .app-nav a { padding: 8px 8px; }
+  }
+  /* A phone, in the editor (#427): two rows, the brand and the app's links,
+     then the score's title, its save state and Score ▾; not sticky, as the
+     site's header is not, so the editor's menu bar keeps the top. */
+  @media (max-width: 600px) {
+    .app-header:has(.app-doc) { flex-wrap: wrap; height: auto; row-gap: 4px; padding-top: 8px; padding-bottom: 8px; }
+    .app-header:has(.app-doc) .app-doc { order: 3; flex: 1 0 100%; }
+    body:has(.studio) .app-header { position: static; }
   }
   .version-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 

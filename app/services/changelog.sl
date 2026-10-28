@@ -12,6 +12,14 @@ class Changelog
     [
       {"date": "2026-10-28", "entries": [
         {
+          "area": "site",
+          "title": "The editor's header fits a narrower screen",
+          "text": "On a laptop or a tablet, the header over a score ran its buttons into the app's links and lost the "
+          + "score's title. Below 1180 pixels, Keep a version, History, Comments and Share now go under a Score ▾ "
+          + "menu, and the title keeps its place. On a phone the header takes two rows, and the actions are there "
+          + "too, where they used to be hidden."
+        },
+        {
           "area": "editor",
           "title": "← and → in note input sound the note you move to",
           "text": "In note input, moving the cursor with ← and → sounded the note selected before, the same one "

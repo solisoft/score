@@ -3004,8 +3004,62 @@
     color: var(--ink);
     text-decoration: none;
   }
+  .app-doc-more {
+    display: none;
+  }
+  .app-doc-actions[popover] {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: static;
+    inset: auto;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    overflow: visible;
+    width: auto;
+    height: auto;
+  }
+  @media (max-width: 1180px) {
+    .app-header:has(.app-doc) .brand > span:last-child, .app-header:has(.app-doc) .app-nav a:first-child {
+      display: none;
+    }
+    .app-doc-more {
+      display: inline-flex;
+      flex: none;
+    }
+    .app-doc-actions[popover]:not(:popover-open) {
+      display: none;
+    }
+    .app-doc-actions:popover-open {
+      display: grid;
+      position: fixed;
+      top: 58px;
+      inset-inline-end: auto;
+      gap: 4px;
+      width: 220px;
+      padding: 6px;
+      margin: 0;
+      background: var(--sheet);
+      border: 1px solid var(--line-strong);
+      border-radius: 12px;
+      box-shadow: 0 14px 36px rgb(29 25 20 / .16);
+    }
+    .app-doc-actions:popover-open .app-doc-action {
+      border: 0;
+      border-radius: 8px;
+      padding: 10px 12px;
+      text-align: left;
+      font-size: 14px;
+    }
+    .app-doc-actions:popover-open .app-doc-action:hover {
+      background: var(--paper-deep);
+    }
+  }
   @media (max-width: 760px) {
-    .app-doc-action, .app-nav a:first-child {
+    .app-nav a:first-child {
       display: none;
     }
     .app-header {
@@ -3020,6 +3074,22 @@
     }
     .app-nav a {
       padding: 8px 8px;
+    }
+  }
+  @media (max-width: 600px) {
+    .app-header:has(.app-doc) {
+      flex-wrap: wrap;
+      height: auto;
+      row-gap: 4px;
+      padding-top: 8px;
+      padding-bottom: 8px;
+    }
+    .app-header:has(.app-doc) .app-doc {
+      order: 3;
+      flex: 1 0 100%;
+    }
+    body:has(.studio) .app-header {
+      position: static;
     }
   }
   .version-actions {

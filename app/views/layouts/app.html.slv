@@ -45,12 +45,17 @@
                 <span class="app-doc-title" data-doc-title><%= editing_score.title %></span>
                 <span class="app-save" data-save-state data-kind="ok" role="status" aria-live="polite">Saved</span>
                 <span class="app-room" data-room hidden aria-live="polite"></span>
-                <button type="button" class="app-doc-action" data-keep-version>Keep a version</button>
-                <a class="app-doc-action" href="<%= app_score_versions_path(editing_score) %>">History</a>
-                <button type="button" class="app-doc-action" data-comments-toggle aria-expanded="false">Comments <span class="app-comments-count" data-comments-count></span></button>
-                <% if owner %>
-                    <a class="app-doc-action" href="<%= app_score_share_path(editing_score) %>">Share</a>
-                <% end %>
+                <%# The score's actions: in the header on a wide screen; on a
+                    narrower one, under Score ▾ (#427), where the header has no room. %>
+                <button type="button" class="app-doc-action app-doc-more" popovertarget="app-doc-actions" aria-label="This score's actions">Score ▾</button>
+                <div class="app-doc-actions" id="app-doc-actions" popover>
+                    <button type="button" class="app-doc-action" data-keep-version>Keep a version</button>
+                    <a class="app-doc-action" href="<%= app_score_versions_path(editing_score) %>">History</a>
+                    <button type="button" class="app-doc-action" data-comments-toggle aria-expanded="false">Comments <span class="app-comments-count" data-comments-count></span></button>
+                    <% if owner %>
+                        <a class="app-doc-action" href="<%= app_score_share_path(editing_score) %>">Share</a>
+                    <% end %>
+                </div>
             </div>
         <% end %>
         <nav class="app-nav" aria-label="App">
@@ -98,6 +103,23 @@
     </script>
     <% end %>
     <%# Installable, and open without a network: public/sw.js. %>
+    <%# Score ▾ (#427): its menu opens under it, and an action chosen closes it (but Keep a version, which answers on itself). %>
+    <script>
+      if (!window.euiDocMore) {
+        window.euiDocMore = true;
+        document.addEventListener("beforetoggle", (event) => {
+          const menu = event.target;
+          if (!menu.matches?.(".app-doc-actions") || event.newState !== "open") return;
+          const at = document.querySelector(".app-doc-more")?.getBoundingClientRect();
+          if (at) menu.style.left = `${Math.round(Math.max(8, Math.min(at.left, innerWidth - 228)))}px`;
+        }, true);
+        document.addEventListener("click", (event) => {
+          const menu = event.target.closest?.(".app-doc-actions:popover-open");
+          // Keep a version says "Version kept" on itself: the menu stays open to show it.
+          if (menu && event.target.closest(".app-doc-action") && !event.target.closest("[data-keep-version]")) menu.hidePopover();
+        });
+      }
+    </script>
     <script>
       if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
     </script>

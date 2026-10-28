@@ -22,6 +22,11 @@ def editor_source
   source
 end
 
+# What the Score ▾ menu holds.
+def text_of_page_actions
+  evaluate("document.getElementById('app-doc-actions').innerText")
+end
+
 # Waits for the editor to have read its score: its tools are off until then.
 def wait_editor
   wait_for_text("Your changes save themselves")
@@ -396,6 +401,54 @@ describe("The app, in a browser") do
     other = evaluate("(#{style})('.studio-dropdown-items [data-act=\"new\"]')")
     assert_eq(photo, other)
     assert_contains(photo, "none")
+    assert_no_page_errors()
+  end
+
+  test("the editor's header never overlaps: on a narrower screen the score's actions go under Score ▾ (#427)") do
+    email = journey_email()
+    sign_up_in_browser(email)
+    # An admin has the most links in the header.
+    user = User.find_by("email", email)
+    user.role = "admin"
+    user.save
+    choose("input[value='string-quartet']")
+    fill_in("#new-title", "Quartet in G minor, first movement")
+    click_button("Create the score")
+    wait_for("[data-save-state]")
+    wait_editor()
+    header = "(() => { const box = (it) => it.getBoundingClientRect();"
+    + " const head = document.querySelector('.app-header');"
+    + " const doc = box(head.querySelector('.app-doc')); const nav = box(head.querySelector('.app-nav'));"
+    + " const title = box(head.querySelector('.app-doc-title'));"
+    + " const apart = doc.right <= nav.left + 1 || doc.top >= nav.bottom - 1;"
+    + " return { apart, title: Math.round(title.width),"
+    + " more: getComputedStyle(head.querySelector('.app-doc-more')).display !== 'none',"
+    + " page: document.documentElement.scrollWidth <= innerWidth }; })()"
+    [[1280, false], [900, true], [761, true], [390, true]].each do |size|
+      viewport(size[0], 700)
+      sleep(0.4)
+      seen = evaluate(header)
+      assert(seen["apart"], "the score's part and the app's links apart at #{size[0]}")
+      assert(seen["title"] > 40, "the title in sight at #{size[0]}: #{seen["title"]}")
+      assert_eq(seen["more"], size[1], "Score ▾ at #{size[0]}")
+      assert(seen["page"], "nothing wider than the window at #{size[0]}")
+    end
+    # Score ▾ opens the four actions, and one chosen closes it and does its work.
+    viewport(900, 700)
+    sleep(0.3)
+    click(".app-doc-more")
+    sleep(0.3)
+    assert(evaluate("document.getElementById('app-doc-actions').matches(':popover-open')"), "the menu opens")
+    assert_contains(text_of_page_actions(), "Keep a version")
+    click("#app-doc-actions [data-keep-version]")
+    wait_for_text("Version kept")
+    assert(evaluate("document.getElementById('app-doc-actions').matches(':popover-open')"), "open, to say it")
+    # Comments opens its panel and closes the menu.
+    click("#app-doc-actions [data-comments-toggle]")
+    sleep(0.4)
+    assert_not(evaluate("document.getElementById('app-doc-actions').matches(':popover-open')"), "chosen, it closes")
+    assert(evaluate("Boolean(document.querySelector('[data-comments-panel]:not([hidden])'))"), "the comments open")
+    viewport(1280, 800)
     assert_no_page_errors()
   end
 
