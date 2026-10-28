@@ -273,4 +273,31 @@ describe("Note input's pen and ghost note, in a browser") do
     assert_not(evaluate("document.getElementById('studio').studio.input.on"), "I ends note input")
     assert_no_page_errors()
   end
+
+  test("in note input, ← and → sound the note the cursor comes to, not the one selected before (#426)") do
+    # A MIDI device to hear through: what is sent to it is kept.
+    evaluate("(() => { window.sent = []; const out = { id: 'fake-out', name: 'Fake synth', state: 'connected',"
+    + " send: (bytes) => window.sent.push(Array.from(bytes)) };"
+    + " const access = { inputs: new Map(), outputs: new Map([['fake-out', out]]) };"
+    + " Object.defineProperty(navigator, 'requestMIDIAccess', { configurable: true, value: async () => access }); })()")
+    evaluate("(() => { const box = document.querySelector('[data-play=\"output\"]'); box.value = 'find';"
+    + " box.dispatchEvent(new Event('change', { bubbles: true })); })()")
+    sleep(0.5)
+    assert_eq(evaluate("document.querySelector('[data-play=\"output\"]').value"), "fake-out")
+    heard = "window.sent.filter((m) => (m[0] & 0xf0) === 0x90 && m[2] > 0).map((m) => m[1])"
+    press("n")
+    sleep(0.3)
+    evaluate("window.sent = []")
+    # c' d' e' f': → to D4, → to E4, ← back to D4.
+    ["ArrowRight", "ArrowRight", "ArrowLeft"].each do |arrow|
+      press(arrow)
+      sleep(0.3)
+    end
+    assert_eq(evaluate(heard), [
+      62,
+      64,
+      62
+    ])
+    assert_no_page_errors()
+  end
 end

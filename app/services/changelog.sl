@@ -13,6 +13,13 @@ class Changelog
       {"date": "2026-10-28", "entries": [
         {
           "area": "editor",
+          "title": "← and → in note input sound the note you move to",
+          "text": "In note input, moving the cursor with ← and → sounded the note selected before, the same one "
+          + "each time, instead of the note under the cursor. It now sounds the note the cursor comes to, with its "
+          + "staff's instrument, as writing one does."
+        },
+        {
+          "area": "editor",
           "title": "File › Open a photo… looks like the menu's other items",
           "text": "In the app, with no AI key yet, File › Open a photo… is a link to the account page, and it was "
           + "drawn as one: red, underlined and out of line with the items around it. It now looks like the other "

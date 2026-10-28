@@ -96,7 +96,8 @@ export function install(ctx) {
   /** Sounds the note the tools act on — its selected head, or the whole chord — with its staff's instrument. */
   function hear() {
     if (!hearBox?.checked || st.playing || !st.score) return;
-    const t = target();
+    // In note input with nothing just written (← → moved the cursor), the note at the cursor (#426).
+    const t = st.input.on && !st.input.last ? atCursor() : target();
     const ev = t && st.score.staves[t.s]?.events[t.i];
     if (!ev || ev.rest || !ev.pitches.length) return;
     const heads = t.head >= 0 && ev.pitches[t.head] ? [ev.pitches[t.head]] : ev.pitches;
@@ -107,6 +108,13 @@ export function install(ctx) {
       say("Loading the sounds, to hear the notes… (38 MB, once)");
       P.prepare().then(() => say("The notes sound as you write them; Hear the notes turns it off.")).catch(() => {});
     }
+  }
+
+  /** The event the note-input cursor stands on, as a target, or null past the end. */
+  function atCursor() {
+    const staff = st.score.staves[st.input.staff];
+    const i = staff ? M.starts(staff).findLastIndex((start) => start <= st.input.t) : -1;
+    return i >= 0 ? { s: st.input.staff, i, head: -1 } : null;
   }
 
   /** The one event the tools act on: the selection's first, or the note just written. */
