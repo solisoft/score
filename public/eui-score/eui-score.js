@@ -27,7 +27,7 @@
 // asked for by: a new engraver is never taken from the cache of an old one,
 // whatever address loaded this module, and it changes this file — and so
 // this file's address — too.
-const WASM = "d23b6acc09845ce3";
+const WASM = "5bda876ae1b7f2fb";
 const V = `?v=${WASM}`;
 
 /** The WebAssembly binding itself: every function the module exports. */

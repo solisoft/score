@@ -23,13 +23,14 @@ crate-type = ["cdylib", "rlib"]
 # modes, four voices a staff and notes across staves; d0a4419 (what Soli
 # 2.28.5 pins) adds gathered bars of rest, clefs and keys changed inside a
 # bar, and real LilyPond files: layout settings passed over with warnings,
-# breath marks, bowings, cis! and cis?, movements. The browser draws
+# breath marks, bowings, cis! and cis?, movements; adc44e0 breaks a title
+# too wide for the page between words (#431). The browser draws
 # those before the server's Soli does;
 # move this
 # and the server's Soli together otherwise. `build.sh` writes the module
 # into public/eui-score/, and that output is committed: deploying the site
 # needs no Rust.
-eui-score = { git = "https://github.com/solisoft/eui", rev = "eed4bd9" }
+eui-score = { git = "https://github.com/solisoft/eui", rev = "adc44e0" }
 wasm-bindgen = "=0.2.126"
 serde_json = "1"
 

@@ -433,6 +433,15 @@ describe("The app, in a browser") do
       assert_eq(seen["more"], size[1], "Score ▾ at #{size[0]}")
       assert(seen["page"], "nothing wider than the window at #{size[0]}")
     end
+    # On a phone the long title breaks onto two lines on the engraved page,
+    # none of it left of the page's edge (#431).
+    viewport(390, 700)
+    sleep(1.0)
+    ink = "(() => { const svg = document.querySelector('.studio-sheet svg'); const box = svg.getBBox();"
+    + " return { left: box.x - svg.viewBox.baseVal.x, right: svg.viewBox.baseVal.width - box.x - box.width }; })()"
+    edges = evaluate(ink)
+    assert(edges["left"] >= 0, "the engraved page's ink starts on it: #{edges["left"]}")
+    assert(edges["right"] >= 0, "and ends on it: #{edges["right"]}")
     # Score ▾ opens the four actions, and one chosen closes it and does its work.
     viewport(900, 700)
     sleep(0.3)

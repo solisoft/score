@@ -12,6 +12,13 @@ class Changelog
     [
       {"date": "2026-10-28", "entries": [
         {
+          "area": "engine",
+          "title": "A long title fits a phone's page",
+          "text": "On a phone, a title wider than the engraved page started off its left edge and was cut. It now "
+          + "breaks between words onto a second line, and a single word too long for the page is set a little "
+          + "smaller. On a wider page the title is set as before."
+        },
+        {
           "area": "editor",
           "title": "Note input: Insert › A staff, and the marks, act where you are",
           "text": "In note input, Insert › A staff added the staff without a word and left the writing on the first "
