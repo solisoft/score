@@ -72,7 +72,7 @@ class HomeFeatures
           "A loop that speeds up each pass, until you are at tempo."
         ],
         "image": "practice.jpg",
-        "alt": "The tuner reading an A a few cents sharp, beside the practice loop that gets faster each pass.",
+        "alt": "The tuner reading an A a few cents sharp, over the string quartet it tunes for.",
         "link": "signup",
         "label": "Start practising"
       },
