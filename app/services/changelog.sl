@@ -13,6 +13,14 @@ class Changelog
       {"date": "2026-10-28", "entries": [
         {
           "area": "editor",
+          "title": "Chords with the mouse",
+          "text": "Add to the chord, in the toolbox's Notes, now works with the mouse too. Ticked, in note input, a "
+          + "click on the staff over a note adds that pitch to it, and the letter buttons write a chord's first "
+          + "note and then add to it. Alt+click adds to the chord without ticking the box; Shift+letter, on the "
+          + "keyboard, works as before."
+        },
+        {
+          "area": "editor",
           "title": "The toolbox's buttons grouped by what they do",
           "text": "Each button of the toolbox now sits with its kind, and each row has its name: the respelling "
           + "(C♯ ↔ D♭) with the accidentals, crescendo and diminuendo with the dynamics, the stems, beams and "

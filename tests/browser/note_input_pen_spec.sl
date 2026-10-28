@@ -36,10 +36,10 @@ def pen_point(bar, along, step)
   + " return page(b.box[0] + #{along} * (b.box[2] - b.box[0]), b.staves[0] + 4 * space - #{step} * space / 2); })()"))
 end
 
-# A pointer event of `kind` on the score at a page point; `shift` held or not.
-def pen_pointer(kind, point, shift = false)
+# A pointer event of `kind` on the score at a page point; `shift` (or `alt`) held or not.
+def pen_pointer(kind, point, shift = false, alt = false)
   evaluate("document.querySelector('.studio-sheet').dispatchEvent(new PointerEvent(#{JSON.stringify(kind)},"
-  + " { clientX: #{point["x"]}, clientY: #{point["y"]}, shiftKey: #{shift},"
+  + " { clientX: #{point["x"]}, clientY: #{point["y"]}, shiftKey: #{shift}, altKey: #{alt},"
   + " pointerId: 1, bubbles: true, button: 0 }))")
   sleep(0.25)
 end
@@ -193,5 +193,60 @@ describe("Note input's pen and ghost note, in a browser") do
     pen_pointer("pointerdown", spot)
     pen_pointer("pointerup", spot)
     assert_eq(pen_text(), before)
+  end
+
+  test("with Add to the chord ticked, a click on a note adds its pitch to it; on a rest it writes a note (#422)") do
+    press("n")
+    sleep(0.3)
+    evaluate("document.querySelector('[data-chord-mode]').click()")
+    # Over the first note, on the second line: G4 joins C4.
+    first = pen_point(0, 0.12, 2)
+    pen_pointer("pointermove", first)
+    pen_pointer("pointerdown", first)
+    pen_pointer("pointerup", first)
+    assert_contains(pen_text(), "<c' g'>4 d'4")
+    # Again, higher: a third note to the same chord, one step to undo each.
+    higher = pen_point(0, 0.12, 6)
+    pen_pointer("pointerdown", higher)
+    pen_pointer("pointerup", higher)
+    assert_contains(pen_text(), "<c' g' d''>4 d'4")
+    # On the rest of bar 2 there is nothing to add to: the note is written there.
+    on_rest = pen_point(1, 0.2, 6)
+    pen_pointer("pointerdown", on_rest)
+    pen_pointer("pointerup", on_rest)
+    assert_contains(pen_text(), "f'4 | d''4 r2.")
+    press("Ctrl+z")
+    sleep(0.4)
+    assert_contains(pen_text(), "f'4 | r1")
+    evaluate("document.querySelector('[data-chord-mode]').click()")
+    # Unticked, a click over a note writes over it, as before.
+    pen_pointer("pointerdown", first)
+    pen_pointer("pointerup", first)
+    assert_not(pen_text().includes?("<c' g' d''>4 d'4"), "the chord is written over: #{pen_text}")
+    assert_no_page_errors()
+  end
+
+  test("Alt+click adds to the chord without the box (#422)") do
+    press("n")
+    sleep(0.3)
+    first = pen_point(0, 0.12, 2)
+    pen_pointer("pointerdown", first, false, true)
+    pen_pointer("pointerup", first, false, true)
+    assert_contains(pen_text(), "<c' g'>4 d'4")
+    assert_no_page_errors()
+  end
+
+  test("with Add to the chord ticked, the letter buttons write a chord's first note, then add to it (#422)") do
+    press("n")
+    sleep(0.3)
+    evaluate("document.querySelector('[data-chord-mode]').click()")
+    ["4", "6", "1"].each do |step|
+      evaluate("document.querySelector(\".studio-toolbox [data-act='letter'][data-step='#{step}']\").click()")
+      sleep(0.3)
+    end
+    # G written over the first note, then B and D on it: G B D.
+    assert_contains(pen_text(), "<g' b' d''>4 d'4")
+    evaluate("document.querySelector('[data-chord-mode]').click()")
+    assert_no_page_errors()
   end
 end

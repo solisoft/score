@@ -175,7 +175,10 @@ export function install(ctx) {
       case "duration": return duration(Number(data.base), st.input.on ? st.input.dots : 0);
       case "dot": return toggleDot();
       case "letter": {
-        const add = data.add || root.querySelector("[data-chord-mode]")?.checked;
+        // Ticked, Add to the chord adds to the note just written; with none
+        // yet, the letter writes the chord's first note (#422).
+        const ticked = root.querySelector("[data-chord-mode]")?.checked && (!st.input.on || Boolean(st.input.last));
+        const add = data.add || ticked;
         if (st.input.on) return inputWrite(Number(data.step), add);
         return edit((score) => {
           const t = need();

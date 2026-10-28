@@ -190,11 +190,30 @@ export function install(ctx) {
   }
 
   /** The note written where the ghost is: the cursor put there, then written as its letter would be — one step to undo. */
-  function writeAtGhost(spot) {
+  /** Writes the ghost's note at its place; `add`: its pitch joins the note already there, as a chord (#422). */
+  function writeAtGhost(spot, add = false) {
     st.input.staff = spot.lane;
     st.input.t = spot.t;
     st.input.last = null;
-    return inputWrite(spot.drum ?? { key: Gh.midiOf(spot.pitch) });
+    const what = spot.drum ?? { key: Gh.midiOf(spot.pitch) };
+    const under = add ? chordAt(spot.lane, spot.t) : null;
+    if (!under) return inputWrite(what);
+    // On to after that note, as writing it did; the next click or letter goes there.
+    st.input.last = { staff: spot.lane, t: under.t0 };
+    st.input.t = under.t1;
+    return inputWrite(what, true);
+  }
+
+  /** The note sounding on `lane` at `t` (a chord to add to), as { t0, t1 }, or null on a rest or past the end. */
+  function chordAt(lane, t) {
+    const staff = st.score?.staves[lane];
+    if (!staff) return null;
+    const at = M.starts(staff);
+    const i = at.findLastIndex((start) => start <= t);
+    const ev = staff.events[i];
+    if (!ev || ev.rest) return null;
+    const t1 = at[i] + M.ticksOf(ev);
+    return t < t1 ? { t0: at[i], t1 } : null;
   }
 
   return { ghostAt, writeAtGhost, placeGhost };

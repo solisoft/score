@@ -352,7 +352,7 @@
           <button type="button" class="tool" data-act="rest" title="Rest (0)">𝄽</button>
         </div>
         <div class="tool-row tool-drums" data-drums hidden aria-label="Drums"></div>
-        <label class="tool-check"><input type="checkbox" data-chord-mode> Add to the chord <span class="muted">(Shift)</span></label>
+        <label class="tool-check" title="Ticked, a letter adds to the note just written (the first one writes the chord's first note), and a click on the staff adds to the note there"><input type="checkbox" data-chord-mode> Add to the chord <span class="muted">(Shift+letter, Alt+click)</span></label>
         <label class="tool-check"><input type="checkbox" data-hear checked> Hear the notes</label>
       </details>
 

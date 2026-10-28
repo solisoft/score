@@ -3,7 +3,7 @@
 
 /** The score's pointer wired: notes and bars selected, notes and repeats dragged. */
 export function install(ctx) {
-  const { sheet, st, M } = ctx;
+  const { root, sheet, st, M } = ctx;
   const { writeText, snapshot, saveDraft, select, geometry, draw, say, ghostAt, writeAtGhost } = ctx.call;
 
   // ---- Pointer ------------------------------------------------------------------
@@ -91,10 +91,11 @@ export function install(ctx) {
       return;
     }
     // Note input: a click writes the ghost's note there (studio-ghost.js); Shift+click moves the cursor, as a click did before.
+    // With Add to the chord ticked, or Alt held, the click adds its pitch to the note there (#422).
     const spot = st.input.on && !event.shiftKey ? ghostAt(event) : null;
     if (spot) {
       event.preventDefault();
-      return writeAtGhost(spot);
+      return writeAtGhost(spot, event.altKey || Boolean(root.querySelector("[data-chord-mode]")?.checked));
     }
     const found = p && hit(p);
     if (!found) {
