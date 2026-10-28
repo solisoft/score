@@ -12,6 +12,14 @@ class Changelog
     [
       {"date": "2026-10-28", "entries": [
         {
+          "area": "editor",
+          "title": "Note input: Insert › A staff, and the marks, act where you are",
+          "text": "In note input, Insert › A staff added the staff without a word and left the writing on the first "
+          + "one, so it seemed to do nothing. It now says which staff was added, and note input goes on in it. And "
+          + "once ← and → have moved the cursor, a mark, a slur or a chord symbol goes on the note at the cursor, "
+          + "not on a note selected before."
+        },
+        {
           "area": "site",
           "title": "The editor's header fits a narrower screen",
           "text": "On a laptop or a tablet, the header over a score ran its buttons into the app's links and lost the "

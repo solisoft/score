@@ -300,4 +300,38 @@ describe("Note input's pen and ghost note, in a browser") do
     ])
     assert_no_page_errors()
   end
+
+  test("Insert › A staff in note input adds it, says so, and the writing goes on in it (#429)") do
+    press("n")
+    sleep(0.3)
+    evaluate("(() => { const b = document.querySelector('.studio-dropdown [data-act=\"add-staff\"]');"
+    + " b.closest('details').open = true; b.click(); })()")
+    sleep(0.5)
+    assert_eq(evaluate("document.getElementById('studio').studio.score.staves.length"), 2)
+    assert_contains(evaluate("document.querySelector('[data-status]').textContent"), "staff added")
+    assert_eq(evaluate("document.getElementById('studio').studio.input.staff"), 1)
+    # A letter now writes in the new staff, at its start; the first staff is as it was.
+    press("g")
+    sleep(0.4)
+    staves = evaluate("document.getElementById('studio').studio.score.staves.map((it) => it.events[0].rest)")
+    assert_eq(staves, [false, false])
+    assert_contains(pen_text(), "c'4 d'4 e'4 f'4")
+    assert_no_page_errors()
+  end
+
+  test("in note input, a mark goes on the note the cursor was moved to, not one selected before (#429)") do
+    # A note selected first (the last of bar 1), then note input from the start.
+    evaluate("(() => { const st = document.getElementById('studio').studio;"
+    + " st.sel = { staff: 0, t0: 2880, t1: 2880, head: -1 }; })()")
+    press("n")
+    sleep(0.3)
+    evaluate("(() => { const st = document.getElementById('studio').studio; st.input.t = 0; st.input.last = null; })()")
+    press("ArrowRight")
+    sleep(0.3)
+    evaluate("document.querySelector(\".studio-toolbox [data-act='art'][data-name='staccato']\").click()")
+    sleep(0.4)
+    # The staccato on d', the note the cursor came to; f' as it was.
+    assert_contains(pen_text(), "c'4 d'4-. e'4 f'4")
+    assert_no_page_errors()
+  end
 end

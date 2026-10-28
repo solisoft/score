@@ -136,6 +136,9 @@ export function install(ctx) {
       const next = Math.max(0, Math.min(at.length - 1, i + by));
       st.input.t = at[next];
       st.input.last = null;
+      // The selection comes along: what acts on the selected notes (a mark,
+      // a slur) acts on the one at the cursor, not one left from before (#429).
+      st.sel = { staff: st.input.staff, t0: at[next], t1: at[next], head: -1 };
       return draw();
     }
     const r = range();

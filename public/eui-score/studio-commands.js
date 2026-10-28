@@ -447,7 +447,11 @@ export function install(ctx) {
         const it = M.INSTRUMENTS[Number(k)] ?? M.INSTRUMENTS[0];
         const kit = it.drums ? { drums: true } : {};
         M.addStaff(score, { instrument: it.sound, name: it.name, short: it.short, clef: clef || it.clef || "treble", ...kit });
-        st.sel = { staff: score.staves.length - 1, t0: 0, t1: 0, head: -1 };
+        const lane = score.staves.length - 1;
+        st.sel = { staff: lane, t0: 0, t1: 0, head: -1 };
+        // In note input, the writing goes on in the new staff, from its start (#429).
+        if (st.input.on) Object.assign(st.input, { staff: lane, t: 0, last: null });
+        say(`A ${it.name.toLowerCase()} staff added, under the others${st.input.on ? ": note input goes on in it" : ""}. Bars & staves › − This staff takes it away.`);
       });
       case "voice": return toVoice(Number(data.voice));
       case "voice-remove": return edit((score) => {

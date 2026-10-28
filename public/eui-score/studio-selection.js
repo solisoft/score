@@ -96,8 +96,7 @@ export function install(ctx) {
   /** Sounds the note the tools act on — its selected head, or the whole chord — with its staff's instrument. */
   function hear() {
     if (!hearBox?.checked || st.playing || !st.score) return;
-    // In note input with nothing just written (← → moved the cursor), the note at the cursor (#426).
-    const t = st.input.on && !st.input.last ? atCursor() : target();
+    const t = target();
     const ev = t && st.score.staves[t.s]?.events[t.i];
     if (!ev || ev.rest || !ev.pitches.length) return;
     const heads = t.head >= 0 && ev.pitches[t.head] ? [ev.pitches[t.head]] : ev.pitches;
@@ -117,12 +116,18 @@ export function install(ctx) {
     return i >= 0 ? { s: st.input.staff, i, head: -1 } : null;
   }
 
-  /** The one event the tools act on: the selection's first, or the note just written. */
+  /** The one event the tools act on: in note input the note just written, or the one at the cursor; else the selection's first. */
   function target() {
     if (st.input.on && st.input.last) {
       const staff = st.score.staves[st.input.last.staff];
       const i = M.eventAt(staff, st.input.last.t);
       if (i >= 0) return { s: st.input.last.staff, i, head: -1 };
+    }
+    // In note input with nothing just written (← → moved the cursor, a staff
+    // was added), the note at the cursor, not a selection left from before (#426, #429).
+    if (st.input.on && st.score) {
+      const here = atCursor();
+      if (here) return here;
     }
     const r = range();
     return r ? { s: r.s, i: r.a, head: st.sel.head } : null;
