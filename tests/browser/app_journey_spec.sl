@@ -245,6 +245,49 @@ def roll_keys(key, shift)
   + " { key: '#{key}', ctrlKey: true, shiftKey: #{shift}, bubbles: true }))")
 end
 
+# Stand-ins for the photo reading's server and AI (#435): POST takes it as
+# reading "r435", GET answers "thinking" until `__readingDone`, then the music;
+# EventSource is a stand-in the test tells events through.
+const PHOTO_STAND_INS = """
+(() => {
+  const real = window.fetch;
+  window.__readingDone = false;
+  window.fetch = async (url, options = {}) => {
+    const json = (body, status = 200) =>
+      new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+    if (String(url).endsWith("/app/readings") && options.method === "POST") {
+      return json({ id: "r435", state: "reading" }, 202);
+    }
+    if (String(url).endsWith("/app/readings/r435")) {
+      return window.__readingDone
+        ? json({ state: "done", source: "{ c'4 d'4 }", svg: "<svg viewBox='0 0 10 10'></svg>" })
+        : json({ state: "reading", phase: "thinking", draft: "", seconds: 200 });
+    }
+    return real(url, options);
+  };
+  window.EventSource = class {
+    constructor(url) { this.url = url; this.closed = false; this.listeners = {}; window.__readingEvents = this; }
+    addEventListener(name, fn) { (this.listeners[name] ??= []).push(fn); }
+    tell(name, data) { for (const fn of this.listeners[name] ?? []) fn({ data: JSON.stringify(data) }); }
+    close() { this.closed = true; }
+  };
+})()
+"""
+
+# A small PNG chosen as the photo.
+const PHOTO_CHOSEN = """
+(async () => {
+  const canvas = Object.assign(document.createElement("canvas"), { width: 40, height: 20 });
+  canvas.getContext("2d").fillRect(0, 9, 40, 2);
+  const blob = await new Promise((done) => canvas.toBlob(done, "image/png"));
+  const input = document.querySelector("[data-photo]");
+  const files = new DataTransfer();
+  files.items.add(new File([blob], "scale.png", { type: "image/png" }));
+  input.files = files.files;
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+})()
+"""
+
 describe("The app, in a browser") do
   before_each() do
     logout()
@@ -458,6 +501,30 @@ describe("The app, in a browser") do
     assert_not(evaluate("document.getElementById('app-doc-actions').matches(':popover-open')"), "chosen, it closes")
     assert(evaluate("Boolean(document.querySelector('[data-comments-panel]:not([hidden])'))"), "the comments open")
     viewport(1280, 800)
+    assert_no_page_errors()
+  end
+
+  test("a photo being read shows its time, then the LilyPond as the AI writes it, then the music (#435)") do
+    email = journey_email()
+    sign_up_in_browser(email)
+    User.find_by("email", email).keep_ai_key("mistral", "pixtral-large-latest", "sk-mistral-3333")
+    visit("/app")
+    wait_for("[data-photo]")
+    # The server and the AI stood in for in the page: the reading taken, then
+    # asked after (thinking, then done), its news told over a stand-in EventSource.
+    evaluate(PHOTO_STAND_INS)
+    evaluate(PHOTO_CHOSEN)
+    wait_for_text("The AI is reading the photo… 3 min 20 s")
+    assert(evaluate("document.querySelector('[data-reading-draft]').hidden"), "no LilyPond before it is written")
+    evaluate("window.__readingEvents.tell('progress', { phase: 'writing', draft: \"{ c'4 d'4\", seconds: 610 })")
+    wait_for_text("The AI is writing the music… 10 min 10 s")
+    assert_eq(evaluate("document.querySelector('[data-reading-draft]').textContent"), "{ c'4 d'4")
+    assert_not(evaluate("document.querySelector('[data-reading-draft]').hidden"))
+    assert_eq(evaluate("window.__readingEvents.url"), "/app/readings/r435/events")
+    evaluate("window.__readingDone = true; window.__readingEvents.tell('done', { state: 'done' })")
+    wait_for_text("What was read. You can correct it in the editor.")
+    assert(evaluate("document.querySelector('[data-reading-draft]').hidden"), "the draft goes once the music is in")
+    assert(evaluate("window.__readingEvents.closed"), "and the page stops listening")
     assert_no_page_errors()
   end
 

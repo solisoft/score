@@ -294,3 +294,166 @@ describe("AiClient") do
     assert_eq(AiClient.provider_name("unknown"), "unknown")
   end
 end
+
+# A streamed answer as HTTP.stream gives it: `status`, then `next_line` until
+# nil; it raises at line `fail_at`, and waits a little before line `pause_at`.
+class FakeStream
+  status: Int = 200
+  lines: Array = []
+  at: Int = 0
+  fail_at: Int = 999999
+  pause_at: Int = 999999
+
+  def next_line
+    throw "HTTP.stream: nothing received for 180 s" if @at == @fail_at
+    sleep(2.2) if @at == @pause_at
+    return nil if @at >= @lines.length
+
+    line = @lines[@at]
+    @at = @at + 1
+    line
+  end
+end
+
+def fake_stream(lines, status = 200)
+  stream = FakeStream.new()
+  stream.lines = lines
+  stream.status = status
+  stream
+end
+
+def sse(event)
+  "data: #{JSON.stringify(event)}"
+end
+
+describe("AiClient streamed answers (#435)") do
+  test("asks for a stream, its timeout the wait between pieces") do
+    claude = AiClient.request(own_settings("anthropic", "claude-opus-5-5"), [{
+      "role": "user",
+      "text": "hi"
+    }], true)
+    assert_eq(claude["body"]["stream"], true)
+    assert_eq(claude["headers"]["timeout"], AI_STREAM_IDLE)
+    kimi = AiClient.request(own_settings("moonshot", "kimi-k3.1-pro"), [{
+      "role": "user",
+      "text": "hi"
+    }], true)
+    assert_eq(kimi["body"]["stream"], true)
+    plain = AiClient.request(own_settings("moonshot", "kimi-k3.1-pro"), [{
+      "role": "user",
+      "text": "hi"
+    }])
+    assert_null(plain["body"]["stream"])
+    assert_eq(plain["headers"]["timeout"], 300)
+  end
+
+  test("reads Anthropic's events: the text deltas, nothing else") do
+    stream = fake_stream([
+      "event: message_start",
+      sse({"type": "message_start", "message": {"id": "m"}}),
+      "",
+      sse({"type": "content_block_delta", "delta": {
+        "type": "thinking_delta",
+        "thinking": "hmm"
+      }}),
+      sse({"type": "content_block_delta", "delta": {
+        "type": "text_delta",
+        "text": "{ c'4"
+      }}),
+      ": keep-alive",
+      sse({"type": "content_block_delta", "delta": {
+        "type": "text_delta",
+        "text": " d'4 }"
+      }}),
+      sse({"type": "message_delta", "delta": {"stop_reason": "end_turn"}}),
+      sse({"type": "message_stop"}),
+      sse({"type": "content_block_delta", "delta": {
+        "type": "text_delta",
+        "text": "after the end"
+      }})
+    ])
+    assert_eq(AiClient.streamed(stream, own_settings("anthropic", "claude-opus-5-5")), {"text": "{ c'4 d'4 }"})
+  end
+
+  test("reads chat-completions chunks, a thought not taken for the answer") do
+    stream = fake_stream([
+      sse({"choices": [{"delta": {
+        "role": "assistant",
+        "reasoning_content": "Let me look"
+      }}]}),
+      sse({"choices": [{"delta": {"content": "{ e'4"}}]}),
+      sse({"choices": [{"delta": {"content": [{
+        "type": "text",
+        "text": " f'4 }"
+      }]}}]}),
+      sse({"choices": [{"delta": {}, "finish_reason": "stop"}]}),
+      "data: [DONE]",
+      sse({"choices": [{"delta": {"content": "after the end"}}]})
+    ])
+    assert_eq(AiClient.streamed(stream, own_settings("moonshot", "kimi-k3.1-pro")), {"text": "{ e'4 f'4 }"})
+  end
+
+  test("a refusal, a provider's error in the stream, and a stream that stops are each named") do
+    refusal = fake_stream([sse({
+      "type": "message_delta",
+      "delta": {"stop_reason": "refusal"}
+    })])
+    assert_eq(
+      AiClient.streamed(refusal, own_settings("anthropic", "claude-opus-5-5"))["error"],
+      "Anthropic (Claude) declined the request."
+    )
+    filtered = fake_stream([sse({"choices": [{
+      "delta": {},
+      "finish_reason": "content_filter"
+    }]})])
+    assert_contains(AiClient.streamed(filtered, own_settings("openai", "gpt-5"))["error"], "declined")
+    overloaded = fake_stream([sse({
+      "type": "error",
+      "error": {"type": "overloaded_error", "message": "Overloaded"}
+    })])
+    assert_eq(
+      AiClient.streamed(overloaded, own_settings("anthropic", "claude-opus-5-5"))["error"],
+      "Anthropic (Claude) could not answer this time. Try again in a moment."
+    )
+    stopped = fake_stream([
+      sse({"choices": [{"delta": {"content": "{ c'4"}}]}),
+      "",
+      ""
+    ])
+    stopped.fail_at = 2
+    assert_eq(
+      AiClient.streamed(stopped, own_settings("moonshot", "kimi-k3.1-pro"))["error"],
+      "Moonshot (Kimi) stopped answering. Try again in a moment."
+    )
+  end
+
+  test("a status other than 200 is read whole, as an answer refused") do
+    refused = fake_stream(["{\"error\": {\"message\": \"bad key\"}}"], 401)
+    assert_eq(
+      AiClient.streamed(refused, own_settings("moonshot", "kimi-k3.1-pro"))["error"],
+      "Moonshot (Kimi) refused your API key. Check it on your account page."
+    )
+    busy = fake_stream(["{\"error\": \"engine overloaded\"}"], 429)
+    assert_contains(AiClient.streamed(busy, own_settings("moonshot", "kimi-k3.1-pro"))["error"], "busy")
+  end
+
+  test("tells its progress: thinking before the first words, then the text so far") do
+    told = []
+    progress = fn(phase, text) { told.push([phase, text]) }
+    stream = fake_stream([
+      sse({"choices": [{"delta": {"reasoning_content": "Let me look"}}]}),
+      sse({"choices": [{"delta": {"content": "{ c'4"}}]}),
+      sse({"choices": [{"delta": {"content": " }"}}]})
+    ])
+    stream.pause_at = 2
+    assert_eq(AiClient.streamed(stream, own_settings("moonshot", "kimi-k3.1-pro"), progress), {"text": "{ c'4 }"})
+    assert_eq(told, [["thinking", ""], ["writing", "{ c'4 }"]])
+  end
+
+  test("reads a line that is no data as nothing, and a broken one too") do
+    assert_null(AiClient.stream_delta("event: ping", true))
+    assert_null(AiClient.stream_delta("data: {not json", false))
+    assert_null(AiClient.stream_delta("data: [1, 2]", false))
+    assert_eq(AiClient.stream_delta("data:[DONE]", false), {"done": true})
+  end
+end

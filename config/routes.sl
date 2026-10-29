@@ -116,6 +116,7 @@ middleware("require_app_database", fn() {
     post("/app/trash/empty", "app/scores#empty_trash", name: "app_trash_empty")
     post("/app/readings", "app/score_readings#create", name: "app_readings")
     get("/app/readings/:id", "app/score_readings#show", name: "app_reading")
+    get("/app/readings/:id/events", "app/score_readings#events", name: "app_reading_events")
     post("/app/scores/:id/suggestions", "app/score_suggestions#create", name: "app_score_suggestions")
     get("/app/suggestions/:id", "app/score_suggestions#show", name: "app_suggestion")
     get("/app/scores/:id", "app/scores#show", name: "app_score")

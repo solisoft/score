@@ -67,14 +67,15 @@ class ScoreReader
   end
 
   # The picture, read with `settings`: {"source": LilyPond} or {"error": …}.
-  static def read(picture, settings)
-    first = ScoreReader.ask(picture, settings, nil, nil)
+  # `progress(phase, text)` is told as the answer comes (AiClient.ask, #435).
+  static def read(picture, settings, progress = nil)
+    first = ScoreReader.ask(picture, settings, nil, nil, progress)
     return first unless first["error"].nil?
 
     problem = AiClient.problem(first["source"])
     return first if problem.nil?
 
-    second = ScoreReader.ask(picture, settings, first["source"], problem)
+    second = ScoreReader.ask(picture, settings, first["source"], problem, progress)
     return second unless second["error"].nil?
 
     unreadable = {"error": "The picture could not be read as a score. Try a sharper photo."}
@@ -84,8 +85,8 @@ class ScoreReader
   end
 
   # One call to the model, then the source in its answer.
-  static def ask(picture, settings, previous, problem)
-    ScoreReader.source_of(AiClient.ask(settings, ScoreReader.turns(picture, previous, problem)))
+  static def ask(picture, settings, previous, problem, progress = nil)
+    ScoreReader.source_of(AiClient.ask(settings, ScoreReader.turns(picture, previous, problem), progress))
   end
 
   # What the model is asked: what to read, the signs of form and ornament in

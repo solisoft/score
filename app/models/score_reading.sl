@@ -5,9 +5,11 @@
 # (AiClient.refusal, #396). SCORE_READINGS_OWN_PER_DAY in any 24 hours: their
 # provider bills them, so this only stops a runaway loop.
 const SCORE_READINGS_OWN_PER_DAY = 200
-# A reading or a suggestion still at work after this many seconds was cut off
+# A reading or a suggestion with no news for this many seconds was cut off
 # (a restart, a deploy: their jobs are not retried) and never will finish:
-# DataCleanupJob marks it failed and lets its picture or its text go.
+# DataCleanupJob marks it failed and lets its picture or its text go. A
+# reading's news is its last progress (#435), else its start: one that keeps
+# streaming is not cut off however long it takes.
 const SCORE_AI_STUCK_SECONDS = 600
 
 class ScoreReading < Model
@@ -73,7 +75,7 @@ class ScoreReading < Model
   static def expire_stuck
     since = DateTime.utc.to_unix - SCORE_AI_STUCK_SECONDS
     stuck = ScoreReading.where(
-      "doc.state == @state AND doc.created_at < @since",
+      "doc.state == @state AND (doc.progressed_at != null ? doc.progressed_at : doc.created_at) < @since",
       {"state": "reading", "since": since}
     ).limit(5000).all
     stuck.each do |reading|
@@ -102,6 +104,9 @@ class ScoreReading < Model
     @picture = nil
     @finished_at = DateTime.utc.to_unix
     @save
+    # The pages following it ask after it once more, and stop listening.
+    sse_broadcast(ScoreReading.topic(@_key), JSON.stringify({"state": @state}), "done")
+    true
   end
 
   # What the AI answered, or why there is no answer: asked again here, as
@@ -111,7 +116,33 @@ class ScoreReading < Model
     settings = AiClient.settings_for(user)
     return {"error": AiClient.refusal_text(AiClient.refusal(user))} if settings.nil?
 
-    ScoreReader.read(@picture.to_s, settings)
+    reading = this
+    ScoreReader.read(@picture.to_s, settings, fn(phase, text) { reading.progressed(phase, text) })
+  end
+
+  # The reading's news as the answer comes (#435): kept, for whoever asks
+  # after it, and told at once to the pages following it (`events`).
+  def progressed(phase, text)
+    @phase = phase
+    @draft = text
+    @progressed_at = DateTime.utc.to_unix
+    @save
+    sse_broadcast(ScoreReading.topic(@_key), JSON.stringify(@news), "progress")
+  end
+
+  # What a page following the reading is told: its phase, the LilyPond
+  # written so far, and the seconds since it started.
+  def news
+    {
+      "phase": @phase ?? "waiting",
+      "draft": @draft.to_s,
+      "seconds": DateTime.utc.to_unix - @created_at
+    }
+  end
+
+  # The topic the pages following reading `key` listen to.
+  static def topic(key)
+    "reading:#{key}"
   end
 
   def owned_by?(user)

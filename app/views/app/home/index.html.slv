@@ -117,7 +117,8 @@
         </figure>
         <figure>
           <div class="photo-reading-score" data-reading-score></div>
-          <figcaption class="muted" data-reading-status>Reading the music… This takes a minute or two.</figcaption>
+          <pre class="photo-reading-draft" data-reading-draft aria-live="off" hidden></pre>
+          <figcaption class="muted" data-reading-status aria-live="polite">Sending the photo…</figcaption>
         </figure>
       </div>
       <p class="form-error" data-reading-error hidden></p>
@@ -228,7 +229,7 @@
     // A photo: sent to be read, asked after until it is, shown beside what was read.
     const photoInput = document.querySelector("[data-photo]");
     const reading = document.querySelector("[data-reading]");
-    const { readPhoto } = await import("/js/score-photo.js?v=<%= eui_version %>");
+    const { readPhoto, readingSays } = await import("/js/score-photo.js?v=<%= eui_version %>");
     photoInput?.addEventListener("change", async (event) => {
       const file = event.target.files[0];
       if (!file) return;
@@ -237,9 +238,12 @@
       const error = reading.querySelector("[data-reading-error]");
       const keep = reading.querySelector("[data-reading-keep]");
       const score = reading.querySelector("[data-reading-score]");
+      const draft = reading.querySelector("[data-reading-draft]");
       reading.querySelector("[data-reading-photo]").src = URL.createObjectURL(file);
       score.replaceChildren();
-      status.textContent = "Reading the music… This takes a minute or two.";
+      draft.hidden = true;
+      draft.textContent = "";
+      status.textContent = "Sending the photo…";
       error.hidden = keep.hidden = true;
       reading.hidden = false;
       reading.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -249,6 +253,7 @@
         if (link) error.append(" ", Object.assign(document.createElement("a"), { href: link, textContent: linkText || "See the plans" }));
         error.hidden = false;
         status.textContent = "";
+        draft.hidden = true;
       };
       try {
         const answer = await readPhoto(file, {
@@ -256,8 +261,19 @@
           started: () => {
             const left = document.querySelector("[data-photos-left]");
             left.textContent = Math.max(0, Number(left.textContent) - 1);
+            status.textContent = readingSays({ phase: "waiting", seconds: 0 });
+          },
+          // How it goes (#435): the time, then the LilyPond as the AI writes it.
+          progress: (news) => {
+            status.textContent = readingSays(news);
+            if (news.draft) {
+              draft.hidden = false;
+              draft.textContent = news.draft;
+              draft.scrollTop = draft.scrollHeight;
+            }
           },
         });
+        draft.hidden = true;
         score.innerHTML = answer.svg;
         status.textContent = "What was read. You can correct it in the editor.";
         keep.hidden = false;

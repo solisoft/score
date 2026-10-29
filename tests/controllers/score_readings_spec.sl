@@ -89,7 +89,13 @@ describe("AppScoreReadingsController") do
     assert_eq(stored.user_id, user._key)
     assert(stored.picture.starts_with?("/9j/"), "re-encoded as JPEG")
     assert_eq(queued_reading_jobs(), jobs_before + 1)
-    assert_eq(res_json(get("/app/readings/#{answer["id"]}")), {"state": "reading"})
+    queued = res_json(get("/app/readings/#{answer["id"]}"))
+    assert_eq([queued["state"], queued["phase"], queued["draft"]], [
+      "reading",
+      "waiting",
+      ""
+    ])
+    assert(queued["seconds"] <= 2, "just started: #{queued["seconds"]}")
   end
 
   test("without a key of one's own: refused with the way to Account, nothing kept or queued") do
@@ -153,6 +159,43 @@ describe("AppScoreReadingsController") do
     assert_eq(answer["state"], "done")
     assert_eq(answer["source"], "{ c'4 d' e' f' }")
     assert_contains(answer["svg"], "<svg")
+  end
+
+  test("answers how a reading is going: its phase, the LilyPond so far, the seconds since it started (#435)") do
+    user = reading_user()
+    reading = ScoreReading.create({
+      "user_id": user._key,
+      "state": "reading",
+      "picture": "base64-jpeg",
+      "created_at": DateTime.utc.to_unix - 90
+    })
+    waiting = res_json(get("/app/readings/#{reading._key}"))
+    assert_eq([waiting["state"], waiting["phase"], waiting["draft"]], [
+      "reading",
+      "waiting",
+      ""
+    ])
+    assert(waiting["seconds"] >= 90 && waiting["seconds"] < 100, "seconds: #{waiting["seconds"]}")
+    ScoreReading.find(reading._key).progressed("thinking", "")
+    assert_eq(res_json(get("/app/readings/#{reading._key}"))["phase"], "thinking")
+    ScoreReading.find(reading._key).progressed("writing", "{ c'4 d'")
+    going = res_json(get("/app/readings/#{reading._key}"))
+    assert_eq([going["phase"], going["draft"]], ["writing", "{ c'4 d'"])
+    assert_not_null(ScoreReading.find(reading._key).progressed_at)
+    assert_null(going["source"], "no source before it is done")
+  end
+
+  test("its events are its owner's, and an unknown one is 404 (#435)") do
+    owner = reading_user()
+    reading = ScoreReading.create({
+      "user_id": owner._key,
+      "state": "reading",
+      "created_at": DateTime.utc.to_unix
+    })
+    clear_cookies()
+    reading_user()
+    assert_eq(res_status(get("/app/readings/#{reading._key}/events")), 404)
+    assert_eq(res_status(get("/app/readings/no-such-reading/events")), 404)
   end
 
   test("answers why a reading failed") do

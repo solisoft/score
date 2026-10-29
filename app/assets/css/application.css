@@ -523,6 +523,8 @@
   .photo-reading-pair figure { margin: 0; display: grid; gap: 6px; align-content: start; min-width: 0; }
   .photo-reading-pair img, .photo-reading-score svg { width: 100%; height: auto; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; }
   .photo-reading-score { color: #111; }
+  /* The LilyPond as the AI writes it (#435): its last lines in view. */
+  .photo-reading-draft { margin: 0; max-height: 220px; overflow: auto; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); font: 12px/1.45 var(--font-mono); white-space: pre-wrap; word-break: break-word; }
   .photo-reading .btn-primary { justify-self: start; }
   @media (max-width: 760px) { .photo-reading-pair { grid-template-columns: 1fr; } }
   .start-recent { display: grid; gap: 12px; }

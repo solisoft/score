@@ -1,7 +1,7 @@
 # A photo of a score, read into LilyPond by an AI model on the person's own
 # key (User#ai_settings; the site has no AI of its own, #396): the Start
-# page's card and the editor's File menu send the picture, then ask after it
-# until the reading is done. Behind sign-in; a reading is only its owner's.
+# page's card and the editor's File menu send the picture, then follow it
+# (events, #435) and ask after it until the reading is done. Behind sign-in; a reading is only its owner's.
 class AppScoreReadingsController < AppBaseController
   # POST /app/readings — JSON {picture: base64}: 202 {id}, or an {error}
   # (with the `link` that lifts it when it is the key or the plan)
@@ -35,7 +35,7 @@ class AppScoreReadingsController < AppBaseController
     reading = ScoreReading.find(params["id"])
     halt(404, "No such reading") unless reading.owned_by?(current_user())
 
-    return render_json({"state": "reading"}) if reading.state == "reading"
+    return render_json({"state": "reading"}.merge(reading.news)) if reading.state == "reading"
     if reading.state == "failed"
       return render_json({"state": "failed", "error": reading.error})
     end
@@ -45,6 +45,16 @@ class AppScoreReadingsController < AppBaseController
       "source": reading.source,
       "svg": ScoreSvg.engrave(reading.source, 1000, 7, 0, {})["svg"]
     })
+  end
+
+  # GET /app/readings/:id/events — server-sent events while it is read:
+  # "progress" (its phase, the LilyPond so far, the seconds since it started)
+  # and "done", then the reading is asked after (show) as before (#435)
+  def events
+    reading = ScoreReading.find(params["id"])
+    halt(404, "No such reading") unless reading.owned_by?(current_user())
+
+    sse_subscribe(req, ScoreReading.topic(reading._key))
   end
 
   private

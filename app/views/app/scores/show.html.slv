@@ -625,10 +625,14 @@
     const file = event.target.files[0];
     event.target.closest("details")?.removeAttribute("open");
     if (!file) return;
-    const { readPhoto } = await import("/js/score-photo.js?v=<%= eui_version %>");
-    show("Reading the photo… a minute or two", "busy");
+    const { readPhoto, readingSays } = await import("/js/score-photo.js?v=<%= eui_version %>");
+    show("Sending the photo…", "busy");
     try {
-      const answer = await readPhoto(file, { readings: "<%= app_readings_path() %>" });
+      // How it goes (#435): the time, and whether the AI is still reading or writing.
+      const answer = await readPhoto(file, {
+        readings: "<%= app_readings_path() %>",
+        progress: (news) => show(readingSays(news), "busy"),
+      });
       await openAsNew(answer.source);
     } catch (problem) {
       show("Photo not read", "conflict");

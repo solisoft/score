@@ -72,6 +72,19 @@ describe("DataCleanupJob") do
     assert_eq(untouched.picture, "base64-jpeg")
   end
 
+  test("a reading still streaming its answer is not stuck, however long ago it started (#435)") do
+    user = cleanup_owner()
+    streaming = reading_started(user, SCORE_AI_STUCK_SECONDS * 3)
+    streaming.progressed_at = DateTime.utc.to_unix - 30
+    streaming.save
+    silent = reading_started(user, SCORE_AI_STUCK_SECONDS * 3)
+    silent.progressed_at = DateTime.utc.to_unix - SCORE_AI_STUCK_SECONDS - 60
+    silent.save
+    DataCleanupJob.perform_now({})
+    assert_eq(ScoreReading.find(streaming._key).state, "reading")
+    assert_eq(ScoreReading.find(silent._key).state, "failed", "no news for ten minutes")
+  end
+
   test("fails a suggestion stuck past ten minutes and lets its text go, and leaves a recent one alone") do
     user = cleanup_owner()
     score = Score.start(user, Score.blank_source("Asked"))

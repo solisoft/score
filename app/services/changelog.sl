@@ -13,6 +13,14 @@ class Changelog
       {"date": "2026-10-29", "entries": [
         {
           "area": "editor",
+          "title": "A photo's reading followed live, however long the AI thinks",
+          "text": "Some AI models think for ten minutes before they write a score down, and the reading was cut "
+          + "off after five. The answer is now read as it comes: the page shows how long the AI has been at it, "
+          + "whether it is still reading the photo or already writing, and the LilyPond as it is written. A "
+          + "reading only stops when the AI has said nothing for three minutes."
+        },
+        {
+          "area": "editor",
           "title": "A click on a chord diagram opens it large, to click on",
           "text": "A guitar chord diagram drawn on the score is small for a precise click: one click now opens it "
           + "large, its six strings and five frets in cells big enough to aim at. A click on a fret puts a finger "
