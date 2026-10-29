@@ -5001,6 +5001,47 @@
   .studio-words-expression {
     font-style: italic;
   }
+  .studio-fret-grid {
+    --fret-cell: 22px;
+    position: absolute;
+    z-index: 5;
+    display: grid;
+    grid-template-columns: repeat(6, var(--fret-cell));
+    grid-auto-rows: var(--fret-cell);
+    padding: 4px 8px 8px;
+    border-radius: 6px;
+    border: 2px solid #2563c9;
+    background: #fff;
+    box-shadow: 0 4px 14px rgba(0,0,0,.15);
+  }
+  .studio-fret-grid button {
+    padding: 0;
+    border: 0;
+    border-bottom: 1px solid #222;
+    cursor: pointer;
+    color: #222;
+    font: 13px/1 var(--font-sans);
+    background: linear-gradient(#222, #222) center / 1px 100% no-repeat;
+  }
+  .studio-fret-grid button[data-fret="nut"] {
+    background: none;
+    border-bottom: 3px solid #222;
+  }
+  .studio-fret-grid button[aria-pressed="true"] {
+    background: radial-gradient(circle, #222 0 6px, transparent 7px), linear-gradient(#222, #222) center / 1px 100% no-repeat;
+  }
+  .studio-fret-grid button:hover {
+    background-color: #e8eefb;
+  }
+  .studio-fret-grid button:focus-visible {
+    outline: 2px solid #2563c9;
+    outline-offset: -2px;
+  }
+  @media (max-width: 899px) {
+    .studio-fret-grid {
+      --fret-cell: 34px;
+    }
+  }
   .studio-source {
     border-top: 1px solid var(--line);
     background: var(--sheet);
@@ -6056,7 +6097,7 @@
     body {
       color: #000;
     }
-    .site-header, .site-footer, .app-header, .app-flash, .playground-banner, .page-head, .studio-menubar, .studio-progress, .studio-toolbox, .studio-source, .studio-notice, .studio-statusbar, .studio-panel, .studio-roll, .studio-overlay, .studio-ghost, .studio-palette, .studio-playhead, .studio-words, dialog, .score-actions, .score-source, .score-figure figcaption, .read-exports, .studio-comments, .read-comments, .read-takes {
+    .site-header, .site-footer, .app-header, .app-flash, .playground-banner, .page-head, .studio-menubar, .studio-progress, .studio-toolbox, .studio-source, .studio-notice, .studio-statusbar, .studio-panel, .studio-roll, .studio-overlay, .studio-ghost, .studio-palette, .studio-playhead, .studio-words, .studio-fret-grid, dialog, .score-actions, .score-source, .score-figure figcaption, .read-exports, .studio-comments, .read-comments, .read-takes {
       display: none !important;
     }
     .wrap, .app-main, .studio, .studio-body, .studio-canvas {

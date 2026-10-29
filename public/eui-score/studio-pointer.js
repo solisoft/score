@@ -75,6 +75,35 @@ export function install(ctx) {
     return best;
   }
 
+  /** The word drawn under a point — a chord diagram, a text, a chord symbol, a syllable — or null. */
+  function wordHit(p) {
+    const reach = 3 / p.scale;
+    const inside = ([x0, y0, x1, y1]) => p.x >= x0 - reach && p.x <= x1 + reach && p.y >= y0 - reach && p.y <= y1 + reach;
+    return (st.view?.words ?? []).find((w) => inside(w.box)) ?? null;
+  }
+
+  // A double click on a word opens it where it is drawn, with its value (#434).
+  sheet.addEventListener("dblclick", (event) => {
+    if (!st.score || !st.view || st.input.on || event.target.closest(".studio-words")) return;
+    const p = point(event);
+    const word = p && wordHit(p);
+    if (!word) {
+      // A chord name on a line of chord names: its chord, typed again.
+      const found = p && hit(p);
+      const on = found && st.items[found.item];
+      if (on && M.isChords(st.score, on.staff)) {
+        event.preventDefault();
+        ctx.call.openWordAt(on.staff, on.index, "chord");
+      }
+      return;
+    }
+    const at = st.items[word.item];
+    const kind = at && M.wordKind(word, st.score.staves[at.staff].events[at.index]);
+    if (!kind) return;
+    event.preventDefault();
+    ctx.call.openWordAt(at.staff, at.index, kind, word.index + 1);
+  });
+
   sheet.addEventListener("pointerdown", (event) => {
     if (event.target.closest(".studio-words")) return;
     // A comment's bubble, or the selection's 💬: a click of their own, not a press on the score.

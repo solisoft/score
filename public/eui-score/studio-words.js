@@ -52,7 +52,10 @@ export function install(ctx) {
       fret: "Guitar chord, low E first: x32010 — Enter done",
     }[kind]);
     sheet.appendChild(box);
-    wordsBox = { box, kind, s: lane, t: time, anchor: t.s, noteChord: noteChord ? { s: t.s, i: t.i } : null };
+    // A chord diagram's frets, clicked under its box (#434).
+    const grid = kind === "fret" ? fretGrid(box) : null;
+    if (grid) sheet.appendChild(grid);
+    wordsBox = { box, grid, kind, s: lane, t: time, anchor: t.s, noteChord: noteChord ? { s: t.s, i: t.i } : null };
     // The note palette steps out of the box's way while it is open.
     ctx.call.placeOverlay();
     placeWords();
@@ -80,6 +83,63 @@ export function install(ctx) {
         closeWords();
       }
     }, 0));
+  }
+
+  // ---- A chord diagram's grid (#434) -------------------------------------------------
+
+  const STRINGS = ["low E", "A", "D", "G", "B", "high E"];
+
+  /**
+   * Six strings and five frets under a chord diagram's box: a click on a fret
+   * puts a finger there, again takes it away; over the nut, open (o) and not
+   * played (x) in turn. The box's text follows, and the grid follows the text.
+   */
+  function fretGrid(box) {
+    const grid = Object.assign(document.createElement("div"), { className: "studio-fret-grid" });
+    grid.setAttribute("role", "group");
+    grid.setAttribute("aria-label", "Chord diagram: click a fret to put a finger there, over the nut for open or not played");
+    const frets = () => {
+      try {
+        return M.fretSpec(box.value).split("|")[0].split(";").filter(Boolean);
+      } catch {
+        return ["o", "o", "o", "o", "o", "o"];
+      }
+    };
+    for (const fret of ["nut", "1", "2", "3", "4", "5"]) {
+      for (let string = 0; string < 6; string++) {
+        const button = Object.assign(document.createElement("button"), { type: "button" });
+        button.dataset.string = String(string);
+        button.dataset.fret = fret;
+        button.setAttribute("aria-label", fret === "nut" ? `${STRINGS[string]} string: open or not played` : `${STRINGS[string]} string, fret ${fret}`);
+        grid.appendChild(button);
+      }
+    }
+    const show = () => {
+      const items = frets();
+      for (const button of grid.querySelectorAll("button")) {
+        const { string, fret } = button.dataset;
+        const now = items[Number(string)];
+        if (fret === "nut") button.textContent = now === "x" ? "×" : now === "o" ? "○" : "";
+        else button.setAttribute("aria-pressed", String(now === fret));
+      }
+    };
+    // The box keeps the focus: a click on the grid is not a step out of it.
+    grid.addEventListener("pointerdown", (event) => event.preventDefault());
+    grid.addEventListener("click", (event) => {
+      const button = event.target.closest("button");
+      if (!button) return;
+      const items = frets();
+      const string = Number(button.dataset.string);
+      const fret = button.dataset.fret;
+      if (fret === "nut") items[string] = items[string] === "o" ? "x" : "o";
+      else items[string] = items[string] === fret ? "o" : fret;
+      box.value = M.fretText(`${items.join(";")};`);
+      show();
+      box.focus();
+    });
+    box.addEventListener("input", show);
+    show();
+    return grid;
   }
 
   /** The verse the lyrics box writes: the Verse menu's, 1 the first. */
@@ -159,6 +219,7 @@ export function install(ctx) {
 
   function closeWords() {
     wordsBox?.box.remove();
+    wordsBox?.grid?.remove();
     wordsBox = null;
     // The note palette, hidden while the words were typed, comes back.
     ctx.call.placeOverlay();
@@ -188,7 +249,23 @@ export function install(ctx) {
     // A later verse's box a line lower, as its words stand.
     const line = wordsBox.kind === "lyric" ? (verse() - 1) * 26 * st.zoom : 0;
     wordsBox.box.style.top = below ? `${corner.y + 8 + line}px` : `${Math.max(0, corner.y - 36)}px`;
+    if (wordsBox.grid) {
+      wordsBox.grid.style.left = wordsBox.box.style.left;
+      wordsBox.grid.style.top = `${parseFloat(wordsBox.box.style.top) + wordsBox.box.offsetHeight + 4}px`;
+    }
   }
 
-  return { openWords, placeWords, wordsOpen };
+  /** A word double-clicked on the score: its note selected, its box opened there with its value (#434). */
+  function openWordAt(s, i, kind, verseNumber = 1) {
+    const staff = st.score?.staves[s];
+    if (!staff?.events[i]) return;
+    const t = M.starts(staff)[i];
+    st.sel = { staff: s, t0: t, t1: t, head: -1 };
+    const verses = root.querySelector("[data-verse]");
+    if (kind === "lyric" && verses) verses.value = String(verseNumber);
+    draw();
+    openWords(kind);
+  }
+
+  return { openWords, openWordAt, placeWords, wordsOpen };
 }

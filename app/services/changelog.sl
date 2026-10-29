@@ -13,6 +13,15 @@ class Changelog
       {"date": "2026-10-29", "entries": [
         {
           "area": "editor",
+          "title": "Double-click a chord diagram, an expression or a syllable to change it",
+          "text": "A double click on words drawn on the score — a guitar chord diagram, an expression such as "
+          + "dolce, a staff text, a chord symbol, a syllable — opens them where they stand, with what they say: "
+          + "Enter keeps the change, Escape leaves them as they were, an emptied box takes them away. A chord "
+          + "diagram also shows its six strings: a click on a fret puts a finger there, over the nut a string "
+          + "is open or not played."
+        },
+        {
+          "area": "editor",
           "title": "Open a photo reads the repeats, the segno and the coda too",
           "text": "Reading a photo now asks the AI for the signs of form and ornament as well: repeats with their "
           + "first and second endings, segno, coda, D.S. and D.C., Fine, To Coda, sections, tuplets, grace notes, "

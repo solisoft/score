@@ -195,7 +195,7 @@ fn base(src: &str, width: f64, sp: f64) -> Result<std::rc::Rc<Base>, String> {
         return Ok(found);
     }
     let eng = eui_score::engrave(src, (width / sp).max(10.0), &Layout::default()).map_err(|e| e.message)?;
-    let (paths, ranges, heads) = eui_score::paths_heads(&eng, sp, 0).map_err(|e| e.message)?;
+    let (paths, ranges, heads, word_ranges) = eui_score::paths_words(&eng, sp, 0).map_err(|e| e.message)?;
     let parsed = parse::parse(src).map_err(|e| e.message)?;
     let by_item = events_by_item(&parsed);
 
@@ -294,7 +294,19 @@ fn base(src: &str, width: f64, sp: f64) -> Result<std::rc::Rc<Base>, String> {
             bar_boxes.push(json!({ "bar": b, "system": k, "box": [bar.x0 * sp, y0, bar.x1 * sp, y1], "staves": staves }));
         }
     }
-    let rest = json!({ "width": w, "height": total, "y0": y0, "items": items, "bars": bar_boxes, "editable": not_editable(src).unwrap_or("yes") });
+    // Each word's box, by the item it is written on: "text" (its words over or
+    // under it, a chord diagram) or "lyric", and which of them (its index among
+    // the item's words, the verse) — what a double click opens (#434).
+    let words: Vec<Value> = word_ranges
+        .iter()
+        .filter_map(|(item, kind, index, range)| {
+            let b = union(range, None)?;
+            // A text's words as the editor keeps them, to tell a chord diagram, a chord symbol and an expression apart.
+            let said = (*kind == "text").then(|| by_item.get(item).and_then(|ev| ev.texts.get(*index)).map(words_json)).flatten();
+            Some(json!({ "item": item, "kind": kind, "index": index, "box": b, "words": said }))
+        })
+        .collect();
+    let rest = json!({ "width": w, "height": total, "y0": y0, "items": items, "bars": bar_boxes, "words": words, "editable": not_editable(src).unwrap_or("yes") });
     let rest_json = rest.to_string();
     let pitches = by_item.iter().map(|(i, ev)| (*i, ev.pitches.iter().map(|p| p.d).collect())).collect();
     let made = std::rc::Rc::new(Base { key, paths, ranges, heads, pitches, svg_start, rest_json });

@@ -4050,6 +4050,22 @@ function figureLine(score, staff, unsupported) {
 
 const FRET_MARK = "\u0001fret:";
 
+/**
+ * What a word the engraver drew on event `ev` is to the editor (#434), from
+ * the view's `words` entry: "lyric", "fret" (a chord diagram), "chord" (its
+ * chord symbol), "expression" (in italics) or "text" (staff text); null for
+ * a sign drawn as words.
+ */
+export function wordKind(word, ev) {
+  if (word.kind === "lyric") return "lyric";
+  const text = word.words?.text ?? "";
+  if (text.startsWith(FRET_MARK)) return "fret";
+  // A sign drawn as words (a pedal's "Ped."), or nothing to type: not a word the editor opens.
+  if (!text.trim()) return null;
+  if (ev?.chord && text === ev.chord) return "chord";
+  return word.words?.italic ? "expression" : "text";
+}
+
 /** A shape typed as "x32010", "x;3;2;0;1;0" or "x 3 2 0 1 0", low E first: its spec. */
 export function fretSpec(text) {
   const typed = String(text ?? "").trim().toLowerCase();
