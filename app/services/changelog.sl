@@ -10,14 +10,24 @@
 class Changelog
   static def days
     [
-      {"date": "2026-10-29", "entries": [{
-        "area": "engine",
-        "title": "LilyPond 2.24's marks, sections, endings and harmonics open",
-        "text": "A file that wrote \\segnoMark 1, a segno or a coda over a note, \\section, \\sectionLabel, "
-        + "\\textMark, \\volta in an \\alternative or \\harmonic could not be opened at all. Each is now drawn as "
-        + "LilyPond draws it: the sign, a double bar line with the section's name in bold, the words over the bar "
-        + "line, endings labelled \"1., 2.\", diamond heads. They stay when the score is edited."
-      }]},
+      {"date": "2026-10-29", "entries": [
+        {
+          "area": "editor",
+          "title": "Open a photo reads the repeats, the segno and the coda too",
+          "text": "Reading a photo now asks the AI for the signs of form and ornament as well: repeats with their "
+          + "first and second endings, segno, coda, D.S. and D.C., Fine, To Coda, sections, tuplets, grace notes, "
+          + "trills and mordents, 8va lines, the pedal, fingering, harmonics and two voices on a staff, each written "
+          + "the way the engraver reads it, and the note names in the form it reads."
+        },
+        {
+          "area": "engine",
+          "title": "LilyPond 2.24's marks, sections, endings and harmonics open",
+          "text": "A file that wrote \\segnoMark 1, a segno or a coda over a note, \\section, \\sectionLabel, "
+          + "\\textMark, \\volta in an \\alternative or \\harmonic could not be opened at all. Each is now drawn as "
+          + "LilyPond draws it: the sign, a double bar line with the section's name in bold, the words over the bar "
+          + "line, endings labelled \"1., 2.\", diamond heads. They stay when the score is edited."
+        }
+      ]},
       {"date": "2026-10-28", "entries": [
         {
           "area": "engine",

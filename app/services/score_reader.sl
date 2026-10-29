@@ -17,6 +17,40 @@ each staff of the picture as a staff, inside one \score with a \new Staff (or a
 \new PianoStaff / \new ChoirStaff) per part, and use \relative only if it makes
 the music shorter. Put the title and composer, when the picture shows them, in a
 \header block. Leave out what you cannot read rather than guess it.
+"""
+
+# The signs of form and ornament the picture may show, each as the engraver
+# reads it (#432): the model is shown these forms, and a spec engraves every
+# example, so the list cannot name one the engraver refuses.
+const SCORE_READER_FORMS = [
+  [
+    "a repeated passage, with its first and second endings if any",
+    "\\repeat volta 2 { c4 d e f } \\alternative { { g2 g } { a1 } }"
+  ],
+  ["a segno sign and a coda sign over the bar line", "\\segnoMark c1 \\codaMark d1"],
+  ["D.S. al Coda, D.C. al Fine, D.S., D.C., after the bar that shows it", "c1 \\jump \"D.S. al Coda\""],
+  ["Fine, where the piece may end", "c1 \\fine"],
+  ["To Coda, over its note", "c1^\"To Coda\""],
+  ["a double bar line and the final one", "c1 \\bar \"||\" d1 \\bar \"|.\""],
+  ["a rehearsal mark", "\\mark \\default c1"],
+  ["a section's double bar line and its name", "c1 \\section \\sectionLabel \"Trio\" d1"],
+  ["a triplet or another tuplet", "\\tuplet 3/2 { c8 d e } f4"],
+  ["grace notes", "\\acciaccatura d8 c4 \\appoggiatura e8 d4 \\grace { c16 d } e2"],
+  ["a trill, a mordent, a short trill, a turn, a fermata", "c4\\trill d\\mordent e\\prall f\\turn g1\\fermata"],
+  ["a tremolo", "c2:16 d:32"],
+  ["8va and 8vb lines", "\\ottava 1 c4 d \\ottava 0 e f \\ottava -1 g1 \\ottava 0"],
+  ["the sustain pedal", "c4\\sustainOn d e f\\sustainOff"],
+  ["fingering, bowing and an arpeggio", "c4-1 d\\downbow e\\upbow <c e g>\\arpeggio"],
+  ["a harmonic's diamond head", "c4\\harmonic <c g'\\harmonic>2."],
+  ["two voices on one staff", "<< { c4 d e f } \\\\ { a,2 b } >>"]
+]
+
+# The note names the engraver reads with no \language: a model often writes
+# English ones (bf), and the reading fails on them.
+const SCORE_READER_NAMES = """
+Write the note names in Dutch, LilyPond's own: c d e f g a b, cis for C sharp,
+bes for B flat, ees for E flat. Use English names (cs, bf) only after a
+\language "english" line.
 
 Answer with the LilyPond source only: no explanation, no Markdown fence.
 """
@@ -54,13 +88,23 @@ class ScoreReader
     ScoreReader.source_of(AiClient.ask(settings, ScoreReader.turns(picture, previous, problem)))
   end
 
+  # What the model is asked: what to read, the signs of form and ornament in
+  # the forms the engraver reads, and the note names it reads.
+  static def instructions
+    forms = SCORE_READER_FORMS.map do |form|
+      "- #{form[0]}: #{form[1]}"
+    end.join("\n")
+    intro = "Write the signs of form and ornament you see too, in these forms:"
+    [SCORE_READER_PROMPT.trim, "#{intro}\n#{forms}", SCORE_READER_NAMES.trim].join("\n\n")
+  end
+
   # The conversation: the picture and the instructions; on the second try,
   # the first answer and what the engraver said of it.
   static def turns(picture, previous, problem)
     turns = [{
       "role": "user",
       "image": picture,
-      "text": SCORE_READER_PROMPT.trim
+      "text": ScoreReader.instructions
     }]
     return turns if previous.nil?
 

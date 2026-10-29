@@ -36,6 +36,7 @@ describe("ScoreReader") do
       turns = ScoreReader.turns("abc", nil, nil)
       assert_eq(turns.length, 1)
       assert_eq(turns[0]["image"], "abc")
+      assert_eq(turns[0]["text"], ScoreReader.instructions)
       assert_contains(turns[0]["text"], "LilyPond source only")
     end
 
@@ -48,6 +49,48 @@ describe("ScoreReader") do
       )
       assert_contains(turns[2]["text"], "unclosed slur")
       assert_null(turns[2]["image"])
+    end
+  end
+
+  describe("the instructions") do
+    test("ask for the signs of form and ornament, and keep the source-only answer") do
+      text = ScoreReader.instructions
+      [
+        "\\repeat volta",
+        "\\alternative",
+        "\\segnoMark",
+        "\\codaMark",
+        "\\jump",
+        "\\fine",
+        "To Coda",
+        "\\tuplet",
+        "\\acciaccatura",
+        "\\trill",
+        "\\ottava",
+        "\\sustainOn"
+      ].each do |form|
+        assert_contains(text, form)
+      end
+      assert_contains(text, "Leave out what you cannot read")
+      assert_contains(text, "cis for C sharp")
+      assert(
+        text.ends_with?("LilyPond source only: no explanation, no Markdown fence."),
+        "the answer's form comes last"
+      )
+    end
+
+    test("show only forms the engraver reads (#432)") do
+      SCORE_READER_FORMS.each do |form|
+        assert_null(AiClient.problem("\\relative c'' { #{form[1]} }"), form[0])
+        assert_contains(ScoreReader.instructions, "- #{form[0]}: #{form[1]}")
+      end
+    end
+
+    test("ask for the note names the engraver reads") do
+      assert_contains(ScoreReader.instructions, "Write the note names in Dutch")
+      assert_not_null(AiClient.problem("\\relative c'' { bf4 cs d e }"))
+      assert_null(AiClient.problem("\\relative c'' { bes4 cis d e }"))
+      assert_null(AiClient.problem("\\language \"english\" \\relative c'' { bf4 cs d e }"))
     end
   end
 
