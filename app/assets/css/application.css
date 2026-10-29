@@ -940,9 +940,9 @@
   }
   .studio-words-chord { font-weight: 600; }
   .studio-words-expression { font-style: italic; }
-  /* A chord diagram's frets, under its box (#434): strings down, frets across, a dot where a finger is. */
+  /* A chord diagram drawn large under its box (#434, #436): strings down, frets across, a dot where a finger is. */
   .studio-fret-grid {
-    --fret-cell: 22px;
+    --fret-cell: 34px;
     position: absolute; z-index: 5; display: grid; grid-template-columns: repeat(6, var(--fret-cell)); grid-auto-rows: var(--fret-cell);
     padding: 4px 8px 8px; border-radius: 6px; border: 2px solid #2563c9; background: #fff; box-shadow: 0 4px 14px rgba(0,0,0,.15);
   }
@@ -950,13 +950,17 @@
     padding: 0; border: 0; border-bottom: 1px solid #222; cursor: pointer; color: #222; font: 13px/1 var(--font-sans);
     background: linear-gradient(#222, #222) center / 1px 100% no-repeat;
   }
-  .studio-fret-grid button[data-fret="nut"] { background: none; border-bottom: 3px solid #222; }
+  .studio-fret-grid button[data-fret="nut"] { background: none; border-bottom: 4px solid #222; font-size: 17px; }
+  /* Up the neck: no nut, the first fret's number beside its row. */
+  .studio-fret-grid-up { padding-left: 36px; }
+  .studio-fret-grid-up button[data-fret="nut"] { border-bottom-width: 1px; }
+  .studio-fret-first { position: absolute; left: 6px; top: calc(4px + var(--fret-cell) * 1.5); transform: translateY(-50%); font: 600 13px/1 var(--font-sans); color: #222; }
   .studio-fret-grid button[aria-pressed="true"] {
-    background: radial-gradient(circle, #222 0 6px, transparent 7px), linear-gradient(#222, #222) center / 1px 100% no-repeat;
+    background: radial-gradient(circle, #222 0 9px, transparent 10px), linear-gradient(#222, #222) center / 1px 100% no-repeat;
   }
   .studio-fret-grid button:hover { background-color: #e8eefb; }
   .studio-fret-grid button:focus-visible { outline: 2px solid #2563c9; outline-offset: -2px; }
-  @media (max-width: 899px) { .studio-fret-grid { --fret-cell: 34px; } }
+  @media (max-width: 899px) { .studio-fret-grid { --fret-cell: 40px; } }
 
   .studio-source { border-top: 1px solid var(--line); background: var(--sheet); padding: 12px 16px 18px; }
   .studio-source-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-bottom: 8px; }

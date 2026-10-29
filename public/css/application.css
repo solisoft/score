@@ -5002,7 +5002,7 @@
     font-style: italic;
   }
   .studio-fret-grid {
-    --fret-cell: 22px;
+    --fret-cell: 34px;
     position: absolute;
     z-index: 5;
     display: grid;
@@ -5025,10 +5025,25 @@
   }
   .studio-fret-grid button[data-fret="nut"] {
     background: none;
-    border-bottom: 3px solid #222;
+    border-bottom: 4px solid #222;
+    font-size: 17px;
+  }
+  .studio-fret-grid-up {
+    padding-left: 36px;
+  }
+  .studio-fret-grid-up button[data-fret="nut"] {
+    border-bottom-width: 1px;
+  }
+  .studio-fret-first {
+    position: absolute;
+    left: 6px;
+    top: calc(4px + var(--fret-cell) * 1.5);
+    transform: translateY(-50%);
+    font: 600 13px/1 var(--font-sans);
+    color: #222;
   }
   .studio-fret-grid button[aria-pressed="true"] {
-    background: radial-gradient(circle, #222 0 6px, transparent 7px), linear-gradient(#222, #222) center / 1px 100% no-repeat;
+    background: radial-gradient(circle, #222 0 9px, transparent 10px), linear-gradient(#222, #222) center / 1px 100% no-repeat;
   }
   .studio-fret-grid button:hover {
     background-color: #e8eefb;
@@ -5039,7 +5054,7 @@
   }
   @media (max-width: 899px) {
     .studio-fret-grid {
-      --fret-cell: 34px;
+      --fret-cell: 40px;
     }
   }
   .studio-source {

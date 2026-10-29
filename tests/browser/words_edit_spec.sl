@@ -147,3 +147,70 @@ describe("Words opened where they are drawn") do
     assert_no_page_errors()
   end
 end
+
+# A single click on the middle of the `nth` chord diagram drawn on the score.
+def click_diagram(nth)
+  evaluate("(() => { const st = document.getElementById('studio').studio;"
+  + " const svg = document.querySelector('.studio-svg svg').getBoundingClientRect();"
+  + " const scale = svg.width / st.view.width;"
+  + " const b = st.view.words.filter((w) => (w.words?.text ?? '').startsWith('\\u0001fret:'))[#{nth}].box;"
+  + " const at = { clientX: svg.left + (b[0] + b[2]) / 2 * scale,"
+  + " clientY: svg.top + ((b[1] + b[3]) / 2 - (st.view.y0 ?? 0)) * scale, pointerId: 1, bubbles: true, button: 0 };"
+  + " const sheet = document.querySelector('.studio-sheet');"
+  + " sheet.dispatchEvent(new PointerEvent('pointerdown', at));"
+  + " sheet.dispatchEvent(new PointerEvent('pointerup', at)); })()")
+  sleep(0.5)
+end
+
+# The grid's frets with a finger, "string:fret" in the order drawn.
+def fingers_shown
+  evaluate("[...document.querySelectorAll('.studio-fret-grid [aria-pressed=\"true\"]')]"
+  + ".map((b) => b.dataset.string + ':' + b.dataset.fret).join(' ')")
+end
+
+describe("A chord diagram clicked on the score") do
+  before_each() do
+    viewport(1280, 800)
+    visit("/playground")
+    wait_for("[data-source]")
+    sleep(1)
+    words_source(WORDS_SOURCE)
+  end
+
+  test("a single click opens it large, its grid to click on, and changes nothing until it is written (#436)") do
+    click_diagram(0)
+    assert_eq(
+      open_words(),
+      {"kind": "studio-words-fret", "value": "x32010"}
+    )
+    assert_eq(fingers_shown(), "4:1 2:2 1:3")
+    cell = evaluate("document.querySelector('.studio-fret-grid button[data-fret=\"1\"]').getBoundingClientRect().width")
+    assert(cell >= 30, "cells large enough to click on: #{cell}")
+    assert_contains(words_text(), "\\fret-diagram \"6-x;5-3;4-2;3-o;2-1;1-o;\"")
+    evaluate("document.querySelector('.studio-fret-grid button[data-string=\"5\"][data-fret=\"3\"]').click()")
+    assert_eq(open_words()["value"], "x32013")
+    words_key("Enter")
+    assert_contains(words_text(), "\\fret-diagram \"6-x;5-3;4-2;3-o;2-1;1-3;\"")
+    assert_no_page_errors()
+  end
+
+  test("a shape up the neck shows its first fret and the frets after it") do
+    words_source("{ c''1^\\markup \\fret-diagram \"6-x;5-5;4-7;3-7;2-6;1-5;\" }")
+    click_diagram(0)
+    assert_eq(open_words()["value"], "x57765")
+    assert_eq(evaluate("document.querySelector('.studio-fret-first').textContent"), "5fr")
+    assert_eq(fingers_shown(), "1:5 5:5 4:6 2:7 3:7")
+    # Typed lower, the grid comes back to the first fret.
+    evaluate("(() => { const box = document.querySelector('.studio-words'); box.value = 'x32010';"
+    + " box.dispatchEvent(new Event('input', { bubbles: true })); })()")
+    assert_eq(evaluate("document.querySelector('.studio-fret-first').textContent"), "")
+    assert_eq(fingers_shown(), "4:1 2:2 1:3")
+  end
+
+  test("in note input a click on a diagram opens nothing") do
+    evaluate("document.querySelector('.studio-toolbox [data-act=\"mode-input\"]').click()")
+    sleep(0.3)
+    click_diagram(0)
+    assert_null(open_words())
+  end
+end

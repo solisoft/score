@@ -13,6 +13,14 @@ class Changelog
       {"date": "2026-10-29", "entries": [
         {
           "area": "editor",
+          "title": "A click on a chord diagram opens it large, to click on",
+          "text": "A guitar chord diagram drawn on the score is small for a precise click: one click now opens it "
+          + "large, its six strings and five frets in cells big enough to aim at. A click on a fret puts a finger "
+          + "there, again takes it away; over the nut a string is open or not played. A shape up the neck shows "
+          + "its first fret's number. Enter writes it, Escape leaves the diagram as it was."
+        },
+        {
+          "area": "editor",
           "title": "Double-click a chord diagram, an expression or a syllable to change it",
           "text": "A double click on words drawn on the score — a guitar chord diagram, an expression such as "
           + "dolce, a staff text, a chord symbol, a syllable — opens them where they stand, with what they say: "

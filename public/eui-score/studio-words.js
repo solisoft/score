@@ -90,9 +90,11 @@ export function install(ctx) {
   const STRINGS = ["low E", "A", "D", "G", "B", "high E"];
 
   /**
-   * Six strings and five frets under a chord diagram's box: a click on a fret
-   * puts a finger there, again takes it away; over the nut, open (o) and not
-   * played (x) in turn. The box's text follows, and the grid follows the text.
+   * A chord diagram drawn large under its box (#434, #436): six strings and
+   * five frets, from the first or, for a shape up the neck, from its lowest
+   * fret, numbered. A click on a fret puts a finger there, again takes it
+   * away; over the nut, open (o) and not played (x) in turn. The box's text
+   * follows, and the grid follows the text.
    */
   function fretGrid(box) {
     const grid = Object.assign(document.createElement("div"), { className: "studio-fret-grid" });
@@ -105,17 +107,31 @@ export function install(ctx) {
         return ["o", "o", "o", "o", "o", "o"];
       }
     };
-    for (const fret of ["nut", "1", "2", "3", "4", "5"]) {
-      for (let string = 0; string < 6; string++) {
-        const button = Object.assign(document.createElement("button"), { type: "button" });
-        button.dataset.string = String(string);
-        button.dataset.fret = fret;
-        button.setAttribute("aria-label", fret === "nut" ? `${STRINGS[string]} string: open or not played` : `${STRINGS[string]} string, fret ${fret}`);
-        grid.appendChild(button);
+    // The first fret shown: 1, or the lowest fingered one of a shape reaching past the fifth.
+    const firstOf = (items) => {
+      const fingered = items.filter((f) => /^\d+$/.test(f)).map(Number).filter((f) => f > 0);
+      return fingered.length && Math.max(...fingered) > 5 ? Math.min(...fingered) : 1;
+    };
+    let first = 0;
+    const build = (from) => {
+      first = from;
+      grid.replaceChildren();
+      grid.classList.toggle("studio-fret-grid-up", from > 1);
+      const label = Object.assign(document.createElement("span"), { className: "studio-fret-first", textContent: from > 1 ? `${from}fr` : "" });
+      grid.appendChild(label);
+      for (const fret of ["nut", ...[0, 1, 2, 3, 4].map((k) => String(from + k))]) {
+        for (let string = 0; string < 6; string++) {
+          const button = Object.assign(document.createElement("button"), { type: "button" });
+          button.dataset.string = String(string);
+          button.dataset.fret = fret;
+          button.setAttribute("aria-label", fret === "nut" ? `${STRINGS[string]} string: open or not played` : `${STRINGS[string]} string, fret ${fret}`);
+          grid.appendChild(button);
+        }
       }
-    }
+    };
     const show = () => {
       const items = frets();
+      if (firstOf(items) !== first) build(firstOf(items));
       for (const button of grid.querySelectorAll("button")) {
         const { string, fret } = button.dataset;
         const now = items[Number(string)];

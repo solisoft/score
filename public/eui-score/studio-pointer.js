@@ -126,6 +126,14 @@ export function install(ctx) {
       event.preventDefault();
       return writeAtGhost(spot, event.altKey || Boolean(root.querySelector("[data-chord-mode]")?.checked));
     }
+    // A chord diagram drawn on the score: a click opens it large, its grid to click on (#436).
+    const diagram = p && !st.input.on ? wordHit(p) : null;
+    const on = diagram && st.items[diagram.item];
+    if (on && M.wordKind(diagram, st.score.staves[on.staff].events[on.index]) === "fret") {
+      event.preventDefault();
+      ctx.call.openWordAt(on.staff, on.index, "fret");
+      return;
+    }
     const found = p && hit(p);
     if (!found) {
       // The empty part of a bar: it is selected, and a drag selects the bars it crosses.
