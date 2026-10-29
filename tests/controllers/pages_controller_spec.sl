@@ -145,6 +145,12 @@ describe("PagesController") do
   end
 
   describe("the changelog and the app") do
+    # A visitor's pages: a session left by an earlier spec in this worker shows "Open the app".
+    before_each() do
+      logout()
+      clear_cookies()
+    end
+
     test("shows the app's news only where the app is open") do
       all_titles = Changelog.shown(true).map do |day|
         day["entries"]
