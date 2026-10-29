@@ -10,6 +10,14 @@
 class Changelog
   static def days
     [
+      {"date": "2026-10-29", "entries": [{
+        "area": "engine",
+        "title": "LilyPond 2.24's marks, sections, endings and harmonics open",
+        "text": "A file that wrote \\segnoMark 1, a segno or a coda over a note, \\section, \\sectionLabel, "
+        + "\\textMark, \\volta in an \\alternative or \\harmonic could not be opened at all. Each is now drawn as "
+        + "LilyPond draws it: the sign, a double bar line with the section's name in bold, the words over the bar "
+        + "line, endings labelled \"1., 2.\", diamond heads. They stay when the score is edited."
+      }]},
       {"date": "2026-10-28", "entries": [
         {
           "area": "engine",

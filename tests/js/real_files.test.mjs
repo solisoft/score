@@ -164,3 +164,34 @@ test("the names of what is passed over: each once, the long list cut short", () 
   assert.equal(many[5], "4 more");
   assert.deepEqual(M.passedOver(undefined), []);
 });
+
+const LILYPOND_224 = String.raw`{ \time 4/4
+  c''4\segno d''4 e''4 f''4\coda | \segnoMark 1 g''1 | \section \sectionLabel "Trio" a''4 b''4 c'''2 |
+  \repeat volta 3 { d''1 } \alternative { \volta 1,2 { e''1 } \volta 3 { f''1 } }
+  \textMark "To Coda" g''1 | c''4\harmonic <c'' g''\harmonic>2. \codaMark \default | e''1 \bar "|." }`;
+
+test("LilyPond 2.24's marks, sections, endings and harmonics open and survive an edit (#433)", () => {
+  const { lost, source } = editedElsewhere(LILYPOND_224);
+  assert.equal(lost, undefined, "nothing left out");
+  // A segno and a coda over a note, a harmonic on a note and on one head of a chord.
+  assert.match(source, /c''4\\segno d''4 e''4 f''4\\coda/);
+  assert.match(source, /c''4\\harmonic <c'' g''\\harmonic>2\./);
+  // The marks and the section's words come back as the editor writes them.
+  // \\section is its double bar, a \\sectionLabel a mark of words, "To Coda" the jump it means.
+  assert.match(source, /\\segnoMark g''1 \| \\bar "\|\|" \\mark "Trio" a''4/);
+  assert.match(source, /\\repeat volta 3 \{ d''1 \} \\alternative \{ \{ e''1 \} \{ f''1 \\jump "To Coda" \} \}/);
+  assert.match(source, /\\codaMark/);
+  // Read again, every one is there still.
+  const back = read(source).score.staves[0].events;
+  assert.deepEqual([back[0].arts, back[3].arts], [["segno"], ["coda"]]);
+  const harmonics = back.filter((e) => e.harmonics).map((e) => e.harmonics);
+  assert.deepEqual(harmonics, [[14], [18]]);
+});
+
+test("a harmonic follows its note when it is transposed (#433)", () => {
+  const { score } = read(String.raw`{ <c'' g''\harmonic>1 }`);
+  M.transpose(score, { steps: 1, semitones: 2 });
+  const ev = score.staves[0].events[0];
+  assert.deepEqual(ev.harmonics, [ev.pitches[1].d]);
+  assert.match(engrave(score), /<d'' a''\\harmonic>1/);
+});

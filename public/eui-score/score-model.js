@@ -58,6 +58,8 @@ const SCRIPTS = {
   upbow: "\\upbow", downbow: "\\downbow", flageolet: "\\flageolet", espressivo: "\\espressivo",
   // A brass mute's: open (o) and stopped (+). Read and written back; on a drum, the hi-hat's.
   open: "\\open", stopped: "\\stopped",
+  // A segno or a coda over a note (LilyPond 2.24, #433).
+  segno: "\\segno", coda: "\\coda", varcoda: "\\varcoda",
 };
 /** A breath mark after a note or rest: `\\breathe` (a comma) or `\\caesura` (//). */
 export const BREATHS = ["breathe", "caesura"];
@@ -783,6 +785,7 @@ function pieces(score, ev, at, ticks, role) {
       delete p.spanStart;
       delete p.forced;
       delete p.cautionary;
+      delete p.harmonics;
       delete p.repeatTie;
       delete p.hairpinWords;
       // A chord of a line of chord names is named once, where it starts; so is a figure, a chord diagram.
@@ -1022,6 +1025,7 @@ export function remove(score, s, i, head = -1) {
   delete ev.phraseEnd;
   delete ev.forced;
   delete ev.cautionary;
+  delete ev.harmonics;
   delete ev.lv;
   delete ev.repeatTie;
   delete ev.cross;
@@ -1401,7 +1405,7 @@ export function removeFingerings(score, s, i) {
 /** A chord's fingerings follow its notes, moved from `was` to `now` head by head. */
 function followHeads(ev, was, now) {
   // A reminder accidental stays on its note (cis! moved to d is d!).
-  for (const field of ["forced", "cautionary"]) {
+  for (const field of ["forced", "cautionary", "harmonics"]) {
     if (!ev[field]) continue;
     ev[field] = ev[field].map((d) => {
       const k = was.findIndex((p) => p.d === d);
@@ -2725,8 +2729,10 @@ function eventText(ev, beam = "") {
     return `${t.lead}${t.text} ${t.lead !== "-" && /^[-^_]/.test(text) ? text.slice(1) : text}`;
   };
   const onHead = (p) => (ev.pitches.length > 1 ? fingers.filter((f) => f.head === p.d && ev.pitches.find((q) => q.d === f.head) === p) : []);
+  // `\\harmonic`: a diamond head (#433), in a chord on its note, else after the value.
+  const harmonic = (p) => !ev.rest && !p.drum && (ev.harmonics ?? []).includes(p.d);
   // Inside a chord, a note's string comes before its finger.
-  const headMarks = (p) => onHead(p).sort((x, y) => Number(y.circled) - Number(x.circled)).map(fingerText).join("");
+  const headMarks = (p) => (harmonic(p) ? "\\harmonic" : "") + onHead(p).sort((x, y) => Number(y.circled) - Number(x.circled)).map(fingerText).join("");
   const loose = fingers.filter((f) => !ev.pitches.some((p) => onHead(p).includes(f)));
   // A grace note with its fingering: c8-2, <c-1 e-3>8 — in braces, \grace { c8-2 }.
   const graceText = (g) => {
@@ -2746,6 +2752,7 @@ function eventText(ev, beam = "") {
   out += ev.base + ".".repeat(ev.dots);
   if (ev.tremolo && !ev.rest) out += `:${ev.tremolo}`;
   out += beam;
+  if (ev.pitches.length === 1 && harmonic(ev.pitches[0])) out += "\\harmonic";
   if (ev.tie && !ev.rest) out += tw("tie", "~");
   if (ev.slurStart) out += tw("slur", "(");
   if (ev.slurEnd) out += ")";
@@ -6648,6 +6655,7 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
           ...(ev.phrase_off ? { phraseEnd: true } : {}),
           // Real files (#359): cis! and cis?, a crescendo in words, a tie let ring or repeated, a text span, a breath.
           ...(!drums && k === "Note" && ev.forced?.length ? { forced: [...ev.forced] } : {}),
+          ...(!drums && k === "Note" && ev.harmonics?.length ? { harmonics: [...ev.harmonics] } : {}),
           ...(!drums && k === "Note" && ev.cautionary?.length ? { cautionary: [...ev.cautionary] } : {}),
           ...(ev.hairpin && HAIRPIN_WORDS.includes(String(ev.hairpin_text ?? "").replace(/\.$/, "")) ? { hairpinWords: ev.hairpin_text.replace(/\.$/, "") } : {}),
           ...(k === "Note" && ev.lv ? { lv: true } : {}),

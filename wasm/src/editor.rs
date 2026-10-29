@@ -830,6 +830,8 @@ pub fn score(src: &str) -> Result<Value, String> {
             // accidental is printed whatever the key says, and in parentheses.
             event["forced"] = json!(ev.forced);
             event["cautionary"] = json!(ev.cautionary);
+            // `\\harmonic`: the diatonic numbers of the heads drawn as diamonds.
+            event["harmonics"] = json!(ev.harmonics);
             // `\stemUp` (1), `\stemDown` (-1) in force, and `\autoBeamOff`.
             event["stem"] = json!(ev.stem_dir);
             event["no_autobeam"] = json!(ev.no_autobeam);
