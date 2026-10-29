@@ -133,8 +133,8 @@ class AiClient
     return AiClient.ask_whole(settings, turns) unless AiClient.streams?
 
     request = AiClient.request(settings, turns, true)
-    # Through `send`: a Soli without HTTP.stream (before 2.28.9's #435
-    # rebuild) refuses the name itself when the file loads.
+    # Through `send`: a Soli without HTTP.stream (before 2.28.11, #435)
+    # refuses the name itself when the file loads.
     stream = HTTP.send("stream", "POST", request["url"], request["headers"], JSON.stringify(request["body"])) rescue nil
     return AiClient.answer(nil, settings) if stream.nil?
 

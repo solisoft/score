@@ -29,7 +29,7 @@ concurrency:
 env:
   # Pinned, so CI tests what the server runs. The eui_score_* builtins the
   # site engraves with are in every release since 2.26.0.
-  SOLI_VERSION: "2.28.9"
+  SOLI_VERSION: "2.28.11"
   # `soli test` resets its test databases on SoliDB before it starts.
   SOLIDB_VERSION: "2.3.1"
 
