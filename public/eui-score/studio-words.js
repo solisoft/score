@@ -266,8 +266,13 @@ export function install(ctx) {
     const line = wordsBox.kind === "lyric" ? (verse() - 1) * 26 * st.zoom : 0;
     wordsBox.box.style.top = below ? `${corner.y + 8 + line}px` : `${Math.max(0, corner.y - 36)}px`;
     if (wordsBox.grid) {
-      wordsBox.grid.style.left = wordsBox.box.style.left;
-      wordsBox.grid.style.top = `${parseFloat(wordsBox.box.style.top) + wordsBox.box.offsetHeight + 4}px`;
+      // Under its box; on a score too short for it there, beside the box, kept inside the sheet (#438).
+      const boxTop = parseFloat(wordsBox.box.style.top);
+      const under = boxTop + wordsBox.box.offsetHeight + 4;
+      const room = sheet.scrollTop + sheet.clientHeight - 4 - wordsBox.grid.offsetHeight;
+      const beside = under > room;
+      wordsBox.grid.style.left = beside ? `${parseFloat(wordsBox.box.style.left) + wordsBox.box.offsetWidth + 6}px` : wordsBox.box.style.left;
+      wordsBox.grid.style.top = `${beside ? Math.max(0, Math.min(boxTop, room)) : under}px`;
     }
   }
 

@@ -15,25 +15,35 @@ def words_source(text)
   sleep(0.6)
 end
 
+# Two presses at a point of the sheet, as a mouse double-clicks: each press
+# draws the score again, as a real one does.
+def press_twice(x_expr, y_expr)
+  evaluate("(() => { const sheet = document.querySelector('.studio-sheet');"
+  + " const at = { bubbles: true, cancelable: true,"
+  + " pointerId: 1, button: 0, clientX: #{x_expr}, clientY: #{y_expr} };"
+  + " for (const n of [1, 2]) { (document.elementFromPoint(at.clientX, at.clientY) ?? sheet)"
+  + ".dispatchEvent(new PointerEvent('pointerdown', at));"
+  + " sheet.dispatchEvent(new PointerEvent('pointerup', at)); } })()")
+  sleep(0.4)
+end
+
 # A double click at the middle of the `nth` word of kind `kind` ("text", "lyric") drawn on the score.
 def double_click_word(kind, nth)
-  evaluate("(() => { const st = document.getElementById('studio').studio;"
+  where = "(() => { const st = document.getElementById('studio').studio;"
   + " const svg = document.querySelector('.studio-svg svg').getBoundingClientRect();"
   + " const scale = svg.width / st.view.width;"
   + " const word = st.view.words.filter((w) => w.kind === #{JSON.stringify(kind)})[#{nth}];"
-  + " const x = svg.left + (word.box[0] + word.box[2]) / 2 * scale;"
-  + " const y = svg.top + ((word.box[1] + word.box[3]) / 2 - (st.view.y0 ?? 0)) * scale;"
-  + " document.querySelector('.studio-sheet')"
-  + ".dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: x, clientY: y })); })()")
-  sleep(0.4)
+  + " return [svg.left + (word.box[0] + word.box[2]) / 2 * scale,"
+  + " svg.top + ((word.box[1] + word.box[3]) / 2 - (st.view.y0 ?? 0)) * scale]; })()"
+  press_twice("#{where}[0]", "#{where}[1]")
 end
 
 # A double click on the empty sheet, far from any word.
 def double_click_nowhere
-  evaluate("(() => { const svg = document.querySelector('.studio-svg svg').getBoundingClientRect();"
-  + " document.querySelector('.studio-sheet').dispatchEvent(new MouseEvent('dblclick', { bubbles: true,"
-  + " clientX: svg.right - 4, clientY: svg.bottom - 2 })); })()")
-  sleep(0.4)
+  press_twice(
+    "document.querySelector('.studio-svg svg').getBoundingClientRect().right - 4",
+    "document.querySelector('.studio-svg svg').getBoundingClientRect().bottom - 2"
+  )
 end
 
 # The open words box: its kind and value, or nil.
@@ -162,6 +172,21 @@ def click_diagram(nth)
   sleep(0.5)
 end
 
+# A fret of the open grid pressed and clicked as a mouse does. What has the
+# focus once pressed: the box keeps it, or its blur writes and closes it (#438).
+def press_fret(string, fret)
+  focused = evaluate("(() => { const b = document.querySelector('.studio-fret-grid"
+  + " button[data-string=\"#{string}\"][data-fret=\"#{fret}\"]');"
+  + " const r = b.getBoundingClientRect();"
+  + " const at = { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2,"
+  + " pointerId: 1, bubbles: true, cancelable: true, button: 0 };"
+  + " if (b.dispatchEvent(new PointerEvent('pointerdown', at))) b.focus();"
+  + " const focused = document.activeElement.className;"
+  + " b.dispatchEvent(new PointerEvent('pointerup', at)); b.click(); return focused; })()")
+  sleep(0.3)
+  focused
+end
+
 # The grid's frets with a finger, "string:fret" in the order drawn.
 def fingers_shown
   evaluate("[...document.querySelectorAll('.studio-fret-grid [aria-pressed=\"true\"]')]"
@@ -207,10 +232,96 @@ describe("A chord diagram clicked on the score") do
     assert_eq(fingers_shown(), "4:1 2:2 1:3")
   end
 
+  test("its grid stays open under the mouse: a click on a fret puts a finger there, again takes it away (#438)") do
+    click_diagram(0)
+    assert_eq(press_fret(5, 3), "studio-words studio-words-fret")
+    assert_eq(
+      open_words(),
+      {"kind": "studio-words-fret", "value": "x32013"}
+    )
+    assert_eq(press_fret(5, 3), "studio-words studio-words-fret")
+    assert_eq(
+      open_words(),
+      {"kind": "studio-words-fret", "value": "x32010"}
+    )
+    assert(evaluate("document.activeElement.classList.contains('studio-words')"), "the box keeps the focus")
+    assert_no_page_errors()
+  end
+
   test("in note input a click on a diagram opens nothing") do
     evaluate("document.querySelector('.studio-toolbox [data-act=\"mode-input\"]').click()")
     sleep(0.3)
     click_diagram(0)
     assert_null(open_words())
+  end
+end
+
+# A guitar line under chord names, its first note with a diagram over it and "dolce" under it (#438).
+const PALETTE_SOURCE = "\\header { title = \"Démo\" }\n<<\n  \\new ChordNames \\chordmode { s1 | s1 }\n"
++ "  \\new Staff { \\clef \"treble_8\" \\time 4/4"
++ " d'1^\\markup \\fret-diagram \"6-x;5-3;4-2;3-o;2-1;1-1;\"_\\markup \\italic \"dolce\" | r1 | r1 | r1 |"
++ " r1 | r1 | r1 | r1 | r1 | r1 | r1 | r1 | r1 | r1 | r1 | r1 }\n>>"
+
+# The page box of the `nth` word drawn: [left, top, right, bottom].
+def word_page_box(nth)
+  evaluate("(() => { const st = document.getElementById('studio').studio;"
+  + " const svg = document.querySelector('.studio-svg svg').getBoundingClientRect();"
+  + " const scale = svg.width / st.view.width;"
+  + " const b = st.view.words[#{nth}].box; const y0 = st.view.y0 ?? 0;"
+  + " return [svg.left + b[0] * scale, svg.top + (b[1] - y0) * scale,"
+  + " svg.left + b[2] * scale, svg.top + (b[3] - y0) * scale]; })()")
+end
+
+describe("A note's palette and its words") do
+  before_each() do
+    viewport(1280, 800)
+    visit("/playground")
+    wait_for("[data-source]")
+    sleep(1)
+    words_source(PALETTE_SOURCE)
+  end
+
+  test("the palette stands past the selected note's words, which a double click still opens (#438)") do
+    # The note selected by a press on its head.
+    evaluate("(() => { const st = document.getElementById('studio').studio;"
+    + " const svg = document.querySelector('.studio-svg svg').getBoundingClientRect();"
+    + " const scale = svg.width / st.view.width;"
+    + " const item = st.view.items.find((it) => it.item === st.view.words[1].item); const h = item.heads[0].box;"
+    + " const at = { bubbles: true, pointerId: 1, button: 0, clientX: svg.left + (h[0] + h[2]) / 2 * scale,"
+    + " clientY: svg.top + ((h[1] + h[3]) / 2 - (st.view.y0 ?? 0)) * scale };"
+    + " const sheet = document.querySelector('.studio-sheet');"
+    + " sheet.dispatchEvent(new PointerEvent('pointerdown', at));"
+    + " sheet.dispatchEvent(new PointerEvent('pointerup', at)); })()")
+    sleep(0.8)
+    assert_eq(
+      evaluate("document.querySelector('.studio-palette').hidden ? 'hidden'"
+      + " : document.querySelector('.studio-palette').dataset.side"),
+      "below"
+    )
+    dolce = word_page_box(1)
+    palette_top = evaluate("document.querySelector('.studio-palette').getBoundingClientRect().top")
+    assert(palette_top >= dolce[3], "the palette under \"dolce\": #{palette_top} >= #{dolce[3]}")
+    before = words_text()
+    double_click_word("text", 1)
+    assert_eq(
+      open_words(),
+      {"kind": "studio-words-expression", "value": "dolce"}
+    )
+    words_key("Escape")
+    assert_eq(words_text(), before, "no button of the palette was pressed")
+    assert_no_page_errors()
+  end
+
+  test("on a score of one line, the chord diagram's grid opens all of it in the sheet, clear of its box (#438)") do
+    click_diagram(0)
+    assert_eq(open_words()["value"], "x32011")
+    fits = evaluate("(() => { const g = document.querySelector('.studio-fret-grid').getBoundingClientRect();"
+    + " const s = document.querySelector('.studio-sheet').getBoundingClientRect();"
+    + " const b = document.querySelector('.studio-words').getBoundingClientRect();"
+    + " return { bottom: g.bottom <= s.bottom, clear: g.left >= b.right || g.top >= b.bottom }; })()")
+    assert_eq(
+      fits,
+      {"bottom": true, "clear": true}
+    )
   end
 end

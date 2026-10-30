@@ -82,30 +82,56 @@ export function install(ctx) {
     return (st.view?.words ?? []).find((w) => inside(w.box)) ?? null;
   }
 
-  // A double click on a word opens it where it is drawn, with its value (#434).
-  sheet.addEventListener("dblclick", (event) => {
-    if (!st.score || !st.view || st.input.on || event.target.closest(".studio-words")) return;
-    const p = point(event);
-    const word = p && wordHit(p);
+  /**
+   * The word under a point opened where it is drawn, with its value (#434) —
+   * or, on a line of chord names, the chord there typed again. Whether one opened.
+   */
+  function openWordUnder(p) {
+    const word = wordHit(p);
     if (!word) {
-      // A chord name on a line of chord names: its chord, typed again.
-      const found = p && hit(p);
+      const found = hit(p);
       const on = found && st.items[found.item];
-      if (on && M.isChords(st.score, on.staff)) {
-        event.preventDefault();
-        ctx.call.openWordAt(on.staff, on.index, "chord");
-      }
-      return;
+      if (!on || !M.isChords(st.score, on.staff)) return false;
+      ctx.call.openWordAt(on.staff, on.index, "chord");
+      return true;
     }
     const at = st.items[word.item];
     const kind = at && M.wordKind(word, st.score.staves[at.staff].events[at.index]);
-    if (!kind) return;
-    event.preventDefault();
+    if (!kind) return false;
     ctx.call.openWordAt(at.staff, at.index, kind, word.index + 1);
-  });
+    return true;
+  }
+
+  // A double press, told apart here: the first press draws the score again, and
+  // a browser sends no dblclick once the drawing under the pointer is replaced (#438).
+  // Caught on the way down, before the note's palette, drawn over the word once
+  // the first press selected its note, keeps the second to itself.
+  let lastPress = null;
+  let swallowClick = false;
+  const DOUBLE_PRESS_MS = 500;
+  sheet.addEventListener("pointerdown", (event) => {
+    if (event.target.closest(".studio-words, .studio-fret-grid, .studio-note-marker, .studio-comment-here")) return;
+    swallowClick = false;
+    const press = { x: event.clientX, y: event.clientY, at: event.timeStamp };
+    const again = lastPress && press.at - lastPress.at < DOUBLE_PRESS_MS && Math.hypot(press.x - lastPress.x, press.y - lastPress.y) < 6;
+    lastPress = again ? null : press;
+    if (!again || !st.score || !st.view || st.input.on) return;
+    const p = point(event);
+    if (!p || !openWordUnder(p)) return;
+    // Nor the press nor the click it ends in is a press on the palette's button under it.
+    event.preventDefault();
+    event.stopPropagation();
+    swallowClick = true;
+  }, true);
+  sheet.addEventListener("click", (event) => {
+    if (!swallowClick) return;
+    swallowClick = false;
+    event.preventDefault();
+    event.stopPropagation();
+  }, true);
 
   sheet.addEventListener("pointerdown", (event) => {
-    if (event.target.closest(".studio-words")) return;
+    if (event.target.closest(".studio-words, .studio-fret-grid")) return;
     // A comment's bubble, or the selection's 💬: a click of their own, not a press on the score.
     if (event.target.closest(".studio-note-marker, .studio-comment-here")) return;
     sheet.focus({ preventScroll: true });

@@ -10,6 +10,14 @@
 class Changelog
   static def days
     [
+      {"date": "2026-10-30", "entries": [{
+        "area": "editor",
+        "title": "A chord diagram's grid stays open while it is clicked, and \"dolce\" opens again",
+        "text": "Opened large, a chord diagram closed at the first click on one of its frets, which was written "
+        + "as it stood: a click now puts the finger there and the grid stays, for the next one. A note's "
+        + "palette (↑ ↓ ♭ ♯…) no longer covers the words written under or over the note: a double click on a "
+        + "\"dolce\" under a selected note opened nothing and moved the note up a step; it now opens the words."
+      }]},
       {"date": "2026-10-29", "entries": [
         {
           "area": "editor",

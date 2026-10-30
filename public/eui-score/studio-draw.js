@@ -89,7 +89,9 @@ export function install(ctx) {
 
   /** The note palette, beside the selection: above it, kept inside the sheet;
    *  below it where chord symbols stand over the staff (its own, or a line of
-   *  chord names), so it never hides them. Hidden while words are typed. */
+   *  chord names), so it never hides them. Past the note's own words on that
+   *  side too — its diagram, its "dolce" — to be clicked on (#438). Hidden
+   *  while words are typed. */
   function placePalette() {
     const g = geometry();
     const sel = st.sel;
@@ -102,7 +104,12 @@ export function install(ctx) {
     const item = st.view?.items.find((it) => it.item === k);
     if (!item) return hide();
     const below = M.chordsOver(st.score, sel.staff);
-    const corner = g.at(item.box[0], item.box[below ? 3 : 1]);
+    const middle = (item.box[1] + item.box[3]) / 2;
+    const words = (st.view.words ?? []).filter((w) => w.item === k).map((w) => w.box);
+    const edge = below
+      ? Math.max(item.box[3], ...words.filter((b) => b[1] >= middle).map((b) => b[3]))
+      : Math.min(item.box[1], ...words.filter((b) => b[3] <= middle).map((b) => b[1]));
+    const corner = g.at(item.box[0], edge);
     palette.hidden = false;
     palette.dataset.side = below ? "below" : "above";
     palette.style.left = `${Math.max(4, corner.x - 10)}px`;
