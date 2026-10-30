@@ -187,6 +187,21 @@ def press_fret(string, fret)
   focused
 end
 
+# A drag along fret `fret` of the open grid, across string
+# columns `first_string` to `last_string` (0 the low E), as a mouse does: press, move, release, then the click.
+def drag_frets(fret, first_string, last_string)
+  evaluate("(() => { const grid = document.querySelector('.studio-fret-grid');"
+  + " const cell = (k) => grid.querySelector(`button[data-string=\"${k}\"][data-fret=\"#{fret}\"]`);"
+  + " const at = (b) => { const r = b.getBoundingClientRect();"
+  + " return { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2,"
+  + " pointerId: 7, bubbles: true, cancelable: true, button: 0 }; };"
+  + " cell(#{first_string}).dispatchEvent(new PointerEvent('pointerdown', at(cell(#{first_string}))));"
+  + " grid.dispatchEvent(new PointerEvent('pointermove', at(cell(#{last_string}))));"
+  + " cell(#{last_string}).dispatchEvent(new PointerEvent('pointerup', at(cell(#{last_string}))));"
+  + " grid.dispatchEvent(new MouseEvent('click', { bubbles: true })); })()")
+  sleep(0.3)
+end
+
 # The grid's frets with a finger, "string:fret" in the order drawn.
 def fingers_shown
   evaluate("[...document.querySelectorAll('.studio-fret-grid [aria-pressed=\"true\"]')]"
@@ -216,6 +231,45 @@ describe("A chord diagram clicked on the score") do
     assert_eq(open_words()["value"], "x32013")
     words_key("Enter")
     assert_contains(words_text(), "\\fret-diagram \"6-x;5-3;4-2;3-o;2-1;1-3;\"")
+    assert_no_page_errors()
+  end
+
+  test("a drag along a fret lays a barre, drawn across the strings; a click on it takes it away (#445)") do
+    click_diagram(0)
+    assert_eq(open_words()["value"], "x32010")
+    drag_frets(1, 0, 5)
+    # The strings under the barre take its fret, the fingers higher stay.
+    assert_eq(open_words()["value"], "132111 | barre 6-1-1")
+    assert_eq(evaluate("document.querySelector('.studio-fret-barre').style.gridColumn"), "1 / 7")
+    # A finger put on afterwards keeps the barre.
+    evaluate("document.querySelector('.studio-fret-grid button[data-string=\"5\"][data-fret=\"3\"]').click()")
+    assert_eq(open_words()["value"], "132113 | barre 6-1-1")
+    words_key("Enter")
+    assert_contains(words_text(), "\\fret-diagram \"c:6-1-1;6-1;5-3;4-2;3-1;2-1;1-3;\"")
+    # Open again, the barre is there; a click on it takes it away, its fingers kept.
+    click_diagram(0)
+    assert_eq(open_words()["value"], "132113 | barre 6-1-1")
+    evaluate("document.querySelector('.studio-fret-barre').click()")
+    assert_eq(open_words()["value"], "132113")
+    assert_null(evaluate("document.querySelector('.studio-fret-barre')"))
+    assert_no_page_errors()
+  end
+
+  test("a Shift+click on a second string at the same fret lays a barre between them; elsewhere it does not (#445)") do
+    click_diagram(0)
+    evaluate("document.querySelector('.studio-fret-grid button[data-string=\"3\"][data-fret=\"2\"]').click()")
+    assert_eq(open_words()["value"], "x32210")
+    # Shift on another fret: a finger, no barre.
+    evaluate("document.querySelector('.studio-fret-grid button[data-string=\"5\"][data-fret=\"3\"]')"
+    + ".dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }))")
+    assert_eq(open_words()["value"], "x32213")
+    evaluate("document.querySelector('.studio-fret-grid button[data-string=\"1\"][data-fret=\"2\"]').click()")
+    evaluate("document.querySelector('.studio-fret-grid button[data-string=\"4\"][data-fret=\"2\"]')"
+    + ".dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }))")
+    assert_eq(open_words()["value"], "x22223 | barre 5-2-2")
+    # The same barre again takes it away.
+    drag_frets(2, 4, 1)
+    assert_eq(open_words()["value"], "x22223")
     assert_no_page_errors()
   end
 

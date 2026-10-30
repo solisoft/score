@@ -5240,6 +5240,9 @@
       transition: transform .2s ease;
     }
     .studio-tools-open {
+  .studio-words-fret {
+    width: 190px;
+  }
       padding-bottom: 52vh;
     }
     .studio-tools-toggle {
@@ -5284,6 +5287,24 @@
     }
     .studio-source-side > .studio-menubar {
       grid-row: 1;
+  .studio-fret-grid {
+    touch-action: none;
+  }
+  .studio-fret-grid .studio-fret-barre {
+    align-self: center;
+    z-index: 1;
+    height: 22px;
+    margin: 0 calc(var(--fret-cell) / 2 - 11px);
+    border-radius: 11px;
+    background: #222;
+    border: 0;
+  }
+  .studio-fret-grid .studio-fret-barre:hover {
+    background: #2563c9;
+  }
+  .studio-fret-grid button.studio-fret-span {
+    background-color: #cfdcf7;
+  }
     }
     .studio-source-side > .studio-progress {
       grid-row: 2;

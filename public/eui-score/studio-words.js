@@ -102,19 +102,31 @@ export function install(ctx) {
    * A chord diagram drawn large under its box (#434, #436): six strings and
    * five frets, from the first or, for a shape up the neck, from its lowest
    * fret, numbered. A click on a fret puts a finger there, again takes it
-   * away; over the nut, open (o) and not played (x) in turn. The box's text
-   * follows, and the grid follows the text.
+   * away; over the nut, open (o) and not played (x) in turn. A drag along a
+   * fret from one string to another — or a Shift+click on a second string —
+   * lays a barre there, drawn across them; a click on it takes it away
+   * (#445). The box's text follows, and the grid follows the text.
    */
   function fretGrid(box) {
     const grid = Object.assign(document.createElement("div"), { className: "studio-fret-grid" });
     grid.setAttribute("role", "group");
-    grid.setAttribute("aria-label", "Chord diagram: click a fret to put a finger there, over the nut for open or not played");
-    const frets = () => {
+    grid.setAttribute(
+      "aria-label",
+      "Chord diagram: click a fret to put a finger there, over the nut for open or not played; drag along a fret across strings, or Shift+click a second string, for a barre",
+    );
+    // The shape in the box: each string's fret from the low E, and its barre [from string, to string, fret] or null.
+    const read = () => {
       try {
-        return M.fretSpec(box.value).split("|")[0].split(";").filter(Boolean);
+        const [frets, barre] = M.fretSpec(box.value).split("|");
+        return { items: frets.split(";").filter(Boolean), barre: barre ? barre.split("-").map(Number) : null };
       } catch {
-        return ["o", "o", "o", "o", "o", "o"];
+        return { items: ["o", "o", "o", "o", "o", "o"], barre: null };
       }
+    };
+    const write = ({ items, barre }) => {
+      box.value = M.fretText(`${items.join(";")};${barre ? `|${barre.join("-")}` : ""}`);
+      show();
+      box.focus();
     };
     // The first fret shown: 1, or the lowest fingered one of a shape reaching past the fifth.
     const firstOf = (items) => {
@@ -128,39 +140,117 @@ export function install(ctx) {
       grid.classList.toggle("studio-fret-grid-up", from > 1);
       const label = Object.assign(document.createElement("span"), { className: "studio-fret-first", textContent: from > 1 ? `${from}fr` : "" });
       grid.appendChild(label);
-      for (const fret of ["nut", ...[0, 1, 2, 3, 4].map((k) => String(from + k))]) {
+      ["nut", ...[0, 1, 2, 3, 4].map((k) => String(from + k))].forEach((fret, row) => {
         for (let string = 0; string < 6; string++) {
           const button = Object.assign(document.createElement("button"), { type: "button" });
           button.dataset.string = String(string);
           button.dataset.fret = fret;
+          // Placed by hand: the barre is laid over the cells, not among them.
+          Object.assign(button.style, { gridRow: String(row + 1), gridColumn: String(string + 1) });
           button.setAttribute("aria-label", fret === "nut" ? `${STRINGS[string]} string: open or not played` : `${STRINGS[string]} string, fret ${fret}`);
           grid.appendChild(button);
         }
-      }
+      });
     };
     const show = () => {
-      const items = frets();
+      const { items, barre } = read();
       if (firstOf(items) !== first) build(firstOf(items));
-      for (const button of grid.querySelectorAll("button")) {
+      for (const button of grid.querySelectorAll("button[data-fret]")) {
         const { string, fret } = button.dataset;
         const now = items[Number(string)];
         if (fret === "nut") button.textContent = now === "x" ? "×" : now === "o" ? "○" : "";
         else button.setAttribute("aria-pressed", String(now === fret));
       }
+      grid.querySelector(".studio-fret-barre")?.remove();
+      if (!barre || barre[2] < first || barre[2] > first + 4) return;
+      // Strings are numbered 6 (the low E) to 1; the grid's columns go the other way.
+      const [from, to, fret] = barre;
+      const bar = Object.assign(document.createElement("button"), { type: "button", className: "studio-fret-barre" });
+      Object.assign(bar.style, { gridRow: String(fret - first + 2), gridColumn: `${7 - Math.max(from, to)} / ${8 - Math.min(from, to)}` });
+      bar.setAttribute("aria-label", `Barre at fret ${fret}, strings ${Math.max(from, to)} to ${Math.min(from, to)}: click to take it away`);
+      grid.appendChild(bar);
     };
-    // The box keeps the focus: a click on the grid is not a step out of it.
-    grid.addEventListener("pointerdown", (event) => event.preventDefault());
-    grid.addEventListener("click", (event) => {
-      const button = event.target.closest("button");
+    // A barre at `fret` from column `a` to column `b`: the strings it holds down
+    // take that fret, unless a finger stands higher; the same barre again takes it away.
+    const layBarre = (fret, a, b) => {
+      const shape = read();
+      const [lo, hi] = [Math.min(a, b), Math.max(a, b)];
+      const barre = [6 - lo, 6 - hi, fret];
+      if (shape.barre && shape.barre.join("-") === barre.join("-")) return write({ items: shape.items, barre: null });
+      for (let k = lo; k <= hi; k++) {
+        if (!/^\d+$/.test(shape.items[k]) || Number(shape.items[k]) < fret) shape.items[k] = String(fret);
+      }
+      write({ items: shape.items, barre });
+    };
+    const fretButton = (el) => el?.closest?.("button[data-fret]:not([data-fret='nut'])") ?? null;
+    const spanned = (on) => {
+      for (const button of grid.querySelectorAll("button[data-fret]")) {
+        const k = Number(button.dataset.string);
+        button.classList.toggle("studio-fret-span", Boolean(on) && button.dataset.fret === on.fret && k >= Math.min(on.from, on.to) && k <= Math.max(on.from, on.to));
+      }
+    };
+    // A drag along a fret: the strings it crosses, lit as it goes.
+    let drag = null;
+    let dragged = false;
+    let anchor = null;
+    // The box keeps the focus: a press on the grid is not a step out of it.
+    grid.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      dragged = false;
+      const button = fretButton(event.target);
       if (!button) return;
-      const items = frets();
+      drag = { fret: button.dataset.fret, from: Number(button.dataset.string), to: Number(button.dataset.string) };
+      try {
+        grid.setPointerCapture(event.pointerId);
+      } catch {
+        // A pointer the browser no longer knows: the drag is followed without it.
+      }
+    });
+    grid.addEventListener("pointermove", (event) => {
+      if (!drag) return;
+      // Under a barre drawn already, the fret's cell is beneath it.
+      const button = document.elementsFromPoint(event.clientX, event.clientY).map(fretButton).find(Boolean);
+      if (!button || button.dataset.fret !== drag.fret || Number(button.dataset.string) === drag.to) return;
+      drag.to = Number(button.dataset.string);
+      spanned(drag.from !== drag.to ? drag : null);
+    });
+    const endDrag = () => {
+      if (drag && drag.from !== drag.to) {
+        dragged = true;
+        layBarre(Number(drag.fret), drag.from, drag.to);
+      }
+      drag = null;
+      spanned(null);
+    };
+    grid.addEventListener("pointerup", endDrag);
+    grid.addEventListener("pointercancel", () => {
+      drag = null;
+      spanned(null);
+    });
+    grid.addEventListener("click", (event) => {
+      // The click that ends a drag has laid its barre already.
+      if (dragged) {
+        dragged = false;
+        return;
+      }
+      if (event.target.closest(".studio-fret-barre")) {
+        anchor = null;
+        return write({ ...read(), barre: null });
+      }
+      const button = event.target.closest("button[data-fret]");
+      if (!button) return;
       const string = Number(button.dataset.string);
       const fret = button.dataset.fret;
-      if (fret === "nut") items[string] = items[string] === "o" ? "x" : "o";
-      else items[string] = items[string] === fret ? "o" : fret;
-      box.value = M.fretText(`${items.join(";")};`);
-      show();
-      box.focus();
+      if (event.shiftKey && anchor && fret !== "nut" && anchor.fret === fret && anchor.string !== string) {
+        layBarre(Number(fret), anchor.string, string);
+        anchor = null;
+        return;
+      }
+      anchor = { fret, string };
+      const shape = read();
+      if (fret === "nut") shape.items[string] = shape.items[string] === "o" ? "x" : "o";
+      else shape.items[string] = shape.items[string] === fret ? "o" : fret;
+      write(shape);
     });
     box.addEventListener("input", show);
     show();

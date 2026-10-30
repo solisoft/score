@@ -13,6 +13,13 @@ class Changelog
       {"date": "2026-10-30", "entries": [
         {
           "area": "editor",
+          "title": "A barre in a chord diagram's grid",
+          "text": "Opened large, a chord diagram now takes a barre: drag along a fret from one string to another, "
+          + "or Shift+click a second string at the same fret. The barre is drawn across the strings it holds "
+          + "down, which take its fret; a click on it takes it away. A finger put on afterwards keeps it."
+        },
+        {
+          "area": "editor",
           "title": "On a phone, a note's buttons are all in sight",
           "text": "A tap on a note shows its buttons (↑ ↓ ♭ ♯…) beside it. On a phone they "
           + "started at the note and ran past the edge of the score, so for a note on the right "

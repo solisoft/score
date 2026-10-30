@@ -984,6 +984,8 @@
   .studio-source textarea:focus { outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent); outline-offset: 1px; }
 
   /* Phone and tablet: the score first, the tools in a sheet over the lower
+  /* Wide enough for a shape and its barre: "132111 | barre 6-1-1" (#445). */
+  .studio-words-fret { width: 190px; }
      half of the screen, opened from the menu bar — a note stays in sight
      while its tools are used. The site's header scrolls away. */
   /* Below 900px the header's one row no longer holds every link: the brand
@@ -1002,6 +1004,14 @@
        wide; what is selected under them. */
     .studio-menubar { flex-wrap: wrap; }
     .studio-menu-scroll { display: contents; }
+  .studio-fret-grid { touch-action: none; }
+  /* A barre (#445): a bar across the strings it holds down, over their cells; a click takes it away. */
+  .studio-fret-grid .studio-fret-barre {
+    align-self: center; z-index: 1; height: 22px; margin: 0 calc(var(--fret-cell) / 2 - 11px); border-radius: 11px;
+    background: #222; border: 0;
+  }
+  .studio-fret-grid .studio-fret-barre:hover { background: #2563c9; }
+  .studio-fret-grid button.studio-fret-span { background-color: #cfdcf7; }
     .studio-menus { flex: 1 1 0; min-width: 0; flex-wrap: wrap; }
     /* On a row of their own, wrapping when the screen is narrow: nothing cut. */
     .studio-menu-group { flex: 1 0 100%; order: 1; flex-wrap: wrap; row-gap: 4px; padding-bottom: 2px; }
