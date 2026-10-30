@@ -112,8 +112,12 @@ export function install(ctx) {
     const corner = g.at(item.box[0], edge);
     palette.hidden = false;
     palette.dataset.side = below ? "below" : "above";
-    palette.style.left = `${Math.max(4, corner.x - 10)}px`;
-    palette.style.top = below ? `${corner.y + 10}px` : `${Math.max(4, corner.y - 48)}px`;
+    // Kept inside the sheet's visible width: on a phone it wraps, and a note
+    // near the right edge no longer leaves most of it cut off (#443).
+    palette.style.left = `${sheet.scrollLeft}px`; // measured at its full width, not squeezed by the last place
+    const right = sheet.scrollLeft + sheet.clientWidth - 4 - palette.offsetWidth;
+    palette.style.left = `${Math.max(sheet.scrollLeft + 4, Math.min(corner.x - 10, right))}px`;
+    palette.style.top = below ? `${corner.y + 10}px` : `${Math.max(4, corner.y - palette.offsetHeight - 8)}px`;
   }
 
   function placeOverlay() {

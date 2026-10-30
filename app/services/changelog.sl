@@ -13,6 +13,14 @@ class Changelog
       {"date": "2026-10-30", "entries": [
         {
           "area": "editor",
+          "title": "On a phone, a note's buttons are all in sight",
+          "text": "A tap on a note shows its buttons (↑ ↓ ♭ ♯…) beside it. On a phone they "
+          + "started at the note and ran past the edge of the score, so for a note on the right "
+          + "most of them could not be seen. They now stay inside the score, and go on two rows "
+          + "when the screen is too narrow for one."
+        },
+        {
+          "area": "editor",
           "title": "Guitar chord shapes for every chord symbol",
           "text": "Insert ▸ Guitar diagrams for the chord symbols puts a chord diagram over the first note of each "
           + "chord symbol, in the shape a guitarist plays it: the open chord where there is one (C, G, Am7, "

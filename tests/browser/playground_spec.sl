@@ -360,6 +360,21 @@ describe("The playground, in a browser") do
     assert_no_page_errors()
   end
 
+  test("on a phone, a note's palette stands whole inside the sheet, for a note at the right edge too (#443)") do
+    viewport(390, 844)
+    sleep(0.5)
+    type_source("{ \\time 4/4 c'4 d'4 e'4 f'4 | g'4 a'4 b'4 c''4 }")
+    caret_on("c''4")
+    sleep(0.3)
+    assert_eq(palette_side(), "above")
+    inside = evaluate("(() => { const p = document.querySelector('.studio-palette button:last-child')"
+    + ".getBoundingClientRect();"
+    + " const s = document.querySelector('.studio-sheet').getBoundingClientRect();"
+    + " return p.left >= s.left && p.right <= s.right; })()")
+    assert(inside, "the palette's last button within the sheet")
+    assert_no_page_errors()
+  end
+
   test("the arrow beside Play opens the Playback panel; Escape closes it, back on the arrow (#419)") do
     assert_not(evaluate("document.getElementById('studio-playback').matches(':popover-open')"))
     open_playback()

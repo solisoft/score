@@ -342,7 +342,7 @@
   .studio-ai-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
   /* Over the selected note: what is done to a note most. */
-  .studio-palette { position: absolute; z-index: 12; display: flex; gap: 2px; padding: 4px; background: var(--sheet); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: 0 8px 22px rgb(29 25 20 / .16); }
+  .studio-palette { position: absolute; z-index: 12; display: flex; flex-wrap: wrap; max-width: calc(100% - 8px); gap: 2px; padding: 4px; background: var(--sheet); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: 0 8px 22px rgb(29 25 20 / .16); }
   .studio-palette button { min-width: 30px; height: 30px; font: 600 16px/1 var(--font-sans); color: var(--ink); background: none; border: 0; border-radius: 7px; cursor: pointer; }
   .studio-palette button:hover, .studio-palette button:focus-visible { background: var(--paper-deep); outline: none; }
 

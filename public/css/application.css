@@ -2410,6 +2410,8 @@
     position: absolute;
     z-index: 12;
     display: flex;
+    flex-wrap: wrap;
+    max-width: calc(100% - 8px);
     gap: 2px;
     padding: 4px;
     background: var(--sheet);
