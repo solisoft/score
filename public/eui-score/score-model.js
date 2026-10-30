@@ -4068,6 +4068,11 @@ export function wordKind(word, ev) {
 
 /** A shape typed as "x32010", "x;3;2;0;1;0" or "x 3 2 0 1 0", low E first: its spec. */
 export function fretSpec(text) {
+  // A barre after a bar: "x;3;2;o;1;o;|6-1-1", or as fretText writes it, "133211 | barre 6-1-1".
+  const [shapePart, barrePart] = String(text ?? "").split("|");
+  const barre = /^\s*(?:barre\s*)?([1-6])-([1-6])-(\d{1,2})\s*$/i.exec(barrePart ?? "");
+  if (barrePart != null && !barre) throw new Error(`“${barrePart.trim()}” is not a barre: from string, to string, fret, as 6-1-1`);
+  if (barre) return `${fretSpec(shapePart)}|${barre[1]}-${barre[2]}-${barre[3]}`;
   const typed = String(text ?? "").trim().toLowerCase();
   const items = /^[xo0-9]{6}$/.test(typed) ? [...typed] : typed.split(/[;\s,]+/).filter(Boolean);
   const ok = items.length === 6 && items.every((f) => /^(x|o|\d{1,2})$/.test(f) && (!/^\d+$/.test(f) || Number(f) <= 24));

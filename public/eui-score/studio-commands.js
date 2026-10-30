@@ -7,6 +7,8 @@ const V = new URL(import.meta.url).search;
 const patternTools = () => import(`./pattern-tools.js${V}`);
 /** Quantize, swing and humanize (Edit and Play menus), loaded the first time one is opened. */
 const feelTools = () => import(`./feel-tools.js${V}`);
+/** Chord shapes and voicings (Insert ▸ Guitar diagrams for the chord symbols), loaded the first time. */
+const voicings = () => import(`./voicings.js${V}`);
 
 /** The keys, the buttons and the menus wired; answers act, what each of them does. */
 /** The windows wide enough for the source beside the score, as the CSS has it (#420). */
@@ -353,6 +355,14 @@ export function install(ctx) {
       // Figures on the figured bass under the staff, beat by beat; a guitar chord diagram over a note.
       case "figures": return openWords("figure");
       case "fret": return openWords("fret");
+      // A diagram over the first note of each chord symbol, on the selected staff, in the selected bars or all.
+      case "fret-all": return voicings().then((Voicings) => {
+        const bars = selectedBarsOrNull();
+        let count = 0;
+        if (edit((score) => (count = Voicings.diagramsFromSymbols(score, staffOf(), bars ? { a: bars[0], b: bars[1] } : {})))) {
+          say(`${count} guitar diagram${count === 1 ? "" : "s"} put, each in its chord's shape. Double-click one to change it.`);
+        }
+      });
       case "text": return openWords("text");
       case "expression": return openWords("expression");
       case "mark": return edit((score) => {

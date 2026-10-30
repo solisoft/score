@@ -10,14 +10,27 @@
 class Changelog
   static def days
     [
-      {"date": "2026-10-30", "entries": [{
-        "area": "editor",
-        "title": "A chord diagram's grid stays open while it is clicked, and \"dolce\" opens again",
-        "text": "Opened large, a chord diagram closed at the first click on one of its frets, which was written "
-        + "as it stood: a click now puts the finger there and the grid stays, for the next one. A note's "
-        + "palette (↑ ↓ ♭ ♯…) no longer covers the words written under or over the note: a double click on a "
-        + "\"dolce\" under a selected note opened nothing and moved the note up a step; it now opens the words."
-      }]},
+      {"date": "2026-10-30", "entries": [
+        {
+          "area": "editor",
+          "title": "Guitar chord shapes for every chord symbol",
+          "text": "Insert ▸ Guitar diagrams for the chord symbols puts a chord diagram over the first note of each "
+          + "chord symbol, in the shape a guitarist plays it: the open chord where there is one (C, G, Am7, "
+          + "D7…), else a barre up the neck in the E or A shape (F, Bm, B♭7, C♯m7), with its barre drawn. A "
+          + "slash chord's bass goes on the lowest string that reaches it (C/E, D/F♯). Insert ▸ Guitar chord "
+          + "diagram starts from the shape of the chord sounding over the note. The chord symbols are also "
+          + "read further: 11, 13, #11, b13, alt and omit3."
+        },
+        {
+          "area": "editor",
+          "title": "A chord diagram's grid stays open while it is clicked, and \"dolce\" opens again",
+          "text": "Opened large, a chord diagram closed at the first click on one of its frets, which was written "
+          + "as it stood: a click now puts the finger there and the grid stays, for the next one. A note's "
+          + "palette (↑ ↓ ♭ ♯…) no longer covers the words written under or over the note: a double click on "
+          + "a \"dolce\" under a selected note opened nothing and moved the note up a step; it now opens the "
+          + "words."
+        }
+      ]},
       {"date": "2026-10-29", "entries": [
         {
           "area": "editor",

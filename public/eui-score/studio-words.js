@@ -1,6 +1,9 @@
 // The studio's words (studio.js): lyrics, chord symbols, figures, chord
 // diagrams and texts, typed in a box over the note.
 
+// A chord diagram starts from the shape of the chord sounding there (#440).
+const Voicings = await import(`./voicings.js${new URL(import.meta.url).search}`);
+
 /** Answers the words box: lyrics, chord symbols, figures, texts typed over the score. */
 export function install(ctx) {
   const { root, sheet, st, M } = ctx;
@@ -42,6 +45,12 @@ export function install(ctx) {
     const noteChord = kind === "chord" && line >= 0 ? st.score.staves[t.s].events[t.i].chord || null : null;
     const box = Object.assign(document.createElement("input"), { type: "text", className: `studio-words studio-words-${kind}` });
     box.value = noteChord ?? (ev ? wordsOf(ev, kind) : "");
+    // A new diagram: the shape of the chord symbol sounding over the note, to keep or change.
+    const shape = kind === "fret" && !box.value ? Voicings.guitarShape(Voicings.chordAt(st.score, time)) : null;
+    if (shape) {
+      box.value = M.fretText(Voicings.fretSpecOf(shape));
+      say(`The ${shape.name} shape, from the chord symbol: Enter puts it, or click the frets to change it.`);
+    }
     box.placeholder = { lyric: "syllable", chord: "Am7", text: "solo", expression: "dolce", figure: "6 4", fret: "x32010" }[kind];
     box.setAttribute("aria-label", {
       lyric: "Syllable — Space next note, - hyphen, Enter done",

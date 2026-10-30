@@ -8,6 +8,10 @@
 
 // The model at the same version as the page's, so its event ids are one series.
 const M = await import(`./score-model.js${new URL(import.meta.url).search}`);
+// Chord symbols are read in voicings.js, at the page's version: the
+// accompaniments and the chord diagrams read them the one way.
+const V = await import(`./voicings.js${new URL(import.meta.url).search}`);
+export const { chordTones, chordVoicing, chordSymbols } = V;
 
 // ---- The drum grid -----------------------------------------------------------------
 
@@ -188,78 +192,7 @@ export function arpeggiate(score, s, a, b, { pattern = "up", step = "16", octave
   return spans.length;
 }
 
-// ---- Chord symbols -----------------------------------------------------------------
-
-const LETTERS = "CDEFGAB";
-const SIGNS = { "#": 1, "♯": 1, b: -1, "♭": -1 };
-
-/**
- * A chord symbol's notes: { root, bass, tones }, `root` the root's step (0 = C)
- * and alteration, `tones` its intervals above the root as [steps, semitones]
- * — the third (or sus), the fifth, a sixth, the seventh, a ninth — and
- * `bass` the step and alteration after a slash, or null. Null for what is
- * not a chord symbol (isChordSymbol).
- */
-export function chordTones(text) {
-  const symbol = String(text ?? "").trim();
-  if (!M.isChordSymbol(symbol)) return null;
-  const match = /^([A-G])([#♯b♭]?)(.*?)(?:\/([A-G])([#♯b♭]?))?$/.exec(symbol);
-  const [, letter, sign, quality, bassLetter, bassSign] = match;
-  const q = quality;
-  let third = [2, 4];
-  let fifth = [4, 7];
-  let seventh = null;
-  const extra = [];
-  const major7 = /^(maj|M(?!in)|Δ)|\(maj7\)|maj7/.test(q);
-  const minor = /^(m(?!aj)|min|-)/.test(q);
-  const extended = /(^|[^#♯b♭\d])(7|9|11|13)/.test(q.replace(/add\d+/g, "").replace(/6\/9/, "")) || /^(maj|M|Δ)\d/.test(q);
-  if (minor) third = [2, 3];
-  if (/^(dim|°)/.test(q)) {
-    third = [2, 3];
-    fifth = [4, 6];
-    if (/7/.test(q)) seventh = [6, 9];
-  } else if (/^ø/.test(q)) {
-    third = [2, 3];
-    fifth = [4, 6];
-    seventh = [6, 10];
-  } else if (/^(aug|\+)/.test(q)) fifth = [4, 8];
-  if (/sus2/.test(q)) third = [1, 2];
-  else if (/sus/.test(q)) third = [3, 5];
-  if (/b5|♭5|-5/.test(q)) fifth = [4, 6];
-  if (/#5|♯5|\+5/.test(q)) fifth = [4, 8];
-  if (!seventh && (extended || major7)) seventh = major7 ? [6, 11] : [6, 10];
-  if (/6/.test(q.replace(/1[0-9]/g, ""))) extra.push([5, 9]);
-  if (/9/.test(q) || /add9/.test(q)) extra.push(/b9|♭9/.test(q) ? [8, 13] : /#9|♯9/.test(q) ? [8, 15] : [8, 14]);
-  const tones = [third, fifth, ...(seventh ? [seventh] : []), ...extra].sort((x, y) => x[0] - y[0]);
-  return {
-    root: { step: LETTERS.indexOf(letter), alter: SIGNS[sign] ?? 0 },
-    bass: bassLetter ? { step: LETTERS.indexOf(bassLetter), alter: SIGNS[bassSign] ?? 0 } : null,
-    tones,
-  };
-}
-
-/** A chord symbol's notes, its root in the octave starting at step `from` (7 the octave of middle C), with its bass a step below. */
-export function chordVoicing(text, from = 7) {
-  const chord = chordTones(text);
-  if (!chord) return null;
-  const root = { d: from + chord.root.step, alter: chord.root.alter };
-  const pitches = [root, ...chord.tones.map(([steps, semitones]) => M.transposePitch(root, steps, semitones))];
-  const bassStep = chord.bass ? chord.bass.step : chord.root.step;
-  const bass = { d: from - 7 + bassStep, alter: chord.bass ? chord.bass.alter : chord.root.alter };
-  return { pitches, bass, root };
-}
-
-/** The chord symbols of the score, on any staff, by time: [{ t, text, lane }], one per time. */
-export function chordSymbols(score) {
-  const out = [];
-  for (const [s, staff] of score.staves.entries()) {
-    const at = M.starts(staff);
-    staff.events.forEach((ev, i) => {
-      if (ev.chord && M.isChordSymbol(ev.chord) && !out.some((c) => c.t === at[i])) out.push({ t: at[i], text: ev.chord.trim(), lane: s });
-    });
-  }
-  return out.sort((x, y) => x.t - y.t);
-}
+// ---- The chord track ---------------------------------------------------------------
 
 export const ACCOMPANIMENTS = ["block", "arpeggio", "bass-chord"];
 

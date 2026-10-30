@@ -139,6 +139,7 @@
             <button type="button" role="menuitem" data-act="chord">Chord symbol <kbd>Ctrl+K</kbd></button>
             <button type="button" role="menuitem" data-act="figures">Figures (figured bass)</button>
             <button type="button" role="menuitem" data-act="fret">Guitar chord diagram</button>
+            <button type="button" role="menuitem" data-act="fret-all">Guitar diagrams for the chord symbols</button>
             <button type="button" role="menuitem" data-act="text">Staff text</button>
             <button type="button" role="menuitem" data-act="expression">Expression</button>
             <hr>
