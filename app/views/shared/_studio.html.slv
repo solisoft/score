@@ -77,6 +77,10 @@
             <button type="button" role="menuitem" data-act="cut">Cut <kbd>Ctrl+X</kbd></button>
             <button type="button" role="menuitem" data-act="paste">Paste over the selection <kbd>Ctrl+V</kbd></button>
             <button type="button" role="menuitem" data-act="insert-copied">Insert the copied bars before the selection <kbd>Ctrl+Shift+V</kbd></button>
+            <button type="button" role="menuitem" data-act="section-library">Library of sections… <kbd>bars others shared</kbd></button>
+            <% if locals["app"] %>
+              <button type="button" role="menuitem" data-act="share-section">Share the selected bars… <kbd>in the library</kbd></button>
+            <% end %>
             <hr>
             <button type="button" role="menuitem" data-act="insert-bar">Insert a bar before the selection <kbd>Insert</kbd></button>
             <button type="button" role="menuitem" data-act="add-bar">Add a bar at the end <kbd>]</kbd></button>

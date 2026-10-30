@@ -1,0 +1,115 @@
+<%# A section of the shared library (#444): engraved and played; its
+    rating and comments; for the signed-in, rating, commenting, reporting,
+    and taking away what is theirs. %>
+<div class="wrap section-page">
+  <header class="page-head">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="<%= sections_path() %>">Shared sections</a><span>/</span>
+      <span><%= section.title %></span>
+    </nav>
+    <h1><%= section.title %></h1>
+    <p class="muted">
+      <%= instrument_name %> · <%= style_name %> · <%= section.bars %> bar<%= section.bars == 1 ? "" : "s" %> in <%= section.time %><% unless section.key.blank? %> · <%= section.key %><% end %><% if section.bpm > 0 %> · ♩ = <%= section.bpm %><% end %>
+      · shared by <%= names[section.user_id] ?? "A member" %>
+    </p>
+    <% if section.hidden %>
+      <p class="form-error">Hidden: only the admins see this section.</p>
+    <% end %>
+    <% unless section.description.blank? %>
+      <p class="lead section-description"><%= section.description %></p>
+    <% end %>
+  </header>
+
+  <% for message in flashes() %>
+    <p class="form-notice" role="status" data-section-notice><%= message["message"] %></p>
+  <% end %>
+
+  <%- score_figure(figure, {"name": "section", "source": "closed"}) %>
+  <p class="muted">To put it in your score: open the score in the editor, select the bar to put it before, then Edit › Library of sections.</p>
+
+  <section class="section-rating" aria-labelledby="section-rating-title">
+    <h2 id="section-rating-title">Rating</h2>
+    <p data-section-average>
+      <% if section.rating_count == 0 %>
+        Not rated yet.
+      <% else %>
+        <strong>★ <%= section.average %></strong> out of 5, from <%= section.rating_count %> rating<%= section.rating_count == 1 ? "" : "s" %>.
+      <% end %>
+    </p>
+    <% if me.nil? %>
+      <p class="muted"><a href="<%= login_path() %>">Sign in</a> to rate it and comment.</p>
+    <% elsif !section.by?(me) %>
+      <form class="section-stars" action="<%= app_section_rating_path(section._key) %>" method="POST" data-section-stars>
+        <%- csrf_field() %>
+        <span class="muted">Your rating:</span>
+        <% for count in [1, 2, 3, 4, 5] %>
+          <button type="submit" name="stars" value="<%= count %>" class="section-star<%= count <= stars ? " is-on" : "" %>" aria-label="<%= count %> star<%= count == 1 ? "" : "s" %>" aria-pressed="<%= count == stars ? "true" : "false" %>">★</button>
+        <% end %>
+      </form>
+    <% end %>
+  </section>
+
+  <section class="section-comments" aria-labelledby="section-comments-title">
+    <h2 id="section-comments-title"><%= comments.length %> comment<%= comments.length == 1 ? "" : "s" %></h2>
+    <ol class="section-comment-list" data-section-comments>
+      <% for comment in comments %>
+        <li class="section-comment" data-section-comment="<%= comment._key %>">
+          <p class="section-comment-who"><strong><%= names[comment.user_id] ?? "A member" %></strong> <span class="muted"><%= time_ago(comment.created_at) %></span></p>
+          <p class="section-comment-body"><%= comment.body %></p>
+          <% unless me.nil? %>
+            <div class="section-comment-actions">
+              <% if comment.removable_by?(me) %>
+                <form action="<%= app_section_comment_remove_path(section._key, comment._key) %>" method="POST">
+                  <%- csrf_field() %>
+                  <button type="submit" class="section-link">Delete</button>
+                </form>
+              <% end %>
+              <% unless comment.by?(me) %>
+                <details class="section-report">
+                  <summary class="section-link">Report</summary>
+                  <form action="<%= app_section_reports_path(section._key) %>" method="POST">
+                    <%- csrf_field() %>
+                    <input type="hidden" name="comment_id" value="<%= comment._key %>">
+                    <label class="field">What is wrong with it? <input type="text" name="reason" maxlength="500" required></label>
+                    <button type="submit" class="btn btn-ghost">Send to the admins</button>
+                  </form>
+                </details>
+              <% end %>
+            </div>
+          <% end %>
+        </li>
+      <% end %>
+    </ol>
+    <% unless me.nil? %>
+      <form class="section-comment-form" action="<%= app_section_comments_path(section._key) %>" method="POST" data-section-comment-form>
+        <%- csrf_field() %>
+        <% if me.name.blank? %>
+          <label class="field">Your name in the library <input type="text" name="author_name" maxlength="60" placeholder="Shown with your comment" autocomplete="name"></label>
+        <% end %>
+        <label class="field">Your comment <textarea name="body" rows="3" maxlength="2000" required></textarea></label>
+        <button type="submit" class="btn btn-primary">Post</button>
+      </form>
+    <% end %>
+  </section>
+
+  <% unless me.nil? %>
+    <footer class="section-own">
+      <% if can_remove %>
+        <form action="<%= app_section_remove_path(section._key) %>" method="POST" onsubmit="return confirm('Take this section away from the library? Its ratings and comments go with it.')">
+          <%- csrf_field() %>
+          <button type="submit" class="btn btn-danger" data-section-remove>Take it away from the library</button>
+        </form>
+      <% end %>
+      <% unless section.by?(me) %>
+        <details class="section-report">
+          <summary class="section-link">Report this section</summary>
+          <form action="<%= app_section_reports_path(section._key) %>" method="POST">
+            <%- csrf_field() %>
+            <label class="field">What is wrong with it? <input type="text" name="reason" maxlength="500" required></label>
+            <button type="submit" class="btn btn-ghost">Send to the admins</button>
+          </form>
+        </details>
+      <% end %>
+    </footer>
+  <% end %>
+</div>

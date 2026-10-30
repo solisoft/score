@@ -13,6 +13,18 @@ class Changelog
       {"date": "2026-10-30", "entries": [
         {
           "area": "editor",
+          "title": "Share your bars, and rate and comment on everyone's",
+          "text": "Bars can now be shared with everyone. In the editor, select some bars on one track or several, "
+          + "then Edit ▸ Share the selected bars: give them a name, an instrument, a style and a few words, "
+          + "and they are in the library of sections, at /sections, engraved and ready to play. Anyone can "
+          + "listen; with an account, people rate them from one to five stars and comment on them, and Edit ▸"
+          + " Library of sections finds what others shared, plays it, and puts it in the score before the "
+          + "selected bar or over it. Each section and comment can be reported to the admins, and its author "
+          + "can take it away.",
+          "app": true
+        },
+        {
+          "area": "editor",
           "title": "A barre in a chord diagram's grid",
           "text": "Opened large, a chord diagram now takes a barre: drag along a fret from one string to another, "
           + "or Shift+click a second string at the same fret. The barre is drawn across the strings it holds "

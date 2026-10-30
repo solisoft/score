@@ -129,5 +129,33 @@ export function install(ctx) {
     });
   }
 
-  return { copy, insertCopied, paste };
+  /**
+   * `section` (a copySection, from the shared library, #444) put in the
+   * score at the selection: before the selected bar as new bars, or with
+   * `over`, over the bars from there. One undoable edit; false when there is
+   * no place for it.
+   */
+  function putSection(section, over = false) {
+    if (!st.score) return say("Putting bars in needs the score tools: this piece is edited in its text.", true);
+    const place = sectionPlace();
+    if (!place) return say(`Select the bar to put it ${over ? "over" : "before"} first`, true);
+    let skipped = 0;
+    const done = over
+      ? edit((score) => {
+          skipped = M.pasteSection(score, place.lane, place.bar, section);
+          selectSectionQuietly(score, place.bar, place.bar + section.bars - 1, place.lane, section);
+        })
+      : barsEdit((score) => {
+          skipped = M.insertSection(score, place.lane, place.bar, section);
+          selectSectionQuietly(score, place.bar, place.bar + section.bars - 1, place.lane, section);
+          return { at: place.bar, removed: 0, added: section.bars };
+        });
+    if (!done) return false;
+    const n = section.bars;
+    const bars = `bar${n === 1 ? "" : "s"} ${barNo(place.bar)}${n === 1 ? "" : `–${barNo(place.bar + n - 1)}`}`;
+    say(`${over ? "Written over" : "Put in as"} ${bars}${sectionSaid(skipped)}`);
+    return true;
+  }
+
+  return { copy, insertCopied, paste, putSection };
 }

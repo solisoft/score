@@ -1,0 +1,15 @@
+<%# What a report is about (#444): a section, or a comment on one, as it now stands. %>
+<% if section.nil? %>
+  <span class="muted">A section already taken away</span>
+<% elsif report.target == "comment" %>
+  A comment on <a href="<%= section_path(section._key) %>"><%= section.title %></a>
+  <% if comment.nil? %>
+    <small class="muted">(already taken away)</small>
+  <% else %>
+    <blockquote class="admin-quote"><%= comment.body.substring(0, 300) %></blockquote>
+    <small>by <%= names[comment.user_id] ?? "someone" %><%= comment.hidden ? " · hidden" : "" %></small>
+  <% end %>
+<% else %>
+  The section <a href="<%= section_path(section._key) %>"><%= section.title %></a>
+  <small>by <%= names[section.user_id] ?? "someone" %><%= section.hidden ? " · hidden" : "" %></small>
+<% end %>

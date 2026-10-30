@@ -39,7 +39,8 @@
         the engraver's own pages (Syntax, Examples, Embed, Limits) are under
         Guide and in the footer. An item is [label, path, the paths it covers]. %>
     <% app_path = app_open?() ? app_home_path() : playground_path() %>
-    <% nav_items = [["App", app_path, [app_path]], ["Pricing", pricing_path(), [pricing_path()]],
+    <% nav_items = [["App", app_path, [app_path]], ["Sections", sections_path(), [sections_path()]],
+                    ["Pricing", pricing_path(), [pricing_path()]],
                     ["Guide", guide_path(), [guide_path(), syntax_path(), embed_path(), limits_path()]],
                     ["Changelog", changelog_path(), [changelog_path()]]] %>
     <header class="site-header">

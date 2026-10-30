@@ -7,6 +7,8 @@ const V = new URL(import.meta.url).search;
 const patternTools = () => import(`./pattern-tools.js${V}`);
 /** Quantize, swing and humanize (Edit and Play menus), loaded the first time one is opened. */
 const feelTools = () => import(`./feel-tools.js${V}`);
+/** The shared library of sections (Edit ▸ Share the selected bars…, Library of sections…, #444), loaded the first time. */
+const sectionLibrary = () => import(`./section-library.js${V}`);
 /** Chord shapes and voicings (Insert ▸ Guitar diagrams for the chord symbols), loaded the first time. */
 const voicings = () => import(`./voicings.js${V}`);
 
@@ -28,6 +30,7 @@ export function install(ctx) {
   // What changes or moves to a note sounds it, as the person works.
   const SOUNDING = new Set(["letter", "drum", "move", "alter", "head-up", "head-down", "next", "previous"]);
   let patterns = null;
+  let sections = null;
   let feel = null;
 
   // View ▸ Source beside the score (#420): the LilyPond text in a column on
@@ -94,6 +97,10 @@ export function install(ctx) {
         if (!options.onComment) return say("Comments are for scores saved in the app: open this one there to comment.", true);
         return options.onComment(place());
       }
+      // Edit ▸ Share the selected bars…, Library of sections…: section-library.js's dialogs (#444).
+      case "share-section": case "section-library":
+        sections ??= sectionLibrary().then((T) => T.install({ root, st, P, options, toMidi: ctx.toMidi, say, selectedBarsOrNull, putSection: ctx.call.putSection }));
+        return sections.then((tools) => tools.open(name));
       // Edit ▸ Drum grid…, Arpeggiate…, Chord track…: pattern-tools.js's dialogs.
       case "drum-grid": case "arpeggiate": case "chord-track":
         patterns ??= patternTools().then((T) => T.install({ root, st, M, P, edit, say, setLoop, togglePlay, stopPlay, range, selectedBarsOrNull, barNo }));

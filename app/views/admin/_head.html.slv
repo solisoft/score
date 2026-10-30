@@ -1,10 +1,11 @@
 <%# The admin section's title and tabs (#399): `heading`, and `current`
-    ("dashboard", "customers", "payments"). %>
+    ("dashboard", "customers", "payments", "reports"). %>
 <header class="admin-head">
   <h1><%= heading %></h1>
   <nav class="admin-tabs" aria-label="Admin">
     <a href="<%= admin_path() %>"<%- current == "dashboard" ? " aria-current=\"page\"" : "" %>>Overview</a>
     <a href="<%= admin_customers_path() %>"<%- current == "customers" ? " aria-current=\"page\"" : "" %>>Customers</a>
     <a href="<%= admin_payments_path() %>"<%- current == "payments" ? " aria-current=\"page\"" : "" %>>Payments</a>
+    <a href="<%= admin_reports_path() %>"<%- current == "reports" ? " aria-current=\"page\"" : "" %>>Reports</a>
   </nav>
 </header>

@@ -1,0 +1,82 @@
+<%# The shared library of sections (#444): what people published, searched
+    and filtered; each card its first bars, its rating and its comments. %>
+<div class="wrap">
+  <header class="page-head">
+    <span class="eyebrow">Library</span>
+    <h1>Shared sections</h1>
+    <p class="lead">
+      Bars musicians share: a guitar's strumming, a drum groove, a bass line, a piano's chords. Listen to them,
+      rate them, and put them in your own score from the editor (Edit › Library of sections).
+    </p>
+    <% if signed_in %>
+      <p class="muted section-lib-how">To share yours: in the editor, select the bars, then Edit › Share the selected bars.</p>
+    <% else %>
+      <p class="muted section-lib-how"><a href="<%= signup_path() %>">Create an account</a> to share your own, rate and comment.</p>
+    <% end %>
+  </header>
+
+  <% for message in flashes() %>
+    <p class="form-notice" role="status"><%= message["message"] %></p>
+  <% end %>
+
+  <form class="section-lib-filters" action="<%= sections_path() %>" method="GET" role="search">
+    <input type="search" name="q" value="<%= query %>" placeholder="A name, a word" aria-label="Search the sections">
+    <select name="instrument" aria-label="Instrument">
+      <option value="">Every instrument</option>
+      <% for key in instruments.keys %>
+        <option value="<%= key %>"<%= instrument == key ? " selected" : "" %>><%= instruments[key] %></option>
+      <% end %>
+    </select>
+    <select name="style" aria-label="Style">
+      <option value="">Every style</option>
+      <% for key in styles.keys %>
+        <option value="<%= key %>"<%= style == key ? " selected" : "" %>><%= styles[key] %></option>
+      <% end %>
+    </select>
+    <select name="sort" aria-label="Order">
+      <option value="recent"<%= sort == "recent" ? " selected" : "" %>>Newest first</option>
+      <option value="top"<%= sort == "top" ? " selected" : "" %>>Best rated first</option>
+    </select>
+    <button type="submit" class="btn btn-ghost">Search</button>
+  </form>
+
+  <% if sections.length == 0 %>
+    <div class="callout" data-no-section>
+      <% if query.blank? && instrument.blank? && style.blank? %>
+        Nothing shared yet. Be the first: in the editor, select some bars, then Edit › Share the selected bars.
+      <% else %>
+        No section matches. Try fewer words, or every instrument and style.
+      <% end %>
+    </div>
+  <% else %>
+    <div class="example-grid" data-sections>
+      <% for section in sections %>
+        <a class="example-card" href="<%= section_path(section._key) %>" data-section-card="<%= section._key %>">
+          <div class="example-preview"><img src="<%= section_preview_path(section._key) %>" alt="" loading="lazy" decoding="async"></div>
+          <div class="example-body">
+            <h3><%= section.title %></h3>
+            <span class="example-meta">
+              <%= instruments[section.instrument] ?? "Other" %> · <%= styles[section.style] ?? "Other" %> ·
+              <%= section.bars %> bar<%= section.bars == 1 ? "" : "s" %> in <%= section.time %> · by <%= names[section.user_id] ?? "A member" %>
+            </span>
+            <% unless section.description.blank? %>
+              <p><%= section.description.substring(0, 140) %><%= section.description.length > 140 ? "…" : "" %></p>
+            <% end %>
+            <div class="chips">
+              <span class="chip" aria-label="Rated <%= section.average %> out of 5"><%= section.rating_count == 0 ? "Not rated yet" : "★ #{section.average} (#{section.rating_count})" %></span>
+              <span class="chip"><%= section.comments_count %> comment<%= section.comments_count == 1 ? "" : "s" %></span>
+            </div>
+          </div>
+        </a>
+      <% end %>
+    </div>
+    <nav class="section-lib-pages" aria-label="Pages">
+      <% if page > 1 %>
+        <a class="btn btn-ghost" href="<%= sections_path() %>?q=<%= url(query) %>&instrument=<%= instrument %>&style=<%= style %>&sort=<%= sort %>&page=<%= page - 1 %>">← Previous</a>
+      <% end %>
+      <% if more %>
+        <a class="btn btn-ghost" href="<%= sections_path() %>?q=<%= url(query) %>&instrument=<%= instrument %>&style=<%= style %>&sort=<%= sort %>&page=<%= page + 1 %>">Next →</a>
+      <% end %>
+    </nav>
+  <% end %>
+</div>

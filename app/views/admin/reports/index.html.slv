@@ -1,0 +1,37 @@
+<section class="admin" data-admin="reports">
+  <%- partial("admin/head", {"heading": "Reports", "current": "reports"}) %>
+
+  <% if reports.length == 0 %>
+    <p class="admin-empty" data-no-report>Nothing reported. The shared library is quiet.</p>
+  <% else %>
+    <div class="table-scroll">
+      <table class="ref-table admin-table" data-reports>
+        <thead><tr><th>What</th><th>Why</th><th>Reported by</th><th>When</th><th>Do</th></tr></thead>
+        <tbody>
+          <% for report in reports %>
+            <% section = sections[report.section_id] %>
+            <% comment = report.target == "comment" ? comments[report.target_id] : nil %>
+            <tr data-report="<%= report._key %>">
+              <td><%- partial("admin/reports/what", {"report": report, "section": section, "comment": comment, "names": names}) %></td>
+              <td><%= report.reason %></td>
+              <td><%= names[report.user_id] ?? "someone" %></td>
+              <td><%= admin_day(report.created_at) %></td>
+              <td>
+                <div class="admin-report-actions">
+                  <% shown = report.target == "comment" ? !comment.nil? && !comment.hidden : !section.nil? && !section.hidden %>
+                  <% if shown %>
+                    <form action="<%= admin_report_hide_path(report._key) %>" method="POST"><%- csrf_field() %><button type="submit" class="btn btn-ghost">Hide</button></form>
+                  <% elsif !section.nil? %>
+                    <form action="<%= admin_report_show_path(report._key) %>" method="POST"><%- csrf_field() %><button type="submit" class="btn btn-ghost">Show again</button></form>
+                  <% end %>
+                  <form action="<%= admin_report_remove_path(report._key) %>" method="POST"><%- csrf_field() %><button type="submit" class="btn btn-danger">Take away</button></form>
+                  <form action="<%= admin_report_dismiss_path(report._key) %>" method="POST"><%- csrf_field() %><button type="submit" class="btn btn-ghost">Dismiss</button></form>
+                </div>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% end %>
+</section>

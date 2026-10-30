@@ -15,6 +15,9 @@
 <%# File › New, Open a file, Open an example and Open a photo make a new
     score in the library and open it: the score open here stays as it is.
     The conflict dialog's "Save mine as a copy" posts it too. %>
+<%# The name the shared library shows (#444), for Share the selected bars. %>
+<span data-author-name="<%= current_user().name.to_s %>" hidden></span>
+
 <form action="<%= app_scores_path() %>" method="POST" data-open-form hidden>
   <%- csrf_field() %>
   <input type="hidden" name="source" data-open-source>
@@ -346,6 +349,11 @@
     examples: "<%= examples_path() %>",
     shareUrl: <%- owner ? "\"" + app_score_share_path(score) + "\"" : "null" %>,
     scoreUrl: "<%= app_score_path(score) %>",
+    // The shared library of sections (#444): where to publish, and its page.
+    sectionsUrl: "<%= app_sections_path() %>",
+    sectionsPage: "<%= sections_path() %>",
+    // Read from an attribute, escaped by the template: a name is never written into the script.
+    authorName: document.querySelector("[data-author-name]")?.dataset.authorName ?? "",
     source: root.querySelector("[data-source]").value,
     greeting: "Your changes save themselves.",
     onChange(text) {

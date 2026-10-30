@@ -147,6 +147,19 @@ class User < Model
     this.role == "admin"
   end
 
+  # `text` as the name others see this person by — in the shared library
+  # (#444), in comments — when they give one: nil once done, else why not.
+  # A blank name leaves the one they have.
+  def name_as(text)
+    name = text.to_s.trim
+    return nil if name.blank? || name == @name.to_s
+    return "A name holds 60 characters at most." if name.chars().length > 60
+
+    @name = name
+    @update()
+    nil
+  end
+
   # How the app names someone to others: their name when they have one, else
   # their email address.
   def display_name

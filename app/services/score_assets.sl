@@ -100,6 +100,7 @@ class ScoreAssets
       "patterns.js",
       "pattern-tools.js",
       "voicings.js",
+      "section-library.js",
       "feel.js",
       "feel-tools.js",
       "shortcuts.js",
