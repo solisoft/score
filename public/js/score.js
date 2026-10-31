@@ -39,42 +39,58 @@
    */
   /**
    * The piece's source: its button's data-src, or — a section's card, which
-   * holds none — fetched once from its data-section (data.json, #455).
+   * holds none — fetched once from its data-section (data.json, #455). A
+   * section played in a loop (data-loop, #457) learns its bars and metre
+   * there too.
    */
   function sourceOf(button) {
     var src = button.getAttribute("data-src");
     var url = button.getAttribute("data-section");
-    if (src || !url) return Promise.resolve(src || "");
+    var wantsBars = button.hasAttribute("data-loop") && !button.hasAttribute("data-bars");
+    if (!url || (src && !wantsBars)) return Promise.resolve(src || "");
     return fetch(url, { headers: { Accept: "application/json" } })
       .then(function (r) { return r.ok ? r.json() : {}; })
       .then(function (data) {
-        if (data.source) button.setAttribute("data-src", data.source);
-        return data.source || "";
+        if (data.source && !src) button.setAttribute("data-src", data.source);
+        if (data.bars && data.time) {
+          button.setAttribute("data-bars", String(data.bars));
+          button.setAttribute("data-time", data.time);
+        }
+        return src || data.source || "";
       })
-      .catch(function () { return ""; });
+      .catch(function () { return src || ""; });
   }
 
-  /** How the piece asks to be played, from its `%% eui-score` line: { swing, humanize, velocity }, or null. */
+  /** How the piece asks to be played, from its `%% eui-score` line: { swing, humanize, velocity }, or {}. */
   function feelOf(src) {
     var line = /^%% eui-score (.*)$/m.exec(src || "");
-    if (!line) return null;
+    if (!line) return {};
     try {
-      var meta = JSON.parse(line[1]);
-      return meta.swing || meta.humanize || meta.velocity ? meta : null;
+      return JSON.parse(line[1]) || {};
     } catch (error) {
-      return null;
+      return {};
     }
+  }
+
+  /** The turns a looped section is played: two minutes or so of music, then it stops. */
+  function turnsOf(bars) {
+    return Math.max(8, Math.ceil(64 / Math.max(1, bars)));
   }
 
   /**
    * The MIDI as it is to be heard: as written, then each note at the force
-   * set for it (velocity.js), swung and humanized as the piece asks
-   * (feel.js) — the editor's own modules (#453, #455).
+   * set for it (velocity.js), played in a loop when asked (#457), swung and
+   * humanized as the piece asks (feel.js) — the editor's own modules
+   * (#453, #455). Answers { bytes, turns }.
    */
   function midiOf(button) {
     return sourceOf(button).then(function (src) {
       var meta = feelOf(src);
-      if (!meta) return writtenMidi(button);
+      var bars = Number(button.getAttribute("data-bars")) || 0;
+      var loop = button.hasAttribute("data-loop") && bars > 0;
+      if (!meta.swing && !meta.humanize && !meta.velocity && !loop) {
+        return writtenMidi(button).then(function (bytes) { return { bytes: bytes, turns: 1 }; });
+      }
       var parts = [writtenMidi(button), import(FEEL_SRC)];
       if (meta.velocity) parts.push(import(VELOCITY_SRC), import(ENGINE_SRC), import(MODEL_SRC));
       return Promise.all(parts).then(function (got) {
@@ -89,7 +105,14 @@
           }).catch(function () { return bytes; });
         }
         return ready.then(function (played) {
-          return F.feel(played, { swing: meta.swing || null, humanize: meta.humanize || null });
+          var turns = 1;
+          if (loop) {
+            turns = turnsOf(bars);
+            var turn = bars * F.barTicks(button.getAttribute("data-time") || "4/4", F.readSmf(played).division);
+            played = F.loopSmf(played, turn, turns);
+          }
+          // Swung and humanized after the loop: no two turns quite alike.
+          return { bytes: F.feel(played, { swing: meta.swing || null, humanize: meta.humanize || null }), turns: turns };
         });
       });
     });
@@ -126,7 +149,8 @@
     var button = link.parentElement.querySelector("[data-score-play]");
     if (!button || !needsBrowser(button.getAttribute("data-src") || "")) return;
     event.preventDefault();
-    midiOf(button).then(function (bytes) {
+    midiOf(button).then(function (made) {
+      var bytes = made.bytes;
       var url = URL.createObjectURL(new Blob([bytes], { type: "audio/midi" }));
       var save = document.createElement("a");
       save.href = url;
@@ -320,15 +344,19 @@
         var handle = state.handle;
         if (!handle || !handle.duration) return;
         var rect = bar.getBoundingClientRect();
-        handle.time = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) * handle.duration;
+        var turn = handle.duration / (state.turns || 1);
+        var started = Math.floor((handle.time || 0) / turn) * turn;
+        handle.time = started + Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) * turn;
       });
     }
     var handle = state.handle;
     if (!handle) return;
-    var total = handle.duration || 0;
-    var now = Math.min(Math.max(0, handle.time || 0), total);
+    // Played in a loop: the bar counts one turn, round and round (#457).
+    var turns = state.turns || 1;
+    var total = (handle.duration || 0) / turns;
+    var now = Math.min(Math.max(0, (handle.time || 0) % (total || 1)), total);
     bar.querySelector(".score-progress-fill").style.width = total ? (100 * now) / total + "%" : "0";
-    bar.querySelector(".score-progress-text").textContent = clock(now) + " / " + clock(total);
+    bar.querySelector(".score-progress-text").textContent = (turns > 1 ? "↻ " : "") + clock(now) + " / " + clock(total);
   }
 
   function reset(state) {
@@ -367,6 +395,8 @@
     slot.innerHTML = '<span class="score-player-note">Loading the player…</span>';
     Promise.all([loadPlayer(), midiOf(button)])
       .then(function (both) {
+        state.turns = both[1].turns;
+        both[1] = both[1].bytes;
         var p = both[0];
         if (playing !== state) {
           if (context) context.close();

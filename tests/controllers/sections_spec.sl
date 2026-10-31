@@ -186,6 +186,11 @@ describe("SectionsController and AppSectionsController") do
       assert_eq(res_status(page), 200)
       assert_contains(res_body(page), "Waltz strum")
       assert_contains(res_body(page), "<svg")
+      assert_contains(
+        res_body(page),
+        "data-section=\"/sections/#{section._key}/data.json\" data-loop",
+        "played in a loop (#457)"
+      )
       data = res_json(get("/sections/#{section._key}/data.json"))
       assert_eq(data["section"]["bars"], 2)
       assert_eq(data["author"], "Ana")

@@ -24,7 +24,7 @@
     <p class="form-notice" role="status" data-section-notice><%= message["message"] %></p>
   <% end %>
 
-  <%- score_figure(figure, {"name": "section", "source": "closed"}) %>
+  <%- score_figure(figure, {"name": "section", "source": "closed", "section": section_data_path(section._key)}) %>
   <%# Into one's own score (#451): a new one made of it, or after the bars of one of theirs. %>
   <section class="section-import" aria-labelledby="section-import-title">
     <h2 id="section-import-title">Add it to your score</h2>

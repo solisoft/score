@@ -12,6 +12,13 @@ class Changelog
     [
       {"date": "2026-10-31", "entries": [
         {
+          "area": "site",
+          "title": "Sections play in a loop",
+          "text": "A section of the library plays round and round until Stop, with no gap between turns: from its "
+          + "card, its page, and Sections ▸ Listen in the editor. The bar under Play counts one turn, marked ↻; "
+          + "a drum loop never sounds quite the same twice."
+        },
+        {
           "area": "editor",
           "title": "Drums played as a drummer plays them",
           "text": "The grooves, the accompaniments' drums and the library's drum sections no longer strike every "

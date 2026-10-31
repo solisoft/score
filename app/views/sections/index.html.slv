@@ -71,7 +71,7 @@
           </a>
           <%# Heard from the list (#449): public/js/score.js plays the MIDI it fetches; outside the link, a button in a link being no button. %>
           <div class="score-actions section-card-play">
-            <button type="button" class="score-btn score-btn-play" data-score-play data-midi="<%= section_midi_path(section._key) %>" data-section="<%= section_data_path(section._key) %>" aria-label="Play <%= section.title %>"><span aria-hidden="true">▶</span> Play</button>
+            <button type="button" class="score-btn score-btn-play" data-score-play data-midi="<%= section_midi_path(section._key) %>" data-section="<%= section_data_path(section._key) %>" data-loop aria-label="Play <%= section.title %>"><span aria-hidden="true">▶</span> Play</button>
             <div class="score-player" data-score-player></div>
           </div>
         </div>

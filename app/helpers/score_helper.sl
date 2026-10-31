@@ -127,6 +127,9 @@ def _score_actions(figure, opts)
     # The source rides along: a piece with repeats is played out in the
     # browser (public/js/score.js), the server's MIDI playing them once.
     play_attrs = "data-score-play data-midi=\"#{midi}\" data-src=\"#{html_escape(figure["src"])}\""
+    # A section of the library: looped until Stop, its bars read from its data (#457).
+    looped = " data-section=\"#{html_escape(opts["section"])}\" data-loop"
+    play_attrs = play_attrs + looped unless opts["section"].blank?
     buttons.push("<button type=\"button\" class=\"score-btn score-btn-play\" #{play_attrs}>"
     + "<span aria-hidden=\"true\">▶</span> Play</button>")
     # The MIDI link saves the file as Play plays it (score.js), repeats and all.

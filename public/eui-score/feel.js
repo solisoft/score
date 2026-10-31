@@ -113,6 +113,36 @@ export function sortTracks(smf) {
   }
 }
 
+/**
+ * `bytes` played `times` times back to back, each turn `ticks` long (in the
+ * file's ticks; its bars', not its last note's): a loop with no gap between
+ * turns (#457). A note ringing past a turn's end rings on into the next.
+ */
+export function loopSmf(bytes, ticks, times) {
+  const smf = readSmf(bytes);
+  for (const events of smf.tracks) {
+    const once = events.filter((ev) => !isMeta(ev, 0x2f));
+    const out = [];
+    for (let k = 0; k < times; k++) {
+      for (const ev of once) {
+        // The names and the set-up once; the tempo with every turn.
+        if (k > 0 && isMeta(ev) && !isMeta(ev, 0x51)) continue;
+        out.push({ tick: ev.tick + k * ticks, data: [...ev.data] });
+      }
+    }
+    out.push({ tick: times * ticks, data: [0xff, 0x2f, 0] });
+    events.splice(0, events.length, ...out);
+  }
+  sortTracks(smf);
+  return writeSmf(smf);
+}
+
+/** A bar's length of `time` ("6/8") in a file of `division` ticks a quarter. */
+export function barTicks(time, division) {
+  const [num, den] = String(time).split("/").map(Number);
+  return Math.round((division * 4 * num) / den);
+}
+
 // ---- Where the bars are in the file -----------------------------------------------------
 
 /**

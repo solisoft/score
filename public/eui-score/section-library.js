@@ -378,6 +378,11 @@ export function install(studio) {
       const meta = M.readMeta(data.source);
       let bytes = await toMidi(data.source, { bpm: 100, beat: 4 });
       if (meta.velocity && studio.parse) bytes = Vel.applyVelocities(M.fromParsed(JSON.parse(studio.parse(data.source))).score, bytes);
+      // Round and round until Stop, no gap between turns (#457); swung and humanized after, no two turns alike.
+      if (data.bars > 0 && data.time) {
+        const turn = data.bars * F.barTicks(data.time, F.readSmf(bytes).division);
+        bytes = F.loopSmf(bytes, turn, Math.max(8, Math.ceil(64 / data.bars)));
+      }
       bytes = F.feel(bytes, F.feelOf(meta));
       button.dataset.playing = "1";
       button.textContent = "■ Stop";
@@ -466,7 +471,7 @@ export function install(studio) {
     const chosen = st.input.on ? M.barAt(st.score, st.input.t) : st.sel ? selectedBarsOrNull()?.[0] : null;
     placeBar = chosen == null ? null : studio.barNo(chosen);
     how.replaceChildren(
-      "Bars others shared: ", el("b", { textContent: "▶ Listen" }), " to hear them, ", el("b", { textContent: "Add" }),
+      "Bars others shared: ", el("b", { textContent: "▶ Listen" }), " to hear them in a loop, ", el("b", { textContent: "Add" }),
       " puts them after the last bar, each instrument on its own staff.",
       ...(placeBar == null ? [" Select a bar first to put them before it or over it."] : [` Or before bar ${placeBar}, or over it.`]),
     );

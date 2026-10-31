@@ -131,3 +131,20 @@ test("a groove's force goes along (#455): kept in the shared section, then on th
   assert.ok(moved.every((id) => ids.has(id)), "each on a note of the score, in its new bars");
   assert.deepEqual(score.meta.humanize, D.DRUMMER_FEEL);
 });
+
+test("a section played in a loop (#457): its bars back to back, each turn a whole number of bars, no gap", async () => {
+  const F = await import("../../public/eui-score/feel.js");
+  // Two bars whose last beat is silent: the loop keeps it.
+  const score = read(String.raw`\new Staff { \time 4/4 c'4 d' e' r | g'4 a' b' r }`);
+  const bytes = new Uint8Array(midi(M.toLilyPond(score, { unfold: true }).source, 100, 4, 0));
+  const division = F.readSmf(bytes).division;
+  const turn = 2 * F.barTicks("4/4", division);
+  const looped = F.loopSmf(bytes, turn, 3);
+  const ons = F.readSmf(looped).tracks.flat().filter((ev) => (ev.data[0] & 0xf0) === 0x90 && ev.data[2] > 0).map((ev) => ev.tick).sort((a, b) => a - b);
+  const once = F.readSmf(bytes).tracks.flat().filter((ev) => (ev.data[0] & 0xf0) === 0x90 && ev.data[2] > 0).map((ev) => ev.tick).sort((a, b) => a - b);
+  assert.equal(ons.length, 3 * once.length);
+  assert.deepEqual(ons.slice(once.length, 2 * once.length), once.map((t) => t + turn), "the second turn a whole two bars later");
+  const end = F.readSmf(looped).tracks.map((t) => t.at(-1));
+  assert.ok(end.every((ev) => ev.data[1] === 0x2f && ev.tick === 3 * turn), "the file ends with the third turn's last bar, silent beat and all");
+  assert.equal(F.barTicks("6/8", 480), 1440);
+});
