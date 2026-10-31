@@ -41,7 +41,7 @@
     <% app_path = app_open?() ? app_home_path() : playground_path() %>
     <% nav_items = [["App", app_path, [app_path]], ["Sections", sections_path(), [sections_path()]],
                     ["Pricing", pricing_path(), [pricing_path()]],
-                    ["Guide", guide_path(), [guide_path(), syntax_path(), embed_path(), limits_path()]],
+                    ["Guide", guide_path(), [guide_path(), syntax_path(), embed_path(), limits_path(), claude_path()]],
                     ["Changelog", changelog_path(), [changelog_path()]]] %>
     <header class="site-header">
         <div class="wrap">
@@ -87,6 +87,7 @@
                 <a href="<%= examples_path() %>">Examples</a>
                 <a href="<%= embed_path() %>">Embed</a>
                 <a href="<%= limits_path() %>">Limits</a>
+                <a href="<%= claude_path() %>">Score in Claude</a>
             </nav>
             <p>
                 <strong>Score</strong> writes, plays and shares scores in the browser. Its engraver,

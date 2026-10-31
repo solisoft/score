@@ -12,6 +12,15 @@ class Changelog
     [
       {"date": "2026-10-31", "entries": [
         {
+          "area": "site",
+          "title": "Score in Claude: how to connect it",
+          "text": "A new page of the guide, Score in Claude, says how to connect Claude Code, claude.ai, Claude "
+          + "Desktop or another MCP app to your scores, each command or address ready to copy; what to ask, what "
+          + "Claude can do, how to disconnect it. The account page now gives the one command to run, and keeps "
+          + "tokens for the apps that cannot sign in.",
+          "app": true
+        },
+        {
           "area": "editor",
           "title": "Photo imports: find them again, and watch the score being written",
           "text": "A photo's reading goes on when you leave its page, and Photo imports, from Start, lists them all: "

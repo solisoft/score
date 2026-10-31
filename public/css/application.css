@@ -1649,6 +1649,17 @@
     color: var(--ink);
     border-color: var(--ink);
   }
+  .command-box {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--sheet);
+    margin: 8px 0;
+  }
+  .command-box pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    padding-right: 72px;
+  }
   .ly-command {
     color: #8b2b2c;
   }
@@ -4269,6 +4280,13 @@
     padding: 10px 12px;
     font-size: 13px;
     user-select: all;
+  }
+  .token-make {
+    margin-top: 12px;
+  }
+  .token-make summary {
+    cursor: pointer;
+    color: var(--muted);
   }
   .token-list {
     list-style: none;

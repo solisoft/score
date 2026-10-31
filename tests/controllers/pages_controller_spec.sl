@@ -200,7 +200,7 @@ describe("PagesController") do
       ["/app", "/pricing", "/guide", "/changelog"].each do |path|
         assert_contains(links, "href=\"#{path}\"")
       end
-      ["/syntax", "/examples", "/embed", "/limits", "/playground"].each do |path|
+      ["/syntax", "/examples", "/embed", "/limits", "/playground", "/claude"].each do |path|
         assert_not(links.includes?("href=\"#{path}\""), "#{path} is in the footer, not the header")
       end
       assert_not(links.includes?("nav-cta"), "no button among the links")
@@ -214,7 +214,8 @@ describe("PagesController") do
         "/syntax",
         "/examples",
         "/embed",
-        "/limits"
+        "/limits",
+        "/claude"
       ]
       every_page.each do |path|
         assert_contains(footer, "href=\"#{path}\"")
@@ -222,7 +223,7 @@ describe("PagesController") do
     end
 
     test("marks Guide as the page for the guide, the syntax, embedding and the limits, and nothing else") do
-      ["/guide", "/syntax", "/embed", "/limits"].each do |path|
+      ["/guide", "/syntax", "/embed", "/limits", "/claude"].each do |path|
         assert_contains(res_body(get(path)), "<a href=\"/guide\" aria-current=\"page\">Guide</a>")
       end
       examples = res_body(get("/examples"))
@@ -245,5 +246,21 @@ describe("PagesController") do
       assert_not(body.contains("class=\"nav-signin\""), "no Sign in")
       assert_not(body.contains("<a class=\"nav-cta\" href=\"/signup\">"), "no Start free in the header")
     end
+  end
+end
+
+describe("Score in Claude (#464)") do
+  test("says how to connect each Claude, with the site's MCP address to copy, and what Claude can do") do
+    response = get("/claude")
+    assert_eq(res_status(response), 200)
+    body = res_body(response)
+    assert_contains(body, "claude mcp add --transport http score ")
+    assert_contains(body, "/mcp</code>")
+    assert_contains(body, "Add custom connector")
+    assert_contains(body, "data-score-copy")
+    ["list_scores", "check_source", "create_score", "update_score", "transcribe_image"].each do |tool|
+      assert_contains(body, tool)
+    end
+    assert_contains(body, "claude mcp remove score")
   end
 end

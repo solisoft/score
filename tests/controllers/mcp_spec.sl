@@ -401,6 +401,11 @@ describe("The MCP server") do
       body = res_body(made)
       record = AccessToken.where({"user_id": user._key}).first
       assert_contains(body, "claude mcp add --transport http score")
+      assert_contains(
+        res_body(get("/app/account")),
+        "href=\"/claude\"",
+        "the account page points to the guide (#464)"
+      )
       assert_contains(body, "/mcp")
       secret = body.split("<code>score_")[1].split("</code>")[0]
       assert_eq(Crypto.sha256("score_" + secret), record.digest, "the token shown is the one kept")

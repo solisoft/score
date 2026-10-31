@@ -1,0 +1,116 @@
+<%# Score in Claude (#464): the MCP server, installed in each Claude. %>
+<div class="wrap">
+  <header class="page-head">
+    <span class="eyebrow">Score in Claude</span>
+    <h1>Write scores with Claude</h1>
+    <p class="lead">
+      Connect Claude to your Score account and ask it for music in plain words: it writes the score, checks it
+      with Score's engraver until it engraves, and saves it in your scores. It reads and changes the scores you
+      have, and turns a photo or a scan of sheet music into a score.
+    </p>
+  </header>
+
+  <div class="doc-layout">
+    <aside class="toc" aria-label="Contents">
+      <p class="toc-title">On this page</p>
+      <ol>
+        <li><a href="#claude-code">Claude Code</a></li>
+        <li><a href="#claude-ai">claude.ai and Claude Desktop</a></li>
+        <li><a href="#others">Other MCP clients</a></li>
+        <li><a href="#ask">What to ask</a></li>
+        <li><a href="#photos">Photos of scores</a></li>
+        <li><a href="#tools">What Claude can do</a></li>
+        <li><a href="#disconnect">Disconnect</a></li>
+        <li><a href="#trouble">If it goes wrong</a></li>
+      </ol>
+    </aside>
+
+    <div class="prose">
+      <section class="doc-section" id="claude-code">
+        <h2>Claude Code<a class="anchor" href="#claude-code">#</a></h2>
+        <p>In a terminal, once:</p>
+        <div class="score-code command-box"><button type="button" class="score-copy" data-score-copy>Copy</button>
+<pre><code>claude mcp add --transport http score <%= mcp_url %></code></pre></div>
+        <p>Add <code>--scope user</code> to have Score in every project, not only the one you are in.</p>
+        <p>The first time Claude Code uses it — or when you type <code>/mcp</code> and choose <em>score</em> — your
+          browser opens Score: sign in, then <strong>Allow</strong>. That is all: nothing to copy, and Claude Code
+          keeps the connection, renewed by itself.</p>
+      </section>
+
+      <section class="doc-section" id="claude-ai">
+        <h2>claude.ai and Claude Desktop<a class="anchor" href="#claude-ai">#</a></h2>
+        <ol>
+          <li>Open <strong>Settings › Connectors</strong>, then <strong>Add custom connector</strong>.</li>
+          <li>Name it <em>Score</em>, and give it this address:
+            <div class="score-code command-box"><button type="button" class="score-copy" data-score-copy>Copy</button>
+<pre><code><%= mcp_url %></code></pre></div></li>
+          <li>Choose <strong>Connect</strong>: Score opens; sign in, then <strong>Allow</strong>.</li>
+        </ol>
+        <p>In a conversation, turn Score on from the tools menu. Custom connectors come with Claude's paid plans; on
+          a Team or Enterprise plan, an owner may have to add it first.</p>
+      </section>
+
+      <section class="doc-section" id="others">
+        <h2>Other MCP clients<a class="anchor" href="#others">#</a></h2>
+        <p>Any client that speaks MCP over HTTP connects to <code><%= mcp_url %></code> the same way: it asks you to
+          sign in to Score and to allow it. For one that cannot sign in, make a token in
+          <a href="<%= app_account_path() %>#tokens">Account › Access tokens</a> and give it as a header:</p>
+        <div class="score-code command-box"><button type="button" class="score-copy" data-score-copy>Copy</button>
+<pre><code>Authorization: Bearer score_…</code></pre></div>
+      </section>
+
+      <section class="doc-section" id="ask">
+        <h2>What to ask<a class="anchor" href="#ask">#</a></h2>
+        <ul>
+          <li>“Write a 16-bar blues in G for piano, with chord symbols, and save it in Score.”</li>
+          <li>“Open my score <em>Petite valse</em> and add a second violin a third below.”</li>
+          <li>“Transpose <em>Ave Maria</em> down a tone for alto.”</li>
+          <li>“List my scores from this week.”</li>
+          <li>“Transcribe this photo into Score” — with the photo attached, or its file named.</li>
+        </ul>
+        <p>Claude answers with the score's address: open it to play it, correct it in the editor, share it.</p>
+      </section>
+
+      <section class="doc-section" id="photos">
+        <h2>Photos of scores<a class="anchor" href="#photos">#</a></h2>
+        <p>Claude reads a photo you give it, writes the score, and checks it with the engraver before saving it.
+          Or it can hand the photo to Score's own reader — the one of <em>From a photo</em> — which uses the AI key
+          of your account (<a href="<%= app_account_path() %>#ai">Account › AI</a>); the reading then appears in
+          Photo imports, where you can follow it.</p>
+      </section>
+
+      <section class="doc-section" id="tools">
+        <h2>What Claude can do<a class="anchor" href="#tools">#</a></h2>
+        <ul>
+          <li><strong>list_scores</strong>, <strong>get_score</strong>: list and read your scores — never anyone else's.</li>
+          <li><strong>check_source</strong>: ask the engraver whether some LilyPond engraves, and why not.</li>
+          <li><strong>create_score</strong>, <strong>update_score</strong>: create a score, or change one. A change
+            made while someone else changed the score is refused, and the version before is kept in its history.</li>
+          <li><strong>transcribe_image</strong>, <strong>get_transcription</strong>: have a photo read by Score, and
+            follow it.</li>
+        </ul>
+        <p>Everything it does, it does as you, on your account only.</p>
+      </section>
+
+      <section class="doc-section" id="disconnect">
+        <h2>Disconnect<a class="anchor" href="#disconnect">#</a></h2>
+        <p>Each connection is listed in <a href="<%= app_account_path() %>#tokens">Account › Access tokens</a>,
+          under the name of the app: <strong>Revoke</strong> ends it at once. In Claude Code,
+          <code>claude mcp remove score</code> takes Score away from it.</p>
+      </section>
+
+      <section class="doc-section" id="trouble">
+        <h2>If it goes wrong<a class="anchor" href="#trouble">#</a></h2>
+        <ul>
+          <li><strong>The browser does not open</strong>: in Claude Code, type <code>/mcp</code>, choose
+            <em>score</em>, then <em>Authenticate</em>.</li>
+          <li><strong>“The engraver does not read it”</strong>: Claude was given the reason and where; ask it to fix
+            the LilyPond and check it again.</li>
+          <li><strong>“Too many calls”</strong>: 120 a minute at most; wait a minute.</li>
+          <li><strong>A photo is refused</strong>: Score's reader needs an AI key in your account; or let Claude read
+            the photo itself.</li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</div>

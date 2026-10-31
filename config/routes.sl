@@ -28,6 +28,7 @@ get("/guide", "pages#guide", name: "guide")
 get("/syntax", "pages#syntax", name: "syntax")
 get("/embed", "pages#embed", name: "embed")
 get("/limits", "pages#limits", name: "limits")
+get("/claude", "pages#claude", name: "claude")
 get("/changelog", "pages#changelog", name: "changelog")
 # The plans, Free and Pro (#393): what each allows, read from Plan.
 get("/pricing", "pages#pricing", name: "pricing")

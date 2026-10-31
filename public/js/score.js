@@ -432,6 +432,17 @@
       setTimeout(function () {
         button.textContent = "Copy";
       }, 1600);
+    }).catch(function () {
+      // The browser keeps the clipboard to itself: the text selected, to copy by hand (#464).
+      var range = document.createRange();
+      range.selectNodeContents(code);
+      var selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      button.textContent = "Selected: ⌘C / Ctrl+C";
+      setTimeout(function () {
+        button.textContent = "Copy";
+      }, 2400);
     });
   }
 

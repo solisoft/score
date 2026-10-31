@@ -30,6 +30,15 @@ class PagesController < Controller
     @description = "Scores on any website: one script, one <eui-score> tag, nothing to install."
   end
 
+  # GET /claude — Score in Claude: the MCP server, installed in Claude Code,
+  # claude.ai, Claude Desktop and other MCP clients (#464)
+  def claude
+    base = auth_base_url()
+    @mcp_url = base + "/mcp"
+    @title = "Score in Claude"
+    @description = "Connect Claude to Score: it writes, reads and changes your scores, and reads photos of scores."
+  end
+
   # GET /limits — what the engraver refuses, with its own messages
   def limits
     @title = "Limits"

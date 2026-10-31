@@ -176,6 +176,9 @@
   .score-code pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-size: 13.5px; line-height: 1.6; color: var(--ink-soft); white-space: pre; }
   .score-copy { position: absolute; top: 8px; right: 8px; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--sheet); color: var(--muted); cursor: pointer; }
   .score-copy:hover { color: var(--ink); border-color: var(--ink); }
+  /* A command to copy, in a box of its own (#464). */
+  .command-box { border: 1px solid var(--line); border-radius: 8px; background: var(--sheet); margin: 8px 0; }
+  .command-box pre { white-space: pre-wrap; overflow-wrap: anywhere; padding-right: 72px; }
 
   .ly-command { color: #8b2b2c; }
   .ly-string { color: #2f6b3b; }
@@ -769,6 +772,8 @@
   .oauth-decide { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
   /* Access tokens for the MCP server (#460). */
   .token-secret { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--sheet); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 13px; user-select: all; }
+  .token-make { margin-top: 12px; }
+  .token-make summary { cursor: pointer; color: var(--muted); }
   .token-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
   .token-list li { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
   /* Edit ▸ Accompaniment… (public/eui-score/pattern-tools.js, #441). */
