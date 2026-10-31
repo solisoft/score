@@ -1,0 +1,91 @@
+<%# One photo's reading (#465): followed live, the score growing as the AI
+    writes it (#462); kept as a score, or tried again. %>
+<section class="start import-page" data-import-page="<%= reading._key %>" data-state="<%= reading.state %>">
+  <p class="breadcrumb"><a href="<%= app_imports_path() %>">Photo imports</a></p>
+  <h1 data-import-title><%= reading.title %></h1>
+  <% for message in flashes() %>
+    <p class="form-error" role="alert"><%= message["message"] %></p>
+  <% end %>
+  <div class="photo-reading-pair">
+    <figure>
+      <% if reading.picture.present? %>
+        <img src="data:image/jpeg;base64,<%= reading.picture %>" alt="The photo">
+      <% else %>
+        <div class="callout">The photo is no longer kept.</div>
+      <% end %>
+      <figcaption class="muted">The photo</figcaption>
+    </figure>
+    <figure>
+      <div class="photo-reading-score" data-import-score>
+        <% unless figure.nil? %><%- figure["svg"] %><% end %>
+      </div>
+      <pre class="photo-reading-draft" data-import-draft aria-live="off" hidden></pre>
+      <figcaption class="muted" data-import-status aria-live="polite">
+        <% if reading.state == "done" %>What was read. You can correct it in the editor.<% end %>
+        <% if reading.state == "failed" %><%= reading.error %><% end %>
+        <% if reading.state == "reading" %>Being read…<% end %>
+      </figcaption>
+    </figure>
+  </div>
+  <div class="import-actions">
+    <form action="<%= app_import_score_path(reading._key) %>" method="POST" data-import-keep<%= reading.state == "done" ? "" : " hidden" %>>
+      <%- csrf_field() %>
+      <button type="submit" class="btn btn-primary">Open as a score</button>
+    </form>
+    <% if reading.picture.present? %>
+      <form action="<%= app_import_retry_path(reading._key) %>" method="POST" data-import-retry<%= reading.state == "reading" ? " hidden" : "" %>>
+        <%- csrf_field() %>
+        <button type="submit" class="btn btn-ghost">Read it again</button>
+      </form>
+    <% end %>
+  </div>
+</section>
+<% if reading.state == "reading" %>
+  <script type="module">
+    // Followed live (#462): the news every few seconds, the music written so far engraved.
+    const page = document.querySelector("[data-import-page]");
+    const status = page.querySelector("[data-import-status]");
+    const score = page.querySelector("[data-import-score]");
+    const draft = page.querySelector("[data-import-draft]");
+    const { readingSays } = await import("/js/score-photo.js?v=<%= eui_version %>");
+    const at = "<%= app_reading_path(reading._key) %>";
+    let events = null;
+    let wake = () => {};
+    try {
+      events = new EventSource(at + "/events");
+      events.addEventListener("progress", (event) => {
+        try {
+          status.textContent = readingSays(JSON.parse(event.data));
+        } catch (error) {}
+      });
+      events.addEventListener("done", () => wake());
+    } catch (error) {}
+    // The page left (instant navigation swaps it): stop asking.
+    while (page.isConnected) {
+      await Promise.race([new Promise((done) => setTimeout(done, 3000)), new Promise((done) => (wake = done))]);
+      if (!page.isConnected) break;
+      let reading;
+      try {
+        reading = await (await fetch(at + "?svg=1", { headers: { Accept: "application/json" } })).json();
+      } catch (error) {
+        continue;
+      }
+      if (reading.state !== "reading") {
+        // Read, or not: the page as it now stands.
+        events?.close();
+        location.reload();
+        break;
+      }
+      status.textContent = readingSays(reading);
+      if (reading.draft_svg) {
+        score.innerHTML = reading.draft_svg;
+        draft.hidden = true;
+      } else if (reading.draft) {
+        draft.hidden = false;
+        draft.textContent = reading.draft;
+        draft.scrollTop = draft.scrollHeight;
+      }
+    }
+    events?.close();
+  </script>
+<% end %>

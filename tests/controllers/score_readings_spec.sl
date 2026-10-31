@@ -235,6 +235,136 @@ describe("AppScoreReadingsController") do
   end
 end
 
+describe("Photo imports (#465, #462)") do
+  before_each() do
+    as_guest()
+    clear_headers()
+    clear_cookies()
+  end
+
+  test("lists one's imports, the latest first, with how each stands; nobody else's") do
+    user = reading_user()
+    now = DateTime.utc.to_unix
+    ScoreReading.create({
+      "user_id": user._key,
+      "state": "done",
+      "source": "\\header { title = \"Read one\" }\n{ c'1 }\n",
+      "created_at": now - 100
+    })
+    ScoreReading.create({
+      "user_id": user._key,
+      "state": "failed",
+      "error": "The AI could not read it.",
+      "created_at": now - 50
+    })
+    ScoreReading.create({
+      "user_id": user._key,
+      "state": "reading",
+      "phase": "thinking",
+      "created_at": now - 10,
+      "progressed_at": now - 2
+    })
+    ScoreReading.create({
+      "user_id": reading_user()._key,
+      "state": "done",
+      "source": "\\header { title = \"Not yours\" }\n{ c'1 }\n",
+      "created_at": now
+    })
+    post(
+      "/login",
+      {"email": user.email, "password": READING_PASSWORD}
+    )
+    page = res_body(get("/app/imports"))
+    assert_contains(page, "Read one")
+    assert_contains(page, "The AI could not read it.")
+    assert_contains(page, "being read")
+    assert_not(page.contains("Not yours"))
+    assert(page.index_of("being read") < page.index_of("Read one"), "the latest first")
+    start = res_body(get("/app"))
+    assert_contains(start, "data-imports-going", "the Start page points to the one going on")
+  end
+
+  test("an import's page: the photo and the score read, opened as a score; read again") do
+    user = reading_user()
+    reading = ScoreReading.create({
+      "user_id": user._key,
+      "state": "done",
+      "picture": SMALL_PNG,
+      "source": "\\header { title = \"Little\" }\n{ c'4 d' e' f' }\n",
+      "created_at": DateTime.utc.to_unix
+    })
+    page = res_body(get("/app/imports/#{reading._key}"))
+    assert_contains(page, "data:image/jpeg;base64,")
+    assert_contains(page, "<svg")
+    assert_contains(page, "Open as a score")
+    count_before = Score.where({"user_id": user._key}).count
+    opened = post("/app/imports/#{reading._key}/score", {})
+    assert_eq(Score.where({"user_id": user._key}).count, count_before + 1)
+    score = Score.where({"user_id": user._key}).order("created_at", "desc").first
+    assert_eq(res_location(opened), "/app/scores/#{score._key}")
+    assert_eq(score.title, "Little")
+    readings_before = readings_of(user)
+    again = post("/app/imports/#{reading._key}/retry", {})
+    assert_eq(readings_of(user), readings_before + 1)
+    fresh = ScoreReading.where({
+      "user_id": user._key,
+      "state": "reading"
+    }).first
+    assert_eq(res_location(again), "/app/imports/#{fresh._key}")
+    assert_eq(fresh.picture, SMALL_PNG, "the same photo")
+  end
+
+  test("a reading being written: its music so far engraved, for the page that follows it") do
+    user = reading_user()
+    reading = ScoreReading.create({
+      "user_id": user._key,
+      "state": "reading",
+      "phase": "writing",
+      "draft": "\\new Staff { \\time 3/4 c'4 d' e' | f'2. | g'4",
+      "created_at": DateTime.utc.to_unix,
+      "progressed_at": DateTime.utc.to_unix
+    })
+    page = get("/app/imports/#{reading._key}")
+    assert_eq(res_status(page), 200, "its page, while nothing is read yet")
+    assert_contains(res_body(page), "Being read")
+    followed = res_json(get("/app/readings/#{reading._key}?svg=1"))
+    assert_eq(followed["state"], "reading")
+    assert_contains(followed["draft_svg"], "<svg")
+    assert_null(res_json(get("/app/readings/#{reading._key}"))["draft_svg"], "only asked for")
+  end
+
+  test("refused: another's import, an unknown one, opening one not read, reading again without the photo; a guest") do
+    owner = reading_user()
+    theirs = ScoreReading.create({
+      "user_id": owner._key,
+      "state": "done",
+      "source": "{ c'1 }",
+      "created_at": DateTime.utc.to_unix
+    })
+    pending = ScoreReading.create({
+      "user_id": owner._key,
+      "state": "failed",
+      "error": "x",
+      "created_at": DateTime.utc.to_unix
+    })
+    reading_user()
+    assert_eq(res_status(get("/app/imports/#{theirs._key}")), 404)
+    assert_eq(res_status(post("/app/imports/#{theirs._key}/score", {})), 404)
+    assert_eq(res_status(get("/app/imports/no-such")), 404)
+    post(
+      "/login",
+      {"email": owner.email, "password": READING_PASSWORD}
+    )
+    count_before = Score.where({"user_id": owner._key}).count
+    assert_eq(res_status(post("/app/imports/#{pending._key}/score", {})), 422, "not read: nothing to open")
+    assert_eq(res_status(post("/app/imports/#{pending._key}/retry", {})), 422, "no photo kept")
+    assert_eq(Score.where({"user_id": owner._key}).count, count_before)
+    as_guest()
+    clear_cookies()
+    assert_ne(res_status(get("/app/imports")), 200)
+  end
+end
+
 describe("An AI key of one's own, on the account page") do
   before_each() do
     as_guest()

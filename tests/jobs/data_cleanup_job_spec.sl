@@ -56,7 +56,7 @@ describe("DataCleanupJob") do
     assert(Score.find(recent._key).trashed?, "a score trashed today stays")
   end
 
-  test("fails a reading stuck past ten minutes and lets its photo go, and leaves a recent one alone") do
+  test("fails a reading stuck past ten minutes, its photo kept to read again, and leaves a recent one alone") do
     user = cleanup_owner()
     stuck = reading_started(user, SCORE_AI_STUCK_SECONDS + 60)
     fresh = reading_started(user, 60)
@@ -64,7 +64,7 @@ describe("DataCleanupJob") do
     assert_gt(done["readings"], 0)
     failed = ScoreReading.find(stuck._key)
     assert_eq(failed.state, "failed")
-    assert_null(failed.picture)
+    assert_eq(failed.picture, "base64-jpeg", "kept for Read it again; let go after a week (#465)")
     assert_contains(failed.error, "interrupted")
     assert_not_null(failed.finished_at)
     untouched = ScoreReading.find(fresh._key)

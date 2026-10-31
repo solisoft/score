@@ -9,6 +9,8 @@ class AppHomeController < AppBaseController
     @recent = @user.nil? ? [] : Score.recent(@user, 6)
     @eui_version = ScoreAssets.version
     @photos = @user.nil? ? nil : @_photos(@user)
+    # Photos being read, found again from here (#465).
+    @photos_going = @user.nil? ? 0 : ScoreReading.going(@user)
     @title = @user.nil? ? "Write music, keep it" : "Start"
     @description = "Write music in your browser: scores engraved as you type, played, saved to your account."
   end

@@ -36,7 +36,14 @@ class AppScoreReadingsController < AppBaseController
     halt(404, "No such reading") unless reading.owned_by?(current_user())
 
     reading.expire_if_silent
-    return render_json({"state": "reading"}.merge(reading.news)) if reading.state == "reading"
+    if reading.state == "reading"
+      news = {"state": "reading"}.merge(reading.news)
+      # What is written so far, engraved, for the import's page (#462).
+      if params["svg"] == "1" && reading.phase == "writing"
+        news["draft_svg"] = ScoreReader.draft_svg(reading.draft)
+      end
+      return render_json(news)
+    end
     if reading.state == "failed"
       return render_json({"state": "failed", "error": reading.error})
     end
@@ -58,7 +65,63 @@ class AppScoreReadingsController < AppBaseController
     sse_subscribe(req, ScoreReading.topic(reading._key))
   end
 
+  # GET /app/imports — the photos read, being read or not read, the latest first (#465)
+  def index
+    @readings = ScoreReading.of(current_user())
+    @title = "Photo imports"
+    @description = "The photos of scores you had read, and those being read."
+  end
+
+  # GET /app/imports/:id — one photo's reading: followed live, the score
+  # growing as it is written (#462); kept as a score, or tried again
+  def watch
+    @reading = @_own_reading
+    @reading.expire_if_silent
+    @eui_version = ScoreAssets.version
+    @figure = @reading.state == "done" ? ScoreSvg.figure(@reading.source, 1000, 7) : nil
+    @title = @reading.title
+    @description = "A photo of a score, read into one."
+  end
+
+  # POST /app/imports/:id/score — what was read, kept as a new score, opened in the editor
+  def keep
+    reading = @_own_reading
+    halt(422, "This photo is not read yet.") unless reading.state == "done"
+
+    score = Score.start(current_user(), reading.source)
+    halt(422, "That score could not be created.") if score._errors
+
+    redirect(app_score_path(score))
+  end
+
+  # POST /app/imports/:id/retry — the same photo read again
+  def retry
+    reading = @_own_reading
+    halt(422, "This photo is not kept any more: choose it again from Start.") if reading.picture.blank?
+    halt(422, "This photo is still being read.") if reading.state == "reading"
+
+    refusal = ScoreReading.refusal(current_user())
+    unless refusal.nil?
+      said = refusal == "used_up" ? "You have read all of today's photos: try again tomorrow." : nil
+      flash("error", said ?? AiClient.refusal_text(refusal))
+      return redirect(app_import_path(reading._key))
+    end
+
+    again = ScoreReading.start(current_user(), reading.picture)
+    halt(422, again.to_s) if type(again) == "string"
+
+    redirect(app_import_path(again._key))
+  end
+
   private
+
+  # The reading of the route, if it is the signed-in person's (404 otherwise).
+  def _own_reading
+    reading = ScoreReading.find(params["id"])
+    halt(404, "No such reading") unless reading.owned_by?(current_user())
+
+    reading
+  end
 
   # The answer refusing one more photo now (`refusal`, ScoreReading.refusal):
   # the day's used up (429), or the key or the plan (403, with its link).

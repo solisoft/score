@@ -3372,6 +3372,52 @@
   .photo-reading-score {
     color: #111;
   }
+  .import-list {
+    list-style: none;
+    margin: 16px 0 0;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+  }
+  .import-item {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 14px;
+    background: var(--sheet);
+  }
+  .import-item a {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    color: inherit;
+  }
+  .import-state {
+    font-size: 12.5px;
+    border-radius: 999px;
+    padding: 2px 10px;
+    border: 1px solid var(--line);
+  }
+  .import-reading .import-state {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .import-failed .import-state {
+    color: var(--muted);
+  }
+  .import-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .import-banner {
+    margin: 0 0 16px;
+  }
   .photo-reading-draft {
     margin: 0;
     max-height: 220px;

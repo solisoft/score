@@ -66,6 +66,85 @@ class ScoreReader
     image.format("jpeg").quality(90).to_buffer
   end
 
+  # The LilyPond an AI is still writing, made whole enough to engrave (#462):
+  # cut after its last bar line (else its last line), then each `{` and `<<`
+  # still open there closed, innermost first. "" when nothing whole is
+  # written yet.
+  static def closed_draft(draft)
+    chars = ScoreReader.unfenced(draft.to_s).chars()
+    marks = ScoreReader.marks(chars)
+    cut = ScoreReader.whole_up_to(marks)
+    return "" if cut <= 0
+
+    text = chars.slice(0, cut).join("")
+    return "" if text.trim.blank?
+
+    open = []
+    marks.filter do |mark|
+      mark["at"] < cut
+    end.each do |mark|
+      token = mark["token"]
+      open.push(token == "{" ? "}" : ">>") if ["{", "<<"].includes?(token)
+      open.pop() if ["}", ">>"].includes?(token) && open.length > 0
+    end
+    text + "\n" + open.reverse().join(" ") + "\n"
+  end
+
+  # The marks of `chars` that tell where it stands, outside strings and
+  # comments: [{"at", "token"}], token one of | (a bar line), a line's end,
+  # { } << >>.
+  static def marks(chars)
+    out = []
+    mode = "code"
+    at = 0
+    while at < chars.length
+      c = chars[at]
+      pair = at + 1 < chars.length ? c + chars[at + 1] : c
+      if mode == "string"
+        at += 1 if c == "\\"
+        mode = "code" if c == "\""
+      elsif mode == "comment"
+        if c == "\n"
+          out.push({"at": at, "token": c})
+        end
+        mode = "code" if c == "\n"
+      else
+        mode = {"\"": "string", "%": "comment"}[c] ?? "code"
+        token = ["<<", ">>"].includes?(pair) ? pair : c
+        if ["|", "\n", "{", "}", "<<", ">>"].includes?(token)
+          out.push({"at": at, "token": token})
+        end
+        at += token.length - 1
+      end
+      at += 1
+    end
+    out
+  end
+
+  # Where a draft is whole up to, from its marks: after its last bar line,
+  # else at its last line's end; 0 when neither.
+  static def whole_up_to(marks)
+    bars = marks.filter do |mark|
+      mark["token"] == "|"
+    end
+    lines = marks.filter do |mark|
+      mark["token"] == "\n"
+    end
+    bar = bars.length > 0 ? bars.last["at"] + 1 : 0
+    line = lines.length > 0 ? lines.last["at"] : 0
+    [bar, line].max()
+  end
+
+  # What the AI has written so far, engraved (#462): the SVG, or nil when
+  # the draft cannot be made whole yet.
+  static def draft_svg(draft)
+    closed = ScoreReader.closed_draft(draft)
+    return nil if closed.blank?
+
+    engraved = ScoreSvg.engrave(closed, 1000, 7, 0, {})
+    engraved["error"].nil? ? engraved["svg"] : nil
+  end
+
   # The picture, read with `settings`: {"source": LilyPond} or {"error": …}.
   # `progress(phase, text)` is told as the answer comes (AiClient.ask, #435).
   static def read(picture, settings, progress = nil)

@@ -11,6 +11,7 @@ class DataCleanupJob
     {
       "scores": Score.purge_all_trash,
       "readings": ScoreReading.expire_stuck,
+      "old_readings": ScoreReading.let_go,
       "suggestions": ScoreSuggestion.expire_stuck,
       "engravings": Engraving.expire
     }

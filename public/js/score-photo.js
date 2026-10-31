@@ -35,7 +35,7 @@ export function readingSays(news) {
   return `Waiting for the AI… ${time}`;
 }
 
-// Sends `file`, calls `started()` once the server took it, tells `progress`
+// Sends `file`, calls `started(id)` once the server took it (the reading's id, #465), tells `progress`
 // how the reading goes ({phase: "waiting" | "thinking" | "writing", draft:
 // the LilyPond so far, seconds}), and resolves to {source, svg}; rejects with
 // an Error whose message the page can show (and, when it is the AI key or the
@@ -56,7 +56,7 @@ export async function readPhoto(file, { readings = "/app/readings", started = ()
   }
   const answer = await sent.json();
   if (sent.status !== 202) throw Object.assign(new Error(answer.error), { link: answer.link, linkText: answer.link_text });
-  started();
+  started(answer.id);
   const at = `${readings}/${answer.id}`;
   // Live: each piece of news as it comes, and "done" to ask after it at once.
   let wake = () => {};

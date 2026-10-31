@@ -162,7 +162,7 @@ describe("ScoreReading") do
     stored = ScoreReading.find(reading._key)
     assert_eq(stored.state, "failed")
     assert_eq(stored.error, AI_NO_KEY)
-    assert_null(stored.picture)
+    assert_eq(stored.picture, "abc", "kept for Try again, let go after a week (#465)")
   end
 
   test("leaves none once the day's are used, and counts only the last 24 hours") do
@@ -241,7 +241,7 @@ describe("ScoreReading") do
     stored = ScoreReading.find(reading._key)
     assert_eq(stored.state, "failed")
     assert_eq(stored.error, "Something went wrong while reading the photo. Try again.")
-    assert_null(stored.picture)
+    assert_eq(stored.picture, "abc", "kept for Try again (#465)")
   end
 
   test("refuses a state it does not know") do
@@ -250,5 +250,78 @@ describe("ScoreReading") do
       "state": "lost"
     })
     assert_null(reading._key)
+  end
+end
+
+describe("A draft engraved while it is written (#462)") do
+  test("is cut after its last bar line, what is open closed, and engraves") do
+    draft = "\\header { title = \"Waltz\" }\n\\new Staff \\relative c' {\n  \\time 3/4 c4 d e | f2. | g4 a"
+    closed = ScoreReader.closed_draft(draft)
+    assert(closed.contains("f2. |"), "kept up to the last bar line")
+    assert_not(closed.contains("g4 a"), "the bar being written left out")
+    assert(closed.trim.ends_with?("}"), "the staff closed")
+    assert_null(eui_score_layout(closed, 100, {})["error"], "the engraver reads it")
+    assert_not_null(ScoreReader.draft_svg(draft))
+  end
+
+  test("closes << and nested braces innermost first, and ignores what strings and comments hold") do
+    draft = "<<\n  \\new Staff { c'4^\"a | b {\" d' | % a comment | {\n  e'1 |\n  \\new Staff { g4"
+    closed = ScoreReader.closed_draft(draft)
+    assert(closed.trim.ends_with?("} >>"), closed)
+    assert_null(eui_score_layout(closed, 100, {})["error"], closed)
+  end
+
+  test("nothing whole yet: nothing to engrave") do
+    assert_eq(ScoreReader.closed_draft(""), "")
+    assert_eq(ScoreReader.closed_draft("\\new Sta"), "")
+    assert_null(ScoreReader.draft_svg("{ c'4"))
+  end
+end
+
+describe("Photo imports kept (#465)") do
+  test("a week for the photo, a month for the reading; one going on is left alone") do
+    owner = User.new()
+    owner.email = "imports-#{uuid_v4}@example.com"
+    owner.set_password("correct horse battery")
+    owner.save
+    now = DateTime.utc.to_unix
+    fresh = ScoreReading.create({
+      "user_id": owner._key,
+      "state": "done",
+      "source": "{ c'1 }",
+      "picture": "abc",
+      "created_at": now - 3600
+    })
+    week = ScoreReading.create({
+      "user_id": owner._key,
+      "state": "failed",
+      "picture": "abc",
+      "created_at": now - 8 * 86400
+    })
+    going = ScoreReading.create({
+      "user_id": owner._key,
+      "state": "reading",
+      "picture": "abc",
+      "created_at": now - 8 * 86400 - 60
+    })
+    month = ScoreReading.create({
+      "user_id": owner._key,
+      "state": "done",
+      "picture": "abc",
+      "created_at": now - 31 * 86400
+    })
+    assert(ScoreReading.let_go >= 1)
+    assert_eq(ScoreReading.find(fresh._key).picture, "abc")
+    assert_null(ScoreReading.find(week._key).picture, "a week old: the photo goes")
+    assert_eq(ScoreReading.find(going._key).picture, "abc", "never under a reading going on")
+    assert_null(ScoreReading.where({"_key": month._key}).first, "a month old: the reading goes")
+    assert_eq(ScoreReading.of(owner).map(&{ |r|
+      r._key
+    }), [fresh._key, week._key, going._key])
+    assert_eq(ScoreReading.going(owner), 1)
+    assert_eq(
+      ScoreReading.find(fresh._key).title,
+      "Photo of " + DateTime.from_unix(now - 3600).format("%d %b %Y, %H:%M")
+    )
   end
 end

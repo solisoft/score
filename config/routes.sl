@@ -141,6 +141,11 @@ middleware("require_app_database", fn() {
     post("/app/readings", "app/score_readings#create", name: "app_readings")
     get("/app/readings/:id", "app/score_readings#show", name: "app_reading")
     get("/app/readings/:id/events", "app/score_readings#events", name: "app_reading_events")
+    # The photo imports, listed and followed (#465, #462).
+    get("/app/imports", "app/score_readings#index", name: "app_imports")
+    get("/app/imports/:id", "app/score_readings#watch", name: "app_import")
+    post("/app/imports/:id/score", "app/score_readings#keep", name: "app_import_score")
+    post("/app/imports/:id/retry", "app/score_readings#retry", name: "app_import_retry")
     post("/app/scores/:id/suggestions", "app/score_suggestions#create", name: "app_score_suggestions")
     get("/app/suggestions/:id", "app/score_suggestions#show", name: "app_suggestion")
     get("/app/scores/:id", "app/scores#show", name: "app_score")

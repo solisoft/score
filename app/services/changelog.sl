@@ -13,6 +13,15 @@ class Changelog
       {"date": "2026-10-31", "entries": [
         {
           "area": "editor",
+          "title": "Photo imports: find them again, and watch the score being written",
+          "text": "A photo's reading goes on when you leave its page, and Photo imports, from Start, lists them all: "
+          + "being read, read, or not. Each opens on a page of its own where the score grows as the AI writes it, "
+          + "bar after bar, engraved beside the photo; then Open as a score, or Read it again. Start says when a "
+          + "photo is being read. Photos are kept a week, imports a month.",
+          "app": true
+        },
+        {
+          "area": "editor",
           "title": "A photo's reading no longer waits for ever",
           "text": "Reading a photo with a model that reasons before it writes (Kimi, DeepSeek, Claude…), the page "
           + "now shows how far its reasoning has gone, not a still \"reading\". A reading stops after 10 minutes and "

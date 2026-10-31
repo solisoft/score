@@ -15,6 +15,10 @@ const SCORE_AI_STUCK_SECONDS = 600
 # answer sends some every few seconds while it lasts (AI_PROGRESS_EVERY), and
 # waits AI_STREAM_IDLE at most for the provider's next piece.
 const SCORE_READING_SILENT = 240
+# How long a photo is kept with its reading, for the imports page and Try
+# again (#465); the reading itself, how long it is listed.
+const SCORE_READING_PICTURE_DAYS = 7
+const SCORE_READING_KEPT_DAYS = 30
 
 class ScoreReading < Model
   validates("user_id", {"presence": true})
@@ -86,10 +90,55 @@ class ScoreReading < Model
 
     @state = "failed"
     @error = "The reading was interrupted. Try again."
-    @picture = nil
     @finished_at = DateTime.utc.to_unix
     @save
     true
+  end
+
+  # `user`'s readings, the latest first (#465): the imports page's list,
+  # without their pictures.
+  static def of(user, count = 30)
+    ScoreReading.where({"user_id": user._key}).select(
+      "state",
+      "phase",
+      "draft",
+      "thought",
+      "source",
+      "error",
+      "created_at",
+      "progressed_at",
+      "finished_at"
+    ).order("created_at", "desc").limit(count).all
+  end
+
+  # How many of `user`'s readings are going on.
+  static def going(user)
+    ScoreReading.where({"user_id": user._key, "state": "reading"}).count
+  end
+
+  # The pictures kept past SCORE_READING_PICTURE_DAYS let go, and the
+  # readings past SCORE_READING_KEPT_DAYS taken away (#465). Answers how many readings went.
+  static def let_go
+    now = DateTime.utc.to_unix
+    picture_since = now - SCORE_READING_PICTURE_DAYS * 86400
+    @sdbql{
+      FOR reading IN score_readings
+      FILTER reading.picture != null AND reading.state != "reading" AND reading.created_at < #{picture_since}
+      UPDATE reading WITH { picture: null } IN score_readings
+    }
+    old = ScoreReading.where("doc.created_at < @since", {"since": now - SCORE_READING_KEPT_DAYS * 86400})
+    count = old.count
+    old.delete_all
+    count
+  end
+
+  # The title what was read (or is being written) gives, else "Photo of <when>".
+  def title
+
+    # What was read, else what is being written (#465): its title as soon as it has one.
+    written = @source.blank? ? @draft.to_s : @source.to_s
+    found = written.blank? ? nil : Score.title_in(written)
+    found ?? "Photo of " + DateTime.from_unix(@created_at.to_s.to_i).format("%d %b %Y, %H:%M")
   end
 
   # The readings still "reading" after SCORE_AI_STUCK_SECONDS: failed, their
@@ -103,7 +152,6 @@ class ScoreReading < Model
     stuck.each do |reading|
       reading.state = "failed"
       reading.error = "The reading was interrupted. Try again."
-      reading.picture = nil
       reading.finished_at = DateTime.utc.to_unix
       reading.save
     end
@@ -123,7 +171,8 @@ class ScoreReading < Model
     @state = outcome["error"].nil? ? "done" : "failed"
     @source = outcome["source"]
     @error = outcome["error"]
-    @picture = nil
+    # The photo kept with what was read, for the imports page and Try again (#465);
+    # the nightly clean-up lets it go after SCORE_READING_PICTURE_DAYS.
     @finished_at = DateTime.utc.to_unix
     @save
     # The pages following it ask after it once more, and stop listening.

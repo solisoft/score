@@ -17,6 +17,11 @@
   <section class="start">
     <h1>Start</h1>
 
+    <% if photos_going > 0 %>
+      <p class="callout import-banner" data-imports-going><%= photos_going == 1 ? "A photo is" : photos_going.to_s + " photos are" %>
+        being read. <a href="<%= app_imports_path() %>">Follow it in Photo imports</a></p>
+    <% end %>
+
     <%# Every way in posts the same form: the LilyPond to start from, and a
         title for a source that has none. %>
     <form action="<%= app_scores_path() %>" method="POST" id="start-form" hidden>
@@ -73,7 +78,8 @@
           <h2>From a photo</h2>
           <% if photos["ready"] %>
             <p class="muted">A photo or scan of printed or handwritten music, read by <%= photos["with"] %>. Check
-              what it read before you keep it. <span data-photos-left><%= photos["left"] %></span> left today.</p>
+              what it read before you keep it. <span data-photos-left><%= photos["left"] %></span> left today.
+              <a href="<%= app_imports_path() %>">Photo imports</a></p>
             <label class="btn btn-ghost start-file">Choose a photo…
               <input type="file" accept="image/*" data-photo hidden<%= photos["left"] == 0 ? " disabled" : "" %>>
             </label>
@@ -121,6 +127,8 @@
           <figcaption class="muted" data-reading-status aria-live="polite">Sending the photo…</figcaption>
         </figure>
       </div>
+      <p class="muted" data-reading-away hidden>You can leave this page: the reading goes on.
+        <a href="<%= app_imports_path() %>">Follow it on its own page</a>, or find it later in Photo imports.</p>
       <p class="form-error" data-reading-error hidden></p>
       <button type="button" class="btn btn-primary" data-reading-keep hidden>Create the score</button>
     </section>
@@ -258,10 +266,14 @@
       try {
         const answer = await readPhoto(file, {
           readings: "<%= app_readings_path() %>",
-          started: () => {
+          started: (id) => {
             const left = document.querySelector("[data-photos-left]");
             left.textContent = Math.max(0, Number(left.textContent) - 1);
             status.textContent = readingSays({ phase: "waiting", seconds: 0 });
+            // It goes on without this page (#465): where to find it again.
+            const away = reading.querySelector("[data-reading-away]");
+            away.querySelector("a").href = "<%= app_imports_path() %>/" + id;
+            away.hidden = false;
           },
           // How it goes (#435): the time, then the LilyPond as the AI writes it.
           progress: (news) => {
