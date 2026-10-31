@@ -6,7 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import init, { editor_view, score_json } from "../../public/eui-score/eui_score_web.js";
+import init, { editor_view, midi, score_json } from "../../public/eui-score/eui_score_web.js";
 import * as M from "../../public/eui-score/score-model.js";
 import { importSection } from "../../public/eui-score/section-library.js";
 
@@ -80,4 +80,32 @@ test("a piano comes with its brace, named; added again, it goes on that brace's 
   assert.deepEqual(again.added, []);
   assert.equal(M.staffLanes(score).length, 3);
   engraves(score);
+});
+
+test("swing goes along (#453): kept in a shared section, set on a straight score it is added to, heard swung", async () => {
+  const { shareable } = await import("../../public/eui-score/section-library.js");
+  const F = await import("../../public/eui-score/feel.js");
+  const swung = read(String.raw`\new Staff { \time 4/4 c'8 d' e' f' g' a' b' c'' }`);
+  swung.meta = { swing: { amount: 62, unit: 8 } };
+  const shared = shareable(swung, [0], 0, 0, "Swung");
+  assert.deepEqual(M.readMeta(shared.source).swing, { amount: 62, unit: 8 }, "the section's text says it swings");
+  const straight = read(String.raw`\new Staff { \time 4/4 c'1 }`);
+  assert.equal(shareable(straight, [0], 0, 0, "Straight").source.includes("%% eui-score"), false);
+  const score = read(String.raw`\new Staff \with { instrumentName = "Voice" } { \time 4/4 c'1 }`);
+  const done = importSection(score, seed("style:swing:bass"), score_json);
+  assert.equal(done.swung, true);
+  assert.deepEqual(score.meta.swing, { amount: 66, unit: 8 });
+  assert.equal(importSection(score, seed("style:shuffle:bass"), score_json).swung, false, "a score that swings keeps its own");
+  assert.deepEqual(score.meta.swing, { amount: 66, unit: 8 });
+  assert.equal(importSection(read(String.raw`{ c'1 }`), seed("style:pop:bass"), score_json).swung, false);
+  // Heard: the off-beat eighth comes late.
+  const bytes = new Uint8Array(midi(M.toLilyPond(swung, { unfold: true }).source, 100, 4, 0));
+  const ons = (b) => F.readSmf(b).tracks.flat().filter((ev) => (ev.data[0] & 0xf0) === 0x90 && ev.data[2] > 0).map((ev) => ev.tick);
+  const straightTicks = ons(bytes);
+  const swungTicks = ons(F.feel(bytes, F.feelOf(swung.meta)));
+  assert.equal(swungTicks.length, 8);
+  assert.notDeepEqual(swungTicks, straightTicks, "the eighths are not even any more");
+  const division = F.readSmf(bytes).division;
+  assert.equal(straightTicks[1] - straightTicks[0], division / 2, "written even");
+  assert.ok(swungTicks[1] - swungTicks[0] > division / 2, "played long-short");
 });

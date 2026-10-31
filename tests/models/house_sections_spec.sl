@@ -61,6 +61,39 @@ describe("SharedSection.add_house") do
     assert_eq(SharedSection.refresh_house([seeds[0]]), 0, "nothing changed: nothing written")
   end
 
+  test("swing_of reads the swing a source asks for (#453), and nothing else") do
+    assert_eq(SharedSection.swing_of("{ c'1 }\n%% eui-score {\"swing\":{\"amount\":62,\"unit\":8}}"), "62/8")
+    assert_eq(SharedSection.swing_of("{ c'1 }\n%% eui-score {\"swing\":{\"amount\":60,\"unit\":16}}"), "60/16")
+    assert_eq(SharedSection.swing_of("{ c'1 }"), "")
+    assert_eq(
+      SharedSection.swing_of("{ c'1 }\n%% eui-score {\"swing\":{\"amount\":50,\"unit\":8}}"),
+      "",
+      "even: straight"
+    )
+    assert_eq(SharedSection.swing_of("{ c'1 }\n%% eui-score {\"swing\":{\"amount\":90,\"unit\":8}}"), "", "past 75")
+    assert_eq(SharedSection.swing_of("{ c'1 }\n%% eui-score {\"swing\":{\"amount\":62,\"unit\":4}}"), "")
+    assert_eq(SharedSection.swing_of("{ c'1 }\n%% eui-score not json"), "")
+    assert_eq(SharedSection.swing_of(nil), "")
+  end
+
+  test("the house's swing sections keep their swing; backfill_swing sets it on those kept before") do
+    seeds = house_seeds()
+    swing = seeds.filter do |fields|
+      fields["seed"] == "style:swing:bass"
+    end.first
+    pop = seeds.filter do |fields|
+      fields["seed"] == "style:pop:bass"
+    end.first
+    SharedSection.add_house([swing, pop])
+    assert_eq(SharedSection.where({"seed": "style:swing:bass"}).first.swing, "66/8")
+    assert_eq(SharedSection.where({"seed": "style:pop:bass"}).first.swing, "")
+    old = SharedSection.where({"seed": "style:swing:bass"}).first
+    old.swing = nil
+    old.update()
+    assert(SharedSection.backfill_swing >= 1)
+    assert_eq(SharedSection.find(old._key).swing, "66/8")
+  end
+
   test("remove_house takes them away, and nobody else's") do
     SharedSection.add_house([house_seeds()[0]])
     mine = SharedSection.create({

@@ -16,6 +16,7 @@
   var ENGINE_SRC = (script && script.getAttribute("data-engine")) || "/eui-score/eui-score.js";
   var MODEL_SRC = (script && script.getAttribute("data-model")) || "/eui-score/score-model.js";
   var MUSICXML_SRC = (script && script.getAttribute("data-musicxml")) || "/eui-score/musicxml.js";
+  var FEEL_SRC = (script && script.getAttribute("data-feel")) || "/eui-score/feel.js";
   var PLAY_LABEL = '<span aria-hidden="true">▶</span> Play';
   var STOP_LABEL = '<span aria-hidden="true">■</span> Stop';
   var player = null;
@@ -35,7 +36,33 @@
    * plays every repeat out and takes the jumps, as the editor plays it. A
    * source the editor's model cannot read is played as written there too.
    */
+  /**
+   * How the piece is to be played (#453): its swing, from the button's
+   * data-swing ("62/8", a section's card) or its source's `%% eui-score`
+   * line; null when it is played straight.
+   */
+  function swingOf(button) {
+    var given = /^(\d+)\/(8|16)$/.exec(button.getAttribute("data-swing") || "");
+    if (given) return { amount: Number(given[1]), unit: Number(given[2]) };
+    var line = /^%% eui-score (.*)$/m.exec(button.getAttribute("data-src") || "");
+    if (!line) return null;
+    try {
+      return JSON.parse(line[1]).swing || null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /** The MIDI as written, swung when the piece swings: by the editor's own feel.js. */
   function midiOf(button) {
+    var swing = swingOf(button);
+    if (!swing) return writtenMidi(button);
+    return Promise.all([writtenMidi(button), import(FEEL_SRC)]).then(function (both) {
+      return both[1].feel(new Uint8Array(both[0]), { swing: swing });
+    });
+  }
+
+  function writtenMidi(button) {
     var server = function () {
       return fetch(button.getAttribute("data-midi")).then(function (r) {
         return r.arrayBuffer();

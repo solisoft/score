@@ -81,11 +81,11 @@ export const GROOVES = [
   { id: "second-line", name: "Second line (New Orleans)", group: "Latin and Caribbean", time: "4/4", bpm: 100, swing: 60, main: { sn: "x--xx-x-x--xx-x-", bd: "x-----x-x-------" }, fill: "snare" },
 
   // ---- Jazz and blues
-  { id: "swing", name: "Swing", group: "Jazz and blues", time: "4/4", bpm: 140, swing: 62, main: { cymr: "x---x-x-x---x-x-", hhp: "----x-------x---", bd: "x---------------" }, fill: "swing" },
-  { id: "bebop", name: "Bebop, up tempo", group: "Jazz and blues", time: "4/4", bpm: 220, swing: 58, main: { cymr: "x---x-x-x---x-x-", hhp: "----x-------x---", sn: "------x-------x-" }, fill: "swing" },
-  { id: "brushes", name: "Ballad, brushes", group: "Jazz and blues", time: "4/4", bpm: 60, swing: 60, main: { sn: "x---x---x---x---", hhp: "----x-------x---", bd: "x-------x-------" }, fill: "swing" },
+  { id: "swing", name: "Swing", group: "Jazz and blues", time: "4/4", bpm: 140, swing: 66, main: { cymr: "x---x-x-x---x-x-", hhp: "----x-------x---", bd: "x---------------" }, fill: "swing" },
+  { id: "bebop", name: "Bebop, up tempo", group: "Jazz and blues", time: "4/4", bpm: 220, swing: 62, main: { cymr: "x---x-x-x---x-x-", hhp: "----x-------x---", sn: "------x-------x-" }, fill: "swing" },
+  { id: "brushes", name: "Ballad, brushes", group: "Jazz and blues", time: "4/4", bpm: 60, swing: 66, main: { sn: "x---x-x-x---x-x-", hhp: "----x-------x---", bd: "x-------x-------" }, fill: "swing" },
   { id: "shuffle", name: "Blues shuffle", group: "Jazz and blues", time: "4/4", bpm: 100, swing: 67, main: { hh: "x-x-x-x-x-x-x-x-", sn: "----x-------x---", bd: "x-----x-x-----x-" }, fill: "swing" },
-  { id: "jazz-waltz", name: "Jazz waltz", group: "Jazz and blues", time: "3/4", bpm: 150, swing: 62, main: { cymr: "x---x-x-x-x-", hhp: "----x-------", bd: "x-----------" }, fill: "toms" },
+  { id: "jazz-waltz", name: "Jazz waltz", group: "Jazz and blues", time: "3/4", bpm: 150, swing: 66, main: { cymr: "x---x-x-x-x-", hhp: "----x-------", bd: "x-----------" }, fill: "toms" },
   { id: "slow-blues", name: "Slow blues (12/8)", group: "Jazz and blues", time: "12/8", bpm: 60, main: { hh: "xxxxxxxxxxxx", sn: "---x-----x--", bd: "x-----x-----" }, fill: "toms" },
   { id: "gospel-128", name: "Gospel (12/8)", group: "Jazz and blues", time: "12/8", bpm: 72, main: { cymr: "xxxxxxxxxxxx", sn: "---x-----x--", bd: "x-x---x-x---" }, fill: "snare" },
 

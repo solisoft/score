@@ -88,12 +88,12 @@ export const STYLES = [
     bass: "R-----R-F---R---", groove: "one-drop",
   },
   {
-    id: "swing", name: "Swing", group: "Jazz", time: "4/4", bpm: 140, swing: 62, piano: "shell", sounds: { guitar: "electric guitar (jazz)", bass: "acoustic bass" },
+    id: "swing", name: "Swing", group: "Jazz", time: "4/4", bpm: 140, swing: 66, piano: "shell", sounds: { guitar: "electric guitar (jazz)", bass: "acoustic bass" },
     guitar: "D---D---D---D---", piano: { lh: "L---------------", rh: "----C-----C-----" },
     bass: "R---T---F---A---", groove: "swing",
   },
   {
-    id: "jazz-ballad", name: "Jazz ballad", group: "Jazz", time: "4/4", bpm: 64, swing: 60, piano: "shell", sounds: { guitar: "electric guitar (jazz)", bass: "acoustic bass" },
+    id: "jazz-ballad", name: "Jazz ballad", group: "Jazz", time: "4/4", bpm: 64, swing: 66, piano: "shell", sounds: { guitar: "electric guitar (jazz)", bass: "acoustic bass" },
     guitar: "D---------------", piano: { lh: "L---------------", rh: "C-------C-------" },
     bass: "R-------F---A---", groove: "brushes",
   },

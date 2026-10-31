@@ -166,6 +166,7 @@ class SharedSection < Model
       "tracks": fields["tracks"].to_s.to_i,
       "section": fields["section"],
       "source": fields["source"].to_s,
+      "swing": SharedSection.swing_of(fields["source"]),
       "rating_sum": 0,
       "rating_count": 0,
       "rating": 0,
@@ -203,6 +204,7 @@ class SharedSection < Model
         "tracks": fields["tracks"].to_s.to_i,
         "section": fields["section"],
         "source": fields["source"].to_s,
+        "swing": SharedSection.swing_of(fields["source"]),
         "rating_sum": 0,
         "rating_count": 0,
         "rating": 0,
@@ -237,10 +239,45 @@ class SharedSection < Model
       section.tracks = fields["tracks"].to_s.to_i
       section.section = fields["section"]
       section.source = fields["source"].to_s
+      section.swing = SharedSection.swing_of(section.source)
       section.update()
       changed += 1
     end
     changed
+  end
+
+  # The swing `source` asks for in its `%% eui-score` line (#453): "62/8"
+  # (the long note's share of the pair, in percent, and the note swung), or
+  # "" when it is played straight. The library's cards play it so.
+  static def swing_of(source)
+    line = source.to_s.split("\n").filter do |text|
+      text.starts_with?("%% eui-score ")
+    end.first
+    return "" if line.nil?
+
+    meta = JSON.parse(line.substring(13, line.length)) rescue nil
+    return "" unless type(meta) == "hash" && type(meta["swing"]) == "hash"
+
+    amount = meta["swing"]["amount"].to_s.to_i
+    unit = meta["swing"]["unit"].to_s.to_i
+    return "" unless amount > 50 && amount <= 75 && [8, 16].includes?(unit)
+
+    "#{amount}/#{unit}"
+  end
+
+  # Every section's `swing` read again from its source: those shared
+  # before it was kept (#453). Answers the number that swing.
+  static def backfill_swing
+    swinging = 0
+    SharedSection.all.each do |section|
+      swing = SharedSection.swing_of(section.source)
+      swinging += 1 unless swing.blank?
+      next if section.swing.to_s == swing
+
+      section.swing = swing
+      section.update()
+    end
+    swinging
   end
 
   # The library's own sections taken away, with what was said of them.
@@ -297,7 +334,8 @@ class SharedSection < Model
       "rating",
       "rating_count",
       "comments_count",
-      "created_at"
+      "created_at",
+      "swing"
     )
     if sort == "top"
       builder = builder.order("rating", "desc").order("rating_count", "desc")

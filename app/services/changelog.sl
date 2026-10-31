@@ -13,6 +13,14 @@ class Changelog
       {"date": "2026-10-31", "entries": [
         {
           "area": "editor",
+          "title": "The swing swings",
+          "text": "The swing, jazz ballad and shuffle accompaniments, and the swing, brushes and jazz waltz grooves, "
+          + "now swing at a triplet feel, the off-beat eighth late, where they were nearly straight; the brushes "
+          + "play the ride's ding, ding-a. A section shared from a score that swings keeps its swing, the library's "
+          + "Play and its page play it swung, and adding it to a score that does not swing yet makes that score swing."
+        },
+        {
+          "area": "editor",
           "title": "Sections, a click away in the editor",
           "text": "The editor's toolbar has a Sections button: the library opens over the score, each section with "
           + "its first bars engraved, Listen and Add. Add puts it after the last bar, each instrument on its own "

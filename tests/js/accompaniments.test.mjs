@@ -93,7 +93,7 @@ test("the selected bars only; swing set by a swing style; what is refused", () =
   const at = M.starts(score.staves[drums]);
   const struck = score.staves[drums].events.map((ev, i) => (ev.rest ? null : M.barAt(score, at[i]))).filter((b) => b != null);
   assert.deepEqual([...new Set(struck)], [1, 2]);
-  assert.deepEqual(score.meta.swing, { amount: 62, unit: 8 });
+  assert.deepEqual(score.meta.swing, { amount: 66, unit: 8 });
   assert.throws(() => A.arrange(score, "polka"), /no style called polka/);
   assert.throws(() => A.arrange(read(String.raw`{ c'1 | d'1 }`), "pop"), /No chord symbols there/);
   assert.throws(() => A.arrange(song("4/4"), "pop", { parts: [] }), /Choose an instrument/);
@@ -129,5 +129,21 @@ test("no two styles in the same metre share a part's pattern: each sounds like i
       assert.ok(!seen.has(key), `${style.id}'s ${part} is ${seen.get(key)}'s`);
       seen.set(key, style.id);
     }
+  }
+});
+
+test("the jazz styles swing as jazz does: their off-beat eighths played a triplet late (#453)", async () => {
+  const F = await import("../../public/eui-score/feel.js");
+  for (const id of ["swing", "jazz-ballad", "shuffle"]) {
+    const score = song("4/4");
+    A.arrange(score, id, { parts: ["drums"], breaks: false });
+    assert.ok(score.meta.swing.amount >= 66, `${id}: ${score.meta.swing.amount} % is a triplet feel`);
+    const bytes = new Uint8Array(midi(M.toLilyPond(score, { unfold: true }).source, 100, 4, 0));
+    const felt = F.feel(bytes, { score, passes: M.playback(score), ...F.feelOf(score.meta) });
+    const smf = F.readSmf(felt);
+    const beat = smf.division;
+    const offs = smf.tracks.flat().filter((ev) => (ev.data[0] & 0xf0) === 0x90 && ev.data[2] > 0).map((ev) => (ev.tick % beat) / beat).filter((f) => f > 0.1);
+    assert.ok(offs.length > 0, `${id}: off-beats heard`);
+    assert.ok(offs.every((f) => f >= 0.64), `${id}: off-beats at ${[...new Set(offs.map((f) => f.toFixed(2)))]}, not halfway`);
   }
 });

@@ -13,6 +13,8 @@
 
 // The model at the same version as the page's.
 const M = await import(`./score-model.js${new URL(import.meta.url).search}`);
+// The swing a section asks for, heard when it is listened to (#453).
+const F = await import(`./feel.js${new URL(import.meta.url).search}`);
 
 const KEY_NAMES = ["C♭", "G♭", "D♭", "A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯"];
 
@@ -60,6 +62,9 @@ export function shareable(score, lanes, a, b, title = "") {
     const drums = M.isDrums(score, u);
     return { name: staff.name ?? "", short: staff.short ?? "", instrument: staff.instrument ?? "", clef: drums ? "percussion" : M.clefAt(score, u, from), events: [], ...(drums ? { drums: true } : {}) };
   });
+  // How it is played goes along: a swing section swings wherever it is heard (#453).
+  const feelMeta = Object.fromEntries(["swing", "humanize"].filter((k) => score.meta?.[k]).map((k) => [k, score.meta[k]]));
+  if (Object.keys(feelMeta).length) mini.meta = feelMeta;
   // A brace whose staves all go along goes too, with its name (a piano's, #452).
   const kept = uppers.map((u) => M.staffNumber(score, u));
   const braces = (score.groups ?? []).filter((g) => g.kind === "brace" && kept.includes(g.first) && kept.indexOf(g.last) - kept.indexOf(g.first) === g.last - g.first);
@@ -157,7 +162,11 @@ export function importSection(score, data, parse) {
     if (lane < 0) lane = M.addVoice(score, staff, part.voice);
     M.pasteSection(score, lane, at, { bars: section.bars, parts: [{ ...part, offset: 0 }] });
   }
-  return { at, bars: section.bars, added };
+  // A swung section in a score that does not swing yet: the score swings now (#453).
+  const swing = M.readMeta(data.source)?.swing ?? null;
+  const swung = Boolean(swing && F.swingOf(swing) && !F.swingOf(score.meta?.swing));
+  if (swung) score.meta = { ...(score.meta ?? {}), swing };
+  return { at, bars: section.bars, added, swung };
 }
 
 /**
@@ -177,7 +186,8 @@ export function addToScore({ barsEdit, say, parse }, data) {
   const n = done.bars;
   const bars = `bar${n === 1 ? "" : "s"} ${done.at + 1}${n === 1 ? "" : `–${done.at + n}`}`;
   const staves = done.added.length ? `, on ${done.added.length === 1 ? "a new staff" : "new staves"}: ${done.added.join(", ")}` : "";
-  say(`“${data.title}” added as ${bars}${staves}. Undo takes it back.`);
+  const swing = done.swung ? " The score swings now, as the section does (Play ▸ Swing and humanize)." : "";
+  say(`“${data.title}” added as ${bars}${staves}.${swing} Undo takes it back.`);
   return true;
 }
 
@@ -337,7 +347,7 @@ export function install(studio) {
         return;
       }
       const data = await full(row);
-      const bytes = await toMidi(data.source, { bpm: 100, beat: 4 });
+      const bytes = F.feel(await toMidi(data.source, { bpm: 100, beat: 4 }), F.feelOf(M.readMeta(data.source)));
       button.dataset.playing = "1";
       button.textContent = "■ Stop";
       const done = () => {
