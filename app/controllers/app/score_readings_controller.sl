@@ -35,6 +35,7 @@ class AppScoreReadingsController < AppBaseController
     reading = ScoreReading.find(params["id"])
     halt(404, "No such reading") unless reading.owned_by?(current_user())
 
+    reading.expire_if_silent
     return render_json({"state": "reading"}.merge(reading.news)) if reading.state == "reading"
     if reading.state == "failed"
       return render_json({"state": "failed", "error": reading.error})

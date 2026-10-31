@@ -439,7 +439,11 @@ describe("AiClient streamed answers (#435)") do
 
   test("tells its progress: thinking before the first words, then the text so far") do
     told = []
-    progress = fn(phase, text) { told.push([phase, text]) }
+    progress = fn(phase, text, thought) { told.push([
+      phase,
+      text,
+      thought
+    ]) }
     stream = fake_stream([
       sse({"choices": [{"delta": {"reasoning_content": "Let me look"}}]}),
       sse({"choices": [{"delta": {"content": "{ c'4"}}]}),
@@ -447,7 +451,55 @@ describe("AiClient streamed answers (#435)") do
     ])
     stream.pause_at = 2
     assert_eq(AiClient.streamed(stream, own_settings("moonshot", "kimi-k3.1-pro"), progress), {"text": "{ c'4 }"})
-    assert_eq(told, [["thinking", ""], ["writing", "{ c'4 }"]])
+    assert_eq(told, [[
+      "thinking",
+      "",
+      11
+    ], ["writing", "{ c'4 }", 11]], "how far its reasoning went, told too (#463)")
+  end
+
+  test("counts a Claude model's thinking, never as the answer (#463)") do
+    told = []
+    progress = fn(phase, text, thought) { told.push([
+      phase,
+      text,
+      thought
+    ]) }
+    stream = fake_stream([
+      sse({
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {"type": "thinking_delta", "thinking": "Four bars in"}
+      }),
+      sse({
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {"type": "text_delta", "text": "{ g'1 }"}
+      }),
+      sse({"type": "message_stop"})
+    ])
+    stream.pause_at = 1
+    assert_eq(AiClient.streamed(stream, own_settings("anthropic", "claude-opus-5-5"), progress), {"text": "{ g'1 }"})
+    assert_eq(told[0], [
+      "thinking",
+      "",
+      12
+    ])
+  end
+
+  test("an answer that goes on past the longest it may take is stopped, and said so (#463)") do
+    stream = fake_stream([
+      sse({"choices": [{"delta": {"reasoning_content": "Hmm"}}]}),
+      sse({"choices": [{"delta": {"reasoning_content": " still thinking"}}]}),
+      sse({"choices": [{"delta": {"content": "{ c'1 }"}}]})
+    ])
+    stream.pause_at = 1
+    late = AiClient.streamed(stream, own_settings("moonshot", "kimi-k3.1-pro"), nil, 1)
+    assert_eq(
+      late["error"],
+      "Moonshot (Kimi) did not finish within 1 second. Try again, or choose a quicker model in Account › AI."
+    )
+    assert_eq(AiClient.duration(600), "10 minutes")
   end
 
   test("reads a line that is no data as nothing, and a broken one too") do

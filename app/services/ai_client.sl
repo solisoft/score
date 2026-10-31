@@ -19,6 +19,10 @@ const AI_NO_KEY = "Add your own AI key in Account to read photos and use the ass
 const AI_STREAM_IDLE = 180
 # How often a streamed answer is told to whoever follows it, in seconds.
 const AI_PROGRESS_EVERY = 2
+# The longest a streamed answer may take, whole, in seconds (#463): a model
+# reasoning on and on, or a provider that only keeps the line alive, does
+# not hold a reading for ever.
+const AI_ANSWER_MAX = 600
 const AI_PRO_ONLY = "AI with your own key is part of Pro."
 
 # The providers a person may bring a key for. "anthropic" speaks Anthropic's
@@ -156,8 +160,8 @@ class AiClient
 
   # A streamed answer read to its end: {"text": …} or {"error": …}. `stream`
   # answers `status`, `next_line` (nil at the end) and may raise.
-  static def streamed(stream, settings, progress = nil)
-    progress ||= fn(phase, text) { nil }
+  static def streamed(stream, settings, progress = nil, longest = AI_ANSWER_MAX)
+    progress ||= fn(phase, text, thought) { nil }
     unless stream.status == 200
       body = AiClient.rest_of(stream)
       return AiClient.answer(
@@ -170,16 +174,20 @@ class AiClient
     anthropic = AI_PROVIDERS[settings["provider"]]["api"] == "anthropic"
     read = {
       "text": "",
+      "thought": 0,
       "refused": false,
       "failed": nil,
       "told": 0,
-      "done": false
+      "done": false,
+      "late": false
     }
+    started = DateTime.utc.to_unix
     try
       line = stream.next_line
       while !line.nil?
         AiClient.took(read, AiClient.stream_delta(line, anthropic), progress)
-        line = read["done"] ? nil : stream.next_line
+        read["late"] = true if DateTime.utc.to_unix - started > longest
+        line = read["done"] || read["late"] ? nil : stream.next_line
       end
     catch error
       Logger.warn(
@@ -197,7 +205,20 @@ class AiClient
     end
     return {"error": "#{who} declined the request."} if read["refused"]
 
+    if read["late"]
+      late = "#{who} did not finish within #{AiClient.duration(longest)}."
+      return {"error": late + " Try again, or choose a quicker model in Account › AI."}
+    end
+
     {"text": read["text"]}
+  end
+
+  # `seconds` as a person says it: "10 minutes", "45 seconds".
+  static def duration(seconds)
+    return "1 second" if seconds == 1
+    return "#{seconds} seconds" if seconds < 120
+
+    "#{seconds / 60} minutes"
   end
 
   # One line's `delta` (stream_delta) added to what is `read` so far, and
@@ -206,6 +227,8 @@ class AiClient
   static def took(read, delta, progress)
     unless delta.nil?
       read["text"] = read["text"] + delta["text"] unless delta["text"].nil?
+      # A reasoning model's thoughts: not the answer, but how far it has gone (#463).
+      read["thought"] = read["thought"] + delta["thinking"].length unless delta["thinking"].nil?
       read["refused"] = true if delta["refused"]
       read["failed"] = delta["error"] unless delta["error"].nil?
       read["done"] = true if delta["done"]
@@ -214,7 +237,7 @@ class AiClient
     return nil if now - read["told"] < AI_PROGRESS_EVERY
 
     read["told"] = now
-    progress(read["text"].blank? ? "thinking" : "writing", read["text"])
+    progress(read["text"].blank? ? "thinking" : "writing", read["text"], read["thought"])
   end
 
   # What is left of a stream, its lines joined: a refusal's body.
@@ -255,6 +278,10 @@ class AiClient
       return {"text": event["delta"]["text"].to_s}
     end
 
+    if kind == "content_block_delta" && event["delta"]["type"] == "thinking_delta"
+      return {"thinking": event["delta"]["thinking"].to_s}
+    end
+
     return {"refused": true} if kind == "message_delta" && event["delta"]["stop_reason"] == "refusal"
     return {"error": AiClient.provider_words(event)} if kind == "error"
     return {"done": true} if kind == "message_stop"
@@ -272,6 +299,10 @@ class AiClient
     choice = choices[0]
     delta = choice["delta"] ?? {}
     return {"refused": true} if choice["finish_reason"] == "content_filter" || !delta["refusal"].blank?
+
+    # A reasoning model's thoughts (Kimi, DeepSeek, Qwen…), before its answer (#463).
+    reasoning = delta["reasoning_content"] ?? delta["reasoning"]
+    return {"thinking": reasoning.to_s} if !reasoning.nil? && delta["content"].nil?
 
     content = delta["content"]
     return nil if content.nil?

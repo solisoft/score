@@ -11,6 +11,10 @@ const SCORE_READINGS_OWN_PER_DAY = 200
 # reading's news is its last progress (#435), else its start: one that keeps
 # streaming is not cut off however long it takes.
 const SCORE_AI_STUCK_SECONDS = 600
+# No news of a reading for this long: its job is gone (#463). A streamed
+# answer sends some every few seconds while it lasts (AI_PROGRESS_EVERY), and
+# waits AI_STREAM_IDLE at most for the provider's next piece.
+const SCORE_READING_SILENT = 240
 
 class ScoreReading < Model
   validates("user_id", {"presence": true})
@@ -70,6 +74,24 @@ class ScoreReading < Model
     ).count
   end
 
+  # Failed, when it is still "reading" with no news for SCORE_READING_SILENT
+  # seconds — its job gone with a restart, or the provider silent (#463):
+  # whoever asks after it is told at once, not at the nightly clean-up.
+  # Answers whether it was.
+  def expire_if_silent
+    return false unless @state == "reading"
+
+    last = (@progressed_at ?? @created_at).to_s.to_i
+    return false if DateTime.utc.to_unix - last < SCORE_READING_SILENT
+
+    @state = "failed"
+    @error = "The reading was interrupted. Try again."
+    @picture = nil
+    @finished_at = DateTime.utc.to_unix
+    @save
+    true
+  end
+
   # The readings still "reading" after SCORE_AI_STUCK_SECONDS: failed, their
   # picture dropped. Answers how many.
   static def expire_stuck
@@ -117,14 +139,17 @@ class ScoreReading < Model
     return {"error": AiClient.refusal_text(AiClient.refusal(user))} if settings.nil?
 
     reading = this
-    ScoreReader.read(@picture.to_s, settings, fn(phase, text) { reading.progressed(phase, text) })
+    ScoreReader.read(@picture.to_s, settings, fn(phase, text, thought) {
+      reading.progressed(phase, text, thought)
+    })
   end
 
   # The reading's news as the answer comes (#435): kept, for whoever asks
   # after it, and told at once to the pages following it (`events`).
-  def progressed(phase, text)
+  def progressed(phase, text, thought = 0)
     @phase = phase
     @draft = text
+    @thought = thought
     @progressed_at = DateTime.utc.to_unix
     @save
     sse_broadcast(ScoreReading.topic(@_key), JSON.stringify(@news), "progress")
@@ -136,6 +161,7 @@ class ScoreReading < Model
     {
       "phase": @phase ?? "waiting",
       "draft": @draft.to_s,
+      "thought": @thought.to_s.to_i,
       "seconds": DateTime.utc.to_unix - @created_at
     }
   end

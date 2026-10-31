@@ -28,6 +28,9 @@ export function took(seconds) {
 export function readingSays(news) {
   const time = took(news?.seconds);
   if (news?.phase === "writing") return `The AI is writing the music… ${time}`;
+  // A reasoning model shows how far its thinking has gone (#463).
+  const thought = Number(news?.thought) || 0;
+  if (news?.phase === "thinking" && thought > 0) return `The AI is thinking the photo over… ${time}, ${thought.toLocaleString("en")} characters of reasoning so far. It writes the music after, within 10 minutes.`;
   if (news?.phase === "thinking") return `The AI is reading the photo… ${time}. It thinks before it writes, often for several minutes.`;
   return `Waiting for the AI… ${time}`;
 }
