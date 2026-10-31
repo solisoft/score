@@ -121,7 +121,9 @@ remaining doubt is listed for the user.
 - One source line per system, preceded by `% system N — bars a–b`, and a `|`
   bar check after every bar.
 - `\fp`, `\sf`, `\sfz`, `\fz` as single commands (never `\f\p`); hairpins
-  `\<` / `\>` ended with `\!` or the next dynamic; `\mark "2"` for circled
+  `\<` / `\>` ended with `\!` or the next dynamic; slurs on the side the
+  original draws them — `\slurUp` / `\slurDown` / `\slurNeutral` (the
+  engraver puts a slur under stem-up runs, onto the hairpins there); `\mark "2"` for circled
   rehearsal numbers; `\repeat volta` + `\alternative` for endings; D.C. /
   al Coda as `^"…"` text; `\key` again at every key change.
 - `check_source` until it answers ok; then `create_score`, or `get_score` +
