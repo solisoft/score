@@ -1,6 +1,6 @@
 <% if user.nil? %>
   <section class="app-panel">
-    <span class="eyebrow">EUI Score</span>
+    <span class="eyebrow">Score</span>
     <h1>Write music, keep it</h1>
     <p class="lead">
       Scores engraved as you type, played with real instruments, and saved to your account: a library of your

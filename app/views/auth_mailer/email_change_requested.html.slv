@@ -1,6 +1,6 @@
 <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
   <h1 style="font-size: 20px;">A change of your email address was asked for</h1>
-  <p>Someone signed in to your EUI Score account asked to change its address from
+  <p>Someone signed in to your Score account asked to change its address from
     <strong><%= user.email %></strong> to <strong><%= new_email %></strong>.
     Nothing changes until the link sent to the new address is followed.</p>
   <p style="color: #666; font-size: 13px;">

@@ -10,6 +10,13 @@
 class Changelog
   static def days
     [
+      {"date": "2026-10-31", "entries": [{
+        "area": "site",
+        "title": "EUI Score is now called Score",
+        "text": "The site and the app have a shorter name: Score. Its pages, its e-mails, the installed app and the "
+        + "picture shown when a link is shared now say so. The engraver that draws every score keeps its own name, "
+        + "eui-score: it is EUI's."
+      }]},
       {"date": "2026-10-30", "entries": [
         {
           "area": "editor",

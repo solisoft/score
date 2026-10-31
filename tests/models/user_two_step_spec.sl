@@ -26,7 +26,7 @@ describe("User two-step sign-in") do
     assert_not(stored.two_step?)
     assert_ne(stored.totp_pending, secret, "encrypted, not kept as typed")
     assert_eq(stored.pending_two_step, secret)
-    assert_contains(stored.two_step_uri(secret), "otpauth://totp/EUI%20Score:")
+    assert_contains(stored.two_step_uri(secret), "otpauth://totp/Score:")
     # A wrong code turns nothing on.
     assert_null(stored.confirm_two_step("000000"))
     assert_null(stored.confirm_two_step("not a code"))

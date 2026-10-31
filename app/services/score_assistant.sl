@@ -20,7 +20,7 @@ const SCORE_ASSISTANT_TASKS = {
 }
 
 const SCORE_ASSISTANT_PROMPT = """
-You are a music arranger. Here is a score, in LilyPond, for the EUI Score engraver:
+You are a music arranger. Here is a score, in LilyPond, for the eui-score engraver:
 
 ```lilypond
 {SOURCE}

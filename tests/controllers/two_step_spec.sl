@@ -114,7 +114,7 @@ describe("Two-step sign-in") do
       password_step(account[0])
       assert_contains(res_body(get("/app/account")), "Turn two-step sign-in on")
       page = res_body(post("/app/account/two-step", {}))
-      assert_contains(page, "data-qr=\"otpauth://totp/EUI%20Score:")
+      assert_contains(page, "data-qr=\"otpauth://totp/Score:")
       secret = User.find(account[0]._key).pending_two_step
       assert_contains(page, secret)
       wrong = post("/app/account/two-step/confirm", {"code": "000000"})

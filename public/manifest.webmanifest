@@ -1,6 +1,6 @@
 {
-  "name": "EUI Score",
-  "short_name": "EUI Score",
+  "name": "Score",
+  "short_name": "Score",
   "description": "Write music: scores engraved as you type, played, saved to your account.",
   "start_url": "/app",
   "scope": "/",

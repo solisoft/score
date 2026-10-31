@@ -8,7 +8,7 @@
       <span class="eyebrow">A score editor in your browser</span>
       <h1>Write, play and share scores, <em>together</em>, in the browser.</h1>
       <p class="lead">
-        EUI Score is where you write music: with the mouse or the keyboard, heard as you go, practised with your
+        Score is where you write music: with the mouse or the keyboard, heard as you go, practised with your
         microphone, and worked on with others, live. Nothing to install.
       </p>
       <div class="hero-actions">
@@ -21,7 +21,7 @@
     </div>
     <figure class="app-shot app-shot-hero">
       <img src="<%= public_path("images/home/hero-editor.jpg") %>" width="<%= shot_width %>" height="<%= shot_height %>" fetchpriority="high"
-        alt="The EUI Score editor: Au clair de la lune for voice and piano, with chord names and lyrics.">
+        alt="The Score editor: Au clair de la lune for voice and piano, with chord names and lyrics.">
     </figure>
   </section>
 

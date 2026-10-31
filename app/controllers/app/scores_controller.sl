@@ -72,7 +72,7 @@ class AppScoresController < AppBaseController
     @_ai_entry(current_user())
     @ai_request_limit = SCORE_SUGGESTION_REQUEST_LIMIT
     @title = @score.title
-    @description = "#{this.score.title}, in the EUI Score editor."
+    @description = "#{this.score.title}, in the Score editor."
   end
 
   # GET /app/scores/:id/room_ticket — JSON {ticket}: the editor's way into the

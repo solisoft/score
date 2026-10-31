@@ -382,7 +382,7 @@ class AccountExport
 
   static def readme(user, number, count, at)
     part = count > 1 ? "This is part #{number} of #{count}: the scores are split so that no download is too big.\n" : ""
-    "EUI Score: everything in the account #{user.email}, exported #{AccountExport.iso(at)}.\n\n" + part
+    "Score: everything in the account #{user.email}, exported #{AccountExport.iso(at)}.\n\n" + part
     + "scores/        your scores, one folder each: the score as it is now (.ly, LilyPond),\n"
     + "               and versions/, every version kept of it, the oldest first;\n"
     + "               takes/, the audio recorded onto its tracks (WAV, one per track).\n"

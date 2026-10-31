@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#fbf9f4">
-    <title><%= title %> · EUI Score</title>
+    <title><%= title %> · Score</title>
 
     <%# Share tags (Open Graph, Twitter card, canonical), as on the site's
         layout. Actions set @title and @description. %>
@@ -14,8 +14,8 @@
     <meta name="description" content="<%= share_description %>">
     <link rel="canonical" href="<%= share_url %>">
     <meta property="og:type" content="website">
-    <meta property="og:site_name" content="EUI Score">
-    <meta property="og:title" content="<%= title %> · EUI Score">
+    <meta property="og:site_name" content="Score">
+    <meta property="og:title" content="<%= title %> · Score">
     <meta property="og:description" content="<%= share_description %>">
     <meta property="og:url" content="<%= share_url %>">
     <meta property="og:image" content="<%= absolute_url(og_image ?? "/images/og.png") %>">
@@ -34,11 +34,11 @@
 </head>
 <body class="app-body">
     <header class="app-header">
-        <a class="brand" href="<%= app_home_path() %>" aria-label="EUI Score app, home">
+        <a class="brand" href="<%= app_home_path() %>" aria-label="Score app, home">
             <span class="brand-mark" aria-hidden="true">
                 <svg width="16" height="18" viewBox="0 0 16 18" fill="currentColor"><path d="M6 1.5 15 0v12.2a2.8 2.3 0 1 1-1.6-2.1V3.4L7.6 4.3v9.9A2.8 2.3 0 1 1 6 12.1Z"/></svg>
             </span>
-            <span>EUI <em>Score</em></span>
+            <span><em>Score</em></span>
         </a>
         <% if editing_score %>
             <div class="app-doc">

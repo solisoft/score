@@ -44,7 +44,7 @@ class PagesController < Controller
   def pricing
     @monthly = Plan.price("monthly")
     @title = "Pricing"
-    @description = "EUI Score is free to write with. Pro, #{this.monthly["label"]} a month, records more audio, "
+    @description = "Score is free to write with. Pro, #{this.monthly["label"]} a month, records more audio, "
     + "runs the AI on your own key and shares with anyone."
     @plans = Plan.catalog
     @annual = Plan.price("annual")

@@ -528,7 +528,7 @@ class User < Model
 
   # What an authenticator app enrols from (the QR code's text).
   def two_step_uri(secret)
-    Crypto.totp_uri(secret, this.email, "EUI Score")
+    Crypto.totp_uri(secret, this.email, "Score")
   end
 
   # The pending secret turned on, if `code` is one of its: the backup codes,

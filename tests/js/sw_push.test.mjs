@@ -38,9 +38,9 @@ const message = (body) => ({ json: () => JSON.parse(body), text: () => body });
 
 test("a push is shown with its title, sentence, tag and the page it opens", async () => {
   const sw = worker();
-  await sw.fire("push", { data: message(JSON.stringify({ title: "EUI Score", body: "Ana replied", tag: "notification-1", url: "/app/notifications/1/open" })) });
+  await sw.fire("push", { data: message(JSON.stringify({ title: "Score", body: "Ana replied", tag: "notification-1", url: "/app/notifications/1/open" })) });
   assert.equal(sw.shown.length, 1);
-  assert.equal(sw.shown[0].title, "EUI Score");
+  assert.equal(sw.shown[0].title, "Score");
   assert.equal(sw.shown[0].body, "Ana replied");
   assert.equal(sw.shown[0].tag, "notification-1");
   assert.equal(sw.shown[0].data.url, "/app/notifications/1/open");
@@ -49,7 +49,7 @@ test("a push is shown with its title, sentence, tag and the page it opens", asyn
 test("a push that is not JSON is shown as text, under the app's name", async () => {
   const sw = worker();
   await sw.fire("push", { data: { json: () => { throw new Error("not JSON"); }, text: () => "plain words" } });
-  assert.equal(sw.shown[0].title, "EUI Score");
+  assert.equal(sw.shown[0].title, "Score");
   assert.equal(sw.shown[0].body, "plain words");
   assert.equal(sw.shown[0].data.url, "/app/notifications");
   const empty = worker();

@@ -29,7 +29,7 @@ class SharedScoresController < Controller
     @eui_version = ScoreAssets.version
     @indexable = @score.visibility == "public"
     @title = @score.title
-    @description = "#{this.score.title}, engraved by EUI Score: play it, print it."
+    @description = "#{this.score.title}, engraved by Score: play it, print it."
   end
 
   # GET /s/:token/source.ly — the LilyPond, for <eui-score src="…"> on any site

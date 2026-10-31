@@ -1,6 +1,6 @@
 <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
   <h1 style="font-size: 20px;">Confirm your new email address</h1>
-  <p>The EUI Score account of <strong><%= user.email %></strong> asked to use
+  <p>The Score account of <strong><%= user.email %></strong> asked to use
     <strong><%= new_email %></strong> from now on. Confirm that this address is yours, and the account changes to it.</p>
   <p style="margin: 24px 0;">
     <a href="<%= confirm_url %>"

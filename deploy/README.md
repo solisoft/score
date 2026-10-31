@@ -51,7 +51,7 @@ ENV
   SOLI_SMTP_PORT=587
   SOLI_SMTP_USER=…
   SOLI_SMTP_PASS=…
-  SOLI_SMTP_FROM=EUI Score <no-reply@solisoft.net>
+  SOLI_SMTP_FROM=Score <no-reply@solisoft.net>
   ENV
   ```
 
@@ -133,7 +133,7 @@ SOLI_NOTIFY_EMAILS=<your address>
 SOLI_NOTIFY_WEBHOOKS=<a Slack / Teams / Discord / Google Chat incoming webhook URL>
 # Optional: the sender (default SOLI_SMTP_FROM) and the links' base URL
 # (default https:// + the first SOLI_APP_HOSTS).
-SOLI_NOTIFY_FROM=EUI Score alerts <no-reply@solisoft.net>
+SOLI_NOTIFY_FROM=Score alerts <no-reply@solisoft.net>
 SOLI_NOTIFY_URL=https://score.solisoft.net
 ENV
 chmod 600 .env

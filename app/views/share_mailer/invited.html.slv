@@ -1,6 +1,6 @@
 <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
   <h1 style="font-size: 20px;"><%= score_title %></h1>
-  <p><strong><%= inviter %></strong> shared this score with you on EUI Score: you may
+  <p><strong><%= inviter %></strong> shared this score with you on Score: you may
     <%= role == "write" ? "open and change it" : "open it" %>.</p>
   <p style="margin: 24px 0;">
     <a href="<%= open_url %>" style="background: #8b2b2c; color: #fff; padding: 10px 18px; border-radius: 6px; text-decoration: none;">Open the score</a>

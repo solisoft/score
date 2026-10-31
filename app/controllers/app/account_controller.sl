@@ -5,7 +5,7 @@ class AppAccountController < AppBaseController
   def show
     @user = current_user()
     @title = "Account"
-    @description = "Your EUI Score account."
+    @description = "Your Score account."
     @error = ""
   end
 
@@ -60,7 +60,7 @@ class AppAccountController < AppBaseController
     @user = current_user()
     unless @user.authenticate(params["password"].to_s) && @user.second_step?(params["code"])
       @title = "Account"
-      @description = "Your EUI Score account."
+      @description = "Your Score account."
       @error = "Two-step sign-in is still on: that password or that code is not right."
       return render("app/account/show", {}, {"status": 422})
     end
@@ -76,7 +76,7 @@ class AppAccountController < AppBaseController
     @ai_error = @user.keep_ai_key(params["provider"], params["model"], params["key"]).to_s
     unless @ai_error.blank?
       @title = "Account"
-      @description = "Your EUI Score account."
+      @description = "Your Score account."
       @error = ""
       return render("app/account/show", {}, {"status": 422})
     end
@@ -209,7 +209,7 @@ class AppAccountController < AppBaseController
   def _refuse(user, message, status)
     @user = user
     @title = "Account"
-    @description = "Your EUI Score account."
+    @description = "Your Score account."
     @error = ""
     @email_error = message
     @typed_email = params["email"].to_s.trim

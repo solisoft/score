@@ -73,7 +73,7 @@ class SectionsController < Controller
     @style_name = SECTION_STYLE_NAMES[@section.style] ?? "Other"
     @indexable = !@section.hidden
     @title = @section.title
-    said = "#{this.instrument_name}, #{this.style_name}: #{this.section.bars} bars shared on EUI Score."
+    said = "#{this.instrument_name}, #{this.style_name}: #{this.section.bars} bars shared on Score."
     @description = @section.description.blank? ? said : @section.description.substring(0, 160)
   end
 

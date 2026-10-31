@@ -1,6 +1,6 @@
 <section class="auth">
   <h1>Two-step sign-in</h1>
-  <p class="muted">Type the six-digit code your authenticator app shows for EUI Score — or one of your backup codes.</p>
+  <p class="muted">Type the six-digit code your authenticator app shows for Score — or one of your backup codes.</p>
   <% if error.present? %>
     <p class="form-error" role="alert"><%= error %></p>
   <% end %>

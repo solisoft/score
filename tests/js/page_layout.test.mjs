@@ -118,13 +118,13 @@ test("LilyPond's own headers are read; one the editor does not write is kept as 
 
 test("the header's piece, opus and copyright are written and read back", () => {
   const s = M.fromTemplate("piano", { title: "Sonatina", composer: "Clementi", bars: 2 });
-  Object.assign(s.header, { piece: "Allegro", opus: "Op. 36, No. 1", copyright: "© 2026 EUI Score" });
+  Object.assign(s.header, { piece: "Allegro", opus: "Op. 36, No. 1", copyright: "© 2026 Score" });
   const source = written(s);
-  assert.match(source, /piece = "Allegro" opus = "Op\. 36, No\. 1" copyright = "© 2026 EUI Score"/);
+  assert.match(source, /piece = "Allegro" opus = "Op\. 36, No\. 1" copyright = "© 2026 Score"/);
   const back = open(source).score;
   assert.equal(back.header.piece, "Allegro");
   assert.equal(back.header.opus, "Op. 36, No. 1");
-  assert.equal(back.header.copyright, "© 2026 EUI Score");
+  assert.equal(back.header.copyright, "© 2026 Score");
 });
 
 test("the PDF is made with the page settings, by any engraver; one that reads them prints their words as text", () => {

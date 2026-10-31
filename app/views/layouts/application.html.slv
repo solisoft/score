@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#fbf9f4">
-    <title><%= title %> · EUI Score</title>
+    <title><%= title %> · Score</title>
 
     <%# Share tags (Open Graph, Twitter card, canonical): every layout carries
         them. Actions set @title and @description; @og_image overrides the
@@ -18,8 +18,8 @@
     <% end %>
     <link rel="canonical" href="<%= share_url %>">
     <meta property="og:type" content="website">
-    <meta property="og:site_name" content="EUI Score">
-    <meta property="og:title" content="<%= title %> · EUI Score">
+    <meta property="og:site_name" content="Score">
+    <meta property="og:title" content="<%= title %> · Score">
     <meta property="og:description" content="<%= share_description %>">
     <meta property="og:url" content="<%= share_url %>">
     <meta property="og:image" content="<%= absolute_url(og_image ?? "/images/og.png") %>">
@@ -45,11 +45,11 @@
                     ["Changelog", changelog_path(), [changelog_path()]]] %>
     <header class="site-header">
         <div class="wrap">
-            <a class="brand" href="<%= root_path() %>" aria-label="EUI Score, home">
+            <a class="brand" href="<%= root_path() %>" aria-label="Score, home">
                 <span class="brand-mark" aria-hidden="true">
                     <svg width="16" height="18" viewBox="0 0 16 18" fill="currentColor"><path d="M6 1.5 15 0v12.2a2.8 2.3 0 1 1-1.6-2.1V3.4L7.6 4.3v9.9A2.8 2.3 0 1 1 6 12.1Z"/></svg>
                 </span>
-                <span>EUI <em>Score</em></span>
+                <span><em>Score</em></span>
             </a>
             <nav class="site-nav" aria-label="Main navigation">
                 <% for item in nav_items %>
@@ -89,7 +89,7 @@
                 <a href="<%= limits_path() %>">Limits</a>
             </nav>
             <p>
-                <strong>EUI Score</strong> writes, plays and shares scores in the browser. Its engraver,
+                <strong>Score</strong> writes, plays and shares scores in the browser. Its engraver,
                 <strong>eui-score</strong>, is the engraver of <a href="https://eui.solisoft.net">EUI</a>: the
                 LilyPond subset it reads is engraved into paths, played as MIDI and printed as PDF. Every score on
                 this site is engraved on the fly by it — on the server, or in your browser.

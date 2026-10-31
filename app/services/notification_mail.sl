@@ -44,7 +44,7 @@ class NotificationMail
   end
 
   static def text(lines, url, action)
-    settings = "Choose which e-mails EUI Score sends you: #{NotificationMail.settings_url}"
+    settings = "Choose which e-mails Score sends you: #{NotificationMail.settings_url}"
     (lines + ["", "#{action}: #{url}", "", settings]).join("\n")
   end
 
@@ -59,7 +59,7 @@ class NotificationMail
     + "\n<p style=\"margin: 24px 0;\"><a href=\"#{html_escape(url)}\" style=\"background: #8b2b2c; color: #fff; "
     + "padding: 10px 18px; border-radius: 6px; text-decoration: none;\">#{action}</a></p>\n"
     + "<p style=\"color: #666; font-size: 13px;\"><a href=\"#{html_escape(NotificationMail.settings_url)}\">"
-    + "Choose which e-mails EUI Score sends you</a>.</p>\n</div>")
+    + "Choose which e-mails Score sends you</a>.</p>\n</div>")
     page
   end
 end

@@ -153,9 +153,9 @@ describe("HomeController") do
 
     test("names the site once in its title, and carries its share tags") do
       body = res_body(get("/"))
-      title = "Write, play and share scores, together · EUI Score"
+      title = "Write, play and share scores, together · Score"
       assert_contains(body, "<title>#{title}</title>")
-      assert_eq(body.split("<title>")[1].split("</title>")[0].split("EUI Score").length - 1, 1)
+      assert_eq(body.split("<title>")[1].split("</title>")[0].split("Score").length - 1, 1)
       assert_contains(body, "<meta property=\"og:title\" content=\"#{title}\">")
       description = h(assigns()["description"])
       assert_contains(description, "score editor in the browser")

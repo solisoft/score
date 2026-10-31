@@ -2,7 +2,7 @@
   <h1>Two-step sign-in</h1>
   <ol class="two-step-steps">
     <li>Open your authenticator app (Google Authenticator, 1Password, Authy…) and scan this code.</li>
-    <li>Then type the six-digit code it shows for EUI Score.</li>
+    <li>Then type the six-digit code it shows for Score.</li>
   </ol>
   <figure class="two-step-qr" data-qr="<%= uri %>" aria-label="QR code to scan with your authenticator app"></figure>
   <p class="muted">No camera? Type this key in the app instead:</p>

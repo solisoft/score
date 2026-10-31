@@ -324,7 +324,7 @@
         if (pending == null) forgetLocally();
         else keepLocally(pending);
         titleBox.textContent = answer.title;
-        document.title = `${answer.title} · EUI Score`;
+        document.title = `${answer.title} · Score`;
         show(pending == null ? (mergeNote ? `Saved, ${mergeNote}` : "Saved") : "Unsaved changes", pending == null ? "ok" : "dirty");
         if (pending == null) mergeNote = null;
       }

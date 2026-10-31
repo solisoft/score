@@ -76,7 +76,7 @@ self.addEventListener("push", (event) => {
   } catch (error) {
     message = { body: event.data ? event.data.text() : "" };
   }
-  event.waitUntil(self.registration.showNotification(message.title || "EUI Score", {
+  event.waitUntil(self.registration.showNotification(message.title || "Score", {
     body: message.body || "",
     tag: message.tag,
     icon: "/images/app/icon-192.png",
@@ -142,7 +142,7 @@ async function fromNetworkFirst(request, name) {
 }
 
 const OFFLINE = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Offline · EUI Score</title><body style="font:16px/1.6 system-ui,sans-serif;background:#fbf9f4;color:#1d1914;max-width:520px;margin:15vh auto;padding:0 20px">
+<title>Offline · Score</title><body style="font:16px/1.6 system-ui,sans-serif;background:#fbf9f4;color:#1d1914;max-width:520px;margin:15vh auto;padding:0 20px">
 <h1 style="font-family:Georgia,serif">You are offline</h1><p>This page was not opened on this device before, so it is not kept here.
 The scores you opened before are: go back, or try again once the network is back.</p>
 <p><a href="/app" style="color:#8b2b2c">Your scores</a></p></body></html>`;

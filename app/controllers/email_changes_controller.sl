@@ -54,7 +54,7 @@ class EmailChangesController < Controller
     @new_email = address ?? user&.email_change_to ?? user&.email
     @stays_signed_in ||= false
     @title = state == "changed" ? "Address changed" : "Change of email address"
-    @description = "Confirm the new address of an EUI Score account."
+    @description = "Confirm the new address of an Score account."
     render("email_changes/show", {}, {"status": statuses[state]})
   end
 end

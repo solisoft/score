@@ -4,7 +4,7 @@ class HomeController < Controller
   # then the engraver for developers and the plans
   def index
     @title = "Write, play and share scores, together"
-    @description = "EUI Score is a score editor in the browser: write with the mouse or the keyboard, play it, "
+    @description = "Score is a score editor in the browser: write with the mouse or the keyboard, play it, "
     + "edit it together live, practise with the microphone, and share it. Free to start."
     @app_open = AppSetup.ready?
     @features = HomeFeatures.all.map do |feature|

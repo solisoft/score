@@ -9,7 +9,7 @@ const SCORE_READER_EDGE = 2576
 const SCORE_READER_BYTES = 7000000
 
 const SCORE_READER_PROMPT = """
-Transcribe the music in this picture into LilyPond, for the EUI Score engraver.
+Transcribe the music in this picture into LilyPond, for the eui-score engraver.
 
 Write the notes, rests, durations, ties, slurs, dynamics, articulations, clefs,
 key and time signatures, tempo, lyrics and chord symbols you can read. Keep

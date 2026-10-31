@@ -111,7 +111,7 @@ class WebPush
     body = notification.sentence
     body = body + ": " + notification.excerpt unless notification.excerpt.blank?
     {
-      "title": "EUI Score",
+      "title": "Score",
       "body": body,
       "url": "/app/notifications/#{notification._key}/open",
       "tag": "notification-#{notification._key}"
@@ -121,7 +121,7 @@ class WebPush
   # A test message to each of `user`'s devices: the counts.
   static def test(user, transport = nil)
     payload = {
-      "title": "EUI Score",
+      "title": "Score",
       "body": "Push notifications work on this device.",
       "url": "/app/account#push",
       "tag": "test"
