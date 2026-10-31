@@ -37,6 +37,30 @@ describe("SharedSection.add_house") do
     assert_null(SharedSection.where({"seed": "spec:broken"}).first)
   end
 
+  test("refresh_house plays a changed section again, keeping its ratings; an unchanged or refused one is left") do
+    seeds = house_seeds()
+    SharedSection.add_house([seeds[0], seeds[1]])
+    first = SharedSection.where({"seed": seeds[0]["seed"]}).first
+    first.source = "{ c'1 }"
+    first.rating_count = 3
+    first.update()
+    refused = seeds[1].merge({"source": "{ c'1 | d'1 }", "instrument": "kazoo"})
+    assert_eq(SharedSection.refresh_house([
+      seeds[0],
+      refused,
+      {"seed": "nowhere", "source": "x"}
+    ]), 1)
+    again = SharedSection.find(first._key)
+    assert_eq(again.source, seeds[0]["source"])
+    assert_eq(again.rating_count, 3, "its ratings kept")
+    assert_eq(
+      SharedSection.where({"seed": seeds[1]["seed"]}).first.source,
+      seeds[1]["source"],
+      "a refused one as it was"
+    )
+    assert_eq(SharedSection.refresh_house([seeds[0]]), 0, "nothing changed: nothing written")
+  end
+
   test("remove_house takes them away, and nobody else's") do
     SharedSection.add_house([house_seeds()[0]])
     mine = SharedSection.create({

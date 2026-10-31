@@ -55,7 +55,7 @@ export const STYLES = [
   {
     id: "pop-ballad", name: "Pop ballad", group: "Pop and rock", time: "4/4", bpm: 72,
     guitar: "D-------D---U---", piano: { lh: "L---------------", rh: "1-2-3-2-1-2-3-2-" },
-    bass: "R-------F-------", groove: "power-ballad",
+    bass: "R-------R-----F-", groove: "power-ballad",
   },
   {
     id: "arpeggio-ballad", name: "Arpeggio ballad", group: "Pop and rock", time: "4/4", bpm: 66, sounds: { guitar: "acoustic guitar (nylon)" },
@@ -65,12 +65,12 @@ export const STYLES = [
   {
     id: "folk", name: "Folk", group: "Pop and rock", time: "4/4", bpm: 100,
     guitar: "B---D-U-A---D-U-", piano: { lh: "R-------F-------", rh: "----C-C-----C-C-" },
-    bass: "R-------F-------", groove: "rock",
+    bass: "R---F---R---F---", groove: "rock",
   },
   {
     id: "country", name: "Country", group: "Pop and rock", time: "4/4", bpm: 112,
     guitar: "B---b---A---b---", piano: { lh: "R-------F-------", rh: "----C-------C---" },
-    bass: "R-------F-------", groove: "train",
+    bass: "R-------F-----A-", groove: "train",
   },
   {
     id: "bossa", name: "Bossa nova", group: "Latin", time: "4/4", bpm: 130, sounds: { guitar: "acoustic guitar (nylon)", bass: "acoustic bass" },
@@ -95,7 +95,7 @@ export const STYLES = [
   {
     id: "jazz-ballad", name: "Jazz ballad", group: "Jazz", time: "4/4", bpm: 64, swing: 60, piano: "shell", sounds: { guitar: "electric guitar (jazz)", bass: "acoustic bass" },
     guitar: "D---------------", piano: { lh: "L---------------", rh: "C-------C-------" },
-    bass: "R-------F-------", groove: "brushes",
+    bass: "R-------F---A---", groove: "brushes",
   },
   {
     id: "shuffle", name: "Shuffle blues", group: "Jazz", time: "4/4", bpm: 100, swing: 67, sounds: { guitar: "electric guitar (clean)" },

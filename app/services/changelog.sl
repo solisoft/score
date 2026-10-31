@@ -12,6 +12,14 @@ class Changelog
     [
       {"date": "2026-10-31", "entries": [
         {
+          "area": "editor",
+          "title": "A bass line of its own for each style",
+          "text": "The pop ballad, folk, country and jazz ballad accompaniments played the same bass. Each has its "
+          + "own now: an alternating root and fifth for folk, a boom on one and three walking up to the next chord "
+          + "for country, a pickup into the next bar for the ballad, a walk into the next chord for jazz. Their "
+          + "sections in the library are played again, their ratings and comments kept."
+        },
+        {
           "area": "site",
           "title": "Play a section from the library's list",
           "text": "Each card of the library of sections, at /sections, now has its Play button: hear the bars "

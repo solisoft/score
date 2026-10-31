@@ -215,6 +215,34 @@ class SharedSection < Model
     added
   end
 
+  # The library's own sections played again from `seeds` (#450), when a
+  # catalogue changed them: their bars, source and words replaced, their
+  # ratings and comments kept. One the rules refuse is left as it was.
+  # Answers the number changed.
+  static def refresh_house(seeds)
+    changed = 0
+    seeds.each do |fields|
+      section = SharedSection.where({
+        "user_id": SECTION_HOUSE_AUTHOR,
+        "seed": fields["seed"]
+      }).first
+      next if section.nil? || section.source == fields["source"].to_s
+      next unless SharedSection.problem(fields).nil?
+
+      section.description = fields["description"].to_s.trim
+      section.time = fields["time"].to_s
+      section.key = fields["key"].to_s
+      section.bpm = fields["bpm"].to_s.to_i
+      section.bars = fields["bars"].to_s.to_i
+      section.tracks = fields["tracks"].to_s.to_i
+      section.section = fields["section"]
+      section.source = fields["source"].to_s
+      section.update()
+      changed += 1
+    end
+    changed
+  end
+
   # The library's own sections taken away, with what was said of them.
   static def remove_house
     SharedSection.where({"user_id": SECTION_HOUSE_AUTHOR}).all.each do |section|

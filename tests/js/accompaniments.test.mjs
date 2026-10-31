@@ -120,3 +120,14 @@ test("the drums play the style's groove, with its break at the end of the four b
   assert.deepEqual(strokes(plain, 3), strokes(plain, 0));
   for (const style of A.STYLES) assert.equal(D.grooveOf(style.groove)?.time, style.time, `${style.id}: a groove in its metre`);
 });
+
+test("no two styles in the same metre share a part's pattern: each sounds like itself", () => {
+  for (const part of ["guitar", "piano", "bass"]) {
+    const seen = new Map();
+    for (const style of A.STYLES) {
+      const key = `${style.time} ${JSON.stringify(style[part])}`;
+      assert.ok(!seen.has(key), `${style.id}'s ${part} is ${seen.get(key)}'s`);
+      seen.set(key, style.id);
+    }
+  }
+});
