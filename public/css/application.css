@@ -4201,6 +4201,18 @@
   .studio-grid-groove select {
     max-width: 240px;
   }
+  .oauth-can {
+    margin: 0;
+    padding-left: 20px;
+    display: grid;
+    gap: 4px;
+  }
+  .oauth-decide {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 8px;
+  }
   .token-secret {
     max-width: 100%;
     white-space: pre-wrap;

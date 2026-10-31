@@ -12,6 +12,24 @@ class Changelog
     [
       {"date": "2026-10-31", "entries": [
         {
+          "area": "editor",
+          "title": "A photo's reading no longer waits for ever",
+          "text": "Reading a photo with a model that reasons before it writes (Kimi, DeepSeek, Claude…), the page now "
+          + "shows how far its reasoning has gone, not a still \"reading\". A reading stops after 10 minutes and "
+          + "says so, suggesting a quicker model; and one that was interrupted is said so within a few minutes, "
+          + "where the page used to wait.",
+          "app": true
+        },
+        {
+          "area": "site",
+          "title": "Connect Claude Code to Score by signing in",
+          "text": "Adding Score to Claude Code, or to another MCP client, no longer needs a token pasted: "
+          + "claude mcp add --transport http score https://score.solisoft.net/mcp, and the client opens Score in "
+          + "the browser, where you sign in and allow it. Each connection is listed in Account › Access tokens, "
+          + "to disconnect it there.",
+          "app": true
+        },
+        {
           "area": "site",
           "title": "Score is an MCP server: write scores from Claude Code, transcribe photos",
           "text": "Claude Code, or any other MCP client, can now work on your scores: list and read them, write "

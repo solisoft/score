@@ -61,15 +61,17 @@ class McpController < Controller
   def _unauthorized
     {
       "status": 401,
-      "headers": {"Content-Type": "application/json", "WWW-Authenticate": "Bearer realm=\"score\""},
+      "headers": {"Content-Type": "application/json", "WWW-Authenticate": OauthServer.challenge},
       "body": ScoreMcp.error(
         nil,
         -32001,
-        "Send a personal access token as \"Authorization: Bearer …\": make one in Account › Access tokens."
+        "Sign in to Score from your MCP client, or send a personal access token "
+        + "as \"Authorization: Bearer …\" (Account › Access tokens)."
       ).to_json
     }
   end
 
+  # Where to sign in from (#461): the metadata OauthServer serves.
   def _reply(body, status)
     {
       "status": status,

@@ -9,6 +9,12 @@ const ACCESS_TOKEN_NAME_LENGTH = 60
 # How often its "last used" is written: a client calling every second does
 # not write every second.
 const ACCESS_TOKEN_TOUCH_SECONDS = 300
+# A connection made by signing in from an MCP client (#461, OauthServer):
+# its access token lasts an hour, its refresh token a month, both renewed
+# at each refresh.
+const OAUTH_ACCESS_SECONDS = 3600
+const OAUTH_REFRESH_SECONDS = 2592000
+const OAUTH_REFRESH_PREFIX = "score_rt_"
 
 class AccessToken < Model
   validates("user_id", {"presence": true})
@@ -42,6 +48,73 @@ class AccessToken < Model
     {"token": secret, "record": record}
   end
 
+  # A connection of `user` to `client` (an OauthClient) by OAuth: {"token",
+  # "refresh_token", "record"} — a row of its own, named after the client,
+  # listed and revoked with the others.
+  static def issue_oauth(user, client)
+    now = DateTime.utc.to_unix
+    secret = ACCESS_TOKEN_PREFIX + Crypto.random_token(32)
+    refresh = OAUTH_REFRESH_PREFIX + Crypto.random_token(32)
+    record = AccessToken.create({
+      "user_id": user._key,
+      "name": client.client_name,
+      "kind": "oauth",
+      "oauth_client_id": client.client_id,
+      "digest": Crypto.sha256(secret),
+      "hint": secret.substring(0, ACCESS_TOKEN_PREFIX.length + 4),
+      "expires_at": now + OAUTH_ACCESS_SECONDS,
+      "refresh_digest": Crypto.sha256(refresh),
+      "refresh_expires_at": now + OAUTH_REFRESH_SECONDS,
+      "created_at": now,
+      "last_used_at": nil
+    })
+    {
+      "token": secret,
+      "refresh_token": refresh,
+      "record": record
+    }
+  end
+
+  # A new pair for refresh token `raw`, sent by client `client_id`, on the
+  # same row (the old ones stop working): {"token", "refresh_token",
+  # "record"}, or nil — unknown, expired, used already or another client's.
+  static def refresh_oauth(raw, client_id)
+    text = raw.to_s
+    return nil unless text.starts_with?(OAUTH_REFRESH_PREFIX)
+
+    record = AccessToken.where({"refresh_digest": Crypto.sha256(text)}).first
+    return nil if record.nil? || record.oauth_client_id.to_s != client_id.to_s
+
+    now = DateTime.utc.to_unix
+    return nil if now > record.refresh_expires_at.to_s.to_i
+
+    secret = ACCESS_TOKEN_PREFIX + Crypto.random_token(32)
+    refresh = OAUTH_REFRESH_PREFIX + Crypto.random_token(32)
+    record.digest = Crypto.sha256(secret)
+    record.hint = secret.substring(0, ACCESS_TOKEN_PREFIX.length + 4)
+    record.expires_at = now + OAUTH_ACCESS_SECONDS
+    record.refresh_digest = Crypto.sha256(refresh)
+    record.refresh_expires_at = now + OAUTH_REFRESH_SECONDS
+    record.update()
+    {
+      "token": secret,
+      "refresh_token": refresh,
+      "record": record
+    }
+  end
+
+  # The connection token `raw` (an access or a refresh token) belongs to,
+  # if it is client `client_id`'s: taken away (RFC 7009). Nothing said either way.
+  static def revoke_oauth(raw, client_id)
+    text = raw.to_s
+    field = text.starts_with?(OAUTH_REFRESH_PREFIX) ? "refresh_digest" : "digest"
+    lookup = {}
+    lookup[field] = Crypto.sha256(text)
+    record = AccessToken.where(lookup).first
+    record.delete if !record.nil? && record.kind == "oauth" && record.oauth_client_id.to_s == client_id.to_s
+    nil
+  end
+
   # The account `secret` (a token as sent) acts as, or nil: unknown, revoked
   # or not a token at all. Its use is noted, at most every few minutes.
   static def user_for(secret)
@@ -52,6 +125,8 @@ class AccessToken < Model
 
     record = AccessToken.where({"digest": Crypto.sha256(text)}).first
     return nil if record.nil?
+    # A connection's access token past its hour: the client refreshes it.
+    return nil if !record.expires_at.nil? && DateTime.utc.to_unix > record.expires_at.to_s.to_i
 
     user = User.find_by("_key", record.user_id)
     return nil if user.nil?

@@ -73,6 +73,15 @@
 # (HMAC-SHA256, Billing.receive) instead.
 skip_csrf("/webhooks/stripe")
 
+# The MCP server (#460) and the OAuth endpoints MCP clients call from their
+# own process (#461): bearer tokens, a client id and its PKCE verifier, no
+# cookie and no browser Origin. The consent page (/app/oauth/consent) keeps
+# its CSRF token.
+skip_csrf("/mcp")
+skip_csrf("/oauth/register")
+skip_csrf("/oauth/token")
+skip_csrf("/oauth/revoke")
+
 # ---------------------------------------------------------------------
 # set_max_body_size — request body cap.
 # ---------------------------------------------------------------------

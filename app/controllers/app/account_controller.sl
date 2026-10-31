@@ -8,6 +8,8 @@ class AppAccountController < AppBaseController
     @description = "Your Score account."
     @error = ""
     @tokens = AccessToken.of(@user)
+    base = auth_base_url()
+    @mcp_url = base + "/mcp"
   end
 
   # POST /app/account/tokens — a personal access token named `name`, for the

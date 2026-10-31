@@ -390,6 +390,7 @@ class ScoreMcp
       return ScoreMcp.refused("No reading of this account has the id #{args["reading_id"]}.")
     end
 
+    reading.expire_if_silent
     if reading.state == "reading"
       news = reading.news
       return ScoreMcp.done(

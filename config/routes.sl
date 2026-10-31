@@ -64,6 +64,14 @@ middleware("require_app_database", fn() {
   # The MCP server (#460): Claude Code and other MCP clients, by a personal access token.
   post("/mcp", "mcp#handle", name: "mcp")
   get("/mcp", "mcp#stream")
+  # OAuth 2.1 for MCP clients (#461, OauthServer): discovery, registration, codes, tokens.
+  get("/.well-known/oauth-protected-resource", "oauth_server#protected_resource")
+  get("/.well-known/oauth-protected-resource/mcp", "oauth_server#protected_resource")
+  get("/.well-known/oauth-authorization-server", "oauth_server#authorization_server")
+  post("/oauth/register", "oauth_server#register")
+  get("/oauth/authorize", "oauth_server#authorize", name: "oauth_authorize")
+  post("/oauth/token", "oauth_server#token")
+  post("/oauth/revoke", "oauth_server#revoke")
   # The shared library of sections (#444): open to everyone to read.
   get("/sections", "sections#index", name: "sections")
   get("/sections/search.json", "sections#search", name: "sections_search")
@@ -99,6 +107,9 @@ middleware("require_app_database", fn() {
     post("/app/account/two-step/stop", "app/account#stop_two_step", name: "app_account_two_step_stop")
     post("/app/account/ai", "app/account#ai_key", name: "app_account_ai")
     post("/app/account/ai/remove", "app/account#forget_ai_key", name: "app_account_ai_remove")
+    # The consent page of an MCP client asking to connect (#461).
+    get("/app/oauth/consent", "app/oauth#consent", name: "app_oauth_consent")
+    post("/app/oauth/consent", "app/oauth#decide")
     post("/app/account/tokens", "app/account#create_token", name: "app_account_tokens")
     post("/app/account/tokens/:id/revoke", "app/account#revoke_token", name: "app_account_token_revoke")
     post("/app/account/notifications", "app/account#notifications", name: "app_account_notifications")

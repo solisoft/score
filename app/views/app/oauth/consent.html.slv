@@ -1,0 +1,17 @@
+<%# The consent page of an MCP client asking to connect (#461). %>
+<section class="auth" data-oauth-consent>
+  <h1>Connect <%= client_name %>?</h1>
+  <p><strong><%= client_name %></strong> asks to reach your scores on Score, as <strong><%= email %></strong>.</p>
+  <ul class="oauth-can">
+    <li>List and read your scores</li>
+    <li>Create scores and change them (each change kept in the score's history)</li>
+    <li>Transcribe photos of scores with your AI key</li>
+  </ul>
+  <p class="muted">It will go back to <code><%= redirect_host %></code>. You can disconnect it any time in
+    Account › Access tokens.</p>
+  <form action="<%= app_oauth_consent_path() %>" method="POST" class="oauth-decide">
+    <%- csrf_field() %>
+    <button type="submit" name="decision" value="allow" class="btn btn-primary" data-oauth-allow>Allow</button>
+    <button type="submit" name="decision" value="deny" class="btn btn-ghost" data-oauth-deny>Deny</button>
+  </form>
+</section>

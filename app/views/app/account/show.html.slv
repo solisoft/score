@@ -265,8 +265,9 @@
   <%# Personal access tokens, for the MCP server (#460). %>
   <h2 id="tokens">Access tokens for Claude Code and MCP</h2>
   <p class="muted">Score is an MCP server: Claude Code, or any other MCP client, can list, read, create and change
-    your scores, and transcribe photos of scores, with a token of yours. A token acts as your account: keep it
-    secret, and revoke it when you no longer use it.</p>
+    your scores, and transcribe photos of scores. Add it with <code>claude mcp add --transport http score <%= locals["mcp_url"] ?? "https://score.solisoft.net/mcp" %></code>:
+    it asks you to sign in here and to allow it. Or make a token below for a client that takes one. Whatever is
+    connected acts as your account: revoke it when you no longer use it.</p>
   <% if locals["new_token"].present? %>
     <div class="callout" data-new-token>
       <p><strong>Your new token</strong> — copy it now: it is not shown again.</p>
@@ -286,7 +287,12 @@
     <ul class="token-list" data-tokens>
       <% for token in locals["tokens"] %>
         <li data-token="<%= token._key %>">
-          <span><strong><%= token.name %></strong> <code><%= token.hint %>…</code>
+          <span><strong><%= token.name %></strong>
+            <% if token.kind == "oauth" %>
+              <span class="muted">connected by signing in,</span>
+            <% else %>
+              <code><%= token.hint %>…</code>
+            <% end %>
             <span class="muted">made <%= time_ago(token.created_at) %>,
               <%= token.last_used_at.nil? ? "never used" : "last used " + time_ago(token.last_used_at) %></span></span>
           <form action="<%= app_account_token_revoke_path(token._key) %>" method="POST">

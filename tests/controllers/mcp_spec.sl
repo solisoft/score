@@ -360,6 +360,28 @@ describe("The MCP server") do
         mcp_call(token, "get_transcription", {"reading_id": failed._key})["content"][0]["text"],
         "unreadable"
       )
+      # A reading with no news for minutes: its job is gone, said at once (#463).
+      silent = ScoreReading.create({
+        "user_id": user._key,
+        "state": "reading",
+        "created_at": DateTime.utc.to_unix - 900,
+        "progressed_at": DateTime.utc.to_unix - 300
+      })
+      gone = mcp_call(token, "get_transcription", {"reading_id": silent._key})
+      assert_eq(gone["isError"], true)
+      assert_contains(gone["content"][0]["text"], "interrupted")
+      assert_eq(ScoreReading.find(silent._key).state, "failed")
+      alive = ScoreReading.create({
+        "user_id": user._key,
+        "state": "reading",
+        "created_at": DateTime.utc.to_unix - 900,
+        "progressed_at": DateTime.utc.to_unix - 5
+      })
+      assert_eq(
+        mcp_call(token, "get_transcription", {"reading_id": alive._key})["structuredContent"]["state"],
+        "reading",
+        "long, but still going"
+      )
       theirs = ScoreReading.create({
         "user_id": mcp_user()._key,
         "state": "done",
