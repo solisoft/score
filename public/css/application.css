@@ -4362,6 +4362,11 @@
   .studio-sheet {
     flex: 0 0 auto;
   }
+  @media (pointer: coarse) {
+    .studio-sheet {
+      touch-action: pan-x pan-y;
+    }
+  }
   .studio-sheet:focus-visible {
     box-shadow: var(--shadow), 0 0 0 2px rgba(139, 43, 44, .3);
   }

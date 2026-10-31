@@ -13,6 +13,13 @@ class Changelog
       {"date": "2026-10-31", "entries": [
         {
           "area": "editor",
+          "title": "On a phone, a finger scrolls the score",
+          "text": "In the editor on a touch screen, swiping over the score scrolls it, up and down and sideways, "
+          + "where it did nothing. A tap still selects a note or a bar, and the note's palette moves it; a swipe "
+          + "never selects anything. With a mouse, nothing changes."
+        },
+        {
+          "area": "editor",
           "title": "The swing swings",
           "text": "The swing, jazz ballad and shuffle accompaniments, and the swing, brushes and jazz waltz grooves, "
           + "now swing at a triplet feel, the off-beat eighth late, where they were nearly straight; the brushes "

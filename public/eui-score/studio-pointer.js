@@ -298,5 +298,10 @@ export function install(ctx) {
     }
   };
   sheet.addEventListener("pointerup", endDrag);
-  sheet.addEventListener("pointercancel", endDrag);
+  // The browser took the gesture over (a finger scrolling the score, #454): what
+  // was begun is left, never ended as a click would be — no bar selected by a scroll.
+  sheet.addEventListener("pointercancel", () => {
+    if (st.barDrag && !st.barDrag.moved) st.barDrag = null;
+    endDrag();
+  });
 }

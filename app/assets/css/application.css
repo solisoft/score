@@ -791,6 +791,11 @@
   }
   /* As tall as the score: the source comes up under a short one (#419). */
   .studio-sheet { flex: 0 0 auto; }
+  /* On a touch screen, a finger scrolls the score (#454): a tap still selects, a note's
+     palette moves it. With a mouse, a drag on the score is the editor's own. */
+  @media (pointer: coarse) {
+    .studio-sheet { touch-action: pan-x pan-y; }
+  }
   .studio-sheet:focus-visible { box-shadow: var(--shadow), 0 0 0 2px rgba(139, 43, 44, .3); }
   .studio-input .studio-sheet { box-shadow: var(--shadow), 0 0 0 2px rgba(37, 99, 201, .35); }
   /* The mode, where the eyes are: a band along the sheet's top, blue while
