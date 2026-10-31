@@ -304,6 +304,24 @@ describe("The playground, in a browser") do
     assert_no_page_errors()
   end
 
+  test("the dot goes round on a note: one, two, none (#469)") do
+    type_source("{ \\time 2/4 a''4 g''4 | c''2 }")
+    assert_not(evaluate("document.querySelector('#studio').classList.contains('studio-text-only')"))
+    caret_on("a''4")
+    evaluate("document.querySelector(\".studio-toolbox [data-act='dot']\").click()")
+    sleep(0.4)
+    assert_contains(playground_text(), "a''4. g''8")
+    caret_on("a''4.")
+    evaluate("document.querySelector(\".studio-toolbox [data-act='dot']\").click()")
+    sleep(0.4)
+    assert_contains(playground_text(), "a''4.. g''16")
+    caret_on("a''4..")
+    evaluate("document.querySelector(\".studio-toolbox [data-act='dot']\").click()")
+    sleep(0.4)
+    assert_not(playground_text().includes?("a''4."))
+    assert_no_page_errors()
+  end
+
   test("notes drawn on the other staff and words under the alto are edited on the score (#375)") do
     type_source("\\new PianoStaff << \\new Staff = \"up\" { c''4 d'' e'' f'' | g''1 }"
     + " \\new Staff = \"down\" { \\clef bass c1 | c1 } >>")

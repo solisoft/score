@@ -155,7 +155,12 @@ export function install(ctx) {
       notice.textContent = `This piece uses ${st.unsupported.join(", ")}: the score editor does not edit those yet. It is engraved, and its text below can be edited.`;
     } else if (st.score && st.lostNotice) notice.textContent = st.lostNotice;
     for (const button of root.querySelectorAll('[data-act="duration"]')) button.classList.toggle("on", Number(button.dataset.base) === st.input.base);
-    root.querySelector('.studio-toolbox [data-act="dot"]')?.classList.toggle("on", st.input.dots > 0);
+    const dot = root.querySelector('.studio-toolbox [data-act="dot"]');
+    if (dot) {
+      dot.classList.toggle("on", st.input.dots > 0);
+      // Two dots drawn on the button when the value has two (#469).
+      dot.textContent = st.input.dots >= 2 ? "••" : "•";
+    }
     // The toolbox's toggles show their state; the menus' items of the same name do not.
     for (const [act, on] of [["mode-input", st.input.on], ["mode-select", !st.input.on]]) {
       const button = root.querySelector(`.studio-toolbox [data-act="${act}"]`);
@@ -182,7 +187,7 @@ export function install(ctx) {
     for (const tool of root.querySelectorAll(".studio-toolbox .tool, .studio-toolbox input, .studio-toolbox select")) tool.disabled = !st.score;
     fillFields();
     // What is selected, in words.
-    const value = `${({ 1: "whole", 2: "half", 4: "quarter", 8: "eighth", 16: "16th", 32: "32nd" })[st.input.base]}${st.input.dots ? ", dotted" : ""}`;
+    const value = `${({ 1: "whole", 2: "half", 4: "quarter", 8: "eighth", 16: "16th", 32: "32nd" })[st.input.base]}${st.input.dots ? `,${M.dotsWord(st.input.dots)}` : ""}`;
     if (st.playing) showProgress();
     else if (st.input.on) state.textContent = `Note input${M.partOfLane(st.score, st.input.staff) ? ` · part ${"I".repeat(M.partOfLane(st.score, st.input.staff))}` : M.isLower(st.score, st.input.staff) ? ` · voice ${M.voiceOf(st.score, st.input.staff)}` : ""} · ${value} · A–G or a click write, 0 or R rest, Esc to stop`;
     else {
@@ -191,7 +196,7 @@ export function install(ctx) {
       else if (r.a !== r.b) state.textContent = `${r.b - r.a + 1} selected`;
       else {
         const ev = r.staff.events[r.a];
-        const len = ({ 1: "whole", 2: "half", 4: "quarter", 8: "eighth", 16: "16th", 32: "32nd" })[ev.base] + (ev.dots ? " dotted" : "") + (ev.tuplet ? ` (${ev.tuplet.n}-tuplet)` : "");
+        const len = ({ 1: "whole", 2: "half", 4: "quarter", 8: "eighth", 16: "16th", 32: "32nd" })[ev.base] + M.dotsWord(ev.dots) + (ev.tuplet ? ` (${ev.tuplet.n}-tuplet)` : "");
         // On a \\partCombine staff, the part: Part I, Part II.
         const part = M.partOfLane(st.score, r.s);
         const voice = part ? `Part ${"I".repeat(part)} · ` : M.isLower(st.score, r.s) ? `Voice ${M.voiceOf(st.score, r.s)} · ` : "";

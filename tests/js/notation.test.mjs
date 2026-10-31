@@ -260,3 +260,17 @@ test("a slur over or under the notes (#467): read, kept, set, turned, taken away
   M.remove(rested, 0, 0);
   assert.equal(rested.staves[0].events[0].slurDir, undefined);
 });
+
+test("the dot goes round: none, one, two, none (#469)", () => {
+  assert.deepEqual([0, 1, 2].map(M.nextDots), [1, 2, 0]);
+  assert.equal(M.nextDots(undefined), 1);
+  assert.deepEqual([0, 1, 2].map(M.dotsWord), ["", " dotted", " double-dotted"]);
+  const { score } = read("{ \\time 2/4 a''4 g''4 | c''2 }");
+  M.setDuration(score, 0, 0, 4, M.nextDots(0));
+  assert.match(engrave(score), /a''4\. g''8 \|/);
+  M.setDuration(score, 0, 0, 4, M.nextDots(score.staves[0].events[0].dots));
+  assert.match(engrave(score), /a''4\.\. g''16 \|/, "two dots, the next note shortened to fit");
+  assert.equal(M.notated(4, 2), M.notated(4) + M.notated(8) + M.notated(16));
+  M.setDuration(score, 0, 0, 4, M.nextDots(score.staves[0].events[0].dots));
+  assert.doesNotMatch(engrave(score), /a''4\./, "and back to none");
+});

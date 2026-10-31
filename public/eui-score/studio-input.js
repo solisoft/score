@@ -117,14 +117,15 @@ export function install(ctx) {
     });
   }
 
+  // The dot goes round: none, one, two (a double-dotted note, #469), none again.
   function toggleDot() {
     if (st.input.on || !range()) {
-      st.input.dots = st.input.dots ? 0 : 1;
+      st.input.dots = M.nextDots(st.input.dots);
       return draw();
     }
     const t = target();
     const ev = st.score.staves[t.s].events[t.i];
-    duration(ev.base, ev.dots ? 0 : 1);
+    duration(ev.base, M.nextDots(ev.dots));
   }
 
   function step(by, extend) {

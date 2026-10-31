@@ -13,6 +13,14 @@ class Changelog
       {"date": "2026-10-31", "entries": [
         {
           "area": "editor",
+          "title": "Double-dotted notes",
+          "text": "The dot (button • or the . key) now goes round: a dot, two dots, none. A quarter note with two "
+          + "dots lasts seven sixteenths, and the next note gives way as it does for one dot; the button shows •• "
+          + "while two are set, in note input as on a selected note.",
+          "app": true
+        },
+        {
+          "area": "editor",
           "title": "A slur over the notes or under them, as you choose",
           "text": "Next to Slur, Above and Below draw a slur on that side of the notes, or turn an existing one "
           + "over; pressed again, it goes back to where the stems leave room. It is written ^( or _( in the "

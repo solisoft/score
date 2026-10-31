@@ -340,7 +340,7 @@
             <button type="button" class="tool tool-glyph" data-act="duration" data-base="8" title="Eighth note (4)">𝅘𝅥𝅮</button>
             <button type="button" class="tool tool-glyph" data-act="duration" data-base="16" title="Sixteenth note (3)">𝅘𝅥𝅯</button>
             <button type="button" class="tool tool-glyph" data-act="duration" data-base="32" title="Thirty-second note (2)">𝅘𝅥𝅰</button>
-            <button type="button" class="tool" data-act="dot" title="Dotted (.)">•</button>
+            <button type="button" class="tool" data-act="dot" title="Dotted (.): again for two dots, once more for none">•</button>
           </div>
           <div class="tool-row tool-row-rare">
             <button type="button" class="tool" data-act="duration" data-base="64" title="Sixty-fourth note">64</button>

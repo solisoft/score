@@ -78,6 +78,16 @@ const VALUES = [1, 2, 4, 8, 16, 32, 64, 128].flatMap((base) => [2, 1, 0].map((do
 // ---- Durations ------------------------------------------------------------
 
 /** The ticks of a written value: `base` 1 (whole) … 128, with `dots`. */
+/** The dots after `dots` as the dot tool goes round: 0 → 1 → 2 → 0 (#469). */
+export function nextDots(dots) {
+  return ((dots ?? 0) + 1) % 3;
+}
+
+/** How a value's dots are said: "", " dotted", " double-dotted". */
+export function dotsWord(dots) {
+  return dots >= 2 ? " double-dotted" : dots === 1 ? " dotted" : "";
+}
+
 export function notated(base, dots = 0) {
   let ticks = WHOLE / base;
   let add = ticks;
