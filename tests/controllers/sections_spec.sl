@@ -205,7 +205,11 @@ describe("SectionsController and AppSectionsController") do
       body = res_body(get("/sections?q=playable"))
       assert_contains(body, "data-midi=\"/sections/#{section._key}/play.mid\"")
       assert_contains(body, "aria-label=\"Play Playable strum\"")
-      assert_contains(body, "data-section=\"/sections/#{section._key}/data.json\"", "its source fetched on Play, to hear how it asks to be played")
+      assert_contains(
+        body,
+        "data-section=\"/sections/#{section._key}/data.json\"",
+        "its source fetched on Play, to hear how it asks to be played"
+      )
       # The button comes after the card's link closes: no button inside a link.
       card = body.split("data-section-card=\"#{section._key}\"")[1].split("data-score-play")[0]
       assert_contains(card, "</a>")
