@@ -4201,6 +4201,34 @@
   .studio-grid-groove select {
     max-width: 240px;
   }
+  .token-secret {
+    max-width: 100%;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    background: var(--sheet);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 13px;
+    user-select: all;
+  }
+  .token-list {
+    list-style: none;
+    margin: 0 0 12px;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+  }
+  .token-list li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 8px 12px;
+  }
   .studio-accompaniment {
     width: min(520px, calc(100vw - 32px));
   }

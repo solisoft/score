@@ -901,6 +901,7 @@ class User < Model
     ScoreSuggestion.delete_all_of(this)
     UserNotification.delete_all_of(this)
     PushSubscription.delete_all_of(this)
+    AccessToken.delete_all_of(this)
     @delete
   end
 

@@ -12,6 +12,16 @@ class Changelog
     [
       {"date": "2026-10-31", "entries": [
         {
+          "area": "site",
+          "title": "Score is an MCP server: write scores from Claude Code, transcribe photos",
+          "text": "Claude Code, or any other MCP client, can now work on your scores: list and read them, write "
+          + "LilyPond and check it with the engraver, create a score or change one, and transcribe a photo or a "
+          + "scan of a score into a new one. Make a personal access token in Account › Access tokens: the page "
+          + "gives the claude mcp add command to paste. A token acts as your account; revoke it when you no "
+          + "longer use it.",
+          "app": true
+        },
+        {
           "area": "editor",
           "title": "Piano patterns, and a piano played by a pianist",
           "text": "Edit ▸ Accompaniment has a Piano plays menu: the style's part, or one of fifteen patterns that "

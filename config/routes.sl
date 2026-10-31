@@ -61,6 +61,9 @@ middleware("require_app_database", fn() {
   # The read page's way into the score's room, to listen (#392).
   get("/s/:token/room_ticket", "shared_scores#room_ticket")
 
+  # The MCP server (#460): Claude Code and other MCP clients, by a personal access token.
+  post("/mcp", "mcp#handle", name: "mcp")
+  get("/mcp", "mcp#stream")
   # The shared library of sections (#444): open to everyone to read.
   get("/sections", "sections#index", name: "sections")
   get("/sections/search.json", "sections#search", name: "sections_search")
@@ -96,6 +99,8 @@ middleware("require_app_database", fn() {
     post("/app/account/two-step/stop", "app/account#stop_two_step", name: "app_account_two_step_stop")
     post("/app/account/ai", "app/account#ai_key", name: "app_account_ai")
     post("/app/account/ai/remove", "app/account#forget_ai_key", name: "app_account_ai_remove")
+    post("/app/account/tokens", "app/account#create_token", name: "app_account_tokens")
+    post("/app/account/tokens/:id/revoke", "app/account#revoke_token", name: "app_account_token_revoke")
     post("/app/account/notifications", "app/account#notifications", name: "app_account_notifications")
     # Push notifications on a device (#400): AppPushController, JSON.
     post("/app/account/push", "app/account#push_prefs", name: "app_account_push")

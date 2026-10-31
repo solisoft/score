@@ -7,6 +7,38 @@ class AppAccountController < AppBaseController
     @title = "Account"
     @description = "Your Score account."
     @error = ""
+    @tokens = AccessToken.of(@user)
+  end
+
+  # POST /app/account/tokens — a personal access token named `name`, for the
+  # MCP server: shown once, on the page this answers (#460)
+  def create_token
+    @user = current_user()
+    made = AccessToken.issue(@user, params["name"])
+    @title = "Account"
+    @description = "Your Score account."
+    @error = ""
+    @tokens = AccessToken.of(@user)
+    unless made["error"].nil?
+      @token_error = made["error"]
+      return render("app/account/show", {}, {"status": 422})
+    end
+
+    # The secret, on this page only: never in the session, never again.
+    @new_token = made["token"]
+    base = auth_base_url()
+    @mcp_url = base + "/mcp"
+    render("app/account/show")
+  end
+
+  # POST /app/account/tokens/:id/revoke — the token stops working at once
+  def revoke_token
+    revoked = AccessToken.revoke(current_user(), params["id"])
+    halt(404, "No such token") unless revoked
+
+    flash("notice", "The token is revoked: whatever used it can no longer reach your scores.")
+    account = app_account_path()
+    redirect(account + "#tokens")
   end
 
   # POST /app/account/password — the current password, then the new one twice
