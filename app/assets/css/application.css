@@ -742,6 +742,8 @@
   .studio-section-what { display: grid; gap: 2px; min-width: 0; flex: 1 1 260px; }
   .studio-section-what a { font-weight: 600; color: var(--ink); }
   .studio-section-what small { font-size: 12.5px; }
+  /* Each section's first bars, engraved, from the toolbar's Sections (#452). */
+  .studio-section-preview { flex: 1 1 100%; width: 100%; height: 78px; object-fit: contain; object-position: left center; background: #fff; border-radius: 6px; }
   .studio-drum-grid { width: min(760px, calc(100vw - 32px)); }
   .studio-grid { display: grid; grid-template-columns: 92px repeat(var(--steps, 16), minmax(0, 1fr)); gap: 3px; align-items: center; overflow-x: auto; }
   .studio-grid-name { font-size: 12.5px; color: var(--ink-soft); white-space: nowrap; }

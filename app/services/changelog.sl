@@ -13,6 +13,14 @@ class Changelog
       {"date": "2026-10-31", "entries": [
         {
           "area": "editor",
+          "title": "Sections, a click away in the editor",
+          "text": "The editor's toolbar has a Sections button: the library opens over the score, each section with "
+          + "its first bars engraved, Listen and Add. Add puts it after the last bar, each instrument on its own "
+          + "staff, with no bar to select first; with a bar selected, it goes before that bar or over it. A piano "
+          + "comes with its brace and its name."
+        },
+        {
+          "area": "editor",
           "title": "Add a section of the library to your score",
           "text": "A section's page, in the library at /sections, now has Add it to your score: choose one of your "
           + "scores, or a new one that starts with it. Your score opens in the editor with the section after its "

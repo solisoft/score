@@ -99,7 +99,10 @@ export function install(ctx) {
       }
       // Edit ▸ Share the selected bars…, Library of sections…: section-library.js's dialogs (#444).
       case "share-section": case "section-library":
-        sections ??= sectionLibrary().then((T) => T.install({ root, st, P, options, toMidi: ctx.toMidi, say, selectedBarsOrNull, putSection: ctx.call.putSection }));
+        sections ??= sectionLibrary().then((T) => T.install({
+          root, st, P, options, toMidi: ctx.toMidi, say, selectedBarsOrNull, barNo, putSection: ctx.call.putSection,
+          barsEdit: ctx.call.barsEdit, parse: ctx.score_json,
+        }));
         return sections.then((tools) => tools.open(name));
       // Edit ▸ Drum grid…, Arpeggiate…, Chord track…, Accompaniment…: pattern-tools.js's dialogs.
       case "drum-grid": case "arpeggiate": case "chord-track": case "accompaniment":

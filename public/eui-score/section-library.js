@@ -60,6 +60,10 @@ export function shareable(score, lanes, a, b, title = "") {
     const drums = M.isDrums(score, u);
     return { name: staff.name ?? "", short: staff.short ?? "", instrument: staff.instrument ?? "", clef: drums ? "percussion" : M.clefAt(score, u, from), events: [], ...(drums ? { drums: true } : {}) };
   });
+  // A brace whose staves all go along goes too, with its name (a piano's, #452).
+  const kept = uppers.map((u) => M.staffNumber(score, u));
+  const braces = (score.groups ?? []).filter((g) => g.kind === "brace" && kept.includes(g.first) && kept.indexOf(g.last) - kept.indexOf(g.first) === g.last - g.first);
+  if (braces.length) mini.groups = braces.map((g) => ({ ...g, first: kept.indexOf(g.first), last: kept.indexOf(g.last) }));
   M.ensureLength(mini, M.barStart(mini, section.bars));
   M.pasteSection(mini, 0, 0, section);
   const kinds = [...new Set(uppers.map((u) => instrumentOfLane(score, u)))];
@@ -98,18 +102,9 @@ export function importSection(score, data, parse) {
   M.ensureLength(score, M.barStart(score, at + section.bars));
   const taken = new Set();
   const added = [];
-  const targets = M.staffLanes(mini).map((m) => {
-    const wanted = mini.staves[m];
-    const drums = M.isDrums(mini, m);
-    const found = M.staffLanes(score).find((s) => {
-      if (taken.has(s) || M.isDrums(score, s) !== drums) return false;
-      const staff = score.staves[s];
-      return drums || staff.instrument === wanted.instrument || (wanted.name && staff.name === wanted.name);
-    });
-    if (found != null) {
-      taken.add(found);
-      return found;
-    }
+  const miniLanes = M.staffLanes(mini);
+  const targets = new Array(miniLanes.length).fill(null);
+  const addStaffLike = (wanted, drums) => {
     M.addStaff(score, {
       name: wanted.name ?? "",
       short: wanted.short ?? "",
@@ -119,8 +114,41 @@ export function importSection(score, data, parse) {
     });
     const lane = M.staffLanes(score).at(-1);
     taken.add(lane);
-    added.push(wanted.name || M.INSTRUMENTS[wanted.instrument]?.name || "a staff");
     return lane;
+  };
+  // A named brace (a piano's two staves): onto the score's brace of that name, else added with its brace.
+  for (const group of (mini.groups ?? []).filter((g) => g.kind === "brace" && g.name)) {
+    const size = group.last - group.first + 1;
+    const lanes = M.staffLanes(score);
+    const same = (score.groups ?? []).find((g) => g.kind === "brace" && g.name === group.name && g.last - g.first + 1 === size
+      && lanes.slice(g.first, g.last + 1).every((s) => s != null && !taken.has(s)));
+    for (let k = 0; k < size; k++) {
+      const lane = same ? lanes[same.first + k] : addStaffLike(mini.staves[miniLanes[group.first + k]], false);
+      taken.add(lane);
+      targets[group.first + k] = lane;
+    }
+    if (!same) {
+      const first = M.staffNumber(score, targets[group.first]);
+      score.groups = [...(score.groups ?? []), { kind: "brace", first, last: first + size - 1, name: group.name, short: group.short ?? "" }];
+      added.push(group.name);
+    }
+  }
+  miniLanes.forEach((m, k) => {
+    if (targets[k] != null) return;
+    const wanted = mini.staves[m];
+    const drums = M.isDrums(mini, m);
+    const found = M.staffLanes(score).find((s) => {
+      if (taken.has(s) || M.isDrums(score, s) !== drums) return false;
+      const staff = score.staves[s];
+      return drums || staff.instrument === wanted.instrument || (wanted.name && staff.name === wanted.name);
+    });
+    if (found != null) {
+      taken.add(found);
+      targets[k] = found;
+      return;
+    }
+    targets[k] = addStaffLike(wanted, drums);
+    added.push(wanted.name || M.INSTRUMENTS[wanted.instrument]?.name || "a staff");
   });
   for (const part of section.parts) {
     const staff = targets[part.offset];
@@ -130,6 +158,27 @@ export function importSection(score, data, parse) {
     M.pasteSection(score, lane, at, { bars: section.bars, parts: [{ ...part, offset: 0 }] });
   }
   return { at, bars: section.bars, added };
+}
+
+/**
+ * `data` (a section, as data.json answers) added to the editor's score by
+ * importSection, as one undoable edit whose new bars the app's merge is
+ * told of (`barsEdit`), and said (`say`). `parse` is score_json. Answers
+ * whether it went in.
+ */
+export function addToScore({ barsEdit, say, parse }, data) {
+  let done = null;
+  const went = barsEdit((score) => {
+    const before = M.barsOf(score);
+    done = importSection(score, data, parse);
+    return { at: before, removed: 0, added: M.barsOf(score) - before };
+  });
+  if (!went) return false;
+  const n = done.bars;
+  const bars = `bar${n === 1 ? "" : "s"} ${done.at + 1}${n === 1 ? "" : `–${done.at + n}`}`;
+  const staves = done.added.length ? `, on ${done.added.length === 1 ? "a new staff" : "new staves"}: ${done.added.join(", ")}` : "";
+  say(`“${data.title}” added as ${bars}${staves}. Undo takes it back.`);
+  return true;
 }
 
 // ---- The dialogs -------------------------------------------------------------------
@@ -163,7 +212,7 @@ function menu(name, choices, first = null) {
 
 /** The dialogs, made once; `open("share-section")` or `open("section-library")`. */
 export function install(studio) {
-  const { root, st, toMidi, P, say, options } = studio;
+  const { root, st, toMidi, P, say, options, selectedBarsOrNull } = studio;
 
   // ---- Share the selected bars --------------------------------------------------------
 
@@ -255,8 +304,9 @@ export function install(studio) {
   const list = el("ul", { className: "studio-section-list" });
   list.dataset.sectionList = "";
   const note = el("p", { className: "muted studio-pattern-note" });
+  const how = el("p", { className: "muted studio-pattern-note" });
   library.append(
-    el("p", { className: "muted studio-pattern-note" }, "Bars others shared. ", el("b", { textContent: "Insert" }), " puts them before the selected bar, ", el("b", { textContent: "Write over" }), " over it."),
+    how,
     search,
     note,
     list,
@@ -301,10 +351,16 @@ export function install(studio) {
     }
   }
 
-  async function put(row, over) {
+  // The bar chosen when the library opened, if any: where Insert and Write over go.
+  let placeBar = null;
+
+  async function put(row, how) {
     try {
       const data = await full(row);
-      if (studio.putSection(data.section, over)) library.close();
+      const went = how === "end"
+        ? addToScore({ barsEdit: studio.barsEdit, say, parse: studio.parse }, data)
+        : studio.putSection(data.section, how === "over");
+      if (went) library.close();
     } catch (error) {
       say(error.message ?? String(error), true);
     }
@@ -314,17 +370,28 @@ export function install(studio) {
     list.replaceChildren(...rows.map((row) => {
       const play = el("button", { type: "button", className: "tool", textContent: "▶ Listen" });
       play.addEventListener("click", () => listen(row, play));
-      const insert = el("button", { type: "button", className: "tool tool-primary", textContent: "Insert" });
-      insert.addEventListener("click", () => put(row, false));
-      const over = el("button", { type: "button", className: "tool", textContent: "Write over" });
-      over.addEventListener("click", () => put(row, true));
+      const add = el("button", { type: "button", className: "tool tool-primary", textContent: "Add", title: "After the last bar, each instrument on its own staff" });
+      add.dataset.sectionAdd = "";
+      add.addEventListener("click", () => put(row, "end"));
+      const buttons = [play, add];
+      // With a bar chosen: before it, or over it, as Edit ▸ Paste does.
+      if (placeBar != null) {
+        const insert = el("button", { type: "button", className: "tool", textContent: `Before bar ${placeBar}` });
+        insert.addEventListener("click", () => put(row, "insert"));
+        const over = el("button", { type: "button", className: "tool", textContent: `Over bar ${placeBar}` });
+        over.addEventListener("click", () => put(row, "over"));
+        buttons.push(insert, over);
+      }
+      // Its first bars engraved, as the library's page shows them; fetched when the row is in view.
+      const preview = el("img", { className: "studio-section-preview", src: `/sections/${encodeURIComponent(row.id)}/preview.svg`, alt: "", loading: "lazy", decoding: "async" });
       const item = el(
         "li",
         { className: "studio-section-item" },
+        preview,
         el("div", { className: "studio-section-what" },
           el("a", { href: row.url, target: "_blank", textContent: row.title }),
           el("small", { className: "muted", textContent: `${INSTRUMENTS[row.instrument] ?? "Other"} · ${STYLES[row.style] ?? "Other"} · ${row.bars} bar${row.bars === 1 ? "" : "s"} in ${row.time} · by ${row.author} · ${stars(row)}` })),
-        el("div", { className: "tool-row" }, play, insert, over),
+        el("div", { className: "tool-row" }, ...buttons),
       );
       item.dataset.section = row.id;
       return item;
@@ -354,6 +421,14 @@ export function install(studio) {
   library.addEventListener("close", () => P.stop());
 
   function openLibrary() {
+    if (!st.score) return say("Adding bars needs the score tools: this piece is edited in its text.", true);
+    const chosen = st.input.on ? M.barAt(st.score, st.input.t) : st.sel ? selectedBarsOrNull()?.[0] : null;
+    placeBar = chosen == null ? null : studio.barNo(chosen);
+    how.replaceChildren(
+      "Bars others shared: ", el("b", { textContent: "▶ Listen" }), " to hear them, ", el("b", { textContent: "Add" }),
+      " puts them after the last bar, each instrument on its own staff.",
+      ...(placeBar == null ? [" Select a bar first to put them before it or over it."] : [` Or before bar ${placeBar}, or over it.`]),
+    );
     library.showModal();
     query.focus();
     find();

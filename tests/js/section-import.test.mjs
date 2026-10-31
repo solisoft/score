@@ -65,3 +65,19 @@ test("a section in another metre changes the metre where it goes; what is refuse
   engraves(score);
   assert.throws(() => importSection(score, { section: { bars: 0, parts: [] }, source: "{ c'1 }" }, score_json), /holds no bars/);
 });
+
+test("a piano comes with its brace, named; added again, it goes on that brace's staves", () => {
+  const score = read(String.raw`\new Staff \with { instrumentName = "Voice" } { \time 4/4 c'1 }`);
+  const done = importSection(score, seed("style:pop:piano"), score_json);
+  assert.deepEqual(done.added, ["Piano"]);
+  const brace = score.groups.find((g) => g.kind === "brace" && g.name === "Piano");
+  assert.ok(brace, "the piano's brace");
+  assert.equal(brace.last - brace.first, 1);
+  assert.equal(M.staffLanes(score).length, 3);
+  const back = read(M.toLilyPond(score).source);
+  assert.ok(back.groups.some((g) => g.kind === "brace" && g.name === "Piano"), "kept in the text");
+  const again = importSection(score, seed("style:rock:piano"), score_json);
+  assert.deepEqual(again.added, []);
+  assert.equal(M.staffLanes(score).length, 3);
+  engraves(score);
+});

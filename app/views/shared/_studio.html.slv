@@ -197,6 +197,8 @@
       <div class="studio-menu-group">
         <button type="button" class="studio-menu" data-act="undo" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
         <button type="button" class="studio-menu" data-act="redo" title="Redo (Ctrl+Y)" aria-label="Redo">↷</button>
+        <%# The library of sections, a click away (#452): listen, then add. %>
+        <button type="button" class="studio-menu" data-act="section-library" data-sections-button title="Bars others shared: listen, then add them to the score">Sections</button>
         <% if locals["app"] %>
           <button type="button" class="studio-menu" data-act="midi-view" data-midi-button title="Switch between the score and the MIDI view" aria-pressed="false">MIDI</button>
         <% end %>

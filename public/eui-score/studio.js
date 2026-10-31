@@ -390,19 +390,8 @@ export function startStudio(root, options = {}) {
       const response = await fetch(url, { headers: { Accept: "application/json" } });
       if (!response.ok) return say("That section is no longer in the library.", true);
       const data = await response.json();
-      const { importSection } = await import(`./section-library.js${new URL(import.meta.url).search}`);
-      let done = null;
-      // The bars added after the last one told as such, for the app's merge with other editors.
-      const added = (score) => {
-        const before = M.barsOf(score);
-        done = importSection(score, data, score_json);
-        return { at: before, removed: 0, added: M.barsOf(score) - before };
-      };
-      if (!ctx.barsEdit(added)) return;
-      const n = done.bars;
-      const bars = `bar${n === 1 ? "" : "s"} ${done.at + 1}${n === 1 ? "" : `–${done.at + n}`}`;
-      const staves = done.added.length ? `, on a new staff: ${done.added.join(", ")}` : "";
-      say(`“${data.title}” added as ${bars}${staves}. Undo takes it back.`);
+      const { addToScore } = await import(`./section-library.js${new URL(import.meta.url).search}`);
+      addToScore({ barsEdit: ctx.barsEdit, say, parse: score_json }, data);
     } catch (error) {
       say("That section could not be added: try again.", true);
     }
