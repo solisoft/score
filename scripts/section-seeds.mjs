@@ -12,6 +12,7 @@ import * as M from "../public/eui-score/score-model.js";
 import * as A from "../public/eui-score/accompaniments.js";
 import * as D from "../public/eui-score/drums.js";
 import * as G from "../public/eui-score/patterns.js";
+import * as R from "../public/eui-score/riffs.js";
 import { shareable } from "../public/eui-score/section-library.js";
 
 await init({ module_or_path: readFileSync(new URL("../public/eui-score/eui_score_web_bg.wasm", import.meta.url)) });
@@ -83,6 +84,13 @@ for (const style of A.STYLES) {
     const lanes = M.staffLanes(score).filter((s) => s > 0).flatMap((s) => M.voiceLanes(score, s));
     add(`style:${style.id}:${part}`, { score, lanes, style: libraryStyle, description: `${style.name} on the ${PART_SEEDS[part].name}, ${PART_SEEDS[part].what}. ${heard} Made from the chord symbols by Edit ▸ Accompaniment: put it in your score, then change the chords.` }, `${style.name} — ${PART_SEEDS[part].name}`, part);
   }
+  // The guitar as loops too (#458): one bar on the first chord, two on the first two.
+  for (const bars of [1, 2]) {
+    const score = song(style.time, style.bpm, chords.slice(0, bars));
+    A.arrange(score, style.id, { parts: ["guitar"] });
+    const lanes = M.staffLanes(score).filter((s) => s > 0).flatMap((s) => M.voiceLanes(score, s));
+    add(`style:${style.id}:guitar-loop${bars}`, { score, lanes, style: libraryStyle, bars, description: `${style.name} on the guitar, ${bars === 1 ? `one bar to loop, on ${chords[0]}` : `two bars to loop, ${chords[0]} then ${chords[1]}`}. ${style.time}, about ${style.bpm} to the beat. Each stroke as a guitarist plays it: the downstroke on the beat stronger than the upstroke.` }, `${style.name} — guitar, ${bars}-bar loop`, "guitar");
+  }
   const band = song(style.time, style.bpm, chords);
   A.arrange(band, style.id);
   const lanes = M.staffLanes(band).filter((s) => s > 0).flatMap((s) => M.voiceLanes(band, s));
@@ -114,6 +122,29 @@ for (const groove of D.GROOVES) {
   G.writeDrumBar(fill, 0, 0, D.breakOf(groove), groove.time, { fill: true });
   add(`groove:${groove.id}:break`, { score: fill, lanes: M.voiceLanes(fill, 0), style, bars: 1,
     description: `${groove.name}: its break, one bar building to the next. ${feel}. Put it at the end of a phrase.` }, `${groove.name} — break`, "drums");
+}
+
+// The riffs (#458): each as a loop of one bar and of two, over chords of its kind.
+const RIFF_CHORDS = {
+  "Blues and rock'n'roll": ["A7", "D7"], "Rock and metal": ["E", "G"], "Funk and soul": ["E7", "A7"], "Surf, country and pop": ["G", "C"],
+};
+const RIFF_STYLES = {
+  boogie: "blues", "boogie-walk": "blues", "slow-blues": "blues", rocknroll: "rock", drive: "rock", "rock-riff": "rock", punk: "rock",
+  gallop: "metal", chug: "metal", stoner: "metal", "funk-line": "funk", "soul-line": "soul", "disco-octaves": "funk",
+  surf: "rock", "country-walk": "country", "pop-pick": "pop", "ballad-68": "ballad", "waltz-34": "waltz",
+};
+const STYLE_IN = { "4/4": "rock", "3/4": "waltz", "6/8": "six-eight", "12/8": "shuffle" };
+for (const riff of R.RIFFS) {
+  const [first, second] = RIFF_CHORDS[riff.group] ?? ["C", "G"];
+  for (const bars of [1, 2]) {
+    // A riff of two bars loops on its chord; one of a bar goes to the next chord.
+    const chords = bars === 1 ? [first] : riff.bars.length > 1 ? [first, first] : [first, second];
+    const score = song(riff.time, riff.bpm, chords);
+    A.arrange(score, STYLE_IN[riff.time], { parts: ["guitar"], riff: riff.id, diagrams: false });
+    const lanes = M.staffLanes(score).filter((s) => s > 0).flatMap((s) => M.voiceLanes(score, s));
+    const over = chords[0] === chords.at(-1) ? `on ${chords[0]}` : `${chords[0]} then ${chords[1]}`;
+    add(`riff:${riff.id}:loop${bars}`, { score, lanes, style: RIFF_STYLES[riff.id] ?? "rock", bars, description: `${riff.name}, a guitar riff: ${bars === 1 ? "one bar" : "two bars"} to loop, ${over}. ${riff.time}, about ${riff.bpm} to the beat${riff.swing ? ", swung" : ""}. It follows the chords: Edit ▸ Accompaniment, Guitar plays, writes it over yours.` }, `${riff.name} — ${bars}-bar loop`, "guitar");
+  }
 }
 
 mkdirSync(new URL("../db/data/", import.meta.url), { recursive: true });

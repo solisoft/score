@@ -30,6 +30,8 @@ const Voice = await import(`./voicings.js${V}`);
 const D = await import(`./drums.js${V}`);
 // The drums written bar by bar as a drummer plays them (#455).
 const Pt = await import(`./patterns.js${V}`);
+// A riff for the guitar, in place of the style's strumming (#458).
+const Rf = await import(`./riffs.js${V}`);
 
 /** The instruments a style writes for, in the order their staves are added. */
 export const PARTS = ["guitar", "piano", "bass", "drums"];
@@ -183,6 +185,23 @@ function guitarNotes(chord, symbol) {
   return [];
 }
 
+/**
+ * How hard a guitarist plays note `k` of `count` struck together by letter
+ * `symbol`, at `where` in the bar ("down", "beat", "half" or "sub"): a
+ * downstroke on the beat strong, its low strings first, an upstroke lighter
+ * on the high ones, a bass note marked; a riff's notes on the beat over
+ * those between (#458).
+ */
+export function guitarForce(symbol, where, k = 0, count = 1, riff = false) {
+  const placeOf = { down: 0, beat: 1, half: 2, sub: 3 }[where] ?? 3;
+  if (riff) return [100, 92, 78, 68][placeOf] + (count > 1 ? 4 : 0);
+  const shade = count > 1 ? Math.round((symbol === "U" ? k - (count - 1) : -k) * 3) : 0;
+  const base = {
+    D: [98, 92, 80, 72], U: [70, 66, 62, 58], B: [100, 96, 88, 84], A: [94, 90, 84, 80], b: [84, 78, 72, 68],
+  }[symbol] ?? [86, 80, 70, 64];
+  return Math.max(1, Math.min(127, base[placeOf] + shade));
+}
+
 function lhNotes(voicing, symbol) {
   const lh = voicing.lh;
   if (symbol === "R") return [lh[0]];
@@ -244,13 +263,17 @@ function lanesFor(score, part, style, added) {
  * added when the score has none (a staff named Guitar, Bass or Drums, a
  * brace named Piano), over what those staves held there. `diagrams` puts a
  * guitar diagram over each chord; `feel` the style's swing on the score;
- * `breaks` a drum break at the end of each four bars, and of the last.
+ * `breaks` a drum break at the end of each four bars, and of the last;
+ * `riff` the id of a riff (riffs.js) the guitar plays instead of strumming,
+ * in the bars of its metre.
  * Answers { added, chords, bars }; throws with nothing changed when there is
  * no chord symbol to play.
  */
-export function arrange(score, styleId, { a = 0, b = null, parts = PARTS, diagrams = true, feel = true, breaks = true } = {}) {
+export function arrange(score, styleId, { a = 0, b = null, parts = PARTS, diagrams = true, feel = true, breaks = true, riff = null } = {}) {
   const style = styleOf(styleId);
   if (!style) throw new Error(`no style called ${styleId}`);
+  const theRiff = riff == null ? null : Rf.riffOf(riff);
+  if (riff != null && !theRiff) throw new Error(`no riff called ${riff}`);
   const last = b ?? M.barsOf(score) - 1;
   if (a < 0 || last >= M.barsOf(score) || a > last) throw new Error("no such bars");
   const t0 = M.barStart(score, a);
@@ -291,6 +314,11 @@ export function arrange(score, styleId, { a = 0, b = null, parts = PARTS, diagra
     const breaking = breaks && ((bar - a) % 4 === 3 || (bar === last && bar > a));
     const own = part === "drums" ? (breaking ? D.breakOf(groove) : groove.main) : style[part];
     const steps = part === "drums" ? Math.max(...Object.values(own).map((l) => l.length)) : (part === "piano" ? own.lh : own).length;
+    // The guitar's riff, bar after bar of it, where the bar is in its metre (#458).
+    if (part === "guitar" && theRiff && time === theRiff.time) {
+      const line = theRiff.bars[(bar - a) % theRiff.bars.length];
+      if (Number.isInteger(length / line.length)) return { line, steps: line.length, riff: true };
+    }
     if (time === style.time && Number.isInteger(length / steps)) {
       if (part !== "drums") return { line: own, steps };
       // The groove varied along its phrase: a crash opening each one after the first, the third bar's hi-hat opened.
@@ -305,13 +333,15 @@ export function arrange(score, styleId, { a = 0, b = null, parts = PARTS, diagra
     if (len <= 0 || !pitches.length) return;
     M.write(score, s, t, len, { rest: false, pitches: pitches.map((p) => ({ ...p })) });
   };
+  // The guitar's forces, by note, kept as the notes' velocities once all is written (#458).
+  const forces = {};
   let pianoVoicing = null;
   let pianoChord = null;
   let bassPrevious = null;
   for (let bar = a; bar <= last; bar++) {
     for (const part of wanted) {
       const [lane, lower] = lanesOf[part];
-      const { line, steps, groove, fill } = patternOf(part, bar);
+      const { line, steps, groove, fill, riff } = patternOf(part, bar);
       if (part === "drums" && groove) {
         Pt.writeDrumBar(score, lane, bar, line, style.time, { fill });
       } else if (part === "drums") {
@@ -319,7 +349,16 @@ export function arrange(score, styleId, { a = 0, b = null, parts = PARTS, diagra
         const step = (M.barStart(score, bar + 1) - start) / steps;
         for (const hit of hitsOf(line)) write(lane, start + hit.at * step, hit.len * step, hit.drums.map((name) => M.drumPitch(name)));
       } else if (part === "guitar") {
-        for (const n of placed(line, bar, steps)) write(lane, n.t, n.len, guitarNotes(n.chord, n.symbol));
+        const start = M.barStart(score, bar);
+        const beat = (M.barStart(score, bar + 1) - start) / D.beatsOf(M.timeAt(score, bar).join("/"));
+        for (const n of placed(line, bar, steps)) {
+          const notes = riff ? Rf.riffNotes(n.chord, n.symbol) : guitarNotes(n.chord, n.symbol);
+          write(lane, n.t, n.len, notes);
+          // Each note's force, as a guitarist plays it (#458).
+          const into = n.t - start;
+          const where = into === 0 ? "down" : into % beat === 0 ? "beat" : into % (beat / 2) === 0 ? "half" : "sub";
+          notes.forEach((p, k) => (forces[`${lane}:${n.t}:${M.midiKey(p.d, p.alter)}`] = guitarForce(n.symbol, where, k, notes.length, riff)));
+        }
       } else if (part === "bass") {
         for (const n of placed(line, bar, steps)) {
           const note = bassNote(n.chord, nextAfter(n.t), n.symbol, bassPrevious);
@@ -340,15 +379,24 @@ export function arrange(score, styleId, { a = 0, b = null, parts = PARTS, diagra
       }
     }
   }
-  if (diagrams && lanesOf.guitar) {
+  if (lanesOf.guitar) {
+    const lane = lanesOf.guitar[0];
+    const kept = Object.fromEntries(Object.entries(score.meta?.velocity ?? {}).filter(([id]) => {
+      const [l, tick] = id.split(":").map(Number);
+      return l !== lane || tick < t0 || tick >= t1;
+    }));
+    score.meta = { ...(score.meta ?? {}), velocity: { ...kept, ...forces } };
+  }
+  if (diagrams && lanesOf.guitar && !theRiff) {
     try {
       Voice.diagramsFromSymbols(score, lanesOf.guitar[0], { a, b: last });
     } catch (error) {
       // No chord with a note under it on the guitar's staff: no diagram.
     }
   }
-  if (feel && style.swing) score.meta = { ...(score.meta ?? {}), swing: { amount: style.swing, unit: 8 } };
-  // Drums played by a drummer: never twice quite the same, nor quite on the grid (#455).
-  if (feel && lanesOf.drums) Pt.humanizeDrums(score);
+  const swing = (theRiff && lanesOf.guitar ? theRiff.swing : null) ?? style.swing;
+  if (feel && swing) score.meta = { ...(score.meta ?? {}), swing: { amount: swing, unit: 8 } };
+  // Drums and guitar played by people: never twice quite the same, nor quite on the grid (#455, #458).
+  if (feel && (lanesOf.drums || lanesOf.guitar)) Pt.humanizeDrums(score);
   return { added, chords: chords.length, bars: last - a + 1 };
 }

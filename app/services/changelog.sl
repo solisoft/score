@@ -12,6 +12,16 @@ class Changelog
     [
       {"date": "2026-10-31", "entries": [
         {
+          "area": "editor",
+          "title": "Guitar riffs, and a guitar played by a guitarist",
+          "text": "Edit ▸ Accompaniment has a Guitar plays menu: the style's strumming, or one of eighteen riffs "
+          + "that follow the chords, low on the neck: a blues boogie, rock'n'roll eighths, a rock drive in power "
+          + "chords, punk, a metal gallop and chug, a funk line, disco octaves, surf tremolo, a country walk, pop "
+          + "and 6/8 picking. The guitar's strokes have a guitarist's force too, the downstroke on the beat over "
+          + "the upstroke, its low strings first, with a little unevenness. In the library, each riff and each "
+          + "style's guitar is a loop of one bar and of two."
+        },
+        {
           "area": "site",
           "title": "Sections play in a loop",
           "text": "A section of the library plays round and round until Stop, with no gap between turns: from its "

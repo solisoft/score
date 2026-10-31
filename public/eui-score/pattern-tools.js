@@ -10,6 +10,7 @@ const V = new URL(import.meta.url).search;
 const G = await import(`./patterns.js${V}`);
 const D = await import(`./drums.js${V}`);
 const A = await import(`./accompaniments.js${V}`);
+const R = await import(`./riffs.js${V}`);
 
 const LABELS = {
   cymc: "Crash", cymr: "Ride", hho: "Open hi-hat", hh: "Hi-hat", tomh: "High tom", tommh: "Mid tom", tomfh: "Floor tom", sn: "Snare", bd: "Kick",
@@ -304,6 +305,10 @@ export function install(studio) {
   const bandBox = dialog(root, "accompaniment", "Accompaniment");
   const bandStyle = grouped("bandStyle", A.STYLES, "pop");
   const bandAbout = el("p", { className: "muted studio-pattern-note" });
+  // The guitar's part: the style's strumming, or a riff (#458).
+  const bandRiff = grouped("bandRiff", R.RIFFS, "");
+  bandRiff.prepend(new Option("Its strumming, as the style has it", ""));
+  bandRiff.value = "";
   const bandScope = el("p", { className: "muted studio-pattern-note" });
   const check = (field, text, checked = true) => {
     const box = el("input", { type: "checkbox", checked });
@@ -325,6 +330,7 @@ export function install(studio) {
     el("p", { className: "muted studio-pattern-note", textContent: "Guitar, piano, bass and drums played from the chord symbols, each on a staff of its own, added when the score has none. Written again in another style, on the same staves." }),
     el("label", { className: "tool-field" }, "Style ", bandStyle),
     bandAbout,
+    el("label", { className: "tool-field" }, "Guitar plays ", bandRiff),
     bandParts,
     el("div", { className: "studio-band-options" }, check("bandDiagrams", "Guitar diagrams over the chords"), check("bandBreaks", "A drum break every four bars"), check("bandFeel", "The style's swing")),
     bandScope,
@@ -348,6 +354,7 @@ export function install(studio) {
       diagrams: on("band-diagrams"),
       breaks: on("band-breaks"),
       feel: on("band-feel"),
+      ...(bandRiff.value ? { riff: bandRiff.value } : {}),
       ...(bandBars ? { a: bandBars[0], b: bandBars[1] } : {}),
     };
   }

@@ -13,10 +13,18 @@ describe("SharedSection.add_house") do
 
   test("puts in every style and every groove, each one engraved, signed Score, once") do
     seeds = house_seeds()
-    assert_eq(seeds.length, 210)
-    assert_eq(SharedSection.add_house(seeds), 210, "none refused by the engraver or the rules")
+    assert_eq(seeds.length, 276)
+    assert_eq(SharedSection.add_house(seeds), 276, "none refused by the engraver or the rules")
     house = SharedSection.where({"user_id": "score"}).all
-    assert_eq(house.length, 210)
+    assert_eq(house.length, 276)
+    riffs = house.filter do |section|
+      section.seed.to_s.starts_with?("riff:")
+    end
+    assert_eq(riffs.length, 36, "each riff a loop of one bar and of two")
+    loops = house.filter do |section|
+      section.seed.to_s.contains(":guitar-loop")
+    end
+    assert_eq(loops.length, 30, "each style's guitar, a loop of one bar and of two")
     drums = house.filter do |section|
       section.instrument == "drums"
     end
