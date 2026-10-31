@@ -77,6 +77,19 @@
           Or it can hand the photo to Score's own reader — the one of <em>From a photo</em> — which uses the AI key
           of your account (<a href="<%= app_account_path() %>#ai">Account › AI</a>); the reading then appears in
           Photo imports, where you can follow it.</p>
+        <h3 id="photos-exact">No wrong note, no missing marking</h3>
+        <p>Read by eye, a photo gives notes one step off and loses hairpins and <em>fp</em>. Ask Claude for the
+          prompt <strong>transcribe_photo</strong> — in Claude Code, type <code>/mcp__score__transcribe_photo</code>
+          with the photo attached — and it follows a stricter method: it measures the staff lines and the note
+          heads on the photo with two small Python scripts, reads dynamics, slurs and accents in a pass of their
+          own, reads it all twice, and ends on a proof page that sets each line of your photo above what it wrote.
+          Check that page against the original once before playing from it.</p>
+        <p>In Claude Code, the same method installs as a skill, used by itself whenever you give a photo of a
+          score:</p>
+        <div class="score-code command-box"><button type="button" class="score-copy" data-score-copy>Copy</button>
+<pre><code><%= skill_install %></code></pre></div>
+        <p>It needs Python 3: Claude installs Pillow and numpy in a throwaway folder, never in your project. Read the method:
+          <a href="<%= skill_url %>">SKILL.md</a>.</p>
       </section>
 
       <section class="doc-section" id="tools">
@@ -88,6 +101,8 @@
             made while someone else changed the score is refused, and the version before is kept in its history.</li>
           <li><strong>transcribe_image</strong>, <strong>get_transcription</strong>: have a photo read by Score, and
             follow it.</li>
+          <li><strong>transcribe_photo</strong> (a prompt): the method to transcribe a photo with measured pitches
+            and every marking.</li>
         </ul>
         <p>Everything it does, it does as you, on your account only.</p>
       </section>

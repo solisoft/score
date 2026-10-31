@@ -35,6 +35,8 @@ class PagesController < Controller
   def claude
     base = auth_base_url()
     @mcp_url = base + "/mcp"
+    @skill_install = ScoreMcp.skill_install_command(base)
+    @skill_url = base + "/skills/transcribe-score/SKILL.md"
     @title = "Score in Claude"
     @description = "Connect Claude to Score: it writes, reads and changes your scores, and reads photos of scores."
   end
@@ -69,6 +71,7 @@ class PagesController < Controller
       "playground": playground_path(),
       "limits": limits_path(),
       "pricing": pricing_path(),
+      "claude": claude_path(),
       "app": app_home_path()
     }
     @days = Changelog.shown(AppSetup.ready?).map do |day|

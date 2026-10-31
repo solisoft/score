@@ -219,6 +219,89 @@ describe("The MCP server") do
     end
   end
 
+  describe("the prompt transcribe_photo (#466)") do
+    test("is announced, listed, and carries the skill's method with its scripts to fetch") do
+      token = mcp_token(mcp_user())
+      init = res_json(mcp_send(
+        token,
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "initialize",
+          "params": {"protocolVersion": "2025-06-18"}
+        }
+      ))["result"]
+      assert_hash_has_key(init["capabilities"], "prompts")
+      assert_contains(init["instructions"], "transcribe_photo")
+      assert_contains(init["instructions"], "~/.claude/skills/transcribe-score")
+      assert_contains(init["instructions"], "/skills/transcribe-score/$f")
+      prompts = res_json(mcp_send(
+        token,
+        {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "method": "prompts/list"
+        }
+      ))["result"]["prompts"]
+      assert_eq(prompts.length, 1)
+      assert_eq(prompts[0]["name"], "transcribe_photo")
+      assert_eq(prompts[0]["arguments"][0]["name"], "photo")
+      got = res_json(mcp_send(
+        token,
+        {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "method": "prompts/get",
+          "params": {"name": "transcribe_photo", "arguments": {"photo": "~/Downloads/tonnerre.jpg"}}
+        }
+      ))["result"]
+      text = got["messages"][0]["content"]["text"]
+      assert_eq(got["messages"][0]["role"], "user")
+      assert(text.starts_with?("Transcribe the photo ~/Downloads/tonnerre.jpg into a Score score"))
+      assert_contains(text, "/skills/transcribe-score/scripts/staff.py -o \"$SKILL/scripts/staff.py\"")
+      assert_contains(text, "/skills/transcribe-score/scripts/proof.py")
+      assert_contains(text, "## 4. Markings pass")
+      assert_not(text.includes?("name: transcribe-score"), "the skill's front matter stays out")
+    end
+
+    test("without a photo asks for one; an unknown prompt is a JSON-RPC error") do
+      token = mcp_token(mcp_user())
+      text = res_json(mcp_send(
+        token,
+        {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "method": "prompts/get",
+          "params": {"name": "transcribe_photo"}
+        }
+      ))["result"]["messages"][0]["content"]["text"]
+      assert(text.starts_with?("Transcribe the photo I give you"))
+      unknown = res_json(mcp_send(
+        token,
+        {
+          "jsonrpc": "2.0",
+          "id": 5,
+          "method": "prompts/get",
+          "params": {"name": "write_symphony"}
+        }
+      ))
+      assert_eq(unknown["error"]["code"], -32602)
+      assert_contains(unknown["error"]["message"], "write_symphony")
+      assert_eq(ScoreMcp.without_front_matter("---\nname: x\n---\n\n# Body"), "# Body")
+      assert_eq(ScoreMcp.without_front_matter("# No front matter"), "# No front matter")
+      assert_eq(ScoreMcp.without_front_matter("---\nnever closed"), "---\nnever closed")
+      assert_eq(res_status(mcp_send(
+        nil,
+        {
+          "jsonrpc": "2.0",
+          "id": 6,
+          "method": "prompts/get",
+          "params": {"name": "transcribe_photo"}
+        }
+      )), 401)
+    end
+  end
+
   describe("the tools") do
     test("check_source says what the engraver reads, and why not") do
       token = mcp_token(mcp_user())

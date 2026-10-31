@@ -103,6 +103,7 @@ describe("PagesController") do
       # One "Try it" per linked change, none for the others.
       assert_eq(body.split("class=\"changelog-try\"").length - 1, linked.length)
       assert_contains(body, "href=\"/playground\">Try it")
+      assert_contains(body, "href=\"/claude\">Try it")
     end
 
     test("draws a sample score under an engraver change that names one, in the browser's engraver") do
@@ -262,5 +263,15 @@ describe("Score in Claude (#464)") do
       assert_contains(body, tool)
     end
     assert_contains(body, "claude mcp remove score")
+  end
+
+  test("gives the prompt and the skill that transcribe a photo with measured notes (#466)") do
+    body = res_body(get("/claude"))
+    assert_contains(body, "/mcp__score__transcribe_photo")
+    assert_contains(body, "~/.claude/skills/transcribe-score")
+    ["SKILL.md", "scripts/staff.py", "scripts/proof.py"].each do |file|
+      assert_contains(body, file)
+    end
+    assert_contains(body, "/skills/transcribe-score/SKILL.md\">SKILL.md</a>")
   end
 end

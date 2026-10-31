@@ -13,6 +13,15 @@ class Changelog
       {"date": "2026-10-31", "entries": [
         {
           "area": "site",
+          "title": "Claude transcribes a photo of a score with measured notes",
+          "text": "Ask Claude for the prompt transcribe_photo, or install it once as a skill in Claude Code (Score in "
+          + "Claude gives the command): it measures the staff lines and the note heads on the photo instead of "
+          + "guessing them, reads hairpins, fp, slurs and accents in a pass of their own, and ends on a proof page "
+          + "with each line of the photo above what it wrote.",
+          "link": "claude"
+        },
+        {
+          "area": "site",
           "title": "Score in Claude: how to connect it",
           "text": "A new page of the guide, Score in Claude, says how to connect Claude Code, claude.ai, Claude "
           + "Desktop or another MCP app to your scores, each command or address ready to copy; what to ask, what "

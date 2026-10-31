@@ -28,7 +28,20 @@ update_score with the revision get_score gave). The answer gives the score's add
 To transcribe a photo or a scan of a score: either read the picture yourself and write the LilyPond, checking
 it with check_source; or, when the account has its AI key set, send the picture to transcribe_image (base64)
 and follow it with get_transcription, which can save it as a new score.
+
+To transcribe a photo with no wrong note and no missing marking, get the prompt transcribe_photo: it measures the
+staff lines and the note heads on the photo with two small Python scripts, reads the markings in a pass of their
+own, and ends on a proof page to check against the original.
 """
+# The skill the prompt transcribe_photo carries (#466): served by the site
+# from public/, so a client downloads its scripts, and installed as is in
+# Claude Code (.claude/skills/transcribe-score links to it).
+const MCP_SKILL_DIR = "public/skills/transcribe-score"
+const MCP_SKILL_FILES = [
+  "SKILL.md",
+  "scripts/staff.py",
+  "scripts/proof.py"
+]
 
 class ScoreMcp
   # The answer to `message` (a JSON-RPC request or notification, as parsed)
@@ -47,6 +60,8 @@ class ScoreMcp
     return ScoreMcp.result(id, {}) if method == "ping"
     return ScoreMcp.result(id, {"tools": ScoreMcp.tools}) if method == "tools/list"
     return ScoreMcp.call(user, id, params) if method == "tools/call"
+    return ScoreMcp.result(id, {"prompts": ScoreMcp.prompts}) if method == "prompts/list"
+    return ScoreMcp.prompt(id, params) if method == "prompts/get"
 
     ScoreMcp.error(id, -32601, "No method called #{method}.")
   end
@@ -73,14 +88,91 @@ class ScoreMcp
     asked = params["protocolVersion"].to_s
     {
       "protocolVersion": MCP_PROTOCOL_VERSIONS.includes?(asked) ? asked : MCP_PROTOCOL_VERSIONS[0],
-      "capabilities": {"tools": {"listChanged": false}},
+      "capabilities": {"tools": {"listChanged": false}, "prompts": {"listChanged": false}},
       "serverInfo": {
         "name": "score",
         "title": "Score",
         "version": MCP_SERVER_VERSION
       },
-      "instructions": MCP_INSTRUCTIONS.trim
+      "instructions": MCP_INSTRUCTIONS.trim + "\nAs a Claude Code skill, installed once: "
+      + ScoreMcp.skill_install_command(auth_base_url())
     }
+  end
+
+  # The prompts, as prompts/list describes them (#466).
+  static def prompts
+    [{
+      "name": "transcribe_photo",
+      "title": "Transcribe a photo of a score",
+      "description": "Turn a photo or a scan of sheet music into a Score score with measured pitches and every "
+      + "marking: staff lines and note heads measured on the photo, markings read apart, a proof page at the end.",
+      "arguments": [{
+        "name": "photo",
+        "description": "The photo's file, or how to find it",
+        "required": false
+      }]
+    }]
+  end
+
+  # prompts/get: the method of the skill transcribe-score, preceded by how to
+  # fetch its scripts; a JSON-RPC error for a prompt that does not exist.
+  static def prompt(id, params)
+    name = params["name"].to_s
+    return ScoreMcp.error(id, -32602, "No prompt called #{name}.") unless name == "transcribe_photo"
+
+    arguments = type(params["arguments"]) == "hash" ? params["arguments"] : {}
+    text = ScoreMcp.transcription_method(arguments["photo"].to_s)
+    message = {"role": "user", "content": {
+      "type": "text",
+      "text": text
+    }}
+    summary = "Transcribe a photo of a score into Score, with measured pitches and every marking."
+    ScoreMcp.result(
+      id,
+      {"description": summary, "messages": [message]}
+    )
+  end
+
+  # What the prompt says: the photo, where the scripts come from, then the
+  # skill's own text without its front matter.
+  static def transcription_method(photo)
+    base = auth_base_url()
+    which = photo.blank? ? "the photo I give you" : "the photo #{photo}"
+    fetch = MCP_SKILL_FILES.filter do |file|
+      file.starts_with?("scripts/")
+    end.map do |file|
+      "curl -fsSL #{base}/skills/transcribe-score/#{file} -o \"$SKILL/#{file}\""
+    end
+    "Transcribe #{which} into a Score score, following the method below.\n\n"
+    + "Its scripts are not on this machine yet: fetch them into a folder of your scratchpad, never into a "
+    + "project, and use that folder as <skill dir>.\n\n```bash\nSKILL=<scratchpad>/transcribe-score\n"
+    + "mkdir -p \"$SKILL/scripts\"\n"
+    + fetch.join("\n")
+    + "\n```\n\n"
+    + ScoreMcp.skill_body
+  end
+
+  # SKILL.md as served, without its front matter (name, description).
+  static def skill_body
+    ScoreMcp.without_front_matter(slurp(MCP_SKILL_DIR + "/SKILL.md"))
+  end
+
+  # `text` after its "---" front matter block; all of it when it has none.
+  static def without_front_matter(text)
+    return text unless text.starts_with?("---\n")
+
+    rest = text.substring(4, text.length)
+    finish = rest.index_of("\n---\n")
+    return text if finish < 0
+
+    rest.substring(finish + 5, rest.length).trim
+  end
+
+  # One shell line that installs the skill in Claude Code, for every project.
+  static def skill_install_command(base)
+    files = MCP_SKILL_FILES.join(" ")
+    "d=~/.claude/skills/transcribe-score; mkdir -p $d/scripts && for f in #{files}; do curl -fsSL "
+    + "#{base}/skills/transcribe-score/$f -o $d/$f; done"
   end
 
   # The tools, as tools/list describes them.
