@@ -12,6 +12,8 @@ const M = await import(`./score-model.js${new URL(import.meta.url).search}`);
 // accompaniments and the chord diagrams read them the one way.
 const V = await import(`./voicings.js${new URL(import.meta.url).search}`);
 export const { chordTones, chordVoicing, chordSymbols } = V;
+// The grooves of the drum grid's Groove menu (#442).
+const D = await import(`./drums.js${new URL(import.meta.url).search}`);
 
 // ---- The drum grid -----------------------------------------------------------------
 
@@ -59,6 +61,45 @@ export function drumGrid(score, s, b) {
     }
   });
   return { bar: b, steps, rows, others, fits };
+}
+
+/**
+ * Bar `b` as a grid holding `lines` (a groove's basic bar or its break, from
+ * drums.js) written in `time`: each line's steps spread over the grid's —
+ * twelve eighths of a 12/8 on its twenty-four sixteenths. The drums the grid
+ * has no row for go to `others`. Throws when the bar is in another metre.
+ */
+export function grooveGrid(score, b, lines, time) {
+  const bar = M.timeAt(score, b).join("/");
+  if (bar !== time) throw new Error(`This groove is in ${time} and bar ${b + 1} in ${bar}: choose a groove in ${bar}`);
+  const steps = Math.max(1, Math.round(M.barLength(score, b) / GRID_STEP));
+  const rows = Object.fromEntries(GRID_DRUMS.map((name) => [name, Array(steps).fill(0)]));
+  const others = Array.from({ length: steps }, () => []);
+  for (const [name, line] of Object.entries(lines)) {
+    const per = steps / line.length;
+    if (!Number.isInteger(per)) throw new Error(`The ${name} line has ${line.length} steps: a bar of ${time} takes ${steps}, or a divisor of it`);
+    [...line].forEach((c, k) => {
+      if (c !== "x" && c !== "X") return;
+      const value = c === "X" ? 2 : 1;
+      if (rows[name]) rows[name][k * per] = Math.max(rows[name][k * per], value);
+      else if (!others[k * per].includes(name)) others[k * per].push(name);
+    });
+  }
+  return { bar: b, steps, rows, others, fits: true };
+}
+
+/**
+ * A groove written into bars `a` to `b` of drum lane `s`: its basic bar in
+ * each, its break in the last bar of each four and in the last one, when
+ * `breaks`. Answers the number of bars written.
+ */
+export function writeGroove(score, s, a, b, groove, { breaks = true } = {}) {
+  if (!M.isDrums(score, s)) throw new Error("A groove is a drum staff's: select bars of one");
+  for (let bar = a; bar <= b; bar++) {
+    const breaking = breaks && ((bar - a) % 4 === 3 || (bar === b && bar > a));
+    writeDrumGrid(score, s, grooveGrid(score, bar, breaking ? D.breakOf(groove) : groove.main, groove.time));
+  }
+  return b - a + 1;
 }
 
 /** A grid cell's next value on a click: silent, struck, accented, silent again. */

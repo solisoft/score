@@ -10,13 +10,32 @@
 class Changelog
   static def days
     [
-      {"date": "2026-10-31", "entries": [{
-        "area": "site",
-        "title": "EUI Score is now called Score",
-        "text": "The site and the app have a shorter name: Score. Its pages, its e-mails, the installed app and the "
-        + "picture shown when a link is shared now say so. The engraver that draws every score keeps its own name, "
-        + "eui-score: it is EUI's."
-      }]},
+      {"date": "2026-10-31", "entries": [
+        {
+          "area": "editor",
+          "title": "An accompaniment in one click: guitar, piano, bass and drums",
+          "text": "Edit ▸ Accompaniment plays a song's chord symbols in fifteen styles, from pop, rock and folk "
+          + "to bossa nova, reggae, swing, a waltz and a 6/8 ballad: a guitar strumming its chord shapes, with "
+          + "the diagrams over them, a piano in both hands, a bass and the drums, each on a staff of its own, "
+          + "added when the score has none. Choose the instruments, Listen to four bars, then Write: one Undo "
+          + "takes it all back. Written again in another style, it goes on the same staves."
+        },
+        {
+          "area": "editor",
+          "title": "Fifty drum grooves, each with its break",
+          "text": "The drum grid has a Groove menu: fifty grooves, rock, funk, house, samba, songo, reggae, "
+          + "swing, a jazz waltz, a 12/8 blues and more, each with a basic bar and a break. Put either in the "
+          + "bar, change a step or two, or write the groove in every selected bar, a break at the end of each "
+          + "four. The accompaniments' drums play them too."
+        },
+        {
+          "area": "site",
+          "title": "EUI Score is now called Score",
+          "text": "The site and the app have a shorter name: Score. Its pages, its e-mails, the installed app and the "
+          + "picture shown when a link is shared now say so. The engraver that draws every score keeps its own name, "
+          + "eui-score: it is EUI's."
+        }
+      ]},
       {"date": "2026-10-30", "entries": [
         {
           "area": "editor",

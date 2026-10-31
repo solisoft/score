@@ -4170,6 +4170,42 @@
   .studio-grid-actions {
     margin-top: 12px;
   }
+  .studio-grid-groove {
+    margin-top: 10px;
+    align-items: end;
+    flex-wrap: wrap;
+  }
+  .studio-grid-groove select {
+    max-width: 240px;
+  }
+  .studio-accompaniment {
+    width: min(520px, calc(100vw - 32px));
+  }
+  .studio-band-parts {
+    border: 0;
+    margin: 10px 0 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+  }
+  .studio-band-parts legend {
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-bottom: 6px;
+    padding: 0;
+  }
+  .studio-band-options {
+    display: grid;
+    gap: 4px;
+    margin-top: 10px;
+  }
+  .studio-band-check {
+    font-size: 13.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
   .studio-quantize, .studio-feel {
     width: min(520px, calc(100vw - 32px));
   }

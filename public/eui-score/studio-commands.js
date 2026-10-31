@@ -3,7 +3,7 @@
 
 // Served immutable: this module's version goes to the ones it loads.
 const V = new URL(import.meta.url).search;
-/** The drum grid, the arpeggiator and the chord track (Edit menu), loaded the first time one is opened. */
+/** The drum grid, the arpeggiator, the chord track and the accompaniment (Edit menu), loaded the first time one is opened. */
 const patternTools = () => import(`./pattern-tools.js${V}`);
 /** Quantize, swing and humanize (Edit and Play menus), loaded the first time one is opened. */
 const feelTools = () => import(`./feel-tools.js${V}`);
@@ -101,9 +101,9 @@ export function install(ctx) {
       case "share-section": case "section-library":
         sections ??= sectionLibrary().then((T) => T.install({ root, st, P, options, toMidi: ctx.toMidi, say, selectedBarsOrNull, putSection: ctx.call.putSection }));
         return sections.then((tools) => tools.open(name));
-      // Edit ▸ Drum grid…, Arpeggiate…, Chord track…: pattern-tools.js's dialogs.
-      case "drum-grid": case "arpeggiate": case "chord-track":
-        patterns ??= patternTools().then((T) => T.install({ root, st, M, P, edit, say, setLoop, togglePlay, stopPlay, range, selectedBarsOrNull, barNo }));
+      // Edit ▸ Drum grid…, Arpeggiate…, Chord track…, Accompaniment…: pattern-tools.js's dialogs.
+      case "drum-grid": case "arpeggiate": case "chord-track": case "accompaniment":
+        patterns ??= patternTools().then((T) => T.install({ root, st, M, P, edit, undo, say, setLoop, togglePlay, stopPlay, range, selectedBarsOrNull, barNo }));
         return patterns.then((tools) => tools.open(name));
       // Edit ▸ Quantize…, Play ▸ Swing and humanize…: feel-tools.js's dialogs.
       case "quantize": case "swing":

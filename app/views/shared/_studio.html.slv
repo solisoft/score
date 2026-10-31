@@ -96,6 +96,7 @@
             <hr>
             <button type="button" role="menuitem" data-act="drum-grid">Drum grid… <kbd>a drum staff's bar</kbd></button>
             <button type="button" role="menuitem" data-act="arpeggiate">Arpeggiate the selected chords…</button>
+            <button type="button" role="menuitem" data-act="accompaniment">Accompaniment: guitar, piano, bass, drums…</button>
             <button type="button" role="menuitem" data-act="chord-track">Chord track from the chord symbols…</button>
             <button type="button" role="menuitem" data-act="quantize">Quantize… <kbd>the selection, or the score</kbd></button>
             <%# Comments (#385): a thread on the selected bars of a staff, in the app only. %>
