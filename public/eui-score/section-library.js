@@ -75,6 +75,63 @@ export function shareable(score, lanes, a, b, title = "") {
   };
 }
 
+/**
+ * A section of the library (`data`: its `section` and `source`, as
+ * data.json answers) put in `score` (#451): at its start when it holds
+ * nothing but rests, else after its last bar; in the section's metre from
+ * there. Each of the section's staves goes on a staff of the score with its
+ * instrument (the drums on drums), the first not taken; one is added when
+ * there is none, so nothing is written over another instrument. `parse` is
+ * the engraver's reading of a text (score_json). Answers { at, bars, added },
+ * `added` the names of the staves added.
+ */
+export function importSection(score, data, parse) {
+  const section = data.section;
+  if (!section?.parts?.length || !section.bars) throw new Error("That section holds no bars");
+  const mini = M.fromParsed(JSON.parse(parse(data.source))).score;
+  const empty = score.staves.every((staff) => staff.events.every((ev) => ev.rest));
+  const at = empty ? 0 : M.barsOf(score);
+  if (!empty) M.addBars(score, 1);
+  const [num, den] = mini.time ?? [4, 4];
+  const [hereNum, hereDen] = M.timeAt(score, at);
+  if (num !== hereNum || den !== hereDen) M.setTimeAt(score, at, num, den);
+  M.ensureLength(score, M.barStart(score, at + section.bars));
+  const taken = new Set();
+  const added = [];
+  const targets = M.staffLanes(mini).map((m) => {
+    const wanted = mini.staves[m];
+    const drums = M.isDrums(mini, m);
+    const found = M.staffLanes(score).find((s) => {
+      if (taken.has(s) || M.isDrums(score, s) !== drums) return false;
+      const staff = score.staves[s];
+      return drums || staff.instrument === wanted.instrument || (wanted.name && staff.name === wanted.name);
+    });
+    if (found != null) {
+      taken.add(found);
+      return found;
+    }
+    M.addStaff(score, {
+      name: wanted.name ?? "",
+      short: wanted.short ?? "",
+      instrument: wanted.instrument ?? "acoustic grand",
+      clef: drums ? "percussion" : wanted.clef ?? "treble",
+      ...(drums ? { drums: true } : {}),
+    });
+    const lane = M.staffLanes(score).at(-1);
+    taken.add(lane);
+    added.push(wanted.name || M.INSTRUMENTS[wanted.instrument]?.name || "a staff");
+    return lane;
+  });
+  for (const part of section.parts) {
+    const staff = targets[part.offset];
+    if (staff == null) continue;
+    let lane = M.laneOfVoice(score, staff, part.voice ?? 1);
+    if (lane < 0) lane = M.addVoice(score, staff, part.voice);
+    M.pasteSection(score, lane, at, { bars: section.bars, parts: [{ ...part, offset: 0 }] });
+  }
+  return { at, bars: section.bars, added };
+}
+
 // ---- The dialogs -------------------------------------------------------------------
 
 const el = (tag, props = {}, ...children) => {

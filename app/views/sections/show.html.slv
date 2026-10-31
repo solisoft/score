@@ -25,7 +25,25 @@
   <% end %>
 
   <%- score_figure(figure, {"name": "section", "source": "closed"}) %>
-  <p class="muted">To put it in your score: open the score in the editor, select the bar to put it before, then Edit › Library of sections.</p>
+  <%# Into one's own score (#451): a new one made of it, or after the bars of one of theirs. %>
+  <section class="section-import" aria-labelledby="section-import-title">
+    <h2 id="section-import-title">Add it to your score</h2>
+    <% if me.nil? %>
+      <p class="muted"><a href="<%= login_path() %>">Sign in</a> to add it to one of your scores, or to start a new one with it.</p>
+    <% else %>
+      <form class="section-import-form" action="<%= app_section_import_path(section._key) %>" method="POST" data-section-import>
+        <%- csrf_field() %>
+        <select name="score_id" aria-label="The score to add it to">
+          <option value="new">A new score, starting with it</option>
+          <% for score in my_scores %>
+            <option value="<%= score._key %>"><%= score.title.blank? ? "Untitled" : score.title %></option>
+          <% end %>
+        </select>
+        <button type="submit" class="btn btn-primary">Add it</button>
+      </form>
+      <p class="muted">Added after the score's last bar, each instrument on its own staff (one is added when the score has none). In the editor, Edit › Library of sections also puts it where you choose.</p>
+    <% end %>
+  </section>
 
   <section class="section-rating" aria-labelledby="section-rating-title">
     <h2 id="section-rating-title">Rating</h2>

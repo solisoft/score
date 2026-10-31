@@ -352,6 +352,8 @@
     // The shared library of sections (#444): where to publish, and its page.
     sectionsUrl: "<%= app_sections_path() %>",
     sectionsPage: "<%= sections_path() %>",
+    // A section to add after the score's bars, from the library's page (#451).
+    importSection: "<%= import_section %>",
     // Read from an attribute, escaped by the template: a name is never written into the script.
     authorName: document.querySelector("[data-author-name]")?.dataset.authorName ?? "",
     source: root.querySelector("[data-source]").value,

@@ -67,6 +67,8 @@ class SectionsController < Controller
       comment.user_id
     }))
     @me = current_user()
+    # The scores it can be added to (#451): the person's own, the latest changed first.
+    @my_scores = @me.nil? ? [] : Score.recent(@me, 50)
     @stars = SectionRating.given(@section, @me)
     @can_remove = @section.removable_by?(@me)
     @instrument_name = SECTION_INSTRUMENT_NAMES[@section.instrument] ?? "Other"

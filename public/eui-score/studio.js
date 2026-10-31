@@ -375,7 +375,38 @@ export function startStudio(root, options = {}) {
     // Otherwise nothing: the bar beside it already says how to start (#419).
     // After what was said on opening, not in its place.
     if (keptHistoryNote()) say(`${status.textContent} ${keptHistoryNote()}`.trim(), status.classList.contains("studio-error"));
-  });
+  }).then(() => (options.importSection ? importFromLibrary(options.importSection) : null));
+
+  /**
+   * A section of the library added after the score's bars (#451), from its
+   * page's "Add it": one edit, so one Undo takes it back. The address
+   * forgets it, so a reload does not add it twice.
+   */
+  async function importFromLibrary(url) {
+    const here = new URL(location.href);
+    here.searchParams.delete("section");
+    history.replaceState(null, "", here.pathname + here.search + here.hash);
+    try {
+      const response = await fetch(url, { headers: { Accept: "application/json" } });
+      if (!response.ok) return say("That section is no longer in the library.", true);
+      const data = await response.json();
+      const { importSection } = await import(`./section-library.js${new URL(import.meta.url).search}`);
+      let done = null;
+      // The bars added after the last one told as such, for the app's merge with other editors.
+      const added = (score) => {
+        const before = M.barsOf(score);
+        done = importSection(score, data, score_json);
+        return { at: before, removed: 0, added: M.barsOf(score) - before };
+      };
+      if (!ctx.barsEdit(added)) return;
+      const n = done.bars;
+      const bars = `bar${n === 1 ? "" : "s"} ${done.at + 1}${n === 1 ? "" : `–${done.at + n}`}`;
+      const staves = done.added.length ? `, on a new staff: ${done.added.join(", ")}` : "";
+      say(`“${data.title}” added as ${bars}${staves}. Undo takes it back.`);
+    } catch (error) {
+      say("That section could not be added: try again.", true);
+    }
+  }
   // `parse`: the engraver's reading of a text (score_json), for the app's merge.
   return { state: st, ready, source: () => st.text, load, peers: setPeers, parse: (text) => parseKept(text), markers: setMarkers, selectPlace, placeLabel, place };
 }

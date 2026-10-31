@@ -220,6 +220,64 @@ describe("SectionsController and AppSectionsController") do
     end
   end
 
+  describe("adding a section to one's score (#451)") do
+    test("the page offers the person's own scores, or a new one; a guest is asked to sign in") do
+      author = lib_user()
+      section = lib_section(author)
+      guest_page = res_body(get("/sections/#{section._key}"))
+      assert_contains(guest_page, "to add it to one of your scores")
+      assert_not(guest_page.contains("data-section-import"))
+      reader = lib_user()
+      mine = Score.start(reader, "\\header { title = \"My song\" }\n{ c'1 }\n")
+      theirs = Score.start(author, "\\header { title = \"Not yours\" }\n{ c'1 }\n")
+      lib_sign_in(reader)
+      page = res_body(get("/sections/#{section._key}"))
+      assert_contains(page, "data-section-import")
+      assert_contains(page, "<option value=\"#{mine._key}\">My song</option>")
+      assert_not(page.contains(theirs._key), "nobody else's scores")
+    end
+
+    test("a new score made of it; one of the person's opens in the editor, which is told to add it") do
+      author = lib_user()
+      section = lib_section(author)
+      reader = lib_user()
+      lib_sign_in(reader)
+      count_before = Score.where({"user_id": reader._key}).count
+      made = post("/app/sections/#{section._key}/import", {"score_id": "new"})
+      assert_eq(res_status(made), 302)
+      assert_eq(Score.where({"user_id": reader._key}).count, count_before + 1)
+      created = Score.where({"user_id": reader._key}).order("created_at", "desc").first
+      assert_eq(res_location(made), "/app/scores/#{created._key}")
+      assert_contains(Score.find(created._key).source, "\\time 3/4")
+      mine = Score.start(reader, "{ c'1 }\n")
+      into = post("/app/sections/#{section._key}/import", {"score_id": mine._key})
+      assert_eq(res_location(into), "/app/scores/#{mine._key}?section=#{section._key}")
+      editor = res_body(get("/app/scores/#{mine._key}?section=#{section._key}"))
+      assert_contains(editor, "importSection: \"/sections/#{section._key}/data.json\"")
+      assert_contains(res_body(get("/app/scores/#{mine._key}?section=%22%3E%3Cscript%3E")), "importSection: \"\"")
+      assert_eq(Score.find(mine._key).source, "{ c'1 }\n", "the score itself changes only in the editor")
+    end
+
+    test("refused: a guest, a score of someone else's, an unknown or a hidden section — and nothing made") do
+      author = lib_user()
+      section = lib_section(author)
+      theirs = Score.start(author, "{ c'1 }\n")
+      as_guest()
+      clear_cookies()
+      guest = post("/app/sections/#{section._key}/import", {"score_id": "new"})
+      assert_ne(res_status(guest), 200)
+      assert_not(res_location(guest).to_s.starts_with?("/app/scores/"), "no score opened for a guest")
+      reader = lib_user()
+      lib_sign_in(reader)
+      assert_eq(res_status(post("/app/sections/#{section._key}/import", {"score_id": theirs._key})), 403)
+      assert_eq(res_status(post("/app/sections/no-such/import", {"score_id": "new"})), 404)
+      section.hidden = true
+      section.update()
+      assert_eq(res_status(post("/app/sections/#{section._key}/import", {"score_id": "new"})), 404)
+      assert_eq(Score.where({"user_id": reader._key}).count, 0, "nothing made for the reader")
+    end
+  end
+
   describe("rating") do
     test("one rating a member, changed by rating again; the average follows; the author cannot rate") do
       author = lib_user()

@@ -13,6 +13,15 @@ class Changelog
       {"date": "2026-10-31", "entries": [
         {
           "area": "editor",
+          "title": "Add a section of the library to your score",
+          "text": "A section's page, in the library at /sections, now has Add it to your score: choose one of your "
+          + "scores, or a new one that starts with it. Your score opens in the editor with the section after its "
+          + "last bar, each instrument on its own staff, one added when the score has none, and the metre changed "
+          + "there when the section's is another. One Undo takes it back.",
+          "app": true
+        },
+        {
+          "area": "editor",
           "title": "A bass line of its own for each style",
           "text": "The pop ballad, folk, country and jazz ballad accompaniments played the same bass. Each has its "
           + "own now: an alternating root and fifth for folk, a boom on one and three walking up to the next chord "

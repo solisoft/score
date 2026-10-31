@@ -71,6 +71,10 @@ class AppScoresController < AppBaseController
     @editing_score = @score
     @_ai_entry(current_user())
     @ai_request_limit = SCORE_SUGGESTION_REQUEST_LIMIT
+    # A section of the library to add after its bars (#451): its data, which the editor fetches.
+    section_key = params["section"].to_s
+    wanted = Regex.matches("^[A-Za-z0-9-]{1,64}$", section_key)
+    @import_section = wanted ? section_data_path(section_key) : ""
     @title = @score.title
     @description = "#{this.score.title}, in the Score editor."
   end

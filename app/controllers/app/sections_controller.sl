@@ -23,6 +23,22 @@ class AppSectionsController < AppBaseController
     )
   end
 
+  # POST /app/sections/:id/import — `score_id`: one of the person's scores,
+  # or "new" (#451). A new score is the section itself, titled with its name;
+  # one of theirs opens in the editor, which adds the section after its bars.
+  def add_to_score
+    section = @_visible
+    if params["score_id"].to_s == "new"
+      score = Score.start(current_user(), section.source)
+      halt(422, "That score could not be created.") if score._errors
+
+      return redirect(app_score_path(score))
+    end
+
+    score = authorize(Score.find(params["score_id"].to_s), "update")
+    redirect("#{app_score_path(score)}?section=#{section._key}")
+  end
+
   # POST /app/sections/:id/rating — `stars`, 1 to 5
   def rate
     section = @_visible

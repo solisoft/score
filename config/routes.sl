@@ -171,6 +171,7 @@ middleware("require_app_database", fn() {
     # The shared library (#444): publishing from the editor (JSON); rating,
     # commenting, reporting and taking away from a section's page (forms).
     post("/app/sections", "app/sections#create", name: "app_sections")
+    post("/app/sections/:id/import", "app/sections#add_to_score", name: "app_section_import")
     post("/app/sections/:id/rating", "app/sections#rate", name: "app_section_rating")
     post("/app/sections/:id/comments", "app/sections#comment", name: "app_section_comments")
     post(
