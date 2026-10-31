@@ -14,8 +14,8 @@ class Changelog
         {
           "area": "editor",
           "title": "A photo's reading no longer waits for ever",
-          "text": "Reading a photo with a model that reasons before it writes (Kimi, DeepSeek, Claude…), the page now "
-          + "shows how far its reasoning has gone, not a still \"reading\". A reading stops after 10 minutes and "
+          "text": "Reading a photo with a model that reasons before it writes (Kimi, DeepSeek, Claude…), the page "
+          + "now shows how far its reasoning has gone, not a still \"reading\". A reading stops after 10 minutes and "
           + "says so, suggesting a quicker model; and one that was interrupted is said so within a few minutes, "
           + "where the page used to wait.",
           "app": true
