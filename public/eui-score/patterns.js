@@ -79,7 +79,7 @@ export function grooveGrid(score, b, lines, time) {
     const per = steps / line.length;
     if (!Number.isInteger(per)) throw new Error(`The ${name} line has ${line.length} steps: a bar of ${time} takes ${steps}, or a divisor of it`);
     [...line].forEach((c, k) => {
-      if (c !== "x" && c !== "X") return;
+      if (c !== "x" && c !== "X" && c !== "g") return;
       const value = c === "X" ? 2 : 1;
       if (rows[name]) rows[name][k * per] = Math.max(rows[name][k * per], value);
       else if (!others[k * per].includes(name)) others[k * per].push(name);
@@ -93,13 +93,45 @@ export function grooveGrid(score, b, lines, time) {
  * each, its break in the last bar of each four and in the last one, when
  * `breaks`. Answers the number of bars written.
  */
-export function writeGroove(score, s, a, b, groove, { breaks = true } = {}) {
+export function writeGroove(score, s, a, b, groove, { breaks = true, feel = false } = {}) {
   if (!M.isDrums(score, s)) throw new Error("A groove is a drum staff's: select bars of one");
   for (let bar = a; bar <= b; bar++) {
     const breaking = breaks && ((bar - a) % 4 === 3 || (bar === b && bar > a));
-    writeDrumGrid(score, s, grooveGrid(score, bar, breaking ? D.breakOf(groove) : groove.main, groove.time));
+    const n = (bar - a) % 4;
+    const lines = breaking ? D.breakOf(groove) : D.variedBar(groove.main, n, { crash: bar - a >= 4 });
+    writeDrumBar(score, s, bar, lines, groove.time, { fill: breaking });
   }
+  if (feel) humanizeDrums(score);
   return b - a + 1;
+}
+
+/**
+ * Bar `bar` of drum lane `s` written from `lines` (a bar of `time`, as
+ * drums.js has them), each stroke at the force a drummer plays it with
+ * (drums.js dynamicsOf): kept as the notes' velocities (velocity.js, the
+ * MIDI view's strip), the bar's earlier ones on that lane replaced (#455).
+ */
+export function writeDrumBar(score, s, bar, lines, time, { fill = false } = {}) {
+  const grid = grooveGrid(score, bar, lines, time);
+  writeDrumGrid(score, s, grid);
+  const t0 = M.barStart(score, bar);
+  const t1 = M.barStart(score, bar + 1);
+  const steps = Math.max(...Object.values(lines).map((line) => line.length));
+  const step = (t1 - t0) / steps;
+  const kept = Object.fromEntries(Object.entries(score.meta?.velocity ?? {}).filter(([id]) => {
+    const [lane, tick] = id.split(":").map(Number);
+    return lane !== s || tick < t0 || tick >= t1;
+  }));
+  for (const stroke of D.dynamicsOf(lines, time, { fill })) {
+    kept[`${s}:${t0 + stroke.at * step}:${M.drumKey(stroke.drum)}`] = stroke.velocity;
+  }
+  score.meta = { ...(score.meta ?? {}), velocity: kept };
+}
+
+/** The score played with a drummer's small unevenness (drums.js DRUMMER_FEEL), unless it has a humanize of its own. */
+export function humanizeDrums(score) {
+  if (score.meta?.humanize) return;
+  score.meta = { ...(score.meta ?? {}), humanize: { ...D.DRUMMER_FEEL } };
 }
 
 /** A grid cell's next value on a click: silent, struck, accented, silent again. */

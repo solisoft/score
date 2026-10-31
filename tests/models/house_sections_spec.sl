@@ -13,13 +13,17 @@ describe("SharedSection.add_house") do
 
   test("puts in every style and every groove, each one engraved, signed Score, once") do
     seeds = house_seeds()
-    assert_eq(seeds.length, 110)
-    assert_eq(SharedSection.add_house(seeds), 110, "none refused by the engraver or the rules")
+    assert_eq(seeds.length, 210)
+    assert_eq(SharedSection.add_house(seeds), 210, "none refused by the engraver or the rules")
     house = SharedSection.where({"user_id": "score"}).all
-    assert_eq(house.length, 110)
-    assert_eq(house.filter(&{ |section|
+    assert_eq(house.length, 210)
+    drums = house.filter do |section|
       section.instrument == "drums"
-    }).length, 50, "a groove each")
+    end
+    assert_eq(drums.length, 150, "a 1-bar loop, a 2-bar loop and a break a groove")
+    assert_eq(drums.filter(&{ |section|
+      section.bars == 1
+    }).length, 100, "the 1-bar loops and the breaks")
     assert_eq(house.filter(&{ |section|
       section.instrument == "band"
     }).length, 15, "the whole band, a style each")
@@ -92,6 +96,26 @@ describe("SharedSection.add_house") do
     old.update()
     assert(SharedSection.backfill_swing >= 1)
     assert_eq(SharedSection.find(old._key).swing, "66/8")
+  end
+
+  test("prune_house takes away the house's sections the file no longer has, and only those") do
+    seeds = house_seeds()
+    SharedSection.add_house([seeds[0], seeds[1]])
+    old = SharedSection.where({"seed": seeds[1]["seed"]}).first
+    mine = SharedSection.create({
+      "user_id": "someone",
+      "title": "Mine",
+      "instrument": "drums",
+      "style": "rock",
+      "source": "{ c'1 }"
+    })
+    assert_eq(SharedSection.prune_house([seeds[0]]), 1)
+    assert_null(SharedSection.where({"seed": seeds[1]["seed"]}).first)
+    assert_not_null(SharedSection.where({"seed": seeds[0]["seed"]}).first)
+    assert_not_null(SharedSection.find(mine._key), "nobody else's")
+    assert_eq(SharedSection.prune_house([seeds[0]]), 0)
+    old.remove rescue nil
+    mine.delete
   end
 
   test("remove_house takes them away, and nobody else's") do

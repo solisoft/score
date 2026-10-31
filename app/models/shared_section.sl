@@ -280,6 +280,22 @@ class SharedSection < Model
     swinging
   end
 
+  # The library's own sections no longer in `seeds` taken away, with their
+  # ratings, comments and reports (#456: a groove's four bars, become its
+  # loops and its break). Answers the number taken away.
+  static def prune_house(seeds)
+    kept = seeds.map do |fields|
+      fields["seed"].to_s
+    end
+    gone = SharedSection.where({"user_id": SECTION_HOUSE_AUTHOR}).all.filter do |section|
+      !kept.includes?(section.seed.to_s)
+    end
+    gone.each do |section|
+      section.remove
+    end
+    gone.length
+  end
+
   # The library's own sections taken away, with what was said of them.
   static def remove_house
     SharedSection.where({"user_id": SECTION_HOUSE_AUTHOR}).all.each do |section|

@@ -104,7 +104,7 @@
     </footer>
 
     <script defer src="<%= public_path("js/score.js") %>" data-player="<%= public_path("eui-score/player.js") %>"
-      data-engine="<%= public_path("eui-score/eui-score.js") %>" data-model="<%= public_path("eui-score/score-model.js") %>" data-feel="<%= public_path("eui-score/feel.js") %>"
+      data-engine="<%= public_path("eui-score/eui-score.js") %>" data-model="<%= public_path("eui-score/score-model.js") %>" data-feel="<%= public_path("eui-score/feel.js") %>" data-velocity="<%= public_path("eui-score/velocity.js") %>"
       data-musicxml="<%= public_path("eui-score/musicxml.js") %>"></script>
 </body>
 </html>

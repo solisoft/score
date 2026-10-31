@@ -28,6 +28,8 @@ const V = new URL(import.meta.url).search;
 const M = await import(`./score-model.js${V}`);
 const Voice = await import(`./voicings.js${V}`);
 const D = await import(`./drums.js${V}`);
+// The drums written bar by bar as a drummer plays them (#455).
+const Pt = await import(`./patterns.js${V}`);
 
 /** The instruments a style writes for, in the order their staves are added. */
 export const PARTS = ["guitar", "piano", "bass", "drums"];
@@ -289,7 +291,12 @@ export function arrange(score, styleId, { a = 0, b = null, parts = PARTS, diagra
     const breaking = breaks && ((bar - a) % 4 === 3 || (bar === last && bar > a));
     const own = part === "drums" ? (breaking ? D.breakOf(groove) : groove.main) : style[part];
     const steps = part === "drums" ? Math.max(...Object.values(own).map((l) => l.length)) : (part === "piano" ? own.lh : own).length;
-    if (time === style.time && Number.isInteger(length / steps)) return { line: own, steps };
+    if (time === style.time && Number.isInteger(length / steps)) {
+      if (part !== "drums") return { line: own, steps };
+      // The groove varied along its phrase: a crash opening each one after the first, the third bar's hi-hat opened.
+      const lines = breaking ? own : D.variedBar(own, (bar - a) % 4, { crash: bar - a >= 4 });
+      return { line: lines, steps, groove: true, fill: breaking };
+    }
     const plain = fallback(time);
     return { line: plain[part], steps: plain.steps };
   }
@@ -304,8 +311,10 @@ export function arrange(score, styleId, { a = 0, b = null, parts = PARTS, diagra
   for (let bar = a; bar <= last; bar++) {
     for (const part of wanted) {
       const [lane, lower] = lanesOf[part];
-      const { line, steps } = patternOf(part, bar);
-      if (part === "drums") {
+      const { line, steps, groove, fill } = patternOf(part, bar);
+      if (part === "drums" && groove) {
+        Pt.writeDrumBar(score, lane, bar, line, style.time, { fill });
+      } else if (part === "drums") {
         const start = M.barStart(score, bar);
         const step = (M.barStart(score, bar + 1) - start) / steps;
         for (const hit of hitsOf(line)) write(lane, start + hit.at * step, hit.len * step, hit.drums.map((name) => M.drumPitch(name)));
@@ -339,5 +348,7 @@ export function arrange(score, styleId, { a = 0, b = null, parts = PARTS, diagra
     }
   }
   if (feel && style.swing) score.meta = { ...(score.meta ?? {}), swing: { amount: style.swing, unit: 8 } };
+  // Drums played by a drummer: never twice quite the same, nor quite on the grid (#455).
+  if (feel && lanesOf.drums) Pt.humanizeDrums(score);
   return { added, chords: chords.length, bars: last - a + 1 };
 }

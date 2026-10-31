@@ -1,8 +1,8 @@
 // The sections the shared library starts with (#447), made from the
 // editor's own catalogues: each accompaniment style (accompaniments.js)
 // played by the guitar, the piano, the bass and the whole band over a
-// progression of its kind, and each drum groove (drums.js) as three basic
-// bars and its break. Written to db/data/house_sections.json, which the
+// progression of its kind, and each drum groove (drums.js) as a loop of one
+// bar, a loop of two and its break. Written to db/data/house_sections.json, which the
 // migration add_house_sections reads; run again after a catalogue changes:
 //
 //   node scripts/section-seeds.mjs
@@ -69,7 +69,7 @@ function song(time, bpm, chords) {
 
 const seeds = [];
 function add(seed, made, title, instrument) {
-  const shared = shareable(made.score, made.lanes, 0, 3, title);
+  const shared = shareable(made.score, made.lanes, 0, (made.bars ?? 4) - 1, title);
   seeds.push({ seed, title, ...shared, instrument, style: made.style, description: made.description });
 }
 
@@ -89,16 +89,31 @@ for (const style of A.STYLES) {
   add(`style:${style.id}:band`, { score: band, lanes, style: libraryStyle, description: `${style.name} for the whole band: guitar, piano, bass and drums, the drums' break in the fourth bar. ${heard} Made by Edit ▸ Accompaniment.` }, `${style.name} — the whole band`, "band");
 }
 
+// Each groove as a drummer would hand it over (#456): a loop of one bar, a
+// loop of two (the second varied, its hi-hat opened), and its break, one bar.
 for (const groove of D.GROOVES) {
-  const score = read(String.raw`\new DrumStaff \with { instrumentName = "Drums" } \drummode { \time ${groove.time} ${tempo(groove.time, groove.bpm)} r${BAR[groove.time]} | r | r | r }`);
-  G.writeGroove(score, 0, 0, 3, groove);
-  if (groove.swing) score.meta = { ...(score.meta ?? {}), swing: { amount: groove.swing, unit: 8 } };
-  add(`groove:${groove.id}`, {
-    score,
-    lanes: M.voiceLanes(score, 0),
-    style: GROOVE_STYLES[groove.id] ?? GROUP_STYLES[groove.group],
-    description: `${groove.name}: three bars of the basic beat, then its break. ${groove.time}, about ${groove.bpm} to the beat${groove.swing ? ", swung" : ""}. Also in the drum grid's Groove menu (Edit ▸ Drum grid).`,
-  }, `${groove.name} — beat and break`, "drums");
+  const style = GROOVE_STYLES[groove.id] ?? GROUP_STYLES[groove.group];
+  const feel = `${groove.time}, about ${groove.bpm} to the beat${groove.swing ? ", swung" : ""}`;
+  const kit = (bars) => {
+    const rests = Array.from({ length: bars }, (_, k) => (k ? "r" : `r${BAR[groove.time]}`)).join(" | ");
+    const score = read(String.raw`\new DrumStaff \with { instrumentName = "Drums" } \drummode { \time ${groove.time} ${tempo(groove.time, groove.bpm)} ${rests} }`);
+    if (groove.swing) score.meta = { ...(score.meta ?? {}), swing: { amount: groove.swing, unit: 8 } };
+    G.humanizeDrums(score);
+    return score;
+  };
+  const one = kit(1);
+  G.writeDrumBar(one, 0, 0, groove.main, groove.time);
+  add(`groove:${groove.id}:loop1`, { score: one, lanes: M.voiceLanes(one, 0), style, bars: 1,
+    description: `${groove.name}, its basic beat: one bar to loop. ${feel}. Played as a drummer plays it: the backbeat strong, the off-beats lighter${/g/.test(Object.values(groove.main).join("")) ? ", ghost notes on the snare" : ""}. Also in the drum grid's Groove menu.` }, `${groove.name} — 1-bar loop`, "drums");
+  const two = kit(2);
+  G.writeDrumBar(two, 0, 0, groove.main, groove.time);
+  G.writeDrumBar(two, 0, 1, D.variedBar(groove.main, 2), groove.time);
+  add(`groove:${groove.id}:loop2`, { score: two, lanes: M.voiceLanes(two, 0), style, bars: 2,
+    description: `${groove.name}: two bars to loop, the second varied at its end. ${feel}.` }, `${groove.name} — 2-bar loop`, "drums");
+  const fill = kit(1);
+  G.writeDrumBar(fill, 0, 0, D.breakOf(groove), groove.time, { fill: true });
+  add(`groove:${groove.id}:break`, { score: fill, lanes: M.voiceLanes(fill, 0), style, bars: 1,
+    description: `${groove.name}: its break, one bar building to the next. ${feel}. Put it at the end of a phrase.` }, `${groove.name} — break`, "drums");
 }
 
 mkdirSync(new URL("../db/data/", import.meta.url), { recursive: true });

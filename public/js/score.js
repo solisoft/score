@@ -17,6 +17,7 @@
   var MODEL_SRC = (script && script.getAttribute("data-model")) || "/eui-score/score-model.js";
   var MUSICXML_SRC = (script && script.getAttribute("data-musicxml")) || "/eui-score/musicxml.js";
   var FEEL_SRC = (script && script.getAttribute("data-feel")) || "/eui-score/feel.js";
+  var VELOCITY_SRC = (script && script.getAttribute("data-velocity")) || "/eui-score/velocity.js";
   var PLAY_LABEL = '<span aria-hidden="true">▶</span> Play';
   var STOP_LABEL = '<span aria-hidden="true">■</span> Stop';
   var player = null;
@@ -37,28 +38,60 @@
    * source the editor's model cannot read is played as written there too.
    */
   /**
-   * How the piece is to be played (#453): its swing, from the button's
-   * data-swing ("62/8", a section's card) or its source's `%% eui-score`
-   * line; null when it is played straight.
+   * The piece's source: its button's data-src, or — a section's card, which
+   * holds none — fetched once from its data-section (data.json, #455).
    */
-  function swingOf(button) {
-    var given = /^(\d+)\/(8|16)$/.exec(button.getAttribute("data-swing") || "");
-    if (given) return { amount: Number(given[1]), unit: Number(given[2]) };
-    var line = /^%% eui-score (.*)$/m.exec(button.getAttribute("data-src") || "");
+  function sourceOf(button) {
+    var src = button.getAttribute("data-src");
+    var url = button.getAttribute("data-section");
+    if (src || !url) return Promise.resolve(src || "");
+    return fetch(url, { headers: { Accept: "application/json" } })
+      .then(function (r) { return r.ok ? r.json() : {}; })
+      .then(function (data) {
+        if (data.source) button.setAttribute("data-src", data.source);
+        return data.source || "";
+      })
+      .catch(function () { return ""; });
+  }
+
+  /** How the piece asks to be played, from its `%% eui-score` line: { swing, humanize, velocity }, or null. */
+  function feelOf(src) {
+    var line = /^%% eui-score (.*)$/m.exec(src || "");
     if (!line) return null;
     try {
-      return JSON.parse(line[1]).swing || null;
+      var meta = JSON.parse(line[1]);
+      return meta.swing || meta.humanize || meta.velocity ? meta : null;
     } catch (error) {
       return null;
     }
   }
 
-  /** The MIDI as written, swung when the piece swings: by the editor's own feel.js. */
+  /**
+   * The MIDI as it is to be heard: as written, then each note at the force
+   * set for it (velocity.js), swung and humanized as the piece asks
+   * (feel.js) — the editor's own modules (#453, #455).
+   */
   function midiOf(button) {
-    var swing = swingOf(button);
-    if (!swing) return writtenMidi(button);
-    return Promise.all([writtenMidi(button), import(FEEL_SRC)]).then(function (both) {
-      return both[1].feel(new Uint8Array(both[0]), { swing: swing });
+    return sourceOf(button).then(function (src) {
+      var meta = feelOf(src);
+      if (!meta) return writtenMidi(button);
+      var parts = [writtenMidi(button), import(FEEL_SRC)];
+      if (meta.velocity) parts.push(import(VELOCITY_SRC), import(ENGINE_SRC), import(MODEL_SRC));
+      return Promise.all(parts).then(function (got) {
+        var bytes = new Uint8Array(got[0]);
+        var F = got[1];
+        var ready = Promise.resolve(bytes);
+        if (meta.velocity) {
+          var Vel = got[2], E = got[3], M = got[4];
+          ready = E.loaded().then(function () {
+            var score = M.fromParsed(JSON.parse(E.engine.score_json(src))).score;
+            return Vel.applyVelocities(score, bytes);
+          }).catch(function () { return bytes; });
+        }
+        return ready.then(function (played) {
+          return F.feel(played, { swing: meta.swing || null, humanize: meta.humanize || null });
+        });
+      });
     });
   }
 

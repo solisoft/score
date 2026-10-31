@@ -15,6 +15,8 @@
 const M = await import(`./score-model.js${new URL(import.meta.url).search}`);
 // The swing a section asks for, heard when it is listened to (#453).
 const F = await import(`./feel.js${new URL(import.meta.url).search}`);
+// Each note's force, heard when a section is listened to (#455).
+const Vel = await import(`./velocity.js${new URL(import.meta.url).search}`);
 
 const KEY_NAMES = ["C♭", "G♭", "D♭", "A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯"];
 
@@ -71,6 +73,16 @@ export function shareable(score, lanes, a, b, title = "") {
   if (braces.length) mini.groups = braces.map((g) => ({ ...g, first: kept.indexOf(g.first), last: kept.indexOf(g.last) }));
   M.ensureLength(mini, M.barStart(mini, section.bars));
   M.pasteSection(mini, 0, 0, section);
+  // Each note's force goes along, on the section's own staves and from its start (#455).
+  const velocity = {};
+  for (const [id, v] of Object.entries(score.meta?.velocity ?? {})) {
+    const [lane, tick, key] = id.split(":").map(Number);
+    const k = uppers.findIndex((u) => M.voiceLanes(score, u).includes(lane));
+    if (k < 0 || tick < t0 || tick >= M.barStart(score, to + 1)) continue;
+    const there = M.laneOfVoice(mini, M.staffLanes(mini)[k], M.voiceOf(score, lane));
+    if (there >= 0) velocity[`${there}:${tick - t0}:${key}`] = v;
+  }
+  if (Object.keys(velocity).length) mini.meta = { ...(mini.meta ?? {}), velocity };
   const kinds = [...new Set(uppers.map((u) => instrumentOfLane(score, u)))];
   return {
     section,
@@ -162,6 +174,22 @@ export function importSection(score, data, parse) {
     if (lane < 0) lane = M.addVoice(score, staff, part.voice);
     M.pasteSection(score, lane, at, { bars: section.bars, parts: [{ ...part, offset: 0 }] });
   }
+  // Each note's force, from the section's staves to the ones it went on, from bar `at` (#455).
+  const theirs = M.readMeta(data.source) ?? {};
+  const moved = {};
+  const start = M.barStart(score, at);
+  for (const part of section.parts) {
+    const from = M.laneOfVoice(mini, miniLanes[part.offset], part.voice ?? 1);
+    const to = targets[part.offset] == null ? -1 : M.laneOfVoice(score, targets[part.offset], part.voice ?? 1);
+    if (from < 0 || to < 0) continue;
+    for (const [id, v] of Object.entries(theirs.velocity ?? {})) {
+      const [lane, tick, key] = id.split(":").map(Number);
+      if (lane === from) moved[`${to}:${tick + start}:${key}`] = v;
+    }
+  }
+  if (Object.keys(moved).length) score.meta = { ...(score.meta ?? {}), velocity: { ...(score.meta?.velocity ?? {}), ...moved } };
+  // A section played humanized in a score that is not: the score is now (#455).
+  if (theirs.humanize && !score.meta?.humanize) score.meta = { ...(score.meta ?? {}), humanize: theirs.humanize };
   // A swung section in a score that does not swing yet: the score swings now (#453).
   const swing = M.readMeta(data.source)?.swing ?? null;
   const swung = Boolean(swing && F.swingOf(swing) && !F.swingOf(score.meta?.swing));
@@ -347,7 +375,10 @@ export function install(studio) {
         return;
       }
       const data = await full(row);
-      const bytes = F.feel(await toMidi(data.source, { bpm: 100, beat: 4 }), F.feelOf(M.readMeta(data.source)));
+      const meta = M.readMeta(data.source);
+      let bytes = await toMidi(data.source, { bpm: 100, beat: 4 });
+      if (meta.velocity && studio.parse) bytes = Vel.applyVelocities(M.fromParsed(JSON.parse(studio.parse(data.source))).score, bytes);
+      bytes = F.feel(bytes, F.feelOf(meta));
       button.dataset.playing = "1";
       button.textContent = "■ Stop";
       const done = () => {

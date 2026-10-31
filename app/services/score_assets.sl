@@ -52,6 +52,7 @@ const SCORE_STUDIO_MODULES = [
   "studio-words.js",
   "voicings.js",
   "drums.js",
+  "patterns.js",
   "accompaniments.js",
   "studio-draw.js",
   "studio-peers.js",

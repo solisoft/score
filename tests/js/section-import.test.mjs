@@ -50,7 +50,7 @@ test("into an empty score: from its first bar; the whole band on its staves; a g
   assert.ok(M.staffLanes(back).some((s) => M.isDrums(back, s)), "a drum staff");
   engraves(score);
   const before = M.staffLanes(score).length;
-  const groove = importSection(score, seed("groove:funk"), score_json);
+  const groove = importSection(score, seed("groove:funk:loop1"), score_json);
   assert.equal(groove.at, 4);
   assert.deepEqual(groove.added, [], "on the drum staff there");
   assert.equal(M.staffLanes(score).length, before);
@@ -108,4 +108,26 @@ test("swing goes along (#453): kept in a shared section, set on a straight score
   const division = F.readSmf(bytes).division;
   assert.equal(straightTicks[1] - straightTicks[0], division / 2, "written even");
   assert.ok(swungTicks[1] - swungTicks[0] > division / 2, "played long-short");
+});
+
+test("a groove's force goes along (#455): kept in the shared section, then on the staff it is added to", async () => {
+  const { shareable } = await import("../../public/eui-score/section-library.js");
+  const G = await import("../../public/eui-score/patterns.js");
+  const D = await import("../../public/eui-score/drums.js");
+  const Vel = await import("../../public/eui-score/velocity.js");
+  const kit = read(String.raw`\new DrumStaff \with { instrumentName = "Drums" } \drummode { \time 4/4 r1 | r | r | r }`);
+  G.writeGroove(kit, 0, 0, 3, D.grooveOf("funk"), { feel: true });
+  const shared = shareable(kit, [0], 1, 2, "Funk");
+  const meta = M.readMeta(shared.source);
+  const forces = Object.values(meta.velocity ?? {});
+  assert.ok(forces.length > 20, "two bars of forces");
+  assert.ok(Math.min(...forces) <= 40 && Math.max(...forces) >= 105, "ghosts and backbeats");
+  assert.deepEqual(meta.humanize, D.DRUMMER_FEEL);
+  const score = read(String.raw`\new Staff \with { instrumentName = "Voice" } { \time 4/4 c'1 | d'1 }`);
+  importSection(score, { title: "Funk", ...shared }, score_json);
+  const ids = new Set(Vel.velocityNotes(score).map((n) => n.id));
+  const moved = Object.keys(score.meta.velocity ?? {});
+  assert.equal(moved.length, forces.length, "every force");
+  assert.ok(moved.every((id) => ids.has(id)), "each on a note of the score, in its new bars");
+  assert.deepEqual(score.meta.humanize, D.DRUMMER_FEEL);
 });

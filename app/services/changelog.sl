@@ -13,6 +13,22 @@ class Changelog
       {"date": "2026-10-31", "entries": [
         {
           "area": "editor",
+          "title": "Drums played as a drummer plays them",
+          "text": "The grooves, the accompaniments' drums and the library's drum sections no longer strike every "
+          + "note alike, on the grid: the downbeat and the backbeat are strong, the hi-hat's off-beats lighter, "
+          + "funk and soul have their ghost notes on the snare, a break builds to the next bar, a crash opens each "
+          + "phrase after the first and the third bar opens its hi-hat; each stroke a little early or late, never "
+          + "twice the same. Each note's force shows in the MIDI view's velocity strip, to change as you like."
+        },
+        {
+          "area": "site",
+          "title": "Drum loops of one and two bars, and breaks",
+          "text": "In the library of sections, each of the fifty drum grooves is now a loop of one bar, a loop of two "
+          + "bars (the second varied) and its break, one bar: a hundred and fifty sections, in place of the four "
+          + "bars of beat and break."
+        },
+        {
+          "area": "editor",
           "title": "On a phone, a finger scrolls the score",
           "text": "In the editor on a touch screen, swiping over the score scrolls it, up and down and sideways, "
           + "where it did nothing. A tap still selects a note or a bar, and the note's palette moves it; a swipe "
