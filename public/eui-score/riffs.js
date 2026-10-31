@@ -87,3 +87,35 @@ export function riffNotes(text, symbol) {
   const low = LOW + mod12(M.midiKey(root.d, root.alter) - LOW);
   return notes.map(([steps, semitones]) => atKey(M.transposePitch(root, steps, semitones), low + semitones));
 }
+
+// ---- Piano patterns (#459) ---------------------------------------------------------
+
+/**
+ * Piano patterns that follow the chords: { id, name, group, time, bpm,
+ * swing, bars: [{ lh, rh }] }. The left hand reads a riff's letters
+ * (riffNotes: R F T Q S Z O P Y W, low on the keyboard) or L, the chord's
+ * left hand as voiced; the right hand the accompaniments' (C the chord, T
+ * its top note, 1–6 one of its notes, low to high).
+ */
+export const PIANO_RIFFS = [
+  { id: "boogie-woogie", name: "Boogie-woogie", group: "Blues and rock'n'roll", time: "4/4", bpm: 120, swing: 67, bars: [{ lh: "R-T-F-S-Z-S-F-T-", rh: "--C--C-C--C--C-C" }] },
+  { id: "boogie-shapes", name: "Boogie, left-hand shapes", group: "Blues and rock'n'roll", time: "4/4", bpm: 120, swing: 67, bars: [{ lh: "P-P-Y-Y-P-P-Y-Y-", rh: "C-------C---C---" }, { lh: "P-P-Y-Y-W-W-Y-Y-", rh: "C-------C---C---" }] },
+  { id: "triplets", name: "Rock'n'roll triplets", group: "Blues and rock'n'roll", time: "12/8", bpm: 70, bars: [{ lh: "R--F--S--F--", rh: "CCCCCCCCCCCC" }] },
+  { id: "stride", name: "Stride", group: "Jazz and gospel", time: "4/4", bpm: 160, swing: 62, bars: [{ lh: "R---L---F---L---", rh: "C-------C---C---" }] },
+  { id: "gospel", name: "Gospel", group: "Jazz and gospel", time: "4/4", bpm: 80, swing: 60, bars: [{ lh: "R-------R---F---", rh: "C--C--C-C--C--CT" }] },
+  { id: "jazz-comp", name: "Jazz comping", group: "Jazz and gospel", time: "4/4", bpm: 140, swing: 66, bars: [{ lh: "L---------------", rh: "------C-----C---" }, { lh: "L---------------", rh: "--C-------C-----" }] },
+  { id: "alberti", name: "Alberti bass", group: "Classical and ballad", time: "4/4", bpm: 100, bars: [{ lh: "R-F-T-F-R-F-T-F-", rh: "C---------------" }] },
+  { id: "ballad-arp", name: "Ballad arpeggios", group: "Classical and ballad", time: "4/4", bpm: 70, bars: [{ lh: "R---F---O-------", rh: "1-2-3-4-3-2-1-2-" }] },
+  { id: "waltz-piano", name: "Waltz, oom-pah-pah", group: "Classical and ballad", time: "3/4", bpm: 120, bars: [{ lh: "R-----------", rh: "----C---C---" }, { lh: "F-----------", rh: "----C---C---" }] },
+  { id: "ballad-68", name: "6/8 broken chords", group: "Classical and ballad", time: "6/8", bpm: 60, bars: [{ lh: "R-----", rh: "-1-2-3" }] },
+  { id: "pop-eighths", name: "Pop eighths", group: "Pop, funk and dance", time: "4/4", bpm: 110, bars: [{ lh: "R-------R---F---", rh: "C-C-C-C-C-C-C-C-" }] },
+  { id: "funk-clav", name: "Funk clavinet", group: "Pop, funk and dance", time: "4/4", bpm: 100, bars: [{ lh: "R..R..R...R.....", rh: "C.CC.C.CC.C.C.CC" }] },
+  { id: "house-stabs", name: "House stabs", group: "Pop, funk and dance", time: "4/4", bpm: 124, bars: [{ lh: "R-------R-------", rh: "--C--C----C--C--" }] },
+  { id: "montuno", name: "Montuno", group: "Latin", time: "4/4", bpm: 180, bars: [{ lh: "R--F---R--F----.", rh: "C-1-3-C-1-C-3-1-" }] },
+  { id: "reggae-bubble", name: "Reggae bubble", group: "Latin", time: "4/4", bpm: 76, bars: [{ lh: "R-------.-----R-", rh: "--C---C---C---C-" }] },
+];
+
+/** The piano pattern of id `id`, or null. */
+export function pianoRiffOf(id) {
+  return PIANO_RIFFS.find((riff) => riff.id === id) ?? null;
+}

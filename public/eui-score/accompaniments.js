@@ -202,6 +202,20 @@ export function guitarForce(symbol, where, k = 0, count = 1, riff = false) {
   return Math.max(1, Math.min(127, base[placeOf] + shade));
 }
 
+/**
+ * How hard a pianist plays note `k` of `count` struck together by `hand`
+ * ("lh" or "rh") with letter `symbol`, at `where` in the bar: the left
+ * hand's bass marked on the beat, the right hand's chords lighter between
+ * the beats, the chord's top note sung over the others (#459).
+ */
+export function pianoForce(hand, symbol, where, k = 0, count = 1) {
+  const placeOf = { down: 0, beat: 1, half: 2, sub: 3 }[where] ?? 3;
+  if (hand === "lh") return [96, 90, 80, 74][placeOf] - (count > 1 && k > 0 ? 6 : 0);
+  const base = /[1-6]/.test(symbol) ? [78, 72, 64, 60] : symbol === "T" ? [86, 80, 74, 70] : [84, 78, 72, 66];
+  const top = count > 1 && k === count - 1 ? 8 : 0;
+  return Math.max(1, Math.min(127, base[placeOf] + top));
+}
+
 function lhNotes(voicing, symbol) {
   const lh = voicing.lh;
   if (symbol === "R") return [lh[0]];
@@ -265,15 +279,18 @@ function lanesFor(score, part, style, added) {
  * guitar diagram over each chord; `feel` the style's swing on the score;
  * `breaks` a drum break at the end of each four bars, and of the last;
  * `riff` the id of a riff (riffs.js) the guitar plays instead of strumming,
- * in the bars of its metre.
+ * in the bars of its metre; `pianoRiff` a piano pattern's (riffs.js
+ * PIANO_RIFFS), the piano's.
  * Answers { added, chords, bars }; throws with nothing changed when there is
  * no chord symbol to play.
  */
-export function arrange(score, styleId, { a = 0, b = null, parts = PARTS, diagrams = true, feel = true, breaks = true, riff = null } = {}) {
+export function arrange(score, styleId, { a = 0, b = null, parts = PARTS, diagrams = true, feel = true, breaks = true, riff = null, pianoRiff = null } = {}) {
   const style = styleOf(styleId);
   if (!style) throw new Error(`no style called ${styleId}`);
   const theRiff = riff == null ? null : Rf.riffOf(riff);
   if (riff != null && !theRiff) throw new Error(`no riff called ${riff}`);
+  const thePianoRiff = pianoRiff == null ? null : Rf.pianoRiffOf(pianoRiff);
+  if (pianoRiff != null && !thePianoRiff) throw new Error(`no piano pattern called ${pianoRiff}`);
   const last = b ?? M.barsOf(score) - 1;
   if (a < 0 || last >= M.barsOf(score) || a > last) throw new Error("no such bars");
   const t0 = M.barStart(score, a);
@@ -318,6 +335,11 @@ export function arrange(score, styleId, { a = 0, b = null, parts = PARTS, diagra
     if (part === "guitar" && theRiff && time === theRiff.time) {
       const line = theRiff.bars[(bar - a) % theRiff.bars.length];
       if (Number.isInteger(length / line.length)) return { line, steps: line.length, riff: true };
+    }
+    // The piano's pattern, bar after bar of it, where the bar is in its metre (#459).
+    if (part === "piano" && thePianoRiff && time === thePianoRiff.time) {
+      const line = thePianoRiff.bars[(bar - a) % thePianoRiff.bars.length];
+      if (Number.isInteger(length / line.rh.length)) return { line, steps: line.rh.length, riff: true };
     }
     if (time === style.time && Number.isInteger(length / steps)) {
       if (part !== "drums") return { line: own, steps };
@@ -374,16 +396,32 @@ export function arrange(score, styleId, { a = 0, b = null, parts = PARTS, diagra
           }
           return pianoVoicing;
         };
-        for (const n of placed(line.rh, bar, steps)) write(lane, n.t, n.len, rhNotes(voiced(n.chord), n.symbol));
-        for (const n of placed(line.lh, bar, steps)) write(lower, n.t, n.len, lhNotes(voiced(n.chord), n.symbol));
+        const start = M.barStart(score, bar);
+        const beat = (M.barStart(score, bar + 1) - start) / D.beatsOf(M.timeAt(score, bar).join("/"));
+        const whereOf = (t) => {
+          const into = t - start;
+          return into === 0 ? "down" : into % beat === 0 ? "beat" : into % (beat / 2) === 0 ? "half" : "sub";
+        };
+        for (const n of placed(line.rh, bar, steps)) {
+          const notes = rhNotes(voiced(n.chord), n.symbol);
+          write(lane, n.t, n.len, notes);
+          // Each note's force, as a pianist plays it (#459).
+          notes.forEach((p, k) => (forces[`${lane}:${n.t}:${M.midiKey(p.d, p.alter)}`] = pianoForce("rh", n.symbol, whereOf(n.t), k, notes.length)));
+        }
+        for (const n of placed(line.lh, bar, steps)) {
+          const notes = riff && n.symbol !== "L" ? Rf.riffNotes(n.chord, n.symbol) : lhNotes(voiced(n.chord), n.symbol);
+          write(lower, n.t, n.len, notes);
+          notes.forEach((p, k) => (forces[`${lower}:${n.t}:${M.midiKey(p.d, p.alter)}`] = pianoForce("lh", n.symbol, whereOf(n.t), k, notes.length)));
+        }
       }
     }
   }
-  if (lanesOf.guitar) {
-    const lane = lanesOf.guitar[0];
+  // The forces of the guitar and the piano, those written before on their lanes and bars replaced.
+  const forced = new Set([...(lanesOf.guitar ?? []), ...(lanesOf.piano ?? [])]);
+  if (forced.size) {
     const kept = Object.fromEntries(Object.entries(score.meta?.velocity ?? {}).filter(([id]) => {
       const [l, tick] = id.split(":").map(Number);
-      return l !== lane || tick < t0 || tick >= t1;
+      return !forced.has(l) || tick < t0 || tick >= t1;
     }));
     score.meta = { ...(score.meta ?? {}), velocity: { ...kept, ...forces } };
   }
@@ -394,9 +432,9 @@ export function arrange(score, styleId, { a = 0, b = null, parts = PARTS, diagra
       // No chord with a note under it on the guitar's staff: no diagram.
     }
   }
-  const swing = (theRiff && lanesOf.guitar ? theRiff.swing : null) ?? style.swing;
+  const swing = (theRiff && lanesOf.guitar ? theRiff.swing : null) ?? (thePianoRiff && lanesOf.piano ? thePianoRiff.swing : null) ?? style.swing;
   if (feel && swing) score.meta = { ...(score.meta ?? {}), swing: { amount: swing, unit: 8 } };
   // Drums and guitar played by people: never twice quite the same, nor quite on the grid (#455, #458).
-  if (feel && (lanesOf.drums || lanesOf.guitar)) Pt.humanizeDrums(score);
+  if (feel && (lanesOf.drums || lanesOf.guitar || lanesOf.piano)) Pt.humanizeDrums(score);
   return { added, chords: chords.length, bars: last - a + 1 };
 }

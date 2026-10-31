@@ -13,6 +13,16 @@ class Changelog
       {"date": "2026-10-31", "entries": [
         {
           "area": "editor",
+          "title": "Piano patterns, and a piano played by a pianist",
+          "text": "Edit ▸ Accompaniment has a Piano plays menu: the style's part, or one of fifteen patterns that "
+          + "follow the chords: boogie-woogie, the boogie's left-hand shapes, rock'n'roll triplets, stride, gospel, "
+          + "jazz comping, an Alberti bass, ballad arpeggios, a waltz, 6/8 broken chords, pop eighths, a funk "
+          + "clavinet, house stabs, a montuno and a reggae bubble. Each note has a pianist's force too: the bass "
+          + "marked, the chord lighter off the beat, its top note sung. In the library, each pattern and each "
+          + "style's piano is a loop of one bar and of two."
+        },
+        {
+          "area": "editor",
           "title": "Guitar riffs, and a guitar played by a guitarist",
           "text": "Edit ▸ Accompaniment has a Guitar plays menu: the style's strumming, or one of eighteen riffs "
           + "that follow the chords, low on the neck: a blues boogie, rock'n'roll eighths, a rock drive in power "

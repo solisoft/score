@@ -91,3 +91,48 @@ test("a riff in its bars only; a guitar note's force by where it falls; a riff t
   assert.ok(A.guitarForce("R", "down", 0, 1, true) > A.guitarForce("R", "sub", 0, 1, true));
   assert.throws(() => A.arrange(song("4/4"), "rock", { riff: "no-such" }), /no riff called no-such/);
 });
+
+test("the piano patterns (#459): every one over a song, engraved, played, read back, its left hand on the chords", () => {
+  assert.ok(R.PIANO_RIFFS.length >= 12);
+  for (const riff of R.PIANO_RIFFS) {
+    for (const bar of riff.bars) {
+      assert.equal(bar.lh.length, bar.rh.length, `${riff.id}: both hands as long`);
+      assert.match(bar.lh, /^[RFTQSZOPYWL.-]+$/, riff.id);
+      assert.match(bar.rh, /^[CT1-6.-]+$/, riff.id);
+    }
+    const score = song(riff.time);
+    A.arrange(score, STYLE[riff.time], { parts: ["piano"], pianoRiff: riff.id });
+    const { source } = M.toLilyPond(score);
+    try {
+      JSON.parse(editor_view(source, 1200, 7, -1, -1));
+    } catch (error) {
+      throw new Error(`${riff.id}: ${error.message ?? error}\n${source}`);
+    }
+    midi(M.toLilyPond(score, { unfold: true }).source, 100, 4, 0);
+    const back = read(source);
+    const brace = back.groups.find((g) => g.name === "Piano");
+    const lower = M.staffLanes(back)[brace.last];
+    const at = M.starts(back.staves[lower]);
+    back.staves[lower].events.forEach((ev, i) => {
+      if (ev.rest) return;
+      // Over the chord's root: its notes, and the riff letters' fourth, sixth and flat seventh.
+      const chord = ["E", "A7", "Bm", "E"][M.barAt(back, at[i])];
+      const root = { E: 4, A7: 9, Bm: 11 }[chord];
+      const allowed = new Set([0, 3, 4, 5, 7, 9, 10].map((n) => mod12(root + n)));
+      for (const p of ev.pitches) assert.ok(allowed.has(mod12(key(p))), `${riff.id}: ${M.midiKey(p.d, p.alter)} over ${chord}`);
+    });
+    const ids = new Set(Vel.velocityNotes(score).map((n) => n.id));
+    const forces = Object.keys(score.meta.velocity ?? {});
+    assert.ok(forces.length > 0 && forces.every((id) => ids.has(id)), `${riff.id}: each note its force`);
+  }
+});
+
+test("a pianist's force: the bass marked, the chord lighter off the beat, its top note sung; an unknown pattern refused", () => {
+  assert.ok(A.pianoForce("lh", "R", "down") > A.pianoForce("lh", "R", "sub"));
+  assert.ok(A.pianoForce("rh", "C", "beat", 0, 4) > A.pianoForce("rh", "C", "half", 0, 4));
+  assert.ok(A.pianoForce("rh", "C", "beat", 3, 4) > A.pianoForce("rh", "C", "beat", 1, 4), "the top note over the inner ones");
+  const score = song("4/4");
+  A.arrange(score, "rock", { parts: ["piano"], pianoRiff: "boogie-woogie" });
+  assert.deepEqual(score.meta.swing, { amount: 67, unit: 8 }, "the boogie-woogie swings");
+  assert.throws(() => A.arrange(song("4/4"), "rock", { pianoRiff: "no-such" }), /no piano pattern called no-such/);
+});

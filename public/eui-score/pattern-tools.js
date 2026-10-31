@@ -309,6 +309,10 @@ export function install(studio) {
   const bandRiff = grouped("bandRiff", R.RIFFS, "");
   bandRiff.prepend(new Option("Its strumming, as the style has it", ""));
   bandRiff.value = "";
+  // The piano's part: the style's, or a pattern (#459).
+  const bandPiano = grouped("bandPiano", R.PIANO_RIFFS, "");
+  bandPiano.prepend(new Option("Its part, as the style has it", ""));
+  bandPiano.value = "";
   const bandScope = el("p", { className: "muted studio-pattern-note" });
   const check = (field, text, checked = true) => {
     const box = el("input", { type: "checkbox", checked });
@@ -331,6 +335,7 @@ export function install(studio) {
     el("label", { className: "tool-field" }, "Style ", bandStyle),
     bandAbout,
     el("label", { className: "tool-field" }, "Guitar plays ", bandRiff),
+    el("label", { className: "tool-field" }, "Piano plays ", bandPiano),
     bandParts,
     el("div", { className: "studio-band-options" }, check("bandDiagrams", "Guitar diagrams over the chords"), check("bandBreaks", "A drum break every four bars"), check("bandFeel", "The style's swing")),
     bandScope,
@@ -355,6 +360,7 @@ export function install(studio) {
       breaks: on("band-breaks"),
       feel: on("band-feel"),
       ...(bandRiff.value ? { riff: bandRiff.value } : {}),
+      ...(bandPiano.value ? { pianoRiff: bandPiano.value } : {}),
       ...(bandBars ? { a: bandBars[0], b: bandBars[1] } : {}),
     };
   }

@@ -84,6 +84,13 @@ for (const style of A.STYLES) {
     const lanes = M.staffLanes(score).filter((s) => s > 0).flatMap((s) => M.voiceLanes(score, s));
     add(`style:${style.id}:${part}`, { score, lanes, style: libraryStyle, description: `${style.name} on the ${PART_SEEDS[part].name}, ${PART_SEEDS[part].what}. ${heard} Made from the chord symbols by Edit ▸ Accompaniment: put it in your score, then change the chords.` }, `${style.name} — ${PART_SEEDS[part].name}`, part);
   }
+  // The piano as loops too (#459): one bar on the first chord, two on the first two.
+  for (const bars of [1, 2]) {
+    const score = song(style.time, style.bpm, chords.slice(0, bars));
+    A.arrange(score, style.id, { parts: ["piano"] });
+    const lanes = M.staffLanes(score).filter((s) => s > 0).flatMap((s) => M.voiceLanes(score, s));
+    add(`style:${style.id}:piano-loop${bars}`, { score, lanes, style: libraryStyle, bars, description: `${style.name} on the piano, ${bars === 1 ? `one bar to loop, on ${chords[0]}` : `two bars to loop, ${chords[0]} then ${chords[1]}`}. ${style.time}, about ${style.bpm} to the beat. Played as a pianist plays it: the bass marked, the chord lighter off the beat, its top note sung.` }, `${style.name} — piano, ${bars}-bar loop`, "piano");
+  }
   // The guitar as loops too (#458): one bar on the first chord, two on the first two.
   for (const bars of [1, 2]) {
     const score = song(style.time, style.bpm, chords.slice(0, bars));
@@ -144,6 +151,28 @@ for (const riff of R.RIFFS) {
     const lanes = M.staffLanes(score).filter((s) => s > 0).flatMap((s) => M.voiceLanes(score, s));
     const over = chords[0] === chords.at(-1) ? `on ${chords[0]}` : `${chords[0]} then ${chords[1]}`;
     add(`riff:${riff.id}:loop${bars}`, { score, lanes, style: RIFF_STYLES[riff.id] ?? "rock", bars, description: `${riff.name}, a guitar riff: ${bars === 1 ? "one bar" : "two bars"} to loop, ${over}. ${riff.time}, about ${riff.bpm} to the beat${riff.swing ? ", swung" : ""}. It follows the chords: Edit ▸ Accompaniment, Guitar plays, writes it over yours.` }, `${riff.name} — ${bars}-bar loop`, "guitar");
+  }
+}
+
+// The piano patterns (#459): each as a loop of one bar and of two, over chords of its kind.
+const PIANO_CHORDS = {
+  "Blues and rock'n'roll": ["C7", "F7"], "Jazz and gospel": ["Cmaj7", "A7"], "Classical and ballad": ["C", "G"],
+  "Pop, funk and dance": ["Am", "F"], Latin: ["C", "G7"],
+};
+const PIANO_STYLES = {
+  "boogie-woogie": "blues", "boogie-shapes": "blues", triplets: "rock", stride: "jazz", gospel: "gospel", "jazz-comp": "jazz",
+  alberti: "classical", "ballad-arp": "ballad", "waltz-piano": "waltz", "ballad-68": "ballad", "pop-eighths": "pop",
+  "funk-clav": "funk", "house-stabs": "electronic", montuno: "latin", "reggae-bubble": "reggae",
+};
+for (const riff of R.PIANO_RIFFS) {
+  const [first, second] = PIANO_CHORDS[riff.group] ?? ["C", "G"];
+  for (const bars of [1, 2]) {
+    const chords = bars === 1 ? [first] : riff.bars.length > 1 ? [first, first] : [first, second];
+    const score = song(riff.time, riff.bpm, chords);
+    A.arrange(score, STYLE_IN[riff.time], { parts: ["piano"], pianoRiff: riff.id });
+    const lanes = M.staffLanes(score).filter((s) => s > 0).flatMap((s) => M.voiceLanes(score, s));
+    const over = chords[0] === chords.at(-1) ? `on ${chords[0]}` : `${chords[0]} then ${chords[1]}`;
+    add(`piano:${riff.id}:loop${bars}`, { score, lanes, style: PIANO_STYLES[riff.id] ?? "pop", bars, description: `${riff.name}, a piano pattern: ${bars === 1 ? "one bar" : "two bars"} to loop, ${over}. ${riff.time}, about ${riff.bpm} to the beat${riff.swing ? ", swung" : ""}. It follows the chords: Edit ▸ Accompaniment, Piano plays, writes it over yours.` }, `${riff.name} — piano, ${bars}-bar loop`, "piano");
   }
 }
 
