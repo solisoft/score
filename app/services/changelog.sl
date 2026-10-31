@@ -13,6 +13,14 @@ class Changelog
       {"date": "2026-10-31", "entries": [
         {
           "area": "site",
+          "title": "A hundred and ten sections in the library to start with",
+          "text": "The library of sections, at /sections, is no longer empty: each of the fifteen accompaniment "
+          + "styles is there on the guitar, the piano, the bass and for the whole band, and each of the fifty "
+          + "drum grooves as three bars of its beat and its break, all signed Score. Listen to them, rate them, "
+          + "and put them in a score from the editor (Edit ▸ Library of sections)."
+        },
+        {
+          "area": "site",
           "title": "Sign-up kept clear of robots, with no puzzle to solve",
           "text": "Creating an account now asks the browser for a moment of work, done while you type, which costs "
           + "a robot making accounts by the thousand far more than it costs you; one place can make ten accounts "

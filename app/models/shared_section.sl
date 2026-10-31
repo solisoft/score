@@ -50,6 +50,11 @@ const SECTION_STYLES = [
   "electronic",
   "other"
 ]
+# The author of the sections the library starts with (#447): made from the
+# editor's own styles and grooves (scripts/section-seeds.mjs), signed with
+# the site's name. No account has this key.
+const SECTION_HOUSE_AUTHOR = "score"
+const SECTION_HOUSE_NAME = "Score"
 # How the library names them.
 const SECTION_INSTRUMENT_NAMES = {
   "guitar": "Guitar",
@@ -173,6 +178,51 @@ class SharedSection < Model
     {"section": section}
   end
 
+  # The library's own sections (#447), from `seeds` (db/data/house_sections.json:
+  # [{seed, title, description, instrument, style, time, key, bpm, bars,
+  # tracks, section, source}]), signed SECTION_HOUSE_NAME. One already there
+  # (by its `seed`) or refused by `problem` is left out. Answers the number
+  # added.
+  static def add_house(seeds)
+    added = 0
+    seeds.each do |fields|
+      next unless SharedSection.where({"seed": fields["seed"]}).first.nil?
+      next unless SharedSection.problem(fields).nil?
+
+      section = SharedSection.create({
+        "user_id": SECTION_HOUSE_AUTHOR,
+        "seed": fields["seed"],
+        "title": fields["title"].to_s.trim,
+        "description": fields["description"].to_s.trim,
+        "instrument": fields["instrument"].to_s,
+        "style": fields["style"].to_s,
+        "time": fields["time"].to_s,
+        "key": fields["key"].to_s,
+        "bpm": fields["bpm"].to_s.to_i,
+        "bars": fields["bars"].to_s.to_i,
+        "tracks": fields["tracks"].to_s.to_i,
+        "section": fields["section"],
+        "source": fields["source"].to_s,
+        "rating_sum": 0,
+        "rating_count": 0,
+        "rating": 0,
+        "comments_count": 0,
+        "hidden": false,
+        "created_at": DateTime.utc.to_unix
+      })
+      added += 1 if section._errors.nil?
+    end
+    added
+  end
+
+  # The library's own sections taken away, with what was said of them.
+  static def remove_house
+    SharedSection.where({"user_id": SECTION_HOUSE_AUTHOR}).all.each do |section|
+      section.remove
+    end
+    nil
+  end
+
   # How many sections `user` published in the last 24 hours.
   static def published_today(user)
     since = DateTime.utc.to_unix - 86400
@@ -241,6 +291,7 @@ class SharedSection < Model
     end.uniq
     return names if wanted.length == 0
 
+    names[SECTION_HOUSE_AUTHOR] = SECTION_HOUSE_NAME if wanted.includes?(SECTION_HOUSE_AUTHOR)
     User.where("doc._key IN @keys", {"keys": wanted}).select("_key", "name").all.each do |user|
       names[user._key] = user.name.blank? ? "A member" : user.name.to_s.trim
     end
