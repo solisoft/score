@@ -27,13 +27,15 @@ crate-type = ["cdylib", "rlib"]
 # too wide for the page between words (#431); 104591c reads LilyPond 2.24's
 # \segnoMark 1, \segno over a note, \section, \sectionLabel, \textMark,
 # \volta in an \alternative and \harmonic (#433); 7ff6282 answers each
-# word's range, what a double click opens (#434). The browser draws
+# word's range, what a double click opens (#434); b64978c a chord
+# diagram's strings and frets (#436); 291b705 a slur's side written ^( or
+# _(, and hairpins under a slur drawn below (#467). The browser draws
 # those before the server's Soli does;
 # move this
 # and the server's Soli together otherwise. `build.sh` writes the module
 # into public/eui-score/, and that output is committed: deploying the site
 # needs no Rust.
-eui-score = { git = "https://github.com/solisoft/eui", rev = "7ff6282" }
+eui-score = { git = "https://github.com/solisoft/eui", rev = "291b705" }
 wasm-bindgen = "=0.2.126"
 serde_json = "1"
 

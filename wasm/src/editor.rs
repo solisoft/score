@@ -195,7 +195,7 @@ fn base(src: &str, width: f64, sp: f64) -> Result<std::rc::Rc<Base>, String> {
         return Ok(found);
     }
     let eng = eui_score::engrave(src, (width / sp).max(10.0), &Layout::default()).map_err(|e| e.message)?;
-    let (paths, ranges, heads, word_ranges) = eui_score::paths_words(&eng, sp, 0).map_err(|e| e.message)?;
+    let (paths, ranges, heads, word_ranges, _fret_grids) = eui_score::paths_words(&eng, sp, 0).map_err(|e| e.message)?;
     let parsed = parse::parse(src).map_err(|e| e.message)?;
     let by_item = events_by_item(&parsed);
 
@@ -779,6 +779,8 @@ pub fn score(src: &str) -> Result<Value, String> {
                 "drums": ev.drums.iter().map(|d| [d.d, d.key]).collect::<Vec<_>>(),
                 "tie": ev.tie,
                 "slur_on": ev.slur_on,
+                // `^(` 1, `_(` -1, `(` 0: the side a slur is written to (#467).
+                "slur_dir": ev.slur_dir,
                 "slur_off": ev.slur_off,
                 "scripts": ev.scripts.iter().map(|s| json!([s.name, s.dir])).collect::<Vec<_>>(),
                 "texts": texts,
@@ -831,6 +833,7 @@ pub fn score(src: &str) -> Result<Value, String> {
             event["fingers"] = json!(ev.fingers.iter().map(|f| json!([f.text, f.dir, f.head, f.circled])).collect::<Vec<_>>());
             // `\\(` and `\\)`: a phrasing slur starts, ends.
             event["phrase_on"] = json!(ev.phrase_on);
+            event["phrase_dir"] = json!(ev.phrase_dir);
             event["phrase_off"] = json!(ev.phrase_off);
             // In `<< { … } \\ { … } >>`, the voice a note or rest is: 1 and 3
             // stems up, 2 and 4 down (`\voiceOne` … `\voiceFour`); null outside.

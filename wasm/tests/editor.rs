@@ -13,6 +13,16 @@ fn each_note_of_voices_says_its_voice() {
     assert_eq!(notes("{ << { \\voiceOne e''1 } \\\\ { \\voiceThree g'1 } >> }"), vec![Some(1), Some(3)]);
 }
 
+#[test]
+fn a_slur_says_the_side_it_is_written_to() {
+    let parsed = score("{ c'4^( d') e'_( f') g'( a') b'^\\( c''\\) }").unwrap();
+    let events = parsed["staves"][0]["events"].as_array().unwrap();
+    let sides: Vec<i64> = events.iter().filter(|ev| ev["slur_on"] == true).map(|ev| ev["slur_dir"].as_i64().unwrap()).collect();
+    assert_eq!(sides, vec![1, -1, 0]);
+    let phrase: Vec<i64> = events.iter().filter(|ev| ev["phrase_on"] == true).map(|ev| ev["phrase_dir"].as_i64().unwrap()).collect();
+    assert_eq!(phrase, vec![1]);
+}
+
 const TUNE: &str = "{ \\key g \\major \\time 3/4 g'4 a' b' | d''2 r4 | <g' b'>2. \\bar \"|.\" }";
 
 fn op(src: &str, v: serde_json::Value) -> Result<String, String> {

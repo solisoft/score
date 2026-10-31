@@ -260,6 +260,12 @@ export function install(ctx) {
         const r = range() ?? (() => { throw new Error("Select the notes to slur: click the first, Shift+click the last"); })();
         M.toggleSlur(score, r.s, r.a, r.b);
       });
+      // A slur over or under the notes (#467): drawn so, or turned to that side.
+      case "slur-up":
+      case "slur-down": return edit((score) => {
+        const r = range() ?? (() => { throw new Error("Select the notes to slur: click the first, Shift+click the last"); })();
+        M.setSlurSide(score, r.s, r.a, r.b, name === "slur-up" ? 1 : -1);
+      });
       case "phrase": return edit((score) => {
         const r = range() ?? (() => { throw new Error("Select the notes of the phrase: click the first, Shift+click the last"); })();
         M.togglePhrase(score, r.s, r.a, r.b);

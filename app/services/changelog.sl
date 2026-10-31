@@ -12,6 +12,15 @@ class Changelog
     [
       {"date": "2026-10-31", "entries": [
         {
+          "area": "editor",
+          "title": "A slur over the notes or under them, as you choose",
+          "text": "Next to Slur, Above and Below draw a slur on that side of the notes, or turn an existing one "
+          + "over; pressed again, it goes back to where the stems leave room. It is written ^( or _( in the "
+          + "LilyPond, read back as such. Hairpins and dynamics under the staff now go under a slur drawn below "
+          + "the notes, where they used to cross it.",
+          "app": true
+        },
+        {
           "area": "site",
           "title": "Claude transcribes a photo of a score with measured notes",
           "text": "Ask Claude for the prompt transcribe_photo, or install it once as a skill in Claude Code (Score in "

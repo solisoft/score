@@ -280,6 +280,30 @@ describe("The playground, in a browser") do
     assert_no_page_errors()
   end
 
+  test("Above and Below put a slur over or under the notes, and turn it back (#467)") do
+    type_source("{ c'4( d') e' f' | g'1 }")
+    assert_not(evaluate("document.querySelector('#studio').classList.contains('studio-text-only')"))
+    caret_on("c'4")
+    evaluate("document.querySelector(\".tool[data-act='slur-down']\").click()")
+    sleep(0.4)
+    assert_contains(playground_text(), "c'4_( d'4)")
+    caret_on("c'4")
+    evaluate("document.querySelector(\".tool[data-act='slur-up']\").click()")
+    sleep(0.4)
+    assert_contains(playground_text(), "c'4^( d'4)")
+    # Pressed again on its side: back to where the stems leave room.
+    caret_on("c'4")
+    evaluate("document.querySelector(\".tool[data-act='slur-up']\").click()")
+    sleep(0.4)
+    assert_contains(playground_text(), "c'4( d'4)")
+    # No slur there: one is drawn, on that side, to the next note.
+    caret_on("e'4")
+    evaluate("document.querySelector(\".tool[data-act='slur-down']\").click()")
+    sleep(0.4)
+    assert_contains(playground_text(), "e'4_( f'4)")
+    assert_no_page_errors()
+  end
+
   test("notes drawn on the other staff and words under the alto are edited on the score (#375)") do
     type_source("\\new PianoStaff << \\new Staff = \"up\" { c''4 d'' e'' f'' | g''1 }"
     + " \\new Staff = \"down\" { \\clef bass c1 | c1 } >>")

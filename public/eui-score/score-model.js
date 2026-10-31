@@ -780,6 +780,7 @@ function pieces(score, ev, at, ticks, role) {
       delete p.ottava;
       delete p.fingers;
       delete p.phraseStart;
+      delete p.phraseDir;
       delete p.stemDir;
       delete p.noAutoBeam;
       delete p.spanStart;
@@ -807,6 +808,7 @@ function pieces(score, ev, at, ticks, role) {
       delete p.lv;
       delete p.spanEnd;
     }
+    if (!(k === 0 && keepsStart)) delete p.slurDir;
     if (!(k === 0 && keepsStart)) Object.assign(p, { slurStart: false, dynamic: null, hairpin: null, arts: [], chord: "", texts: [], lyric: null, verses: [], graces: [], grace: null, arpeggio: false, pedalOn: false, pedalOff: false });
     if (!(last && keepsEnd)) Object.assign(p, { slurEnd: false, hairpinEnd: false, gliss: false });
     // A tremolo's strokes are shorter than the note they repeat.
@@ -1022,6 +1024,8 @@ export function remove(score, s, i, head = -1) {
   delete ev.afterGraces;
   delete ev.afterAt;
   delete ev.phraseStart;
+  delete ev.phraseDir;
+  delete ev.slurDir;
   delete ev.phraseEnd;
   delete ev.forced;
   delete ev.cautionary;
@@ -1058,6 +1062,11 @@ export function toggleTie(score, s, i) {
   ev.tie = !ev.tie;
 }
 
+/** `^` for a line forced over (1), `_` under (-1), nothing for the engraver's choice. */
+function side(dir) {
+  return dir > 0 ? "^" : dir < 0 ? "_" : "";
+}
+
 /** A line from event `a` to event `b` over the fields `start` and `end` (a slur's, a phrasing slur's); see toggleSlur. */
 function toggleLine(events, a, b, start, end, name) {
   const [from, to] = [Math.min(a, b), Math.max(a, b)];
@@ -1085,7 +1094,30 @@ function toggleLine(events, a, b, start, end, name) {
 
 /** A slur from event `a` to event `b`; on one note, takes away the slurs it starts or ends. */
 export function toggleSlur(score, s, a, b) {
-  toggleLine(score.staves[s].events, a, b, "slurStart", "slurEnd", "slur");
+  const events = score.staves[s].events;
+  toggleLine(events, a, b, "slurStart", "slurEnd", "slur");
+  for (const ev of events) if (!ev.slurStart) delete ev.slurDir;
+}
+
+/**
+ * The slur from event `a` to event `b` over the notes (`dir` 1) or under
+ * them (-1), written `^(` or `_(` (#467). A slur already starting on the
+ * first note turns to that side, or back to the engraver's choice when it
+ * is there already; with none, one is drawn, as toggleSlur draws it.
+ */
+export function setSlurSide(score, s, a, b, dir) {
+  const events = score.staves[s].events;
+  const from = Math.min(a, b);
+  // On one note, the slur it is in: the one started on it or before it.
+  const open = events[from].slurStart ? from : a === b ? events.slice(0, from + 1).findLastIndex((e) => e.slurStart) : -1;
+  const closes = open >= 0 && events.some((e, k) => k >= open && e.slurEnd && (a === b ? k >= from : true));
+  if (open >= 0 && closes) {
+    if (events[open].slurDir === dir) delete events[open].slurDir;
+    else events[open].slurDir = dir;
+    return;
+  }
+  toggleLine(events, a, b, "slurStart", "slurEnd", "slur");
+  events[from].slurDir = dir;
 }
 
 /** A phrasing slur, `\(` … `\)`, from event `a` to event `b`: as toggleSlur, beside the slurs. */
@@ -2754,10 +2786,11 @@ function eventText(ev, beam = "") {
   out += beam;
   if (ev.pitches.length === 1 && harmonic(ev.pitches[0])) out += "\\harmonic";
   if (ev.tie && !ev.rest) out += tw("tie", "~");
-  if (ev.slurStart) out += tw("slur", "(");
+  // A slur written over (^) or under (_) keeps its side (#467); `(` leaves it to the engraver.
+  if (ev.slurStart) out += tw("slur", `${side(ev.slurDir)}(`);
   if (ev.slurEnd) out += ")";
   if (ev.phraseEnd && !ev.rest) out += "\\)";
-  if (ev.phraseStart && !ev.rest) out += tw("phrase", "\\(");
+  if (ev.phraseStart && !ev.rest) out += tw("phrase", `${side(ev.phraseDir)}\\(`);
   if (ev.dynamic) out += tw("dynamic", `\\${ev.dynamic}`);
   if (ev.hairpinEnd) out += tw("hairpinEnd", "\\!");
   if (ev.hairpin) out += tw("hairpin", HAIRPIN_WORDS.includes(ev.hairpinWords) ? `\\${ev.hairpinWords}` : ev.hairpin === "<" ? "\\<" : "\\>");
@@ -6673,6 +6706,8 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
           // Fingerings and string numbers (see setFingering); phrasing slurs.
           ...(!drums && ev.fingers?.length ? { fingers: ev.fingers.map(([text, dir, head, circled]) => ({ text, dir, head: head ?? null, circled })) } : {}),
           ...(ev.phrase_on ? { phraseStart: true } : {}),
+          ...(ev.phrase_on && ev.phrase_dir ? { phraseDir: ev.phrase_dir } : {}),
+          ...(ev.slur_on && ev.slur_dir ? { slurDir: ev.slur_dir } : {}),
           ...(ev.phrase_off ? { phraseEnd: true } : {}),
           // Real files (#359): cis! and cis?, a crescendo in words, a tie let ring or repeated, a text span, a breath.
           ...(!drums && k === "Note" && ev.forced?.length ? { forced: [...ev.forced] } : {}),

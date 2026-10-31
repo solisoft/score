@@ -126,6 +126,8 @@
           <div class="studio-dropdown-items" role="menu">
             <button type="button" role="menuitem" data-act="tie">Tie <kbd>T</kbd></button>
             <button type="button" role="menuitem" data-act="slur">Slur <kbd>S</kbd></button>
+            <button type="button" role="menuitem" data-act="slur-up">Slur above</button>
+            <button type="button" role="menuitem" data-act="slur-down">Slur below</button>
             <button type="button" role="menuitem" data-act="phrase">Phrasing slur <kbd>Shift+S</kbd></button>
             <button type="button" role="menuitem" data-act="ottava" data-value="1">8va above the selection</button>
             <button type="button" role="menuitem" data-act="ottava" data-value="-1">8vb below the selection</button>
@@ -443,6 +445,8 @@
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="tie" title="Tie to the next note (T)">⁀ Tie</button>
           <button type="button" class="tool tool-wide" data-act="slur" title="Slur the selected notes (S)">⌒ Slur</button>
+          <button type="button" class="tool" data-act="slur-up" title="A slur over the selected notes, or turn theirs over">⌒ Above</button>
+          <button type="button" class="tool" data-act="slur-down" title="A slur under the selected notes, or turn theirs under">‿ Below</button>
           <button type="button" class="tool tool-wide" data-act="phrase" title="Phrasing slur over the selected notes (Shift+S)">⌒ Phrase</button>
         </div>
         <p class="tool-sub">Ottava</p>

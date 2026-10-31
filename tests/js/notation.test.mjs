@@ -226,3 +226,37 @@ test("musicxml: a second slur over the first is read as a phrasing slur", () => 
   assert.match(source, /c'4\(\\\( d'4 e'4 f'4\\\)\)/);
   engrave(read(source).score);
 });
+
+test("a slur over or under the notes (#467): read, kept, set, turned, taken away", () => {
+  // Read back from a source with its sides, and written out the same.
+  const { score, lost, source } = editedElsewhere("{ c'4^( d') e'_( f') | g'4( a') b'^\\( c''\\) | d''1 }");
+  assert.equal(lost, undefined);
+  assert.match(source, /c'4\^\( d'4\) e'4_\( f'4\) \| g'4\( a'4\) b'4\^\\\( c''4\\\)/);
+  assert.equal(score.staves[0].events[0].slurDir, 1);
+  assert.equal(score.staves[0].events[2].slurDir, -1);
+  assert.equal(score.staves[0].events[4].slurDir, undefined, "( leaves it to the engraver");
+  // Turned: under, then pressed again on its side, back to the engraver's choice.
+  M.setSlurSide(score, 0, 4, 5, -1);
+  assert.match(engrave(score), /g'4_\( a'4\)/);
+  M.setSlurSide(score, 0, 5, 5, -1);
+  assert.match(engrave(score), /g'4\( a'4\)/, "from its last note too");
+  M.setSlurSide(score, 0, 0, 1, -1);
+  assert.match(engrave(score), /c'4_\( d'4\)/, "over turned under");
+  // None there: drawn on that side, over a selection or to the next note.
+  const plain = read("{ c'4 d' e' f' }").score;
+  M.setSlurSide(plain, 0, 0, 2, 1);
+  assert.match(engrave(plain), /c'4\^\( d'4 e'4\)/);
+  const single = read("{ c'4 d' e' f' }").score;
+  M.setSlurSide(single, 0, 1, 1, -1);
+  assert.match(engrave(single), /d'4_\( e'4\)/, "one note: to the next, on that side");
+  assert.throws(() => M.setSlurSide(single, 0, 3, 3, 1), /later note/);
+  assert.throws(() => M.setSlurSide(read("{ c'4 r2. }").score, 0, 0, 1, 1), /slur/);
+  // Taken away with the plain slur tool: its side goes with it.
+  M.toggleSlur(plain, 0, 0, 0);
+  assert.equal(plain.staves[0].events[0].slurDir, undefined);
+  assert.doesNotMatch(engrave(plain), /\^\(/);
+  // A note made a rest keeps no side.
+  const rested = read("{ c'4_( d') e' f' }").score;
+  M.remove(rested, 0, 0);
+  assert.equal(rested.staves[0].events[0].slurDir, undefined);
+});
