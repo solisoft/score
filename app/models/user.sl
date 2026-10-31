@@ -40,6 +40,67 @@ const AUTH_EMAILS_WINDOW_SECONDS = 3600
 # What a refused request reads, the same for any address.
 const AUTH_EMAILS_REFUSED = "Too many emails asked for: try again in an hour."
 
+# Sign-up against spam (#448), past the honeypot and the render time every
+# form carries: each sign-up page asks the browser for a proof of work of
+# SIGNUP_POW_BITS bits (well under a second for a person, real CPU for a bot
+# making accounts by the thousand), one source address makes
+# SIGNUPS_PER_IP_HOUR accounts an hour at most, and a throwaway address —
+# the kind made to receive one mail and vanish — is refused.
+const SIGNUP_POW_BITS = (getenv("SIGNUP_POW_BITS") ?? "17").to_i
+const SIGNUPS_PER_IP_HOUR = (getenv("SIGNUPS_PER_IP_HOUR") ?? "10").to_i
+const THROWAWAY_EMAIL_DOMAINS = [
+  "mailinator.com",
+  "guerrillamail.com",
+  "guerrillamail.net",
+  "guerrillamail.org",
+  "guerrillamailblock.com",
+  "sharklasers.com",
+  "grr.la",
+  "10minutemail.com",
+  "10minutemail.net",
+  "yopmail.com",
+  "yopmail.fr",
+  "yopmail.net",
+  "temp-mail.org",
+  "tempmail.com",
+  "tempmail.net",
+  "tempmailo.com",
+  "temp-mail.io",
+  "tempail.com",
+  "throwawaymail.com",
+  "trashmail.com",
+  "trashmail.de",
+  "getnada.com",
+  "nada.email",
+  "dispostable.com",
+  "maildrop.cc",
+  "mailnesia.com",
+  "mintemail.com",
+  "mohmal.com",
+  "emailondeck.com",
+  "fakeinbox.com",
+  "spamgourmet.com",
+  "getairmail.com",
+  "mailcatch.com",
+  "moakt.com",
+  "burnermail.io",
+  "33mail.com",
+  "spam4.me",
+  "inboxkitten.com",
+  "1secmail.com",
+  "1secmail.net",
+  "1secmail.org",
+  "mail.tm",
+  "mail.gw",
+  "emailfake.com",
+  "fakemail.net",
+  "discard.email",
+  "mailpoof.com",
+  "tmail.ws",
+  "tmpmail.org",
+  "tmpmail.net"
+]
+
 # Base URL used in password-reset / confirmation emails.
 #
 # Read from the environment so a deployment sets it once, next to its other
@@ -131,6 +192,17 @@ class User < Model
 
   # Whether an account e-mail may go to `email`, asked from `ip`: each one
   # allowed counts against both, whether or not `email` has an account.
+  # Whether `email` is at a throwaway address's domain, or one of its
+  # subdomains (#448).
+  static def throwaway_email?(email)
+    domain = email.to_s.trim.downcase.split("@").last.to_s
+    return false if domain.blank?
+
+    THROWAWAY_EMAIL_DOMAINS.any? do |known|
+      domain == known || domain.ends_with?(".#{known}")
+    end
+  end
+
   static def account_email_allowed?(email, ip)
     by_ip = RateLimiter("account-email-ip:#{ip}", AUTH_EMAILS_PER_IP, AUTH_EMAILS_WINDOW_SECONDS)
     by_address = RateLimiter(

@@ -7,8 +7,23 @@ const SPEC_PASSWORD = "correct horse battery"
 # keep: a post without one passes the origin check, as tokens are only
 # required where SOLI_CSRF_TOKENS says so.)
 def form_fields(path)
-  parts = res_body(get(path)).split("name=\"_soli_ts\" value=\"")
-  {"_soli_ts": parts.length > 1 ? parts[1].split("\"")[0] : ""}
+  body = res_body(get(path))
+  parts = body.split("name=\"_soli_ts\" value=\"")
+  fields = {"_soli_ts": parts.length > 1 ? parts[1].split("\"")[0] : ""}
+  challenge = body.split("data-soli-pow=\"")
+  fields["_soli_pow"] = solve_pow(challenge[1].split("\"")[0]) if challenge.length > 1
+  fields
+end
+
+# The proof of work a sign-up page asks for, solved as /__soli/pow.js does:
+# `<challenge>:<nonce>` whose SHA-256 starts with the bits it names — eight
+# under .env.test (SIGNUP_POW_BITS), two zero hex digits.
+def solve_pow(challenge)
+  nonce = 0
+  while !Crypto.sha256("#{challenge}:#{nonce}").starts_with?("00")
+    nonce += 1
+  end
+  "#{challenge}:#{nonce}"
 end
 
 def fresh_email
@@ -100,12 +115,68 @@ describe("Accounts") do
         "password": SPEC_PASSWORD,
         "_soli_url": "http://spam.example"
       }))
-      assert_eq(res_status(filled), 422)
+      assert_eq(res_status(filled), 200, "answered as a sign-up")
       unloaded = post(
         "/signup",
         {"email": email, "password": SPEC_PASSWORD}
       )
       assert_ne(res_status(unloaded), 302)
+      assert_null(User.find_by("email", email))
+    end
+
+    test("refuses a form without its proof of work, and says JavaScript is needed") do
+      email = fresh_email()
+      fields = form_fields("/signup")
+      sleep(2.1)
+      response = post("/signup", fields.merge({
+        "email": email,
+        "password": SPEC_PASSWORD,
+        "_soli_pow": "#{fields["_soli_pow"].split(":")[0]}:0x"
+      }))
+      assert_eq(res_status(response), 422)
+      assert_contains(res_body(response), "needs JavaScript")
+      # Left out altogether, as a bot that never runs the page's script does.
+      fields.delete("_soli_pow")
+      missing = post("/signup", fields.merge({
+        "email": email,
+        "password": SPEC_PASSWORD
+      }))
+      assert_eq(res_status(missing), 422)
+      assert_contains(res_body(missing), "needs JavaScript")
+      assert_null(User.find_by("email", email))
+    end
+
+    test("asks the browser for a proof of work, and says so without JavaScript") do
+      body = res_body(get("/signup"))
+      assert_contains(body, "data-soli-pow=\"")
+      assert_contains(body, "<noscript>")
+    end
+
+    test("refuses a throwaway address, its subdomains too, and creates nothing") do
+      ["someone-#{uuid_v4}@mailinator.com", "someone-#{uuid_v4}@inbox.yopmail.com"].each do |email|
+        fields = form_fields("/signup")
+        sleep(2.1)
+        response = post("/signup", fields.merge({
+          "email": email,
+          "password": SPEC_PASSWORD
+        }))
+        assert_eq(res_status(response), 422, email)
+        assert_contains(res_body(response), "an address you keep")
+        assert_null(User.find_by("email", email))
+      end
+    end
+
+    test("answers a bot as a sign-up, with no account and no mail") do
+      email = fresh_email()
+      fields = form_fields("/signup")
+      sleep(2.1)
+      response = post("/signup", fields.merge({
+        "email": email,
+        "password": SPEC_PASSWORD,
+        "_soli_url": "http://spam.example"
+      }))
+      assert_eq(res_status(response), 200)
+      assert_contains(res_body(response), "Check your inbox")
       assert_null(User.find_by("email", email))
     end
 
@@ -116,7 +187,19 @@ describe("Accounts") do
         "password": SPEC_PASSWORD
       }))
       assert_eq(res_status(response), 422)
+      assert_contains(res_body(response), "That was quick")
       assert_null(User.find_by("email", email))
+    end
+  end
+
+  describe("User.throwaway_email?") do
+    test("knows the throwaway domains and their subdomains, not a lasting address") do
+      assert(User.throwaway_email?("A@Mailinator.com "))
+      assert(User.throwaway_email?("a@x.guerrillamail.com"))
+      assert_not(User.throwaway_email?("a@gmail.com"))
+      assert_not(User.throwaway_email?("a@notmailinator.com"))
+      assert_not(User.throwaway_email?(""))
+      assert_not(User.throwaway_email?(nil))
     end
   end
 

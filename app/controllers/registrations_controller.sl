@@ -16,7 +16,8 @@ class RegistrationsController < Controller
       {
         "title": "Create account",
         "error": "",
-        "user": User.new()
+        "user": User.new(),
+        "pow_bits": SIGNUP_POW_BITS
       }
     )
   end
@@ -26,17 +27,33 @@ class RegistrationsController < Controller
     user = User.new()
     user.email = params["email"]
 
-    # A bot fills the hidden field, posts without loading the page, or within
-    # two seconds of it (spam_check: the fields come with csrf_field()). It
-    # is told what a person would be, and gets no account.
-    refused = spam_check(req, {"min_seconds": 2})
-    return this._reject(user, "That form could not be sent: reload the page and try again.", 422) unless refused.nil?
+    # A bot fills the hidden field, posts without loading the page, within
+    # two seconds of it, or without the page's proof of work (spam_check: the
+    # fields come with csrf_field() and pow_field()). What only a bot does is
+    # answered as a sign-up is, and makes no account: it learns nothing (#448).
+    refused = spam_check(
+      req,
+      {"min_seconds": 2, "pow": true}
+    )
+    return @_refuse_spam(user, refused) unless refused.nil?
 
     # Throttle account creation per source address: unmetered sign-up is how
     # an app ends up seeding spam, and it is also a cheap Argon2id CPU sink
     # (every attempt costs the server ~100ms of hashing).
     limiter = rate_limiter_from_ip(req, AUTH_ATTEMPTS_PER_IP, AUTH_IP_WINDOW_SECONDS)
     return this._reject(user, "Too many sign-up attempts. Try again in a few minutes.", 429) unless limiter.allowed()
+
+    # Accounts made from one address in an hour, whatever became of them.
+    hourly = RateLimiter("signup:#{client_ip(req)}", SIGNUPS_PER_IP_HOUR, 3600)
+    return this._reject(user, "Too many accounts made from here this hour: try later.", 429) unless hourly.allowed()
+
+    if User.throwaway_email?(user.email)
+      return this._reject(
+        user,
+        "Please use an address you keep: a throwaway one cannot receive a new password later.",
+        422
+      )
+    end
 
     # `set_password` is a no-op on a blank value (so profile saves don't wipe
     # the digest), which means the length rule has to be checked here or an
@@ -76,12 +93,42 @@ class RegistrationsController < Controller
 
   private
 
+  # The answer to a sign-up spam_check refused: a person told what to do
+  # when they can act on it; a bot (the hidden field, a message that reads
+  # as spam) answered as a sign-up is, with no account and no mail.
+  def _refuse_spam(user, refused)
+    reason = refused["reason"]
+    return this._reject(user, "That was quick: wait a moment, then send the form again.", 422) if reason == "fast"
+    if reason == "pow"
+      return this._reject(
+        user,
+        "This form needs JavaScript to be sent: turn it on, reload the page and try again.",
+        422
+      )
+    end
+
+    return this._reject(user, "Too many sign-ups from here. Try again in a few minutes.", 429) if reason == "rate"
+    return this._reject(user, "That form could not be sent: reload the page and try again.", 422) if refused["show"]
+
+    render(
+      "confirmations/new",
+      {
+        "title": "Check your inbox",
+        "notice": "Your account is created. We sent a link to #{user.email}: "
+        + "open it to confirm your address, then sign in.",
+        "error": "",
+        "email": user.email
+      }
+    )
+  end
+
   # Re-render the sign-up form with an error and an accurate status code.
   def _reject(user, message, status)
     return render("registrations/new", {
       "title": "Create account",
       "user": user,
-      "error": message
+      "error": message,
+      "pow_bits": SIGNUP_POW_BITS
     }, {"status": status})
   end
 end

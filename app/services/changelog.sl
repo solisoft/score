@@ -12,6 +12,14 @@ class Changelog
     [
       {"date": "2026-10-31", "entries": [
         {
+          "area": "site",
+          "title": "Sign-up kept clear of robots, with no puzzle to solve",
+          "text": "Creating an account now asks the browser for a moment of work, done while you type, which costs "
+          + "a robot making accounts by the thousand far more than it costs you; one place can make ten accounts "
+          + "an hour at most, and a throwaway address is refused, since it could not receive a new password "
+          + "later. No captcha: the page needs JavaScript, and says so when it is off."
+        },
+        {
           "area": "editor",
           "title": "An accompaniment in one click: guitar, piano, bass and drums",
           "text": "Edit ▸ Accompaniment plays a song's chord symbols in fifteen styles, from pop, rock and folk "
