@@ -94,6 +94,19 @@ class SectionsController < Controller
     }
   end
 
+  # GET /sections/:id/play.mid — its bars as MIDI, for the Play button of its card
+  def midi
+    section = @_visible
+    bytes = eui_score_midi(section.source, {"bpm": section.bpm.to_s.to_i > 0 ? section.bpm.to_s.to_i : 100}) rescue nil
+    halt(422, "Those bars could not be played") if bytes.nil?
+
+    {
+      "status": 200,
+      "headers": {"Content-Type": "audio/midi", "Cache-Control": "public, max-age=3600"},
+      "body": bytes
+    }
+  end
+
   private
 
   # The section of the route, unless it is hidden (404; but to an admin).

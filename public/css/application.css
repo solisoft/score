@@ -2064,6 +2064,20 @@
     border-color: var(--line-strong);
     color: inherit;
   }
+  .section-card-link {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    color: inherit;
+  }
+  .section-card-link:hover {
+    text-decoration: none;
+    color: inherit;
+  }
+  .section-card-play {
+    margin: 0;
+    padding: 0 18px 18px;
+  }
   .example-preview {
     position: relative;
     height: 190px;

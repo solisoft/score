@@ -272,6 +272,10 @@
   .example-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
   .example-card { display: flex; flex-direction: column; background: var(--sheet); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; color: inherit; transition: transform .15s, border-color .15s; }
   .example-card:hover { text-decoration: none; transform: translateY(-2px); border-color: var(--line-strong); color: inherit; }
+  /* A section's card (#449): the link above, its Play button under it. */
+  .section-card-link { display: flex; flex-direction: column; flex: 1; color: inherit; }
+  .section-card-link:hover { text-decoration: none; color: inherit; }
+  .section-card-play { margin: 0; padding: 0 18px 18px; }
   .example-preview { position: relative; height: 190px; overflow: hidden; padding: 16px 18px 0; color: #111; border-bottom: 1px solid var(--line); }
   .example-preview img { display: block; width: 100%; height: auto; }
   .example-preview::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 56px; background: linear-gradient(transparent, var(--sheet)); }

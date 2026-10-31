@@ -51,7 +51,8 @@
   <% else %>
     <div class="example-grid" data-sections>
       <% for section in sections %>
-        <a class="example-card" href="<%= section_path(section._key) %>" data-section-card="<%= section._key %>">
+        <div class="example-card section-card" data-section-card="<%= section._key %>">
+          <a class="section-card-link" href="<%= section_path(section._key) %>">
           <div class="example-preview"><img src="<%= section_preview_path(section._key) %>" alt="" loading="lazy" decoding="async"></div>
           <div class="example-body">
             <h3><%= section.title %></h3>
@@ -67,7 +68,13 @@
               <span class="chip"><%= section.comments_count %> comment<%= section.comments_count == 1 ? "" : "s" %></span>
             </div>
           </div>
-        </a>
+          </a>
+          <%# Heard from the list (#449): public/js/score.js plays the MIDI it fetches; outside the link, a button in a link being no button. %>
+          <div class="score-actions section-card-play">
+            <button type="button" class="score-btn score-btn-play" data-score-play data-midi="<%= section_midi_path(section._key) %>" aria-label="Play <%= section.title %>"><span aria-hidden="true">▶</span> Play</button>
+            <div class="score-player" data-score-player></div>
+          </div>
+        </div>
       <% end %>
     </div>
     <nav class="section-lib-pages" aria-label="Pages">

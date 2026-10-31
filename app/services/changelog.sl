@@ -13,6 +13,13 @@ class Changelog
       {"date": "2026-10-31", "entries": [
         {
           "area": "site",
+          "title": "Play a section from the library's list",
+          "text": "Each card of the library of sections, at /sections, now has its Play button: hear the bars "
+          + "without opening the section's page, with the time played under it. Another card's Play stops the "
+          + "first."
+        },
+        {
+          "area": "site",
           "title": "A hundred and ten sections in the library to start with",
           "text": "The library of sections, at /sections, is no longer empty: each of the fifteen accompaniment "
           + "styles is there on the guitar, the piano, the bass and for the whole band, and each of the fifty "

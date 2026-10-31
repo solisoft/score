@@ -198,6 +198,26 @@ describe("SectionsController and AppSectionsController") do
       lib_sign_in(lib_user("Admin", "admin"))
       assert_eq(res_status(get("/sections/#{section._key}")), 200)
     end
+
+    test("each card plays its section: a Play button outside its link, and the MIDI it fetches (#449)") do
+      author = lib_user()
+      section = lib_section(author, "Playable strum")
+      body = res_body(get("/sections?q=playable"))
+      assert_contains(body, "data-midi=\"/sections/#{section._key}/play.mid\"")
+      assert_contains(body, "aria-label=\"Play Playable strum\"")
+      # The button comes after the card's link closes: no button inside a link.
+      card = body.split("data-section-card=\"#{section._key}\"")[1].split("data-score-play")[0]
+      assert_contains(card, "</a>")
+      midi = get("/sections/#{section._key}/play.mid")
+      assert_eq(res_status(midi), 200)
+      assert_eq(res_header(midi, "Content-Type"), "audio/midi")
+      assert(res_body(midi).starts_with?("MThd"), "a MIDI file")
+      assert_eq(res_status(get("/sections/no-such-section/play.mid")), 404)
+      section.hidden = true
+      section.update()
+      as_guest()
+      assert_eq(res_status(get("/sections/#{section._key}/play.mid")), 404, "hidden: not played")
+    end
   end
 
   describe("rating") do
