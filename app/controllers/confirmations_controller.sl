@@ -2,7 +2,8 @@
 #
 # Signup sends a confirmation link (see RegistrationsController); this
 # controller confirms it and can resend a fresh one. The resend form always
-# responds the same way whether or not the email exists.
+# responds the same way, and in the same time, whether or not the email
+# exists (the mail is AuthMailJob's).
 
 class ConfirmationsController < Controller
   static {
@@ -70,11 +71,9 @@ class ConfirmationsController < Controller
       }, {"status": 429})
     end
 
-    user = User.find_by("email", email)
-    if !user.nil? && !user.confirmed?()
-      token = user.start_email_confirmation()
-      MailDelivery.attempt("confirmation", fn() { AuthMailer.confirm_email(user, token) })
-    end
+    # Queued, whatever the address (#539): AuthMailJob looks it up, and sends
+    # a link only to an account still unconfirmed.
+    AuthMailJob.ask("confirm", email)
 
     return render(
       "confirmations/new",

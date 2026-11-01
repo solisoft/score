@@ -21,6 +21,15 @@ const EMAIL_CHANGE_TTL = 86400
 # Changes of address one person may ask for in an hour, right or wrong
 # password: the form must not become a way to guess it.
 const EMAIL_CHANGES_PER_HOUR = 5
+# Wrong passwords the signed-in pages that ask for it (a new password,
+# two-step sign-in turned off, the account deleted, an access token made)
+# take from one account in ACCOUNT_PASSWORD_WINDOW seconds, before even the
+# right one is refused (#539): a stolen session must not become a way to
+# guess the password at leisure. Only wrong ones count.
+const ACCOUNT_PASSWORD_TRIES = 5
+const ACCOUNT_PASSWORD_WINDOW = 900
+# The source addresses an account keeps a count of failed sign-ins for (#539).
+const AUTH_LOCK_SOURCES = 50
 
 # Per-IP throttle on the credential endpoints (login, sign-up, reset). The
 # per-account lockout above cannot see these two attacks: credential stuffing
@@ -179,6 +188,28 @@ class User < Model
     Crypto.password_verify(plaintext, this.password_digest)
   end
 
+  # The count of wrong passwords typed on the signed-in pages (#539).
+  def _password_tries
+    RateLimiter("password-check:#{this._key}", ACCOUNT_PASSWORD_TRIES, ACCOUNT_PASSWORD_WINDOW)
+  end
+
+  # Whether the signed-in pages have had ACCOUNT_PASSWORD_TRIES wrong
+  # passwords lately: they then check none, the right one included.
+  def password_tries_spent?
+    @_password_tries.throttle() > 0
+  end
+
+  # Whether `plaintext` is the password, asked by a signed-in page: false,
+  # without checking, once the tries are spent; a wrong one spends a try.
+  def confirms_password?(plaintext)
+    tries = @_password_tries
+    return false if tries.throttle() > 0
+    return true if @authenticate(plaintext.to_s)
+
+    tries.allowed()
+    false
+  end
+
   # Spend the same Argon2id work as a real `authenticate` without having an
   # account to check against. Sign-in calls this when no user matches the
   # submitted email: verifying costs ~100ms and returning early costs none, so
@@ -302,6 +333,8 @@ class User < Model
     this.forget_email_change()
     this.failed_attempts = 0
     this.locked_at = null
+    # Guesses at the old password count for nothing against the new one.
+    this.sign_in_failures = null
     # Invalidate every session opened before this moment.
     #
     # Sessions are not indexed by user, so there is nothing to delete; instead
@@ -311,12 +344,15 @@ class User < Model
     # which is the one thing a password reset is supposed to stop.
     this.session_version = (this.session_version ?? 0) + 1
     this.update()
+    # The access tokens too (#539): the MCP clients and the apps connected
+    # by OAuth would otherwise keep acting as the account, sessions or not.
+    AccessToken.delete_all_of(this)
   end
 
   # Why the password cannot become `new_password`, or nil: the current one
   # must be right, the new one acceptable, and typed the same twice.
   def password_change_error(current, new_password, confirmation)
-    return SiteText.t("app.account.not_current_password") unless this.authenticate(current.to_s)
+    return SiteText.t("app.account.not_current_password") unless this.confirms_password?(current)
 
     error = this.password_error(new_password)
     return error unless error.nil?
@@ -326,13 +362,25 @@ class User < Model
   end
 
   # A new password, and every other session and remembered browser signed
-  # out, as after a reset.
+  # out, every access token revoked and any reset link sent dead, as after
+  # a reset.
   def change_password(plaintext)
     this.set_password(plaintext)
     this.remember_token_digest = null
     this.forget_email_change()
+    this.forget_password_reset()
     this.session_version = (this.session_version ?? 0) + 1
     this.update()
+    AccessToken.delete_all_of(this)
+  end
+
+  # A reset link sent and not followed made useless (#539: not saved, the
+  # caller saves): after a new password or a new address, the link in an
+  # old mailbox must not choose another.
+  def forget_password_reset
+    this.reset_token_digest = null
+    this.reset_sent_at = null
+    true
   end
 
   # Bumped whenever every existing session must be invalidated (a password
@@ -449,7 +497,8 @@ class User < Model
 
   # The change confirmed: the account takes the new address (confirmed, as
   # the link proves it is theirs), the shares made to the old one move with
-  # it, and every session and remembered browser is signed out. The old
+  # it, every session, remembered browser and access token is signed out,
+  # and a reset link sent to the old address dies. The old
   # address, or nil when the new one has meanwhile become another
   # account's: the change is then dropped, and nothing else changes.
   def finish_email_change
@@ -465,9 +514,11 @@ class User < Model
     this.confirmed_at = DateTime.utc.to_unix
     this.email_changed_digest = this.email_change_digest
     this.forget_email_change()
+    this.forget_password_reset()
     this.remember_token_digest = null
     this.session_version = (this.session_version ?? 0) + 1
     this.update()
+    AccessToken.delete_all_of(this)
     ScoreShare.move_address(old, address, this)
     old
   end
@@ -500,11 +551,53 @@ class User < Model
   end
 
   # --- Account lockout --------------------------------------------------------
+  #
+  # Counted per account AND source address (#539): AUTH_MAX_FAILED_ATTEMPTS
+  # wrong passwords from one address lock the account for that address,
+  # for AUTH_LOCKOUT_SECONDS. Whoever guesses at a known address locks
+  # themselves out, not its owner, who signs in from elsewhere as usual —
+  # a lock of the whole account was one anybody could keep on for ever.
+  # `sign_in_failures` keeps, per address (a digest of it, not the address
+  # itself), {"count", "at" (the last failure), "locked_at"}.
+  # `locked_at` / `failed_attempts` are the whole account's lock from
+  # before, still honoured until it runs out.
+
+  # The key failures from `ip` are counted under.
+  static def failure_source(ip)
+    Crypto.sha256("sign-in:#{ip.to_s}").substring(0, 24)
+  end
+
+  # Whether signing in is locked for whoever comes from `ip`.
+  def locked_for?(ip)
+    return true if @_account_locked?
+
+    entry = (@sign_in_failures ?? {})[User.failure_source(ip)]
+    @_entry_locked?(entry, DateTime.utc.to_unix)
+  end
+
+  # Whether signing in is locked from some address (what the admin pages
+  # show, and lift with `unlock`).
   def locked?
+    return true if @_account_locked?
+
+    now = DateTime.utc.to_unix
+    failures = @sign_in_failures ?? {}
+    failures.keys.any? do |source|
+      @_entry_locked?(failures[source], now)
+    end
+  end
+
+  def _entry_locked?(entry, now)
+    return false if entry.nil? || entry["locked_at"].nil?
+
+    now - entry["locked_at"].to_s.to_i <= AUTH_LOCKOUT_SECONDS
+  end
+
+  # The whole account's lock from before #539; once run out, cleared.
+  def _account_locked?
     return false if this.locked_at.nil?
 
     if DateTime.utc().to_unix() - this.locked_at > AUTH_LOCKOUT_SECONDS
-      # The lockout window has passed — auto-unlock.
       this.locked_at = null
       this.failed_attempts = 0
       this.update()
@@ -513,30 +606,54 @@ class User < Model
     true
   end
 
-  def register_failed_attempt
+  # The failures still counted at `now`: an address's are forgotten once it
+  # has been quiet for AUTH_LOCKOUT_SECONDS (a lock trips at its last
+  # failure, so its lock has run out too), and only the AUTH_LOCK_SOURCES
+  # latest addresses are kept.
+  def _live_failures(now)
+    failures = @sign_in_failures ?? {}
+    recent = failures.keys.filter do |source|
+      now - failures[source]["at"].to_s.to_i <= AUTH_LOCKOUT_SECONDS
+    end
+    latest = recent.sort_by do |source|
+      0 - failures[source]["at"].to_s.to_i
+    end
+    live = {}
+    latest.slice(0, AUTH_LOCK_SOURCES - 1).each do |source|
+      live[source] = failures[source]
+    end
+    live
+  end
 
-    # Don't re-stamp `locked_at` on an account that is *currently* locked:
-    # doing so slides the 30-minute window forward on every further guess, so
-    # an attacker who keeps knocking keeps the owner locked out indefinitely.
-    # The lockout should expire on schedule no matter how loud the attack is.
-    #
-    # Ask `locked?()` rather than testing `locked_at` directly — it is what
-    # clears an expired stamp. Testing the raw field meant that once the first
-    # lockout landed, nothing on the failure path ever cleared it, so
-    # `failed_attempts` froze and the account could never lock a second time:
-    # after the first window elapsed the attacker guessed at full rate forever.
-    return true if this.locked?()
+  def register_failed_attempt(ip = nil)
 
-    this.failed_attempts = (this.failed_attempts ?? 0) + 1
-    just_locked = this.failed_attempts >= AUTH_MAX_FAILED_ATTEMPTS
-    this.locked_at = DateTime.utc().to_unix() if just_locked
+    # Don't count guesses from an address that is *currently* locked: doing
+    # so would slide its window forward on every further guess. The lock
+    # runs out on schedule no matter how loud the attack is.
+    return true if @locked_for?(ip)
+
+    now = DateTime.utc.to_unix
+    failures = @_live_failures(now)
+    source = User.failure_source(ip)
+    count = (failures[source] ?? {})["count"].to_s.to_i + 1
+    just_locked = count >= AUTH_MAX_FAILED_ATTEMPTS
+    failures[source] = {
+      "count": count,
+      "at": now,
+      "locked_at": just_locked ? now : nil
+    }
+    @sign_in_failures = failures
+    # Tell the owner when a lock trips, once a window however many
+    # addresses lock: a mail per address would be a way to flood them.
+    tell = just_locked && now - @lock_told_at.to_s.to_i > AUTH_LOCKOUT_SECONDS
+    @lock_told_at = now if tell
     this.update()
 
-    # Tell the owner once, when the lock trips. The sign-in response says only
-    # "Invalid email or password" whether or not the account is locked, because
-    # a distinct "locked" reply during the lockout tells an attacker which guess
-    # was the right one. Delivery failures must not break sign-in.
-    if just_locked
+    # The sign-in response says only "Invalid email or password" whether or
+    # not the address is locked, because a distinct "locked" reply during the
+    # lockout tells an attacker which guess was the right one. Delivery
+    # failures must not break sign-in.
+    if tell
       try
         AuthMailer.account_locked(this, AUTH_LOCKOUT_SECONDS / 60).deliver()
       catch error
@@ -547,12 +664,15 @@ class User < Model
     true
   end
 
-  def clear_failed_attempts
-    attempts = this.failed_attempts ?? 0
-    return if attempts == 0 && this.locked_at.nil?
+  # A right password from `ip`: its count starts again. Another address's
+  # does not: a sign-in by the owner does not lift an attacker's lock.
+  def clear_failed_attempts(ip = nil)
+    failures = @sign_in_failures ?? {}
+    source = User.failure_source(ip)
+    return true unless failures.has_key(source)
 
-    this.failed_attempts = 0
-    this.locked_at = null
+    failures.delete(source)
+    @sign_in_failures = failures
     this.update()
   end
 
@@ -839,10 +959,12 @@ class User < Model
     nil
   end
 
-  # Signing in allowed again after too many wrong passwords.
+  # Signing in allowed again after too many wrong passwords, from every
+  # address.
   def unlock
     @locked_at = nil
     @failed_attempts = 0
+    @sign_in_failures = nil
     @update()
   end
 

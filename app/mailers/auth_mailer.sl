@@ -37,6 +37,16 @@ class AuthMailer < Mailer
     this.mail(to: user.email, subject: SiteText.t("mail.email_change_requested.title"))
   end
 
+  # To the owner of an address someone tried to sign up with (#539): the
+  # sign-up page answers that attempt as it answers a new account, so that
+  # it says nothing of who has one; this is how the owner hears of it.
+  def signup_taken(user)
+    @user = user
+    @login_url = auth_base_url() + SiteLocale.path("/login")
+    @reset_url = auth_base_url() + SiteLocale.path("/password/reset")
+    this.mail(to: user.email, subject: SiteText.t("security_539.signup_taken.title"))
+  end
+
   # Sent once, when the lockout trips. The sign-in response deliberately says
   # nothing about the lock — telling the browser "this account is locked" also
   # tells whoever is guessing that they found the right password — so this is

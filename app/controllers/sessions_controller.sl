@@ -2,7 +2,8 @@
 #
 # Ships with a per-IP throttle (AUTH_ATTEMPTS_PER_IP per
 # AUTH_IP_WINDOW_SECONDS), account lockout (AUTH_MAX_FAILED_ATTEMPTS wrong
-# passwords lock the account for AUTH_LOCKOUT_SECONDS), optional remember-me
+# passwords from one source address lock the account for that address for
+# AUTH_LOCKOUT_SECONDS, #539), optional remember-me
 # (persistent HttpOnly + Secure cookie), and an optional confirmed-email gate
 # (flip `auth_require_confirmed_email` in app/models/user.sl).
 #
@@ -34,9 +35,10 @@ class SessionsController < Controller
     password = params["password"].to_s
 
     # First gate: how many sign-in attempts this source address gets. The
-    # per-account lockout below is blind to credential stuffing (one guess
-    # each against thousands of accounts) and it is itself abusable as a
-    # denial of service against a known address. This closes both.
+    # lockout below is blind to credential stuffing (one guess each against
+    # thousands of accounts), which this closes. It does not stop one
+    # address locking a known account: the lockout itself is counted per
+    # account and address (#539), so that address locks only itself out.
     limiter = rate_limiter_from_ip(req, AUTH_ATTEMPTS_PER_IP, AUTH_IP_WINDOW_SECONDS)
     return this._reject(SiteText.t("auth.too_many_signins"), email, 429) unless limiter.allowed()
 
@@ -59,7 +61,8 @@ class SessionsController < Controller
     # from an address that was never registered. The owner learns about the lock
     # from the notification `register_failed_attempt` sends when it trips, not
     # from this response.
-    if !user.nil? && user.locked?()
+    ip = client_ip(req)
+    if !user.nil? && user.locked_for?(ip)
       User.burn_password_work(password)
       return this._reject(SiteText.t("auth.invalid"), email, 401)
     end
@@ -71,7 +74,7 @@ class SessionsController < Controller
     authenticated = user.nil? ? User.burn_password_work(password) : user.authenticate(password)
 
     unless authenticated
-      user.register_failed_attempt() unless user.nil?
+      user.register_failed_attempt(ip) unless user.nil?
       return this._reject(SiteText.t("auth.invalid"), email, 401)
     end
 
@@ -85,7 +88,7 @@ class SessionsController < Controller
       }, {"status": 403})
     end
 
-    user.clear_failed_attempts()
+    user.clear_failed_attempts(ip)
     remember = params["remember_me"].to_s == "1"
     # Two-step sign-in: the password is right, the code is still to come. The
     # session says who is half-way, since when, and where they were going —

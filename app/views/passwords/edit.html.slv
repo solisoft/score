@@ -3,6 +3,7 @@
   <% if error.present? %>
     <p class="form-error" role="alert"><%= error %></p>
   <% end %>
+  <p class="muted"><%= t("security_539.reset_disconnects") %></p>
   <form action="<%= lp("/password/update") %>" method="POST" class="auth-form">
     <%- csrf_field() %>
     <input type="hidden" name="token" value="<%= token %>">

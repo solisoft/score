@@ -483,7 +483,10 @@ describe("The MCP server") do
     test("made on the account page and shown once, listed by name, revoked") do
       user = mcp_user()
       mcp_sign_in(user)
-      made = post("/app/account/tokens", {"name": "Claude Code"})
+      made = post(
+        "/app/account/tokens",
+        {"name": "Claude Code", "password": MCP_PASSWORD}
+      )
       assert_eq(res_status(made), 200)
       body = res_body(made)
       record = AccessToken.where({"user_id": user._key}).first
@@ -499,7 +502,10 @@ describe("The MCP server") do
       again = res_body(get("/app/account"))
       assert_contains(again, "Claude Code")
       assert_not(again.contains(secret), "never shown again")
-      assert_eq(res_status(post("/app/account/tokens", {"name": ""})), 422)
+      assert_eq(res_status(post(
+        "/app/account/tokens",
+        {"name": "", "password": MCP_PASSWORD}
+      )), 422)
       revoked = post("/app/account/tokens/#{record._key}/revoke", {})
       assert_eq(res_status(revoked), 302)
       assert_null(AccessToken.where({"_key": record._key}).first)
