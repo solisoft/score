@@ -1,0 +1,8 @@
+<section class="admin" data-admin="actions">
+  <%- partial("admin/head", {"heading": "Activity", "current": "actions"}) %>
+
+  <section class="admin-panel">
+    <h2>What the admins did</h2>
+    <%- partial("admin/actions", {"actions": actions, "names": names}) %>
+  </section>
+</section>

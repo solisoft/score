@@ -1,7 +1,8 @@
 # The customers, for an admin (#399): every account, searched and filtered,
 # and one account's whole picture — its plan, its Stripe customer and
 # invoices, its scores — with what an admin may change: Pro offered or
-# taken back, signing in unlocked, the address confirmed.
+# taken back, signing in unlocked, the address confirmed. Each change made
+# is kept as an AdminAction (#544), shown on the account's page.
 class AdminCustomersController < AdminBaseController
   # GET /admin/customers — `q` (address or name), `filter` (pro, gift,
   # past_due, cancelling, unconfirmed, admins), `page`
@@ -35,6 +36,7 @@ class AdminCustomersController < AdminBaseController
       "more": false
     } : AdminReport.invoices(stripe_id, nil)
     @stripe_customer = stripe_id.blank? ? nil : Stripe.dashboard_url("customers/#{stripe_id}")
+    @admin_actions = AdminAction.about(@customer._key)
     @title = "#{this.customer.display_name} · Admin"
     @description = "One account of the site."
   end
@@ -42,7 +44,14 @@ class AdminCustomersController < AdminBaseController
   # POST /admin/customers/:id/gift — `days` of Pro offered
   def gift
     customer = User.find(params["id"])
-    refusal = customer.gift_pro(params["days"].to_s.to_i, @_now)
+    days = params["days"].to_s.to_i
+    refusal = customer.gift_pro(days, @_now)
+    if refusal.nil?
+      @_record("gift", customer, {
+        "days": days,
+        "until": customer.current_period_end
+      })
+    end
     @_back(
       customer,
       refusal ?? "Pro offered until #{DateTime.from_unix(customer.current_period_end).format("%b %-d, %Y")}."
@@ -52,13 +61,16 @@ class AdminCustomersController < AdminBaseController
   # POST /admin/customers/:id/gift/stop — the offer of Pro ended now
   def stop_gift
     customer = User.find(params["id"])
-    @_back(customer, customer.stop_gift ?? "The offer of Pro ended: the account is on Free.")
+    refusal = customer.stop_gift
+    @_record("stop_gift", customer, {}) if refusal.nil?
+    @_back(customer, refusal ?? "The offer of Pro ended: the account is on Free.")
   end
 
   # POST /admin/customers/:id/unlock — signing in allowed again
   def unlock
     customer = User.find(params["id"])
     customer.unlock
+    @_record("unlock", customer, {})
     @_back(customer, "Signing in is allowed again.")
   end
 
@@ -68,10 +80,16 @@ class AdminCustomersController < AdminBaseController
     return @_back(customer, "The address was confirmed already.") if customer.confirmed?
 
     customer.confirm_email
+    @_record("confirm", customer, {"email": customer.email})
     @_back(customer, "The address is confirmed.")
   end
 
   private
+
+  # The change kept: which admin made it, to which account, and how.
+  def _record(action, customer, details)
+    AdminAction.record(current_user(), action, "user", customer._key, details)
+  end
 
   def _back(customer, message)
     flash("notice", message)

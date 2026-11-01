@@ -87,7 +87,7 @@ export function shareable(score, lanes, a, b, title = "") {
   M.pasteSection(mini, 0, 0, section);
   // Each note's force goes along, on the section's own staves and from its start (#455).
   const velocity = {};
-  for (const [id, v] of Object.entries(score.meta?.velocity ?? {})) {
+  for (const [id, v] of Object.entries(Vel.velocitiesOf(score))) {
     const [lane, tick, key] = id.split(":").map(Number);
     const k = uppers.findIndex((u) => M.voiceLanes(score, u).includes(lane));
     if (k < 0 || tick < t0 || tick >= M.barStart(score, to + 1)) continue;
@@ -187,24 +187,27 @@ export function importSection(score, data, parse) {
     M.pasteSection(score, lane, at, { bars: section.bars, parts: [{ ...part, offset: 0 }] });
   }
   // Each note's force, from the section's staves to the ones it went on, from bar `at` (#455).
+  // The section's meta line is anyone's text: only numbers come along, in range (#537).
   const theirs = M.readMeta(data.source) ?? {};
+  const forces = Vel.velocitiesOf({ meta: theirs });
   const moved = {};
   const start = M.barStart(score, at);
   for (const part of section.parts) {
     const from = M.laneOfVoice(mini, miniLanes[part.offset], part.voice ?? 1);
     const to = targets[part.offset] == null ? -1 : M.laneOfVoice(score, targets[part.offset], part.voice ?? 1);
     if (from < 0 || to < 0) continue;
-    for (const [id, v] of Object.entries(theirs.velocity ?? {})) {
+    for (const [id, v] of Object.entries(forces)) {
       const [lane, tick, key] = id.split(":").map(Number);
-      if (lane === from) moved[`${to}:${tick + start}:${key}`] = v;
+      if (lane === from && Number.isFinite(tick) && Number.isInteger(key)) moved[`${to}:${tick + start}:${key}`] = v;
     }
   }
-  if (Object.keys(moved).length) score.meta = { ...(score.meta ?? {}), velocity: { ...(score.meta?.velocity ?? {}), ...moved } };
+  if (Object.keys(moved).length) score.meta = { ...(score.meta ?? {}), velocity: { ...Vel.velocitiesOf(score), ...moved } };
   // A section played humanized in a score that is not: the score is now (#455).
-  if (theirs.humanize && !score.meta?.humanize) score.meta = { ...(score.meta ?? {}), humanize: theirs.humanize };
+  const humanize = F.humanizeOf(theirs.humanize);
+  if (humanize && !score.meta?.humanize) score.meta = { ...(score.meta ?? {}), humanize };
   // A swung section in a score that does not swing yet: the score swings now (#453).
-  const swing = M.readMeta(data.source)?.swing ?? null;
-  const swung = Boolean(swing && F.swingOf(swing) && !F.swingOf(score.meta?.swing));
+  const swing = F.swingOf(theirs.swing) ? { amount: Math.min(75, Number(theirs.swing.amount)), unit: Number(theirs.swing.unit) === 16 ? 16 : 8 } : null;
+  const swung = Boolean(swing && !F.swingOf(score.meta?.swing));
   if (swung) score.meta = { ...(score.meta ?? {}), swing };
   return { at, bars: section.bars, added, swung };
 }

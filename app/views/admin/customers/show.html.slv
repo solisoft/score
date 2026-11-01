@@ -10,7 +10,15 @@
         <dt>Signed up</dt><dd><%= admin_day(customer._created_at) %></dd>
         <dt>Address</dt><dd data-confirmed="<%= customer.confirmed?() %>"><%= customer.confirmed?() ? "Confirmed" : "Not confirmed" %></dd>
         <dt>Two-step</dt><dd><%= customer.two_step?() ? "On" : "Off" %></dd>
-        <dt>Signing in</dt><dd data-locked="<%= customer.locked?() %>"><%= customer.locked?() ? "Locked: too many wrong passwords" : "Open" %></dd>
+        <%# Which lock (#539): the account's, for every browser that never signed in to it, or some networks'. %>
+        <% sources = customer.locked_sources() %>
+        <% lock_text = "Locked from #{sources} networks: too many wrong passwords from each" %>
+        <% lock_text = "Locked from 1 network: too many wrong passwords from it" if sources == 1 %>
+        <% if customer.account_locked?() %>
+          <% lock_text = "Locked for every browser that never signed in to it: too many wrong passwords from many networks" %>
+        <% end %>
+        <% lock_text = "Locked: too many wrong passwords" if !customer.locked_at.nil? %>
+        <dt>Signing in</dt><dd data-locked="<%= customer.locked?() %>"><%= customer.locked?() ? lock_text : "Open" %></dd>
         <dt>Role</dt><dd><%= customer.admin?() ? "Admin" : "Member" %></dd>
         <dt>Own AI key</dt><dd><%= customer.ai_key.blank? ? "None" : "#{customer.ai_provider} · …#{customer.ai_key_hint}" %></dd>
         <dt>Scores</dt><dd><%= picture["score_count"] %></dd>
@@ -95,6 +103,11 @@
         </table>
       </div>
     <% end %>
+  </section>
+
+  <section class="admin-panel" id="admin-actions">
+    <h2>What the admins did</h2>
+    <%- partial("admin/actions", {"actions": admin_actions, "names": {customer._key: customer.display_name}}) %>
   </section>
 
   <section class="admin-panel">

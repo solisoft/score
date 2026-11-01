@@ -33,12 +33,20 @@ export function velocityNotes(score) {
   return R.rollNotes(score).map((n) => ({ ...n, id: noteId(n.lane, n.t0, n.key) }));
 }
 
-/** The velocities set: { id: 1–127 }. */
-export function velocitiesOf(score) {
-  return score?.meta?.velocity ?? {};
-}
-
 const clampVelocity = (v) => Math.max(1, Math.min(127, Math.round(v)));
+
+/**
+ * The velocities set: { id: 1–127 }. Read from the score's text, which
+ * anyone may have written: a value that is no number is left out, the others
+ * clamped — what reaches the strip's SVG and the MIDI is a number (#537).
+ */
+export function velocitiesOf(score) {
+  const kept = score?.meta?.velocity;
+  if (!kept || typeof kept !== "object" || Array.isArray(kept)) return {};
+  const out = {};
+  for (const [id, v] of Object.entries(kept)) if (typeof v === "number" && Number.isFinite(v)) out[id] = clampVelocity(v);
+  return out;
+}
 
 /**
  * `changes` ({ id: velocity, or null to go back to the dynamics }) kept in
@@ -302,6 +310,8 @@ export function barAtX(bars, px) {
   return best;
 }
 
+const escape = (text) => String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
 /** The strip as SVG: a bar per note, as tall as it is loud; set ones solid, the dynamics' paler, the selected outlined. */
 export function drawStrip(score, geo, { set = {}, heard = {}, selected = new Set() } = {}) {
   const bars = stripBars(score, geo, set, heard);
@@ -316,7 +326,7 @@ export function drawStrip(score, geo, { set = {}, heard = {}, selected = new Set
   for (const b of bars) {
     const y = yOfVelocity(b.v);
     const classes = ["vel-note", b.set ? "" : "vel-note-heard", selected.has(b.id) ? "vel-note-chosen" : ""].filter(Boolean).join(" ");
-    parts.push(`<g class="${classes}" data-vel="${b.id}"><line x1="${b.x}" x2="${b.x}" y1="${STRIP_H - PAD}" y2="${y}" stroke="${R.laneColour(score, b.lane)}"/><circle cx="${b.x}" cy="${y}" r="3" fill="${R.laneColour(score, b.lane)}"/><title>${b.set ? b.v : tr("{velocity} (from the dynamics)", { velocity: b.v })}</title></g>`);
+    parts.push(`<g class="${classes}" data-vel="${b.id}"><line x1="${b.x}" x2="${b.x}" y1="${STRIP_H - PAD}" y2="${y}" stroke="${R.laneColour(score, b.lane)}"/><circle cx="${b.x}" cy="${y}" r="3" fill="${R.laneColour(score, b.lane)}"/><title>${escape(b.set ? b.v : tr("{velocity} (from the dynamics)", { velocity: b.v }))}</title></g>`);
   }
   return `<svg xmlns="http://www.w3.org/2000/svg" class="vel-strip" width="${geo.width}" height="${STRIP_H}" viewBox="0 0 ${geo.width} ${STRIP_H}" role="img" aria-label="${tr("Velocity of {count} notes", { count: bars.length })}">${parts.join("")}</svg>`;
 }

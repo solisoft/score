@@ -149,6 +149,39 @@ describe("Score") do
       assert_eq(Score.trash_of(owner).length, 0)
     end
 
+    test("is its owner's alone: those it is shared with lose it until it comes back (#542)") do
+      owner = score_owner()
+      reader = score_owner()
+      writer = score_owner()
+      score = Score.start(owner, Score.blank_source("Bourrée"))
+      ScoreShare.invite(score, reader.email, "read")
+      ScoreShare.invite(score, writer.email, "write")
+      score.move_to_trash
+      trashed = Score.find(score._key)
+      assert_null(trashed.access_of(reader))
+      assert_null(trashed.access_of(writer))
+      assert_not(ScorePolicy.new({
+        "user": reader,
+        "record": trashed
+      }).show?, "a reader may not open it")
+      assert_not(ScorePolicy.new({
+        "user": writer,
+        "record": trashed
+      }).show?, "nor a writer")
+      assert_not(trashed.writable_by?(writer))
+      # Its owner still sees it, to take it out; changing it waits until then.
+      assert_eq(trashed.access_of(owner), "owner")
+      assert(ScorePolicy.new({"user": owner, "record": trashed}).show?)
+      assert(ScorePolicy.new({"user": owner, "record": trashed}).destroy?)
+      assert_not(trashed.writable_by?(owner))
+      # The shares stayed: taken out of the trash, the score is theirs again.
+      trashed.restore_from_trash
+      restored = Score.find(score._key)
+      assert_eq(restored.access_of(reader), "read")
+      assert_eq(restored.access_of(writer), "write")
+      assert(restored.writable_by?(writer))
+    end
+
     test("no longer shows what has been there more than 30 days, nor counts it") do
       owner = score_owner()
       old = trashed_long_ago(owner, "Old")

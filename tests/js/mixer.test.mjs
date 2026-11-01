@@ -217,3 +217,11 @@ test("the master: its volume, and its own reverb in another room", () => {
   assert.equal(graph.master.convolver.buffer.length, Math.round(X.ROOMS.cathedral.seconds * ctx.sampleRate));
   assert.equal(X.impulse(ctx, "cathedral"), graph.master.convolver.buffer, "one buffer per room and context");
 });
+
+test("a room named after an Object property is no room: the default reverb, not the Object function (#537)", () => {
+  for (const room of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
+    assert.equal(X.settings({ reverb: { on: true, room } }).reverb.room, "hall", room);
+  }
+  const samples = X.impulseSamples("constructor", 8000);
+  assert.ok(samples.length > 0 && samples.every((channel) => channel.every(Number.isFinite)), "a hall's impulse");
+});

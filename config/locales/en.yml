@@ -344,8 +344,6 @@ en:
       push_state_off: "Off for this device."
       push_on_failed: "Could not turn them on: {error}"
       push_off_failed: "Could not turn them off: {error}"
-      push_sent_one: "Sent to {n} device."
-      push_sent_other: "Sent to {n} devices."
       push_sent_none: "Nothing could be sent: turn them on again on this device."
       push_send_failed: "Could not send: {error}"
       plan_on: "You are on <strong>{plan}</strong>."
@@ -1365,8 +1363,6 @@ en:
       photo_of: "Photo of {when}"
       photo_of_format: "%d %b %Y, %H:%M"
     oauth:
-      title: "Connect {name}"
-      heading: "Connect {name}?"
       description: "An application asks to reach your Score scores."
       asks_html: "<strong>{name}</strong> asks to reach your scores on Score, as <strong>{email}</strong>."
       can_list: "List and read your scores"
@@ -1426,6 +1422,26 @@ en:
   # (#538) security: two-step sign-in and resets — keys under `security_538:` right below
   # ---
   # (#539) security: tokens, passwords and accounts — keys under `security_539:` right below
+  security_539:
+    password_changed: "Password changed. Your other browsers are signed out, and the apps connected to your account (Claude and the other MCP clients) lost their access: connect them again."
+    reset_disconnects: "A new password signs out every browser and disconnects the apps connected to your account (Claude and the other MCP clients)."
+    email_change_disconnects: "The apps connected to the account (Claude and the other MCP clients) lose their access too: connect them again."
+    tries_spent: "Too many wrong passwords: try again in {minutes} minutes."
+    token_password: "Type your password to make a token."
+    token_password_label: "Your password"
+    signup_taken:
+      title: "Your address already has an account"
+      body: "Someone tried to create a Score account with <strong>{email}</strong>, which already has one: no second account was made."
+      sign_in: "Sign in"
+      forgot: "Forgot your password?"
+      reset: "Choose a new one"
+      footer: "If that wasn't you, there is nothing to do: your account and its password are unchanged."
+    account_locked:
+      source_body: "There were too many failed sign-in attempts on <strong>{email}</strong> from one network, so we locked signing in from that network for {minutes} minutes."
+      source_advice: "Signing in from any other network works as usual, from your usual browser too. If the attempts were yours, wait for the lock to expire, or reset your password if you have forgotten it. If not, someone is guessing your password: the attempts failed, but a stronger password is a good idea."
+      account_body: "There were too many failed sign-in attempts on <strong>{email}</strong> from many networks, so for {minutes} minutes the account only signs in from a browser you have signed in from before."
+      account_advice: "Your usual browser still signs you in as before. Someone is guessing your password from many places: the attempts failed, but a stronger password is a good idea, and a new one lifts the lock."
+    unconfirmed_hint: "New account? Confirm your address first, with the link we emailed you, or ask for a new one."
   # ---
   # (#540) security: engraving limits and MCP batches — keys under `security_540:` right below
   security_540:
@@ -1435,10 +1451,37 @@ en:
     too_many_engravings: "Too many engravings asked from here: try again in a minute."
   # ---
   # (#541) security: the OAuth server — keys under `security_541:` right below
+  security_541:
+    title: "Connect {host}"
+    title_local: "Connect an app on this computer"
+    heading: "{host} wants to reach your scores, calling itself “{name}”"
+    heading_local: "An app on this computer wants to reach your scores, calling itself “{name}”"
+    name_unchecked: "Score does not check that name: allow only if you have just asked this application to connect."
+    stale_title: "This request was replaced"
+    stale_body: "Another connection request was started since this page was shown, so nothing was allowed. Start again from the application that asked to connect."
+    outdated_title: "This page is out of date"
+    outdated_body: "This page is out of date: start the connection again from your app. Nothing was allowed."
   # ---
   # (#542) security: live sharing and rights — keys under `security_542:` right below
+  security_542:
+    trashed: "That score is in the trash."
+    push_taken: "Push notifications on this device are another account's: turn them off there first."
   # ---
   # (#543) security: push, storage and export — keys under `security_543:` right below
+  security_543:
+    push_test_limited: "Too many test messages: try again in an hour."
+    push_queued_one: "On its way to {n} device."
+    push_queued_other: "On its way to {n} devices."
+    take_room_full: "Your takes would pass the {room} your plan keeps: delete some first."
   # ---
   # (#544) security: CSP, configuration and admin — keys under `security_544:` right below
+  security_544:
+    admin_two_step_title: "Two-step sign-in needed"
+    admin_two_step_description: "The admin section opens to an admin who signs in in two steps."
+    admin_two_step_lead: "The admin section changes other people's accounts: it opens only to an admin who signs in in two steps, so that a password alone never opens it."
+    admin_two_step_do: "Turn on two-step sign-in in your account to use the admin."
+    admin_two_step_button: "Turn on two-step sign-in"
+    admin_two_step_unavailable: "This server cannot keep two-step secrets yet: whoever runs it must set SOLI_ENCRYPTION_KEY first."
+    admin_two_step_again: "This session was opened without your code: before two-step sign-in was turned on, or on a remembered browser. Sign out, then sign in again with the code of your authenticator app to use the admin."
+    admin_two_step_sign_out: "Sign out"
   # ---

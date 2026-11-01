@@ -94,18 +94,41 @@
     last had in common, and the merge is saved. Only the bars changed both
     ways are asked about; a score that cannot be merged by bar gets the
     all-or-nothing choice above. %>
+<%# What the script needs comes beside it, not in it: an inline script's text
+    never changes, its hash is in the Content-Security-Policy (#544). %>
+<%- page_data("editor-data", {
+  "v": eui_version,
+  "words": editor_page_words(),
+  "score": app_score_path(score),
+  "key": score._key,
+  "revision": score.revision,
+  "me": current_user()._key,
+  "examples": examples_path(),
+  "share": owner ? app_score_share_path(score) : nil,
+  "sections": app_sections_path(),
+  "sections_page": sections_path(),
+  "import_section": import_section.to_s,
+  "takes": app_score_takes_path(score),
+  "ticket": app_score_room_ticket_path(editing_score),
+  "comments": app_score_comments_path(score),
+  "people": app_score_people_path(score),
+  "readings": app_readings_path(),
+  "suggestions": app_score_suggestions_path(score),
+  "suggestion": app_suggestion_path("ID")
+}) %>
 <script type="module">
-  const { startStudio } = await import("/eui-score/studio.js?v=<%= eui_version %>");
-  const { mergeScores, conflictLines, anchorMap } = await import("/eui-score/merge.js?v=<%= eui_version %>");
-  const { startComments, markersOf } = await import("/eui-score/comments.js?v=<%= eui_version %>");
+  const page = JSON.parse(document.getElementById("editor-data").textContent);
+  const { startStudio } = await import(`/eui-score/studio.js?v=${page.v}`);
+  const { mergeScores, conflictLines, anchorMap } = await import(`/eui-score/merge.js?v=${page.v}`);
+  const { startComments, markersOf } = await import(`/eui-score/comments.js?v=${page.v}`);
   const root = document.getElementById("studio");
   // What this page says, in the app's language (#508): `say("saved_by", { name })`.
-  const words = <%- editor_page_words().to_json %>;
+  const words = page.words;
   const say = (key, vars = {}) => Object.keys(vars).reduce((text, name) => text.split(`{${name}}`).join(String(vars[name])), words[key]);
-  const url = "<%= app_score_path(score) %>";
+  const url = page.score;
   const saveState = document.querySelector("[data-save-state]");
   const titleBox = document.querySelector("[data-doc-title]");
-  let revision = <%= score.revision %>;
+  let revision = page.revision;
   // The text at `revision`, as this editor and the server both have it: what a merge starts from.
   let base = root.querySelector("[data-source]").value;
   let pending = null;
@@ -120,7 +143,7 @@
   // save as where `base`'s bars went (merge.js, anchorMap): the comments
   // on them follow.
   let barOps = [];
-  const keepKey = "eui-score-pending:<%= score._key %>";
+  const keepKey = `eui-score-pending:${page.key}`;
 
   const keepLocally = (text) => {
     try {
@@ -350,14 +373,14 @@
   }
 
   const studio = startStudio(root, {
-    examples: "<%= examples_path() %>",
-    shareUrl: <%- owner ? "\"" + app_score_share_path(score) + "\"" : "null" %>,
-    scoreUrl: "<%= app_score_path(score) %>",
+    examples: page.examples,
+    shareUrl: page.share,
+    scoreUrl: page.score,
     // The shared library of sections (#444): where to publish, and its page.
-    sectionsUrl: "<%= app_sections_path() %>",
-    sectionsPage: "<%= sections_path() %>",
+    sectionsUrl: page.sections,
+    sectionsPage: page.sections_page,
     // A section to add after the score's bars, from the library's page (#451).
-    importSection: "<%= import_section %>",
+    importSection: page.import_section,
     // Read from an attribute, escaped by the template: a name is never written into the script.
     authorName: document.querySelector("[data-author-name]")?.dataset.authorName ?? "",
     source: root.querySelector("[data-source]").value,
@@ -379,10 +402,10 @@
     // Bars put in or taken away (#392), or null after an Undo: see `barOps`.
     onBars: (op) => (barOps = op && barOps ? [...barOps, op] : null),
     // The undo history, kept in this browser per person and score: a reload can still undo.
-    history: "score:<%= current_user()._key %>:<%= score._key %>",
+    history: `score:${page.me}:${page.key}`,
     historyAcross: true,
     // Its audio tracks, recorded from the microphone (#390).
-    audio: { url: "<%= app_score_takes_path(score) %>", csrf: document.querySelector('input[name="_csrf_token"]')?.value ?? null },
+    audio: { url: page.takes, csrf: document.querySelector('input[name="_csrf_token"]')?.value ?? null },
   });
 
   // What New / Open bring becomes a score of its own, once this one's last
@@ -403,7 +426,7 @@
   // change of its own on the way; otherwise this editor's next save meets
   // the conflict rule above, and nothing is lost either way.
   const roomBox = document.querySelector("[data-room]");
-  const me = "<%= current_user()._key %>";
+  const me = page.me;
   let people = {};
   // Where each of the others works, by connection: { user_id, name, lane, bars }.
   let cursors = {};
@@ -470,7 +493,7 @@
   async function joinRoom() {
     let ticket;
     try {
-      const answer = await fetch("<%= app_score_room_ticket_path(editing_score) %>", {
+      const answer = await fetch(page.ticket, {
         headers: { Accept: "application/json" },
         credentials: "same-origin",
       });
@@ -576,8 +599,8 @@
     root.querySelector("[data-status]").textContent = say("bars_gone", { label: thread.label });
   };
   const comments = startComments(commentsPanel.querySelector("[data-comments]"), {
-    url: "<%= app_score_comments_path(score) %>",
-    people: "<%= app_score_people_path(score) %>",
+    url: page.comments,
+    people: page.people,
     me,
     origin,
     onSelect: selectThread,
@@ -639,12 +662,12 @@
     const file = event.target.files[0];
     event.target.closest("details")?.removeAttribute("open");
     if (!file) return;
-    const { readPhoto, readingSays } = await import("/js/score-photo.js?v=<%= eui_version %>");
+    const { readPhoto, readingSays } = await import(`/js/score-photo.js?v=${page.v}`);
     show(say("sending_photo"), "busy");
     try {
       // How it goes (#435): the time, and whether the AI is still reading or writing.
       const answer = await readPhoto(file, {
-        readings: "<%= app_readings_path() %>",
+        readings: page.readings,
         progress: (news) => show(readingSays(news), "busy"),
       });
       await openAsNew(answer.source);
@@ -714,7 +737,7 @@ ${problem.linkText}?`)) location.href = problem.link;
     aiPart("status").textContent = say("ai_working");
     aiPart("status").hidden = false;
     try {
-      const sent = await fetch("<%= app_score_suggestions_path(score) %>", {
+      const sent = await fetch(page.suggestions, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ action: aiAction, request: aiPart("request").value, source: studio.source() }),
@@ -727,7 +750,7 @@ ${problem.linkText}?`)) location.href = problem.link;
       for (let tries = 0; tries < 100; tries++) {
         await new Promise((done) => setTimeout(done, 3000));
         if (!ai.open) return;
-        const answer = await (await fetch("<%= app_suggestion_path("ID") %>".replace("ID", started.id), { headers: { Accept: "application/json" } })).json();
+        const answer = await (await fetch(page.suggestion.replace("ID", started.id), { headers: { Accept: "application/json" } })).json();
         if (answer.state === "working") continue;
         if (answer.state === "failed") return fail(answer.error);
         aiAnswer = answer;

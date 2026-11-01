@@ -47,6 +47,24 @@ def sign_in_as(email)
   }))
 end
 
+# Whether an AuthMailJob row queued for `email` has still to run.
+def accounts_mail_job_pending(email)
+  pending = Job.list().filter do |job|
+    str(job["handler"]).contains("AuthMailJob") && str(job).contains(email) &&
+        ["pending", "scheduled", "running"].includes?(job["state"])
+  end
+  pending.length > 0
+end
+
+# Waits (up to 10 s) until the AuthMailJob rows queued for `email` have run.
+def accounts_mail_jobs_done(email)
+  waited = 0
+  while waited < 40 && accounts_mail_job_pending(email)
+    sleep(0.25)
+    waited += 1
+  end
+  true
+end
 describe("Accounts") do
   before_each() do
     as_guest()
@@ -68,12 +86,18 @@ describe("Accounts") do
       user = User.find_by("email", email)
       assert_not(user.confirmed?)
       assert_eq(res_status(get("/app/account")), 302, "not signed in yet")
-      # Refused until the address is confirmed, with the way to get a new link.
+      # Refused until the address is confirmed, as a wrong password is (#539:
+      # a sign-in must not say the account exists), with the way to get a
+      # new link that every refused sign-in shows.
       refused = sign_in_as(email)
-      assert_eq(res_status(refused), 403)
-      assert_contains(res_body(refused), "Please confirm your email address first")
+      assert_eq(res_status(refused), 401)
+      assert_contains(res_body(refused), "Invalid email or password")
+      assert_contains(res_body(refused), "Confirm your address first")
       assert_contains(res_body(refused), "Send the link again")
       assert_eq(res_status(get("/app/account")), 302)
+      # The right password queued the link again (AuthMailJob, which the test
+      # server runs): once it has, the link made here is the last one.
+      accounts_mail_jobs_done(email)
       token = User.find(user._key).start_email_confirmation
       assert_contains(res_body(get("/confirm_email?token=#{token}")), "Your email address is confirmed")
       assert_eq(res_status(sign_in_as(email)), 302)
@@ -93,17 +117,19 @@ describe("Accounts") do
       assert_null(User.find_by("email", email))
     end
 
-    test("refuses an email that already has an account") do
+    test("makes no second account for an email that has one, and says no more than for a new one (#539)") do
       email = fresh_email()
       make_user(email)
       fields = form_fields("/signup")
       sleep(2.1)
       response = post("/signup", fields.merge({
         "email": email.upcase,
-        "password": SPEC_PASSWORD
+        "password": "another long password"
       }))
-      assert_eq(res_status(response), 422)
+      assert_eq(res_status(response), 200)
+      assert_contains(res_body(response), "We sent a link to #{email}")
       assert_eq(User.where({"email": email}).count, 1)
+      assert(User.find_by("email", email).authenticate(SPEC_PASSWORD), "its password unchanged")
     end
 
     test("refuses a bot: the hidden field filled, or the form never loaded") do
@@ -455,8 +481,15 @@ describe("Accounts") do
       assert_contains(page, "Not confirmed yet")
       assert_contains(page, "Send the link again")
       # The button sends a fresh link: a new token replaces the old one.
+      # The link is made by the queued AuthMailJob (#539), which the test
+      # server runs: wait for it.
       before = User.find(unconfirmed._key).confirmation_token_digest
       post("/confirmation/resend", {"email": unconfirmed.email})
+      waited = 0
+      while User.find(unconfirmed._key).confirmation_token_digest == before && waited < 40
+        sleep(0.25)
+        waited += 1
+      end
       assert_ne(User.find(unconfirmed._key).confirmation_token_digest, before)
     end
   end

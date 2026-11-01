@@ -62,7 +62,8 @@ describe("PagesController") do
       assert_contains(body, "https://score.solisoft.net/eui-score-editor.js")
       assert_contains(body, "<eui-score src=\"/examples/ensembles/string-quartet/source.ly\"></eui-score>")
       assert_contains(body, "<script type=\"text/x-lilypond\">")
-      assert_contains(body, "await import(\"/eui-score/eui-score.js?v=#{ScoreAssets.version}\")")
+      assert_contains(body, "id=\"embed-data\">{\"v\":\"#{ScoreAssets.version}\"}</script>")
+      assert_contains(body, "await import(`/eui-score/eui-score.js?v=${v}`)")
       assert_contains(body, "<eui-score-editor id=\"embed-editor\">")
     end
   end

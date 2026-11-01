@@ -21,8 +21,12 @@ class OauthServerController < Controller
   end
 
   # POST /oauth/register — dynamic client registration (RFC 7591): public
-  # clients only, their redirect URIs checked by OauthServer
+  # clients only, their redirect URIs checked by OauthServer. Each open
+  # endpoint counts its calls per address (#541).
   def register
+    refused = OauthServer.throttled("register", client_ip(req))
+    return refused unless refused.nil?
+
     input = req["json"] ?? params
     redirect_uris = input["redirect_uris"]
     unless type(redirect_uris) == "array" && redirect_uris.length > 0 && redirect_uris.length <= 10
@@ -71,13 +75,21 @@ class OauthServerController < Controller
     return @_fatal(checked["fatal"]) if checked.has_key("fatal")
     return @_refuse(checked) if checked.has_key("redirect_error")
 
-    session_set("oauth_pending", OauthServer.request_fields(params))
+    # A request replaces the one pending: its own id, which the consent page
+    # sends back, so that a page showing an earlier request cannot approve
+    # this one (#541).
+    pending = OauthServer.request_fields(params)
+    pending["request_id"] = Crypto.random_token(16)
+    session_set("oauth_pending", pending)
     redirect(app_oauth_consent_path())
   end
 
   # POST /oauth/token — a code (with its PKCE verifier), or a refresh token,
   # for an access token
   def token
+    refused = OauthServer.throttled("token", client_ip(req))
+    return refused unless refused.nil?
+
     input = req["json"] ?? params
     grant = input["grant_type"].to_s
     return @_exchange_code(input) if grant == "authorization_code"
@@ -89,6 +101,9 @@ class OauthServerController < Controller
   # POST /oauth/revoke — RFC 7009: a client letting go of its connection.
   # 200 whatever the token was: it says nothing.
   def revoke
+    refused = OauthServer.throttled("revoke", client_ip(req))
+    return refused unless refused.nil?
+
     input = req["json"] ?? params
     AccessToken.revoke_oauth(input["token"], input["client_id"])
     OauthServer.json(200, {})
@@ -108,8 +123,10 @@ class OauthServerController < Controller
       return OauthServer.error(400, "invalid_grant", "code issued to another client")
     end
 
+    # Required, exactly, when the authorization request named it (RFC 6749
+    # 4.1.3); a code issued before #541 carries no flag and is held to it too.
     sent = input["redirect_uri"].to_s
-    if !sent.blank? && sent != code["redirect_uri"]
+    if (sent.blank? && code["redirect_uri_sent"] != false) || (!sent.blank? && sent != code["redirect_uri"])
       return OauthServer.error(400, "invalid_grant", "redirect_uri does not match the authorization request")
     end
 

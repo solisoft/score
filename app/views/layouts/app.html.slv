@@ -90,17 +90,20 @@
         <%= yield %>
     </main>
     <% if signed_in?() %>
+    <%# The bell's words and address, beside its script: an inline script's
+        text never changes, its hash is in the Content-Security-Policy (#544). %>
+    <% bell_words = {"none": t("app.layout.notifications"), "one": t("app.layout.unread_one")} %>
+    <% bell_words["other"] = t("app.layout.unread_other") %>
+    <%- page_data("bell-data", {"words": bell_words, "unread": app_notifications_unread_path()}) %>
     <script data-bell-script>
       // The bell's count, asked for on every page; the editor asks again
       // when a comment comes in (window.euiBell).
-      <% bell_words = {"none": t("app.layout.notifications"), "one": t("app.layout.unread_one")} %>
-      <% bell_words["other"] = t("app.layout.unread_other") %>
-      window.euiBellWords = <%- bell_words.to_json %>;
+      ({ words: window.euiBellWords, unread: window.euiBellUnread } = JSON.parse(document.getElementById("bell-data").textContent));
       window.euiBell = async () => {
         const count = document.querySelector("[data-bell-count]");
         if (!count) return;
         try {
-          const answer = await (await fetch("<%= app_notifications_unread_path() %>", { headers: { Accept: "application/json" } })).json();
+          const answer = await (await fetch(window.euiBellUnread, { headers: { Accept: "application/json" } })).json();
           count.textContent = answer.count > 99 ? "99+" : String(answer.count);
           count.hidden = !answer.count;
           count.closest("[data-bell]").setAttribute("aria-label", answer.count ? window.euiBellWords[answer.count === 1 ? "one" : "other"].replace("{count}", answer.count) : window.euiBellWords.none);

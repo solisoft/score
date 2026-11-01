@@ -12,8 +12,11 @@
 <% end %>
 <%- partial("shared/studio", {"examples": examples, "figure": figure, "source": source}) %>
 
+<%# What the script needs beside it, not in it: its text never changes (#544). %>
+<%- page_data("playground-data", {"v": eui_version, "examples": examples_path()}) %>
 <script type="module">
   // The line over the editor, hidden for good in this browser once closed.
+  const page = JSON.parse(document.getElementById("playground-data").textContent);
   const banner = document.querySelector("[data-banner]");
   const HIDDEN = "eui-score-playground-banner-hidden";
   try {
@@ -25,6 +28,6 @@
       localStorage.setItem(HIDDEN, "1");
     } catch (error) {}
   });
-  const { startStudio } = await import("/eui-score/studio.js?v=<%= eui_version %>");
-  startStudio(document.getElementById("studio"), { examples: "<%= examples_path() %>" });
+  const { startStudio } = await import(`/eui-score/studio.js?v=${page.v}`);
+  startStudio(document.getElementById("studio"), { examples: page.examples });
 </script>

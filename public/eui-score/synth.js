@@ -82,7 +82,8 @@ const clamp = (x, [lo, hi], fallback) => {
 /** A staff's synthesizer, every field there and in range: `stored` over its preset. */
 export function settings(stored = {}) {
   const s = stored ?? {};
-  const preset = PRESETS[s.preset] ? s.preset : DEFAULT_PRESET;
+  // Own presets only: "constructor" or "toString" on a meta line is no preset (#537).
+  const preset = Object.hasOwn(PRESETS, s.preset ?? "") ? s.preset : DEFAULT_PRESET;
   const base = PRESETS[preset];
   const osc = (k) => ({
     wave: WAVES.includes(s[k]?.wave) ? s[k].wave : base[k].wave,
