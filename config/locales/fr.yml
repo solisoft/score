@@ -344,8 +344,6 @@ fr:
       push_state_off: "Désactivées sur cet appareil."
       push_on_failed: "Impossible de les activer : {error}"
       push_off_failed: "Impossible de les désactiver : {error}"
-      push_sent_one: "Envoyé à {n} appareil."
-      push_sent_other: "Envoyé à {n} appareils."
       push_sent_none: "Rien n'a pu être envoyé : réactivez-les sur cet appareil."
       push_send_failed: "Envoi impossible : {error}"
       plan_on: "Vous êtes sur l'offre <strong>{plan}</strong>."
@@ -1445,6 +1443,11 @@ fr:
     push_taken: "Les notifications de cet appareil sont celles d'un autre compte : désactivez-les d'abord depuis ce compte."
   # ---
   # (#543) security: push, storage and export — keys under `security_543:` right below
+  security_543:
+    push_test_limited: "Trop de messages de test : réessayez dans une heure."
+    push_queued_one: "En route vers {n} appareil."
+    push_queued_other: "En route vers {n} appareils."
+    take_room_full: "Vos prises dépasseraient les {room} que garde votre offre : supprimez-en d'abord."
   # ---
   # (#544) security: CSP, configuration and admin — keys under `security_544:` right below
   # ---
