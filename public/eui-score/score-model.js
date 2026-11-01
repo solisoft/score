@@ -1466,7 +1466,13 @@ export function setDynamic(score, s, i, dynamic) {
   ev.dynamic = ev.dynamic === dynamic ? null : dynamic;
 }
 
-/** A hairpin opening at `a` and closing at `b` ("<" or ">"); on one event, toggles its start. */
+/**
+ * A hairpin opening at `a` and closing at `b` ("<" or ">"); on one event, toggles its start.
+ * Over several events it spans all of them: a hairpin that started or ended between them is
+ * taken away, or the new one would stop at that end (at the barline, when it is a bar's first
+ * note). The first event keeps an end it carries — it closes the hairpin before — and the last
+ * a start — it opens the one after.
+ */
 export function setHairpin(score, s, a, b, kind) {
   const events = score.staves[s].events;
   const [from, to] = [Math.min(a, b), Math.max(a, b)];
@@ -1478,7 +1484,13 @@ export function setHairpin(score, s, a, b, kind) {
     return;
   }
   ev.hairpin = kind;
-  if (to > from) events[to].hairpinEnd = true;
+  if (to === from) return;
+  for (const inside of events.slice(from + 1, to)) {
+    inside.hairpin = null;
+    inside.hairpinEnd = false;
+    delete inside.hairpinWords;
+  }
+  events[to].hairpinEnd = true;
 }
 
 export function toggleArticulation(score, s, i, name) {

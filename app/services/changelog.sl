@@ -12,6 +12,14 @@ class Changelog
     [
       {"date": "2026-11-01", "entries": [
         {
+          "area": "editor",
+          "title": "A hairpin over the whole selection",
+          "text": "A crescendo or diminuendo set on selected notes now runs to the last of them. A hairpin that "
+          + "started or ended between them is taken away: before, its end stopped the new one there, at the "
+          + "barline when it was a bar's first note.",
+          "app": true
+        },
+        {
           "area": "site",
           "title": "The account page, set in order",
           "text": "Your account opens on a summary (plan, two-step sign-in, AI key, apps connected) and groups its "

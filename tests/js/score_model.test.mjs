@@ -164,6 +164,37 @@ test("ties, slurs, dynamics, hairpins, articulations, chord symbols, lyrics — 
   assert.equal(back.header.title, "Test");
 });
 
+test("a hairpin set over a selection spans all of it: the hairpins inside are taken away (#506)", () => {
+  const read = (src) => M.fromParsed(JSON.parse(score_json(src))).score;
+  // A diminuendo ends at bar 2's first note (so at the barline); the selection runs to bar 2's last note.
+  const s = read("{ \\time 2/4 e''16\\>( d'' c'' b' a'\\< g' fis' e') | b'4\\!( g'4) | c''2 }");
+  M.setHairpin(s, 0, 0, 9, ">");
+  const ev = s.staves[0].events;
+  assert.equal(ev[0].hairpin, ">");
+  assert.deepEqual(ev.slice(1, 9).map((e) => [e.hairpin, e.hairpinEnd]), Array(8).fill([null, false]), "nothing starts or ends inside");
+  assert.equal(ev[9].hairpinEnd, true);
+  assert.equal(ev[10].hairpinEnd, false);
+  const { source } = engrave(s);
+  assert.match(source, /g'4\)?\\!/);
+  assert.doesNotMatch(source, /b'4\(?\\!/);
+  assert.equal(reread(s).staves[0].events[9].hairpinEnd, true);
+
+  // The first event keeps the end of the hairpin before it, the last the start of the one after.
+  const t = read("{ c''4\\< d'' | e''\\!\\> f'' | g''\\! a'' | b''2 }");
+  M.setHairpin(t, 0, 2, 5, "<");
+  const tev = t.staves[0].events;
+  assert.ok(tev[2].hairpinEnd, "the hairpin before still ends where the new one starts");
+  assert.equal(tev[2].hairpin, "<");
+  assert.equal(tev[4].hairpinEnd, false, "the old diminuendo's end is gone");
+  assert.ok(tev[5].hairpinEnd);
+  engrave(t);
+
+  // One note: the start toggles, nothing else moves.
+  M.setHairpin(t, 0, 2, 2, "<");
+  assert.equal(tev[2].hairpin, null);
+  assert.ok(tev[5].hairpinEnd);
+});
+
 test("a pitch changed on a tied note changes every note tied to it: a tie joins one pitch", () => {
   const s = M.newScore();
   // G tied over three bars, in D flat major: the flat on G is the key's.
