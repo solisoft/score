@@ -97,21 +97,18 @@ class SessionsController < Controller
       return this._reject(SiteText.t("auth.invalid"), email, 401)
     end
 
-    user.clear_failed_attempts(ip)
     remember = params["remember_me"].to_s == "1"
-    # Two-step sign-in: the password is right, the code is still to come. The
-    # session says who is half-way, since when, and where they were going —
-    # it does not sign them in.
+    # Two-step sign-in: the password is right, the code is still to come
+    # (TwoStepPending, which does not sign in nor mark the browser as one
+    # the account knows). The network's wrong passwords are cleared once
+    # the code is right too (TwoStepController, #538); the wrong codes are
+    # counted apart (TwoStepGuard), and no password clears them.
     if user.two_step?()
-      session_regenerate()
-      session_set("two_step_user", user["_key"])
-      session_set("two_step_since", DateTime.utc().to_unix())
-      session_set("two_step_tries", 0)
-      session_set("two_step_remember", remember)
-      session_set("two_step_return", @_return_to)
+      TwoStepPending.start(user, remember, @_return_to)
       return redirect(SiteLocale.path(login_code_path()))
     end
 
+    user.clear_failed_attempts(ip)
     @_finish_sign_in(user, remember)
     redirect(@_after_sign_in)
   end

@@ -10,7 +10,8 @@
 # Args: `kind` ("reset", "confirm", "signup_taken", "account_locked"),
 # `email`, `locale` (the request's: the mail is written in it; English
 # without a valid one), and for "account_locked" `lock` ("source": one
-# network's; "account": every browser the account does not know) and
+# network's; "account": every browser the account does not know; "code":
+# the two-step code step, paused after wrong codes, #538) and
 # `by_code` (the guesses were at the two-step code, not the password).
 # Answers what it did: {"found" (an account has the address), "due" (a mail
 # was to go), "sent" (it left)}.
@@ -77,7 +78,7 @@ class AuthMailJob
       return {
         "kind": kind,
         "token": nil,
-        "lock": args["lock"] == "account" ? "account" : "source",
+        "lock": ["account", "code"].includes?(args["lock"]) ? args["lock"] : "source",
         "by_code": args["by_code"] == true
       }
     end
@@ -119,7 +120,7 @@ class AuthMailJob
       letter = AuthMailJob._letter(user, "account_locked", "mail.account_locked.title", {"reset_url": reset_url})
       letter["lock"] = due["lock"]
       letter["by_code"] = due["by_code"]
-      letter["minutes"] = (due["lock"] == "account" ? AUTH_ACCOUNT_WINDOW : AUTH_LOCKOUT_SECONDS) / 60
+      letter["minutes"] = AuthMailJob.lock_seconds(due["lock"]) / 60
       return letter
     end
 
@@ -129,6 +130,14 @@ class AuthMailJob
       "mail.confirm_email.title",
       {"confirm_url": base + SiteLocale.path("/confirm_email") + "?token=" + due["token"]}
     )
+  end
+
+  # How long a lock of kind `lock` lasts.
+  static def lock_seconds(lock)
+    return AUTH_ACCOUNT_WINDOW if lock == "account"
+    return TWO_STEP_LOCK_SECONDS if lock == "code"
+
+    AUTH_LOCKOUT_SECONDS
   end
 
   static def _letter(user, action, subject_key, links)

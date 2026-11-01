@@ -77,10 +77,16 @@ class AppAccountController < AppBaseController
     redirect(app_account_path())
   end
 
-  # POST /app/account/two-step — a new secret for an authenticator app, to confirm
+  # POST /app/account/two-step — the password, then a new secret for an
+  # authenticator app, to confirm. The password (#538): a browser left signed
+  # in must not be enough to tie the account to someone else's app.
   def two_step
     @user = current_user()
     return redirect(app_account_path()) if @user.two_step?() || !User.two_step_available?()
+    return @_refuse_two_step(@_tries_spent_message, 429) if @user.password_tries_spent?
+    unless @user.confirms_password?(params["password"])
+      return @_refuse_two_step(SiteText.t("security_538.two_step_password"), 422)
+    end
 
     @_show_enrolment(@user.start_two_step(), "")
   end
@@ -95,6 +101,13 @@ class AppAccountController < AppBaseController
     wrong = SiteText.t("app.account.enrol_wrong_code")
     return @_show_enrolment(secret, wrong) if codes.nil?
 
+    # Every other browser is signed out (User#confirm_two_step, #538); this
+    # one stays, on the new version, and is still one the account knows (the
+    # new version voided every `device` cookie given before).
+    session_regenerate()
+    session_set("user_id", @user["_key"])
+    session_set("session_version", @user.current_session_version())
+    set_cookie("device", @user.device_cookie, User.device_cookie_options)
     # A right code, given in this session: as good as a code sign-in (#544).
     SecondStep.mark(@user)
     @codes = codes
@@ -104,11 +117,12 @@ class AppAccountController < AppBaseController
   end
 
   # POST /app/account/two-step/stop — the password and a code turn it off
+  # (a wrong code counted, #538: User#confirms_with_code?)
   def stop_two_step
     @user = current_user()
     return @_refuse_tries if @user.password_tries_spent?
 
-    unless @user.confirms_password?(params["password"]) && @user.second_step?(params["code"])
+    unless @user.confirms_with_code?(params["password"], params["code"])
       @title = SiteText.t("app.account.page_title")
       @description = SiteText.t("app.account.page_description")
       @error = SiteText.t("app.account.two_step_still_on")
@@ -178,15 +192,29 @@ class AppAccountController < AppBaseController
     redirect(app_account_path() + "#push")
   end
 
-  # DELETE /app/account — the password confirms it
+  # DELETE /app/account — the password confirms it, and a code with two-step
+  # sign-in on (#538), as turning that off asks
   def destroy
     @user = current_user()
     return @_refuse_tries if @user.password_tries_spent?
 
-    unless @user.confirms_password?(params["password"])
+    unless @user.confirms_password?(params["password"], !@user.two_step?)
       @title = SiteText.t("app.account.page_title")
+      @description = SiteText.t("app.account.page_description")
       @error = SiteText.t("app.account.not_your_password")
       return render("app/account/show", {}, {"status": 422})
+    end
+    # The code counted, and the tries started again only once it is right
+    # too (User#confirms_with_code?).
+    if @user.two_step?
+      unless @user.second_step_counted?(params["code"])
+        @title = SiteText.t("app.account.page_title")
+        @description = SiteText.t("app.account.page_description")
+        @error = SiteText.t("security_538.delete_wrong_code")
+        return render("app/account/show", {}, {"status": 422})
+      end
+
+      @user.passed_confirmation
     end
 
     @user.erase_account
@@ -283,6 +311,16 @@ class AppAccountController < AppBaseController
     @description = SiteText.t("app.account.page_description")
     @error = @_tries_spent_message
     render("app/account/show", {}, {"status": 429})
+  end
+
+  # The account page again, saying why two-step sign-in was not turned on
+  # (#538): next to its form.
+  def _refuse_two_step(message, status)
+    @title = SiteText.t("app.account.page_title")
+    @description = SiteText.t("app.account.page_description")
+    @error = ""
+    @two_step_error = message
+    render("app/account/show", {}, {"status": status})
   end
 
   def _tries_spent_message

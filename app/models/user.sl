@@ -10,6 +10,10 @@
 const AUTH_RESET_TOKEN_TTL = 7200  # password-reset links live 2 hours
 const AUTH_MAX_FAILED_ATTEMPTS = 10  # failed logins before lockout
 const AUTH_LOCKOUT_SECONDS = 1800  # auto-unlock after 30 minutes
+# Wrong two-step codes that pause the code step, and for how long (#538,
+# TwoStepGuard): as many as wrong passwords, apart from them.
+const TWO_STEP_MAX_WRONG = AUTH_MAX_FAILED_ATTEMPTS
+const TWO_STEP_LOCK_SECONDS = AUTH_LOCKOUT_SECONDS
 const AUTH_CONFIRMATION_TOKEN_TTL = 172800  # confirmation links last 48 hours
 const AUTH_REMEMBER_DAYS = 30  # remember-me cookie lifetime
 const AUTH_MIN_PASSWORD_LENGTH = 12  # shortest password accepted at sign-up
@@ -229,14 +233,39 @@ class User < Model
   # without checking, once the tries are spent. The try is counted before
   # the ~100ms check, not after it: parallel requests would otherwise all
   # pass the count before any of them added to it. A right one starts the
-  # count again.
-  def confirms_password?(plaintext)
+  # count again — unless `new_round` is false: a page that asks for a
+  # two-step code too starts it only once the code is right as well
+  # (`passed_confirmation`, #538). Started on the password alone, a wrong
+  # code after the right password cost no try, and the codes could be
+  # guessed there without end.
+  def confirms_password?(plaintext, new_round = true)
     tries = @_password_tries
     return false unless tries.allowed()
     return false unless @authenticate(plaintext.to_s)
 
+    @_next_password_round if new_round
+    true
+  end
+
+  # The password and the code of a signed-in page both right (#538): the
+  # tries start again.
+  def passed_confirmation
     @_next_password_round
     true
+  end
+
+  # Whether the password and, with two-step sign-in on, a code confirm a
+  # change from a signed-in page: the password's try counted (above), each
+  # wrong code counted at the second step (`second_step_counted?`), the
+  # tries started again only once both are right. The code is not looked at
+  # when the password is wrong.
+  def confirms_with_code?(password, code)
+    return @confirms_password?(password) unless @two_step?
+
+    return false unless @confirms_password?(password, false)
+    return false unless @second_step_counted?(code)
+
+    @passed_confirmation
   end
 
   # Spend the same Argon2id work as a real `authenticate` without having an
@@ -332,11 +361,16 @@ class User < Model
 
   # Issue a reset token: returns the plaintext token (goes into the email);
   # only its digest is stored.
+  #
+  # Written alone (`_patch_stored`): the copy asking may be older than the
+  # account's lockout counts (the mail job reads it), and saving it whole
+  # would put them back as they were then.
   def start_password_reset
     token = uuid_v4()
+    sent_at = DateTime.utc().to_unix()
+    @_patch_stored({"reset_token_digest": Crypto.sha256(token), "reset_sent_at": sent_at})
     this.reset_token_digest = Crypto.sha256(token)
-    this.reset_sent_at = DateTime.utc().to_unix()
-    this.update()
+    this.reset_sent_at = sent_at
     token
   end
 
@@ -430,11 +464,15 @@ class User < Model
   end
 
   # --- Email confirmation -----------------------------------------------------
+  # Written alone, as `start_password_reset` is: the mail job's copy of the
+  # account is read before the sign-ins counted since — saved whole, it
+  # wrote their failures back to what it had read.
   def start_email_confirmation
     token = uuid_v4()
+    sent_at = DateTime.utc().to_unix()
+    @_patch_stored({"confirmation_token_digest": Crypto.sha256(token), "confirmation_sent_at": sent_at})
     this.confirmation_token_digest = Crypto.sha256(token)
-    this.confirmation_sent_at = DateTime.utc().to_unix()
-    this.update()
+    this.confirmation_sent_at = sent_at
     token
   end
 
@@ -472,8 +510,10 @@ class User < Model
   # this account's, and not another account's.
   def email_change_error(new_email, password, code)
     address = new_email.to_s.trim.downcase
-    return SiteText.t("app.account.email_wrong_password") unless this.confirms_password?(password)
-    return SiteText.t("app.account.email_wrong_code") if this.two_step?() && !this.second_step?(code)
+    return SiteText.t("app.account.email_wrong_password") unless this.confirms_password?(password, !this.two_step?())
+    return SiteText.t("app.account.email_wrong_code") if this.two_step?() && !this.second_step_counted?(code)
+
+    this.passed_confirmation() if this.two_step?()
 
     return SiteText.t("app.account.email_invalid") unless Regex.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", address)
     return SiteText.t("app.account.email_same") if address == this.email
@@ -976,39 +1016,106 @@ class User < Model
       Crypto.sha256(User.backup_digest_text(c))
     end
     this.totp_enabled_at = DateTime.utc().to_unix()
+    # Every session and remembered browser opened on the password alone is
+    # signed out (#538): turned on because the password may be known, it
+    # would otherwise leave in whoever got in with it. The browser that
+    # turned it on is stamped again by the controller.
+    this.session_version = (this.session_version ?? 0) + 1
+    this.remember_token_digest = null
     this.update()
     codes
   end
 
   # Whether `code` passes the second step: a code of the app not used
   # before, or a backup code not used before — which is then spent.
+  #
+  # Spent as a compare-and-set on the account's TwoStepGuard row (#538):
+  # reading the account, then writing it, let two requests sent together
+  # both pass with the same code, each having read it unused. The account
+  # read again must still have this secret on: a copy read before two-step
+  # was turned off passes nothing.
   def second_step?(code)
     return false unless this.two_step?()
 
+    stored = User.find_by("_key", this._key)
+    return false if stored.nil? || stored.totp_secret != this.totp_secret
+
+    guard = TwoStepGuard.of(this)
     text = code.to_s.replace(" ", "")
     if Regex.matches("^[0-9]{6}$", text)
       secret = Crypto.decrypt(this.totp_secret, getenv("SOLI_ENCRYPTION_KEY"))
       step = User.totp_step(secret, text, DateTime.utc().to_unix())
-      return false if step.nil? || step <= (this.totp_last_step ?? -1)
+      return false if step.nil?
 
-      this.totp_last_step = step
-      this.update()
-      return true
+      return this._spent_step(guard, step, stored.totp_last_step)
     end
     digest = Crypto.sha256(User.backup_digest_text(text))
-    left = this.totp_backup ?? []
-    return false unless left.includes?(digest)
+    this._spent_backup(guard, digest, stored.totp_backup ?? [])
+  end
 
-    this.totp_backup = left.filter do |d|
-      d != digest
-    end
-    this.update()
+  # The code of time step `step` spent from `guard` (the account's
+  # TwoStepGuard row, as read): whether it was. The account keeps the step
+  # too, written alone, for what it shows.
+  def _spent_step(guard, step, floor)
+    return false unless TwoStepGuard.spend_step(guard, step, floor)
+
+    @_patch_stored({"totp_last_step": step})
+    this.totp_last_step = step
     true
   end
 
+  # The backup code of `digest` spent from `guard`, if it is one of
+  # `valid` (the account's set): whether it was. The set itself stays as
+  # issued — the codes left are counted against the guard's `spent`
+  # (`backup_codes_left`): a list written back from a copy read before
+  # another code was spent would make that code good again.
+  def _spent_backup(guard, digest, valid)
+    TwoStepGuard.spend_backup(guard, digest, valid)
+  end
+
+  # Whether `code` passes the second step, counted (#538): the try is
+  # counted first (TwoStepGuard.take_try), so requests sent together cannot
+  # all pass the pause's check before any is counted; while the code step
+  # is paused no code is looked at, the right one included. A wrong one
+  # stays counted, wherever it is typed — signing in, turning two-step off,
+  # a new address, deleting the account — and the owner is told when it
+  # paused the code step; a right one gives the count back.
+  def second_step_counted?(code)
+    tried = TwoStepGuard.take_try(this)
+    return false if tried.nil?
+
+    if this.second_step?(code)
+      TwoStepGuard.clear_wrong(this)
+      return true
+    end
+    @_tell_paused if tried == "pausing"
+    false
+  end
+
+  # Whether the code step is paused, after too many wrong codes.
+  def codes_locked?
+    TwoStepGuard.locked?(this)
+  end
+
+  # One more wrong code (a try counted, known wrong): whether it paused the
+  # code step, the owner then told (queued, AuthMailJob), once a pause.
+  def count_wrong_code
+    paused = TwoStepGuard.take_try(this) == "pausing"
+    @_tell_paused if paused
+    paused
+  end
+
+  def _tell_paused
+    AuthMailJob.ask("account_locked", @email, {
+      "lock": "code",
+      "by_code": true
+    })
+  end
+
+  # The backup codes not spent yet: the set issued, less those the
+  # second step's record has as spent (TwoStepGuard).
   def backup_codes_left
-    left = this.totp_backup ?? []
-    left.length
+    TwoStepGuard.codes_left(this, this.totp_backup ?? [])
   end
 
   def stop_two_step
@@ -1196,8 +1303,10 @@ class User < Model
   end
 
   # Signing in allowed again after too many wrong passwords, from every
-  # address.
+  # address, and the code step's pause lifted too (#538): an admin lifts
+  # the lock whole.
   def unlock
+    TwoStepGuard.clear_wrong(this)
     @locked_at = nil
     @failed_attempts = 0
     @sign_in_failures = nil
@@ -1276,6 +1385,7 @@ class User < Model
     UserNotification.delete_all_of(this)
     PushSubscription.delete_all_of(this)
     AccessToken.delete_all_of(this)
+    TwoStepGuard.delete_of(this)
     @delete
   end
 

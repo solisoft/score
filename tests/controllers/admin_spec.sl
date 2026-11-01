@@ -138,11 +138,29 @@ describe("The admin section") do
       admin = admin_spec_user("admin", nil, false)
       target = admin_spec_user()
       # Signed in with the password alone, then two-step turned on behind
-      # this session's back (by whoever holds the password, say).
+      # this session's back (by whoever holds the password, say): turning it
+      # on signs that session out (#538), so it reaches no admin page.
       admin_spec_sign_in(admin)
       secret = User.find(admin._key).start_two_step
-      User.find(admin._key).confirm_two_step(Crypto.totp_generate(secret, DateTime.utc.to_unix, 30))
+      codes = User.find(admin._key).confirm_two_step(Crypto.totp_generate(secret, DateTime.utc.to_unix, 30))
       assert(User.find(admin._key).two_step?)
+      assert_contains(res_location(get("/admin")), "/login")
+      # A session opened by a remembered browser gave no code either: the
+      # sign-in that remembered it did, this session did not.
+      clear_cookies()
+      post(
+        "/login",
+        {
+          "email": admin.email,
+          "password": ADMIN_SPEC_PASSWORD,
+          "remember_me": "1"
+        }
+      )
+      headers = str(res_headers(post("/login/code", {"code": codes[0]})))
+      remembered = headers.split("remember_token=")[1].to_s.split(";")[0]
+      assert(remembered.present?, "a remembered browser")
+      clear_cookies()
+      set_request_cookie("remember_token", remembered)
       ["/admin", "/admin/customers", "/admin/actions"].each do |path|
         response = get(path)
         assert_eq(res_status(response), 302, path)
@@ -168,17 +186,19 @@ describe("The admin section") do
       admin = admin_spec_user("admin")
       admin_spec_sign_in(admin)
       assert_eq(res_status(get("/admin")), 200)
-      # Another admin signs in on the same browser with the password alone,
-      # then turns two-step on outside this session: the first one's code
-      # does not carry over.
+      # Another admin signs in on the same browser with the password alone:
+      # the first one's code does not carry over.
       other = admin_spec_user("admin", nil, false)
       post(
         "/login",
         {"email": other.email, "password": ADMIN_SPEC_PASSWORD}
       )
+      assert_eq(res_location(get("/admin")), "/admin/two-step")
+      # Two-step then turned on outside this session: the session is signed
+      # out (#538), the first admin's code still not carried over.
       secret = User.find(other._key).start_two_step
       User.find(other._key).confirm_two_step(Crypto.totp_generate(secret, DateTime.utc.to_unix, 30))
-      assert_eq(res_location(get("/admin")), "/admin/two-step")
+      assert_contains(res_location(get("/admin")), "/login")
     end
 
     test("turning two-step on in this session, with a first code, opens it") do

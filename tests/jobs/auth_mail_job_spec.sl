@@ -117,6 +117,22 @@ describe("AuthMailJob") do
     assert_eq(odd["lock"], "source")
   end
 
+  test("the code step's pause, after wrong two-step codes, for its time, in both languages (#538)") do
+    user = auth_mail_user()
+    paused = auth_letter(user, "account_locked", "fr", {
+      "lock": "code",
+      "by_code": true
+    })
+    assert_eq(paused["lock"], "code")
+    assert_eq(paused["minutes"], TWO_STEP_LOCK_SECONDS / 60)
+    assert(paused["by_code"])
+    assert_eq(paused["links"]["reset_url"], auth_base_url() + "/fr/password/reset")
+    assert_contains(SiteText.t("security_538.account_locked.code_body", {}, "en"), "was typed right")
+    assert_contains(SiteText.t("security_538.account_locked.code_advice", {}, "en"), "someone has your password")
+    assert_contains(SiteText.t("security_538.account_locked.code_body", {}, "fr"), "aucun code")
+    assert_contains(SiteText.t("security_538.account_locked.code_advice", {}, "fr"), "quelqu'un a votre mot de passe")
+  end
+
   test("the lock mail says the usual browser still signs in, in both languages") do
     assert_contains(SiteText.t("security_539.account_locked.source_advice", {}, "en"), "from your usual browser too")
     assert_contains(

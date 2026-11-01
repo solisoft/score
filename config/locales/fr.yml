@@ -1420,6 +1420,13 @@ fr:
   # (#537) security: the editor's score data — keys under `security_537:` right below
   # ---
   # (#538) security: two-step sign-in and resets — keys under `security_538:` right below
+  security_538:
+    account_locked:
+      code_body: "Le mot de passe de <strong>{email}</strong> a été saisi correctement, mais le code de l'application d'authentification a été faux trop de fois : pendant {minutes} minutes, aucun code n'est accepté et la connexion attend."
+      code_advice: "Si ce n'était pas vous, quelqu'un a votre mot de passe : changez-le dès maintenant (bouton ci-dessous), ou dès que vous serez reconnecté. Un nouveau mot de passe ne raccourcit pas la pause ; les navigateurs déjà connectés le restent."
+    too_many_codes: "Trop de codes erronés pour ce compte : aucun code n'est accepté pendant {minutes} minutes."
+    two_step_password: "Ce n'est pas votre mot de passe : la connexion en deux étapes est toujours désactivée."
+    delete_wrong_code: "Ce code n'est pas bon, ou il a déjà servi : le compte est toujours là."
   # ---
   # (#539) security: tokens, passwords and accounts — keys under `security_539:` right below
   security_539:

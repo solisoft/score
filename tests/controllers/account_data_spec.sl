@@ -176,9 +176,12 @@ describe("Account data") do
 
     test("with two-step sign-in on, a code is asked for too") do
       user = data_user()
-      data_sign_in(user)
       secret = User.find(user._key).start_two_step
       codes = User.find(user._key).confirm_two_step(Crypto.totp_generate(secret, DateTime.utc.to_unix, 30))
+      # Turning it on signs out the sessions opened before (#538): sign in
+      # after, both steps.
+      data_sign_in(user)
+      post("/login/code", {"code": codes[9]})
       assert_contains(res_body(get("/app/account")), "id=\"email_code\"")
       new_email = "coded-#{uuid_v4}@example.com"
       refused = ask_change(new_email, DATA_PASSWORD, "000000")

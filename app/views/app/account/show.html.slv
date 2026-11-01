@@ -139,13 +139,20 @@
                 <p class="muted"><%- t("app.account.not_available") %></p>
               <% end %>
             </div>
-            <% if !two_step_on && user.can_use_two_step?() %>
-              <form action="<%= app_account_two_step_path() %>" method="POST">
-                <%- csrf_field() %>
-                <button type="submit" class="btn btn-primary"><%- t("app.account.two_step_turn_on") %></button>
-              </form>
-            <% end %>
           </div>
+          <% if locals["two_step_error"].present? %>
+            <p class="form-error" role="alert"><%= locals["two_step_error"] %></p>
+          <% end %>
+          <% if !two_step_on && user.can_use_two_step?() %>
+            <%# The password first (#538): a browser left signed in is not enough. %>
+            <form action="<%= app_account_two_step_path() %>" method="POST" class="auth-form">
+              <%- csrf_field() %>
+              <label class="field"><%- t("app.account.password_to_confirm") %>
+                <input id="two_step_password" name="password" type="password" required autocomplete="current-password">
+              </label>
+              <button type="submit" class="btn btn-primary"><%- t("app.account.two_step_turn_on") %></button>
+            </form>
+          <% end %>
           <% if two_step_on %>
             <details class="setting-change">
               <summary><%- t("app.account.two_step_turn_off") %></summary>
@@ -515,6 +522,11 @@
               <label class="field"><%- t("app.account.password_to_confirm") %>
                 <input id="delete_password" name="password" type="password" required autocomplete="current-password">
               </label>
+              <% if two_step_on %>
+                <label class="field"><%- t("app.account.code_or_backup") %>
+                  <input id="delete_code" name="code" type="text" required autocomplete="one-time-code" maxlength="12" spellcheck="false">
+                </label>
+              <% end %>
               <button type="submit" class="btn btn-danger"><%- t("app.account.delete_button") %></button>
             </form>
           </details>

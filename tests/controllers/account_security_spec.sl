@@ -67,6 +67,18 @@ def guard_job_args(job)
   job["args"]
 end
 
+# The page `response` shows, `address` taken out, and the time it was
+# rendered at (the form's signed `_soli_ts`, csrf_field): two pages rendered
+# a second apart differ there and nowhere else, which is not an answer
+# telling one address from another.
+def guard_page(response, address)
+  Regex.replace_all(
+    "name=\"_soli_ts\" value=\"[^\"]*\"",
+    res_body(response).replace(address, ""),
+    "name=\"_soli_ts\""
+  )
+end
+
 # The signed render time and proof of work a sign-up page carries.
 def guard_signup_fields
   body = res_body(get("/signup"))
@@ -326,7 +338,7 @@ describe("Account security (#539)") do
       unknown = post("/password/reset", {"email": nobody})
       assert_eq(res_status(known), 200)
       assert_eq(res_status(unknown), 200)
-      assert_eq(res_body(known).replace(user.email, ""), res_body(unknown).replace(nobody, ""))
+      assert_eq(guard_page(known, user.email), guard_page(unknown, nobody))
       # The same work for both: one job each, alike but for the address (the test
       # server runs the queue, so the job may have run already).
       assert_eq(guard_job_args(guard_mail_jobs(user.email)[0]).keys, guard_job_args(guard_mail_jobs(nobody)[0]).keys)
@@ -354,7 +366,7 @@ describe("Account security (#539)") do
       nobody = "nobody-#{uuid_v4}@example.com"
       known = post("/confirmation/resend", {"email": user.email})
       unknown = post("/confirmation/resend", {"email": nobody})
-      assert_eq(res_body(known).replace(user.email, ""), res_body(unknown).replace(nobody, ""))
+      assert_eq(guard_page(known, user.email), guard_page(unknown, nobody))
       assert_eq(guard_job_args(guard_mail_jobs(user.email)[0]).keys, guard_job_args(guard_mail_jobs(nobody)[0]).keys)
       assert_eq(guard_mail_jobs(user.email).length, 1)
       assert_eq(guard_mail_jobs(nobody).length, 1)
@@ -410,7 +422,7 @@ describe("Account security (#539)") do
       assert_eq(res_status(made), 200)
       assert_eq(res_status(taken), 200)
       assert_contains(res_body(taken), "Check your inbox")
-      assert_eq(res_body(made).replace(fresh, ""), res_body(taken).replace(owner.email, ""))
+      assert_eq(guard_page(made, fresh), guard_page(taken, owner.email))
       assert_eq(User.where({"email": owner.email}).count, 1)
       assert(User.find(owner._key).authenticate(GUARD_PASSWORD), "the owner's password is unchanged")
       assert_eq(guard_mail_jobs(fresh).length, 1, "the new account's link, queued")

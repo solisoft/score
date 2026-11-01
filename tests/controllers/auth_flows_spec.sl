@@ -3,6 +3,18 @@
 
 const FLOW_PASSWORD = "correct horse battery"
 
+# The page `response` shows, `address` taken out, and the time it was
+# rendered at (the form's signed `_soli_ts`, csrf_field): two pages rendered
+# a second apart differ there and nowhere else, which is not an answer
+# telling one address from another.
+def flow_page(response, address)
+  Regex.replace_all(
+    "name=\"_soli_ts\" value=\"[^\"]*\"",
+    res_body(response).replace(address, ""),
+    "name=\"_soli_ts\""
+  )
+end
+
 def flow_user(confirmed = true)
   user = User.new()
   user.email = "flow-#{uuid_v4}@example.com"
@@ -201,7 +213,7 @@ describe("Account flows") do
       unknown = post("/confirmation/resend", {"email": nobody})
       assert_eq(res_status(known), 429)
       assert_eq(res_status(unknown), 429)
-      assert_eq(res_body(known).replace(user.email.upcase, ""), res_body(unknown).replace(nobody, ""))
+      assert_eq(flow_page(known, user.email.upcase), flow_page(unknown, nobody))
       assert_contains(res_body(known), "Too many emails asked for: try again in an hour.")
       assert_not(res_body(known).contains("on its way"))
       reset = post("/password/reset", {"email": user.email})

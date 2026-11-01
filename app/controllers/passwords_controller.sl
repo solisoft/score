@@ -112,6 +112,13 @@ class PasswordsController < Controller
     user.finish_password_reset(password)
     # The reset link reached this inbox: the address is confirmed too.
     User.find(user._key).confirm_email() unless user.confirmed?()
+    # With two-step sign-in on, the link is one step, not both (#538): who
+    # reads the inbox still needs the code, as after a password at sign-in.
+    if user.two_step?()
+      TwoStepPending.start(user, false, "")
+      return redirect(SiteLocale.path(login_code_path()))
+    end
+
     # Sign the user straight in with a fresh session.
     session_regenerate()
     session_set("user_id", user["_key"])

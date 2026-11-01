@@ -50,7 +50,8 @@ class AuthMailer < Mailer
   end
 
   # Sent once a window, when a lock trips (AuthMailJob, #539): one
-  # network's, or the account's for every browser it does not know. The
+  # network's, the account's for every browser it does not know, or the
+  # code step's (#538: wrong two-step codes, so after a right password). The
   # sign-in response deliberately says nothing about the lock — telling the
   # browser "this account is locked" also tells whoever is guessing that they
   # found the right password — so this is how the owner finds out.
