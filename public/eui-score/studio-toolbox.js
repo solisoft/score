@@ -313,7 +313,7 @@ export function install(ctx) {
         case "key": M.setKey(score, Number(value)); break;
         case "time": M.setMetre(score, value); break;
         case "pickup": M.setPickup(score, M.pickupOf(value)); break;
-        case "bpm": score.tempo = { ...(score.tempo ?? { text: "", base: 4 }), bpm: Number(value) || 0 }; break;
+        case "bpm": score.tempo = { ...(score.tempo ?? { text: "" }), base: score.tempo?.base || 4, bpm: Number(value) || 0 }; break;
         case "tempo-text": score.tempo = { ...(score.tempo ?? { base: 4, bpm: 0 }), text: value }; break;
         case "group": score.group = value; break;
         case "paper-size": case "paper-orientation": {
@@ -338,7 +338,7 @@ export function install(ctx) {
         case "change-bpm": case "change-tempo-text": {
           const b = changeBar();
           const here = M.changeAt(score, b)?.tempo ?? { text: "", base: M.tempoAt(score, b - 1)?.base || 4, bpm: 0 };
-          M.setTempoAt(score, b, el.dataset.field === "change-bpm" ? { ...here, bpm: Number(value) || 0 } : { ...here, text: value });
+          M.setTempoAt(score, b, el.dataset.field === "change-bpm" ? { ...here, base: here.base || 4, bpm: Number(value) || 0 } : { ...here, text: value });
           break;
         }
         case "change-clef": M.setClefAt(score, staffOf(), changeBar(), value || null); break;

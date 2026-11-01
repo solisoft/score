@@ -3133,7 +3133,9 @@ function restRuns(score, upper, voicesIn, repeats, ossiaOver = () => false) {
 }
 
 const clefText = (clef) => (CLEFS.includes(clef) ? (/[_^]/.test(clef) ? `"${clef}"` : clef) : "treble");
-const tempoText = (tempo) => `\\tempo ${tempo.text ? quote(tempo.text) + " " : ""}${tempo.bpm ? `${tempo.base} = ${tempo.bpm}` : ""}`.trimEnd();
+// A beat without its note value — a tempo first written in words alone, \tempo "Presto", read back with
+// base 0 — counts in quarters, as LilyPond's 4 = 120: `0 = 120` is refused (#502).
+const tempoText = (tempo) => `\\tempo ${tempo.text ? quote(tempo.text) + " " : ""}${tempo.bpm ? `${tempo.base || 4} = ${tempo.bpm}` : ""}`.trimEnd();
 
 /** What staff `s` writes at the start of bar `b` for what changes there. */
 // ---- Marks, and the jumps they make -------------------------------------------------
@@ -5010,7 +5012,7 @@ function playedOut(score, s, bars) {
         const [was, now] = [timeAt(score, previous), timeAt(score, b)];
         if (was[0] !== now[0] || was[1] !== now[1]) jump += `\\time ${now[0]}/${now[1]} `;
         const [before, after] = [speedAt(score, previous), speedAt(score, b)];
-        if (first && (before.bpm !== after.bpm || before.base !== after.base)) jump += `\\tempo ${after.base} = ${after.bpm} `;
+        if (first && (before.bpm !== after.bpm || before.base !== after.base)) jump += `\\tempo ${after.base || 4} = ${after.bpm} `;
       }
       previous = b;
       return jump + bars[b];

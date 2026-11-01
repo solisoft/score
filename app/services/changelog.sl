@@ -12,6 +12,14 @@ class Changelog
     [
       {"date": "2026-11-01", "entries": [
         {
+          "area": "editor",
+          "title": "A tempo in words takes a number",
+          "text": "A score whose tempo was written in words alone (Presto, rit.) refused a number typed in Tempo, "
+          + "saying \\tempo wants a note value. The number now counts in quarters, as LilyPond does: Presto, "
+          + "4 = 120.",
+          "app": true
+        },
+        {
           "area": "site",
           "title": "The site in French",
           "text": "Every page of the site, the guide and the sign-in pages now read in French at /fr: a French "

@@ -286,3 +286,15 @@ test("a PDF two lines too long for a page is set a little smaller, onto one page
   assert.equal(pages(tune(bars)), 1, "no size chosen: one page");
   assert.equal(pages(tune(4)), 1);
 });
+
+test("a tempo in words alone takes a number: counted in quarters, never 0 = 120 (#502)", () => {
+  const { score } = read("{ \\time 2/4 \\tempo \"Presto\" c''4 d'' | e''2 | f''2 | g''2 }");
+  assert.equal(score.tempo.base, 0, "read back with no note value");
+  score.tempo = { ...score.tempo, bpm: 120 };
+  assert.match(engrave(score), /\\tempo "Presto" 4 = 120/);
+  // A change in words alone, later on, given a number too.
+  const changed = read("{ \\time 2/4 c''2 | \\tempo \"rit.\" d''2 | e''2 | f''2 }").score;
+  const here = M.changeAt(changed, 1).tempo;
+  M.setTempoAt(changed, 1, { ...here, bpm: 90 });
+  assert.match(engrave(changed), /\\tempo "rit\." 4 = 90/);
+});
