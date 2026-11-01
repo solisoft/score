@@ -12,6 +12,13 @@ class Changelog
     [
       {"date": "2026-11-01", "entries": [
         {
+          "area": "editor",
+          "title": "French labels that fit their buttons",
+          "text": "In the French editor, « Liaison de prolongation » ran out of its button: it reads « Lier », "
+          + "the full name in its tip, and the turn is « Doublé », as French musicians call it.",
+          "app": true
+        },
+        {
           "area": "site",
           "title": "An account harder to guess into",
           "text": "A new password or address now closes every app connection made before. Wrong passwords lock the "
