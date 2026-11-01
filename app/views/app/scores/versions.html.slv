@@ -1,19 +1,18 @@
 <section class="library">
   <header class="library-head">
-    <h1>History of “<%= score.title %>”</h1>
-    <a class="btn btn-ghost" href="<%= app_score_path(score) %>">Back to the score</a>
+    <h1><%= t("app.scores.versions.heading", {"title": score.title}) %></h1>
+    <a class="btn btn-ghost" href="<%= app_score_path(score) %>"><%= t("app.scores.versions.back") %></a>
   </header>
-  <p class="muted">A version is kept every 10 minutes of work, when you ask for one, before a restore, and when a save
-    could not go through because the score had changed elsewhere. Each says who saved it.</p>
+  <p class="muted"><%= t("app.scores.versions.lead") %></p>
   <% if versions.length == 0 %>
-    <div class="library-empty"><h2>No version kept yet</h2><p>One is kept as soon as you write.</p></div>
+    <div class="library-empty"><h2><%= t("app.scores.versions.none") %></h2><p><%= t("app.scores.versions.none_lead") %></p></div>
   <% else %>
     <ul class="trash-list">
       <% for version in versions %>
         <li>
           <span class="trash-title"><%= version.title %></span>
-          <span class="muted"><%= time_ago(version.created_at) %> · <%= reasons[version.reason] %><% unless authors[version.author_id.to_s].nil? %> · <span class="version-author" data-version-author>by <%= authors[version.author_id.to_s] %></span><% end %></span>
-          <a class="btn btn-ghost" href="<%= app_score_version_path(score._key, version._key) %>">Show</a>
+          <span class="muted"><%= time_ago(version.created_at) %> · <%= reasons[version.reason] %><% unless authors[version.author_id.to_s].nil? %> · <span class="version-author" data-version-author><%= t("app.scores.versions.by", {"name": authors[version.author_id.to_s]}) %></span><% end %></span>
+          <a class="btn btn-ghost" href="<%= app_score_version_path(score._key, version._key) %>"><%= t("app.scores.versions.show") %></a>
         </li>
       <% end %>
     </ul>

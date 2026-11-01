@@ -25,13 +25,13 @@ class AccessToken < Model
   # "record"}, or {"error"} with nothing written.
   static def issue(user, name)
     label = name.to_s.trim
-    return {"error": "Give the token a name: where it is used, say."} if label.blank?
+    return {"error": SiteText.t("app.account.token_name_missing")} if label.blank?
     if label.chars().length > ACCESS_TOKEN_NAME_LENGTH
-      return {"error": "A name holds #{ACCESS_TOKEN_NAME_LENGTH} characters at most."}
+      return {"error": SiteText.t("app.account.token_name_long", {"n": ACCESS_TOKEN_NAME_LENGTH})}
     end
 
     if AccessToken.where({"user_id": user._key}).count >= ACCESS_TOKENS_PER_USER
-      return {"error": "You have #{ACCESS_TOKENS_PER_USER} tokens: revoke one you no longer use first."}
+      return {"error": SiteText.t("app.account.token_too_many", {"n": ACCESS_TOKENS_PER_USER})}
     end
 
     secret = ACCESS_TOKEN_PREFIX + Crypto.random_token(32)
@@ -43,7 +43,7 @@ class AccessToken < Model
       "created_at": DateTime.utc.to_unix,
       "last_used_at": nil
     })
-    return {"error": "The token could not be made: try again."} unless record._errors.nil?
+    return {"error": SiteText.t("app.account.token_failed")} unless record._errors.nil?
 
     {"token": secret, "record": record}
   end

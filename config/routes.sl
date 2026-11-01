@@ -137,6 +137,7 @@ middleware("require_app_database", fn() {
     post("/app/account/tokens", "app/account#create_token", name: "app_account_tokens")
     post("/app/account/tokens/:id/revoke", "app/account#revoke_token", name: "app_account_token_revoke")
     post("/app/account/notifications", "app/account#notifications", name: "app_account_notifications")
+    post("/app/account/language", "app/account#language", name: "app_account_language")
     # Push notifications on a device (#400): AppPushController, JSON.
     post("/app/account/push", "app/account#push_prefs", name: "app_account_push")
     post("/app/push/subscriptions", "app/push#create", name: "app_push_subscriptions")

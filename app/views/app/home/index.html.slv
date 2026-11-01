@@ -1,25 +1,21 @@
 <% if user.nil? %>
   <section class="app-panel">
     <span class="eyebrow">Score</span>
-    <h1>Write music, keep it</h1>
-    <p class="lead">
-      Scores engraved as you type, played with real instruments, and saved to your account: a library of your
-      scores, their history, and every device you sign in on.
-    </p>
+    <h1><%= t("app.home.guest_title") %></h1>
+    <p class="lead"><%= t("app.home.guest_lead") %></p>
     <div class="app-cta">
-      <a class="btn btn-primary" href="<%= signup_path() %>">Create an account</a>
-      <a class="btn btn-ghost" href="<%= login_path() %>">Sign in</a>
+      <a class="btn btn-primary" href="<%= signup_path() %>"><%= t("app.home.create_account") %></a>
+      <a class="btn btn-ghost" href="<%= login_path() %>"><%= t("app.home.sign_in") %></a>
     </div>
-    <p class="muted">Or try it without an account in the <a href="<%= playground_path() %>">playground</a>: your score stays
-      in this browser, and you can bring it to your account later.</p>
+    <p class="muted"><%- t("app.home.guest_try", {"playground": playground_path()}) %></p>
   </section>
 <% else %>
   <section class="start">
-    <h1>Start</h1>
+    <h1><%= t("app.home.title") %></h1>
 
     <% if photos_going > 0 %>
-      <p class="callout import-banner" data-imports-going><%= photos_going == 1 ? "A photo is" : photos_going.to_s + " photos are" %>
-        being read. <a href="<%= app_imports_path() %>">Follow it in Photo imports</a></p>
+      <p class="callout import-banner" data-imports-going><%= t(photos_going == 1 ? "app.home.photos_going_one" : "app.home.photos_going_other", {"count": photos_going}) %>
+        <a href="<%= app_imports_path() %>"><%= t("app.home.follow_imports") %></a></p>
     <% end %>
 
     <%# Every way in posts the same form: the LilyPond to start from, and a
@@ -32,114 +28,107 @@
 
     <div class="start-grid">
       <form class="start-card start-new" id="new-score">
-        <h2>New score</h2>
+        <h2><%= t("app.home.new_score") %></h2>
         <fieldset class="start-templates">
-          <legend>Start from</legend>
+          <legend><%= t("app.home.start_from") %></legend>
           <div data-templates></div>
         </fieldset>
         <div class="start-fields">
-          <label class="field">Title <input type="text" id="new-title" name="title" placeholder="Untitled" maxlength="200"></label>
-          <label class="field">Composer <input type="text" id="new-composer" name="composer"></label>
-          <label class="field">Key
+          <label class="field"><%= t("app.home.title_field") %> <input type="text" id="new-title" name="title" placeholder="<%= t("app.home.untitled") %>" maxlength="200"></label>
+          <label class="field"><%= t("app.home.composer") %> <input type="text" id="new-composer" name="composer"></label>
+          <label class="field"><%= t("app.home.key") %>
             <select id="new-key" name="key">
               <% for key_choice in editor_keys() %>
                 <option value="<%= key_choice[0] %>"<%= key_choice[0] == 0 ? " selected" : "" %>><%= key_choice[1] %></option>
               <% end %>
             </select>
           </label>
-          <label class="field">Metre
+          <label class="field"><%= t("app.home.metre") %>
             <select id="new-time" name="time">
               <% for metre in editor_metres() %>
                 <option value="<%= metre %>"<%= metre == "4/4" ? " selected" : "" %>><%= metre %></option>
               <% end %>
             </select>
           </label>
-          <label class="field">Tempo (♩ =) <input type="number" id="new-bpm" name="bpm" min="20" max="300" placeholder="none"></label>
-          <label class="field">Bars <input type="number" id="new-bars" name="bars" min="1" max="500" value="16"></label>
+          <label class="field"><%= t("app.home.tempo") %> <input type="number" id="new-bpm" name="bpm" min="20" max="300" placeholder="<%= t("app.home.no_tempo") %>"></label>
+          <label class="field"><%= t("app.home.bars") %> <input type="number" id="new-bars" name="bars" min="1" max="500" value="16"></label>
         </div>
         <p class="form-error" data-new-error hidden></p>
-        <button type="submit" class="btn btn-primary">Create the score</button>
+        <button type="submit" class="btn btn-primary"><%= t("app.home.create") %></button>
       </form>
 
       <div class="start-side">
         <div class="start-card">
-          <h2>Import</h2>
-          <p class="muted">A LilyPond file (.ly), MusicXML (.musicxml, .mxl) from MuseScore, Sibelius, Finale or Dorico, or a MIDI file (.mid): its tracks become staves.</p>
-          <label class="btn btn-ghost start-file">Choose a file…
+          <h2><%= t("app.home.import") %></h2>
+          <p class="muted"><%= t("app.home.import_about") %></p>
+          <label class="btn btn-ghost start-file"><%= t("app.home.choose_file") %>
             <input type="file" accept=".ly,.ily,.txt,.musicxml,.mxl,.xml,.mid,.midi,text/plain,audio/midi" data-import hidden>
           </label>
           <div data-import-note hidden>
             <p class="form-error" data-import-message></p>
-            <button type="button" class="btn btn-ghost" data-import-anyway hidden>Create the score anyway</button>
+            <button type="button" class="btn btn-ghost" data-import-anyway hidden><%= t("app.home.create_anyway") %></button>
           </div>
         </div>
 
         <div class="start-card">
-          <h2>From a photo</h2>
+          <h2><%= t("app.home.from_photo") %></h2>
           <% if photos["ready"] %>
-            <p class="muted">A photo or scan of printed or handwritten music, read by <%= photos["with"] %>. Check
-              what it read before you keep it. <span data-photos-left><%= photos["left"] %></span> left today.
-              <a href="<%= app_imports_path() %>">Photo imports</a></p>
-            <label class="btn btn-ghost start-file">Choose a photo…
+            <p class="muted"><%- t("app.home.photo_ready", {"with": h(photos["with"]), "left": "<span data-photos-left>#{photos["left"]}</span>"}) %>
+              <a href="<%= app_imports_path() %>"><%= t("app.home.photo_imports") %></a></p>
+            <label class="btn btn-ghost start-file"><%= t("app.home.choose_photo") %>
               <input type="file" accept="image/*" data-photo hidden<%= photos["left"] == 0 ? " disabled" : "" %>>
             </label>
           <% elsif photos["refusal"] == "plan" %>
-            <p class="muted" data-photos-refused>A photo or scan of printed or handwritten music, read by an AI model
-              on your own key. <%= photos["text"] %></p>
+            <p class="muted" data-photos-refused><%= t("app.home.photo_plan") %> <%= photos["text"] %></p>
             <a class="btn btn-ghost start-file" href="<%= photos["link"]["href"] %>"><%= photos["link"]["text"] %></a>
           <% else %>
-            <p class="muted" data-photos-refused>A photo or scan of printed or handwritten music, read by an AI model
-              on your own key: the site has no AI of its own. Add a key from Anthropic (Claude), OpenAI (GPT),
-              Google (Gemini), Mistral, DeepSeek, Moonshot (Kimi) or OpenRouter to read photos with it; that
-              provider bills you.</p>
-            <a class="btn btn-ghost start-file" href="<%= photos["link"]["href"] %>">Add an AI key</a>
+            <p class="muted" data-photos-refused><%= t("app.home.photo_no_key") %></p>
+            <a class="btn btn-ghost start-file" href="<%= photos["link"]["href"] %>"><%= t("app.home.add_ai_key") %></a>
           <% end %>
         </div>
 
         <div class="start-card" data-draft hidden>
-          <h2>Your playground score</h2>
-          <p class="muted">The score kept in this browser by the <a href="<%= playground_path() %>">playground</a>:
-            <strong data-draft-title></strong>.</p>
-          <button type="button" class="btn btn-ghost" data-keep-draft>Save it to your account</button>
+          <h2><%= t("app.home.draft_heading") %></h2>
+          <p class="muted"><%- t("app.home.draft_about", {"playground": playground_path(), "title": "<strong data-draft-title></strong>"}) %></p>
+          <button type="button" class="btn btn-ghost" data-keep-draft><%= t("app.home.save_to_account") %></button>
         </div>
 
         <div class="start-card" data-shared hidden>
-          <h2>A shared score</h2>
-          <p class="muted">The link you opened holds <strong data-shared-title></strong>.</p>
-          <button type="button" class="btn btn-ghost" data-keep-shared>Save it to your account</button>
+          <h2><%= t("app.home.shared_heading") %></h2>
+          <p class="muted"><%- t("app.home.shared_about", {"title": "<strong data-shared-title></strong>"}) %></p>
+          <button type="button" class="btn btn-ghost" data-keep-shared><%= t("app.home.save_to_account") %></button>
         </div>
       </div>
     </div>
 
     <section class="photo-reading" data-reading hidden>
       <div class="library-head">
-        <h2>From a photo</h2>
-        <button type="button" class="btn btn-ghost" data-reading-close>Close</button>
+        <h2><%= t("app.home.from_photo") %></h2>
+        <button type="button" class="btn btn-ghost" data-reading-close><%= t("app.home.close") %></button>
       </div>
       <div class="photo-reading-pair">
         <figure>
-          <img data-reading-photo alt="The photo">
-          <figcaption class="muted">The photo</figcaption>
+          <img data-reading-photo alt="<%= t("app.home.the_photo") %>">
+          <figcaption class="muted"><%= t("app.home.the_photo") %></figcaption>
         </figure>
         <figure>
           <div class="photo-reading-score" data-reading-score></div>
           <pre class="photo-reading-draft" data-reading-draft aria-live="off" hidden></pre>
-          <figcaption class="muted" data-reading-status aria-live="polite">Sending the photo…</figcaption>
+          <figcaption class="muted" data-reading-status aria-live="polite"><%= t("app.home.sending_photo") %></figcaption>
         </figure>
       </div>
-      <p class="muted" data-reading-away hidden>You can leave this page: the reading goes on.
-        <a href="<%= app_imports_path() %>">Follow it on its own page</a>, or find it later in Photo imports.</p>
+      <p class="muted" data-reading-away hidden><%- t("app.home.reading_away", {"imports": app_imports_path()}) %></p>
       <p class="form-error" data-reading-error hidden></p>
-      <button type="button" class="btn btn-primary" data-reading-keep hidden>Create the score</button>
+      <button type="button" class="btn btn-primary" data-reading-keep hidden><%= t("app.home.create") %></button>
     </section>
 
     <section class="start-recent">
       <div class="library-head">
-        <h2>Recent</h2>
-        <a href="<%= app_scores_path() %>">All your scores</a>
+        <h2><%= t("app.home.recent") %></h2>
+        <a href="<%= app_scores_path() %>"><%= t("app.home.all_scores") %></a>
       </div>
       <% if recent.length == 0 %>
-        <p class="muted">Your scores will be here.</p>
+        <p class="muted"><%= t("app.home.recent_empty") %></p>
       <% else %>
         <ul class="library-grid">
           <% for score in recent %>
@@ -148,7 +137,7 @@
                 <img src="<%= app_score_preview_path(score) %>?r=<%= score.revision %>" alt="" loading="lazy" width="280" height="140">
                 <span class="score-card-title"><%= score.title %></span>
               </a>
-              <span class="score-card-when muted">Changed <%= time_ago(score.updated_at) %></span>
+              <span class="score-card-when muted"><%= t("app.home.changed", {"when": time_ago(score.updated_at)}) %></span>
             </li>
           <% end %>
         </ul>
@@ -157,13 +146,19 @@
   </section>
 
   <script type="module">
+    <% script_words = {"untitled": t("app.home.untitled"), "left_out": t("app.home.left_out")} %>
+    <% script_words["sending"] = t("app.home.sending_photo") %>
+    <% script_words["see_plans"] = t("app.home.see_plans") %>
+    <% script_words["done"] = t("app.home.reading_done") %>
+    <% script_words["templates"] = template_words %>
+    const words = <%- script_words.to_json %>;
     const startForm = document.getElementById("start-form");
     const begin = (source, title = "") => {
       document.getElementById("start-source").value = source;
       document.getElementById("start-title").value = title;
       startForm.submit();
     };
-    const titleOf = (source) => /\\header\s*\{[^}]*?title\s*=\s*"([^"]*)"/.exec(source)?.[1] || "Untitled";
+    const titleOf = (source) => /\\header\s*\{[^}]*?title\s*=\s*"([^"]*)"/.exec(source)?.[1] || words.untitled;
 
     // Import: the file's text, titled after the file when it has no title.
     // MusicXML and MIDI are read as LilyPond first; what they hold that the editor does not write is named before going on.
@@ -190,7 +185,7 @@
         }
         const { source, warnings } = read;
         if (!warnings.length) return begin(source, name);
-        message.textContent = `Left out of ${file.name}: ${warnings.join("; ")}.`;
+        message.textContent = words.left_out.replace("{file}", file.name).replace("{what}", warnings.join("; "));
         anyway.hidden = false;
         anyway.onclick = () => begin(source, name);
       } catch (problem) {
@@ -209,7 +204,7 @@
       const label = Object.assign(document.createElement("label"), { className: "studio-template" });
       const radio = Object.assign(document.createElement("input"), { type: "radio", name: "template", value: template.id, checked: template.id === "piano" });
       const staves = template.staves.map((spec) => spec.name ?? spec.instrument).filter((name, k, all) => name !== all[k - 1]);
-      label.append(radio, Object.assign(document.createElement("b"), { textContent: template.name }), Object.assign(document.createElement("small"), { textContent: template.about ?? staves.join(", ") }));
+      label.append(radio, Object.assign(document.createElement("b"), { textContent: words.templates[template.id]?.name ?? template.name }), Object.assign(document.createElement("small"), { textContent: words.templates[template.id]?.about ?? template.about ?? staves.join(", ") }));
       box.append(label);
     }
     document.getElementById("new-score").addEventListener("submit", (event) => {
@@ -219,7 +214,7 @@
       try {
         const metre = M.metreOf(form.get("time"));
         const score = M.fromTemplate(form.get("template"), {
-          title: form.get("title").trim() || "Untitled",
+          title: form.get("title").trim() || words.untitled,
           composer: form.get("composer").trim(),
           key: Number(form.get("key")),
           time: metre.time,
@@ -251,14 +246,14 @@
       score.replaceChildren();
       draft.hidden = true;
       draft.textContent = "";
-      status.textContent = "Sending the photo…";
+      status.textContent = words.sending;
       error.hidden = keep.hidden = true;
       reading.hidden = false;
       reading.scrollIntoView({ behavior: "smooth", block: "start" });
       // `link`: the page that lifts the refusal (Account for a key, Pricing for Pro, #396).
       const fail = (message, link, linkText) => {
         error.textContent = message;
-        if (link) error.append(" ", Object.assign(document.createElement("a"), { href: link, textContent: linkText || "See the plans" }));
+        if (link) error.append(" ", Object.assign(document.createElement("a"), { href: link, textContent: linkText || words.see_plans }));
         error.hidden = false;
         status.textContent = "";
         draft.hidden = true;
@@ -287,7 +282,7 @@
         });
         draft.hidden = true;
         score.innerHTML = answer.svg;
-        status.textContent = "What was read. You can correct it in the editor.";
+        status.textContent = words.done;
         keep.hidden = false;
         keep.onclick = () => begin(answer.source, name);
       } catch (problem) {

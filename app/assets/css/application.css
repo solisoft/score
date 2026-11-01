@@ -492,6 +492,7 @@
   .account-danger { border: 1px solid #e6b9b4; background: #fdf5f3; border-radius: 10px; padding: 16px 18px; display: grid; gap: 8px; margin-top: 6px; }
   .account-danger h3 { color: var(--accent-ink); }
   .account-signout .btn { white-space: nowrap; }
+  .account-language { display: flex; gap: 8px; flex-wrap: wrap; }
   @media (prefers-reduced-motion: reduce) { .setting-change > summary::before { transition: none; } }
   @media (max-width: 820px) {
     .account-page { padding-top: 24px; gap: 20px; }

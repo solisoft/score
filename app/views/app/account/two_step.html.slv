@@ -1,23 +1,23 @@
 <section class="auth auth-wide">
-  <h1>Two-step sign-in</h1>
+  <h1><%- t("app.account.enrol_title") %></h1>
   <ol class="two-step-steps">
-    <li>Open your authenticator app (Google Authenticator, 1Password, Authy…) and scan this code.</li>
-    <li>Then type the six-digit code it shows for Score.</li>
+    <li><%- t("app.account.enrol_scan") %></li>
+    <li><%- t("app.account.enrol_type") %></li>
   </ol>
-  <figure class="two-step-qr" data-qr="<%= uri %>" aria-label="QR code to scan with your authenticator app"></figure>
-  <p class="muted">No camera? Type this key in the app instead:</p>
+  <figure class="two-step-qr" data-qr="<%= uri %>" aria-label="<%- t("app.account.enrol_qr") %>"></figure>
+  <p class="muted"><%- t("app.account.enrol_no_camera") %></p>
   <p class="two-step-secret"><code><%= secret %></code></p>
   <% if error.present? %>
     <p class="form-error" role="alert"><%= error %></p>
   <% end %>
   <form action="<%= app_account_two_step_confirm_path() %>" method="POST" class="auth-form">
     <%- csrf_field() %>
-    <label class="field">Code from the app
+    <label class="field"><%- t("app.account.enrol_code") %>
       <input id="code" name="code" type="text" inputmode="numeric" required autofocus autocomplete="one-time-code" maxlength="7">
     </label>
-    <button type="submit" class="btn btn-primary">Turn it on</button>
+    <button type="submit" class="btn btn-primary"><%- t("app.account.enrol_turn_on") %></button>
   </form>
-  <p class="auth-alt"><a href="<%= app_account_path() %>">Not now</a></p>
+  <p class="auth-alt"><a href="<%= app_account_path() %>"><%- t("app.account.enrol_not_now") %></a></p>
 </section>
 <script src="<%= public_path("js/vendor/qrcode.js") %>"></script>
 <script>

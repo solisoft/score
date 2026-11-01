@@ -15,8 +15,8 @@ class AppOauthController < AppBaseController
     @client_name = checked["client"].client_name
     @redirect_host = OauthServer.host_of(checked["redirect_uri"])
     @email = current_user().email.to_s
-    @title = "Connect " + this.client_name
-    @description = "An application asks to reach your Score scores."
+    @title = SiteText.t("app.oauth.title", {"name": @client_name})
+    @description = SiteText.t("app.oauth.description")
   end
 
   # POST /app/oauth/consent — `decision` allow or deny: a code, or a
@@ -52,8 +52,8 @@ class AppOauthController < AppBaseController
   private
 
   def _nothing_pending
-    @title = "Nothing to connect"
-    @description = "No application is waiting for your answer."
+    @title = SiteText.t("app.oauth.nothing_title")
+    @description = SiteText.t("app.oauth.nothing_description")
     @reason = "nothing_pending"
     render("oauth_server/error", {}, {"status": 400})
   end

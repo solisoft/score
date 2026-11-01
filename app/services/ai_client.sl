@@ -102,12 +102,18 @@ class AiClient
     refusal == "plan" ? AI_PRO_ONLY : AI_NO_KEY
   end
 
+  # `refusal_text` in the page's language (#505), for the app's pages: what
+  # is stored or told to MCP keeps the English of refusal_text.
+  static def refusal_words(refusal)
+    SiteText.t(refusal == "plan" ? "app.ai.pro_only" : "app.ai.no_key")
+  end
+
   static def refusal_link(refusal, account, pricing)
     if refusal == "plan"
-      return {"href": pricing, "text": "See the plans"}
+      return {"href": pricing, "text": SiteText.t("app.ai.see_plans")}
     end
 
-    {"href": account, "text": "Add your key in Account"}
+    {"href": account, "text": SiteText.t("app.ai.add_key")}
   end
 
   # The JSON body refusing an AI request: the sentence, its `link`
@@ -115,7 +121,7 @@ class AiClient
   # answer with (#393).
   static def refusal_answer(refusal, link)
     answer = {
-      "error": AiClient.refusal_text(refusal),
+      "error": AiClient.refusal_words(refusal),
       "link": link["href"],
       "link_text": link["text"]
     }

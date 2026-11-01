@@ -9,24 +9,24 @@
     <div class="account-who">
       <span class="account-avatar" aria-hidden="true"><%= user.email.to_s.substring(0, 1).upcase %></span>
       <div class="account-who-text">
-        <h1>Your account</h1>
+        <h1><%- t("app.account.title") %></h1>
         <p class="account-email"><%= user.email %>
           <% if user.confirmed?() %>
-            <span class="account-badge account-confirmed">Confirmed</span>
+            <span class="account-badge account-confirmed"><%- t("app.account.confirmed") %></span>
           <% else %>
-            <span class="account-badge account-unconfirmed">Not confirmed yet</span>
+            <span class="account-badge account-unconfirmed"><%- t("app.account.not_confirmed") %></span>
           <% end %>
         </p>
       </div>
       <div class="account-signout">
-        <%- button_to("Sign out", logout_path(), {"method": "delete", "class": "btn btn-ghost"}) %>
+        <%- button_to(t("app.account.sign_out"), logout_path(), {"method": "delete", "class": "btn btn-ghost"}) %>
       </div>
     </div>
-    <ul class="account-glance" aria-label="At a glance">
-      <li><span>Plan</span><strong><%= user.plan_name() %></strong></li>
-      <li><span>Two-step sign-in</span><strong class="<%= two_step_on ? "is-on" : "is-off" %>"><%= two_step_on ? "On" : "Off" %></strong></li>
-      <li><span>AI key</span><strong class="<%= user.own_ai?() ? "is-on" : "is-off" %>"><%= user.own_ai?() ? user.ai_provider_name() : "None" %></strong></li>
-      <li><span>Apps connected</span><strong><%= connections %></strong></li>
+    <ul class="account-glance" aria-label="<%- t("app.account.at_a_glance") %>">
+      <li><span><%- t("app.account.plan") %></span><strong><%= user.plan_name() %></strong></li>
+      <li><span><%- t("app.account.two_step") %></span><strong class="<%= two_step_on ? "is-on" : "is-off" %>"><%= two_step_on ? t("app.account.state_on") : t("app.account.state_off") %></strong></li>
+      <li><span><%- t("app.account.ai_key") %></span><strong class="<%= user.own_ai?() ? "is-on" : "is-off" %>"><%= user.own_ai?() ? user.ai_provider_name() : t("app.account.none") %></strong></li>
+      <li><span><%- t("app.account.apps_connected") %></span><strong><%= connections %></strong></li>
     </ul>
     <% if error.present? %>
       <p class="form-error" role="alert"><%= error %></p>
@@ -34,38 +34,37 @@
   </header>
 
   <div class="account-layout">
-    <nav class="account-nav" aria-label="Account sections">
-      <a href="#security">Sign-in &amp; security</a>
-      <a href="#notifications">Notifications</a>
-      <a href="#plan">Plan</a>
-      <a href="#ai">AI key</a>
-      <a href="#tokens">Claude &amp; apps</a>
-      <a href="#data">Your data</a>
+    <nav class="account-nav" aria-label="<%- t("app.account.sections") %>">
+      <a href="#security"><%= t("app.account.security") %></a>
+      <a href="#notifications"><%- t("app.account.notifications") %></a>
+      <a href="#plan"><%- t("app.account.plan") %></a>
+      <a href="#ai"><%- t("app.account.ai_key") %></a>
+      <a href="#tokens"><%= t("app.account.claude_apps") %></a>
+      <a href="#data"><%- t("app.account.your_data") %></a>
     </nav>
 
     <div class="account-panels">
       <%# ---- Sign-in and security ---------------------------------------- %>
       <section class="account-panel" id="security" aria-labelledby="security-title">
-        <h2 id="security-title">Sign-in &amp; security</h2>
+        <h2 id="security-title"><%= t("app.account.security") %></h2>
 
         <div class="setting" id="email">
           <div class="setting-row">
-            <div class="setting-what"><h3>Email address</h3><p class="setting-value"><%= user.email %></p></div>
+            <div class="setting-what"><h3><%- t("app.account.email_address") %></h3><p class="setting-value"><%= user.email %></p></div>
             <% unless user.confirmed?() %>
               <form action="<%= confirmation_resend_path() %>" method="POST" class="account-resend">
                 <%- csrf_field() %>
                 <input type="hidden" name="email" value="<%= user.email %>">
-                <button type="submit" class="btn btn-ghost">Send the link again</button>
+                <button type="submit" class="btn btn-ghost"><%- t("app.account.send_again") %></button>
               </form>
             <% end %>
           </div>
           <% if user.email_change_to.present? %>
             <div class="account-pending">
-              <p>Waiting for <strong><%= user.email_change_to %></strong>: follow the link sent to it to use it. Until then you
-                sign in with <%= user.email %>.</p>
+              <p><%- t("app.account.email_pending", {"email": h(user.email_change_to), "current": h(user.email)}) %></p>
               <form action="<%= app_account_email_cancel_path() %>" method="POST">
                 <%- csrf_field() %>
-                <button type="submit" class="btn btn-ghost">Cancel the change</button>
+                <button type="submit" class="btn btn-ghost"><%- t("app.account.cancel_change") %></button>
               </form>
             </div>
           <% end %>
@@ -73,45 +72,55 @@
             <p class="form-error" role="alert"><%= locals["email_error"] %></p>
           <% end %>
           <details class="setting-change"<%= locals["email_error"].present? ? " open" : "" %>>
-            <summary>Change your email address</summary>
-            <p class="muted">A link goes to the new address, and the change is made when it is followed. Your current address
-              is told too.</p>
+            <summary><%- t("app.account.change_email") %></summary>
+            <p class="muted"><%- t("app.account.change_email_lead") %></p>
             <form action="<%= app_account_email_path() %>" method="POST" class="auth-form">
               <%- csrf_field() %>
-              <label class="field">New email address
+              <label class="field"><%- t("app.account.new_email") %>
                 <input id="new_email" name="email" type="email" required autocomplete="email" value="<%= locals["typed_email"].to_s %>">
               </label>
-              <label class="field">Your password, to confirm
+              <label class="field"><%- t("app.account.password_to_confirm") %>
                 <input id="email_password" name="password" type="password" required autocomplete="current-password">
               </label>
               <% if two_step_on %>
-                <label class="field">A code from the app, or a backup code
+                <label class="field"><%- t("app.account.code_or_backup") %>
                   <input id="email_code" name="code" type="text" required autocomplete="one-time-code" maxlength="12" spellcheck="false">
                 </label>
               <% end %>
-              <button type="submit" class="btn btn-primary">Send the link</button>
+              <button type="submit" class="btn btn-primary"><%- t("app.account.send_link") %></button>
             </form>
           </details>
         </div>
 
+        <div class="setting" id="language">
+          <div class="setting-row">
+            <div class="setting-what"><h3><%= t("app.account.language") %></h3><p class="setting-value"><%= t("app.account.language_hint") %></p></div>
+            <form action="<%= app_account_language_path() %>" method="POST" class="account-language" data-language-form>
+              <%- csrf_field() %>
+              <button type="submit" name="locale" value="en" lang="en" class="btn <%= I18n.locale() == "en" ? "btn-primary" : "btn-ghost" %>"<%- I18n.locale() == "en" ? " aria-pressed=\"true\"" : " aria-pressed=\"false\"" %>>English</button>
+              <button type="submit" name="locale" value="fr" lang="fr" class="btn <%= I18n.locale() == "fr" ? "btn-primary" : "btn-ghost" %>"<%- I18n.locale() == "fr" ? " aria-pressed=\"true\"" : " aria-pressed=\"false\"" %>>Français</button>
+            </form>
+          </div>
+        </div>
+
         <div class="setting" id="password">
           <div class="setting-row">
-            <div class="setting-what"><h3>Password</h3><p class="setting-value" aria-label="Hidden">••••••••••••</p></div>
+            <div class="setting-what"><h3><%- t("app.account.password") %></h3><p class="setting-value" aria-label="<%- t("app.account.hidden") %>">••••••••••••</p></div>
           </div>
           <details class="setting-change">
-            <summary>Change your password</summary>
+            <summary><%- t("app.account.change_password") %></summary>
             <form action="<%= app_account_password_path() %>" method="POST" class="auth-form">
               <%- csrf_field() %>
-              <label class="field">Current password
+              <label class="field"><%- t("app.account.current_password") %>
                 <input id="current_password" name="current_password" type="password" required autocomplete="current-password">
               </label>
-              <label class="field"><span>New password <span class="muted">— 12 characters or more</span></span>
+              <label class="field"><span><%- t("app.account.new_password") %> <span class="muted"><%- t("app.account.twelve") %></span></span>
                 <input id="new_password" name="password" type="password" required minlength="12" autocomplete="new-password">
               </label>
-              <label class="field">The same again
+              <label class="field"><%- t("app.account.same_again") %>
                 <input id="password_confirmation" name="password_confirmation" type="password" required minlength="12" autocomplete="new-password">
               </label>
-              <button type="submit" class="btn btn-primary">Change the password</button>
+              <button type="submit" class="btn btn-primary"><%- t("app.account.change_password_button") %></button>
             </form>
           </details>
         </div>
@@ -119,36 +128,36 @@
         <div class="setting" id="two-step">
           <div class="setting-row">
             <div class="setting-what">
-              <h3>Two-step sign-in</h3>
+              <h3><%- t("app.account.two_step") %></h3>
               <% if two_step_on %>
-                <p>On: signing in asks for a code from your authenticator app as well as your password.
-                  <span class="muted"><%= user.backup_codes_left() %> backup codes left.</span></p>
+                <% codes_left = user.backup_codes_left() %>
+                <p><%- t("app.account.two_step_on_text") %>
+                  <span class="muted"><%= t(codes_left == 1 ? "app.account.backup_left_one" : "app.account.backup_left_other", {"n": codes_left}) %></span></p>
               <% elsif user.can_use_two_step?() %>
-                <p class="muted">Off. Turned on, signing in asks for a six-digit code from an authenticator app on your phone
-                  (Google Authenticator, 1Password, Authy…) as well as your password.</p>
+                <p class="muted"><%- t("app.account.two_step_off_text") %></p>
               <% else %>
-                <p class="muted">Not available on this server yet.</p>
+                <p class="muted"><%- t("app.account.not_available") %></p>
               <% end %>
             </div>
             <% if !two_step_on && user.can_use_two_step?() %>
               <form action="<%= app_account_two_step_path() %>" method="POST">
                 <%- csrf_field() %>
-                <button type="submit" class="btn btn-primary">Turn two-step sign-in on</button>
+                <button type="submit" class="btn btn-primary"><%- t("app.account.two_step_turn_on") %></button>
               </form>
             <% end %>
           </div>
           <% if two_step_on %>
             <details class="setting-change">
-              <summary>Turn two-step sign-in off</summary>
+              <summary><%- t("app.account.two_step_turn_off") %></summary>
               <form action="<%= app_account_two_step_stop_path() %>" method="POST" class="auth-form">
                 <%- csrf_field() %>
-                <label class="field">Your password
+                <label class="field"><%- t("app.account.your_password") %>
                   <input id="stop_password" name="password" type="password" required autocomplete="current-password">
                 </label>
-                <label class="field">A code from the app, or a backup code
+                <label class="field"><%- t("app.account.code_or_backup") %>
                   <input id="stop_code" name="code" type="text" required autocomplete="one-time-code" maxlength="12" spellcheck="false">
                 </label>
-                <button type="submit" class="btn btn-ghost">Turn two-step sign-in off</button>
+                <button type="submit" class="btn btn-ghost"><%- t("app.account.two_step_turn_off") %></button>
               </form>
             </details>
           <% end %>
@@ -157,52 +166,68 @@
 
       <%# ---- Notifications (#385, #400) ------------------------------------ %>
       <section class="account-panel" id="notifications" aria-labelledby="notifications-title">
-        <h2 id="notifications-title">Notifications</h2>
-        <p class="muted">The bell at the top lists everything. Choose what also reaches you.</p>
+        <h2 id="notifications-title"><%- t("app.account.notifications") %></h2>
+        <p class="muted"><%- t("app.account.notifications_lead") %></p>
         <div class="account-pair">
           <div class="setting">
-            <h3>E-mails</h3>
-            <p class="muted">Sent to <%= user.email %>.</p>
+            <h3><%- t("app.account.emails") %></h3>
+            <p class="muted"><%= t("app.account.sent_to", {"email": user.email}) %></p>
             <form action="<%= app_account_notifications_path() %>" method="POST" class="auth-form account-mails" data-mail-prefs>
               <%- csrf_field() %>
               <input type="hidden" name="kinds[]" value="none">
-              <label class="tool-check"><input type="checkbox" name="kinds[]" value="shared"<%= user.mails?("shared") ? " checked" : "" %>> <span>A score shared with me <span class="muted">— the invitation</span></span></label>
-              <label class="tool-check"><input type="checkbox" name="kinds[]" value="reply"<%= user.mails?("reply") ? " checked" : "" %>> <span>A reply in a thread I wrote in</span></label>
-              <label class="tool-check"><input type="checkbox" name="kinds[]" value="mention"<%= user.mails?("mention") ? " checked" : "" %>> <span>A comment that mentions me <span class="muted">— @name or @e-mail</span></span></label>
-              <label class="tool-check"><input type="checkbox" name="kinds[]" value="changed"<%= user.mails?("changed") ? " checked" : "" %>> <span>Changes to the scores shared with me <span class="muted">— gathered in a digest, not an e-mail a save</span></span></label>
-              <button type="submit" class="btn btn-ghost">Save the e-mail settings</button>
+              <label class="tool-check"><input type="checkbox" name="kinds[]" value="shared"<%= user.mails?("shared") ? " checked" : "" %>> <span><%- t("app.account.kind_shared") %> <span class="muted"><%- t("app.account.kind_shared_hint") %></span></span></label>
+              <label class="tool-check"><input type="checkbox" name="kinds[]" value="reply"<%= user.mails?("reply") ? " checked" : "" %>> <span><%- t("app.account.kind_reply") %></span></label>
+              <label class="tool-check"><input type="checkbox" name="kinds[]" value="mention"<%= user.mails?("mention") ? " checked" : "" %>> <span><%- t("app.account.kind_mention") %> <span class="muted"><%- t("app.account.kind_mention_hint") %></span></span></label>
+              <label class="tool-check"><input type="checkbox" name="kinds[]" value="changed"<%= user.mails?("changed") ? " checked" : "" %>> <span><%- t("app.account.kind_changed") %> <span class="muted"><%- t("app.account.kind_changed_mail_hint") %></span></span></label>
+              <button type="submit" class="btn btn-ghost"><%- t("app.account.save_mails") %></button>
             </form>
           </div>
 
           <div class="setting" id="push">
-            <h3>Push notifications</h3>
+            <h3><%- t("app.account.push") %></h3>
             <% push = user.push_setup() %>
             <% if push["key"].blank? %>
-              <p class="muted" data-push-unavailable>Not available on this server yet.</p>
+              <p class="muted" data-push-unavailable><%- t("app.account.not_available") %></p>
             <% else %>
               <div class="account-push" data-push data-key="<%= push["key"] %>" data-devices="<%= push["devices"] %>">
-                <p data-push-state>Notifications on this phone or computer, even when the app is closed.</p>
-                <% one = push["devices"] == 1 %>
-                <% devices_said = "#{push["devices"]} #{one ? "device receives" : "devices receive"} them." %>
-                <p class="muted" data-push-devices><%= push["devices"] == 0 ? "No device receives them yet." : devices_said %></p>
+                <p data-push-state><%- t("app.account.push_lead") %></p>
+                <% devices_key = push["devices"] == 0 ? "none" : (push["devices"] == 1 ? "one" : "other") %>
+                <p class="muted" data-push-devices><%= t("app.account.push_devices_" + devices_key, {"n": push["devices"]}) %></p>
                 <div class="account-plan-actions">
-                  <button type="button" class="btn btn-primary" data-push-on hidden>Turn on for this device</button>
-                  <button type="button" class="btn btn-ghost" data-push-off hidden>Turn off for this device</button>
-                  <button type="button" class="btn btn-ghost" data-push-test<%= push["devices"] == 0 ? " hidden" : "" %>>Send a test</button>
+                  <button type="button" class="btn btn-primary" data-push-on hidden><%- t("app.account.push_on") %></button>
+                  <button type="button" class="btn btn-ghost" data-push-off hidden><%- t("app.account.push_off") %></button>
+                  <button type="button" class="btn btn-ghost" data-push-test<%= push["devices"] == 0 ? " hidden" : "" %>><%- t("app.account.push_test") %></button>
                 </div>
-                <p class="muted">On an iPhone or iPad, add the app to the Home Screen first (Share, then Add to Home Screen), and turn them on from there.</p>
+                <p class="muted"><%- t("app.account.push_ios") %></p>
               </div>
               <form action="<%= app_account_push_path() %>" method="POST" class="auth-form account-mails" data-push-prefs>
                 <%- csrf_field() %>
                 <input type="hidden" name="kinds[]" value="none">
-                <label class="tool-check"><input type="checkbox" name="kinds[]" value="shared"<%= user.pushes?("shared") ? " checked" : "" %>> <span>A score shared with me</span></label>
-                <label class="tool-check"><input type="checkbox" name="kinds[]" value="reply"<%= user.pushes?("reply") ? " checked" : "" %>> <span>A reply in a thread I wrote in</span></label>
-                <label class="tool-check"><input type="checkbox" name="kinds[]" value="mention"<%= user.pushes?("mention") ? " checked" : "" %>> <span>A comment that mentions me</span></label>
-                <label class="tool-check"><input type="checkbox" name="kinds[]" value="changed"<%= user.pushes?("changed") ? " checked" : "" %>> <span>Changes to the scores shared with me <span class="muted">— once an hour a score</span></span></label>
-                <button type="submit" class="btn btn-ghost">Save the push settings</button>
+                <label class="tool-check"><input type="checkbox" name="kinds[]" value="shared"<%= user.pushes?("shared") ? " checked" : "" %>> <span><%- t("app.account.kind_shared") %></span></label>
+                <label class="tool-check"><input type="checkbox" name="kinds[]" value="reply"<%= user.pushes?("reply") ? " checked" : "" %>> <span><%- t("app.account.kind_reply") %></span></label>
+                <label class="tool-check"><input type="checkbox" name="kinds[]" value="mention"<%= user.pushes?("mention") ? " checked" : "" %>> <span><%- t("app.account.kind_mention") %></span></label>
+                <label class="tool-check"><input type="checkbox" name="kinds[]" value="changed"<%= user.pushes?("changed") ? " checked" : "" %>> <span><%- t("app.account.kind_changed") %> <span class="muted"><%- t("app.account.kind_changed_push_hint") %></span></span></label>
+                <button type="submit" class="btn btn-ghost"><%- t("app.account.save_push") %></button>
               </form>
+              <% push_words = {} %>
+              <% push_words["none"] = t("app.account.push_devices_none") %>
+              <% push_words["one"] = t("app.account.push_devices_one") %>
+              <% push_words["other"] = t("app.account.push_devices_other") %>
+              <% push_words["refused"] = t("app.account.push_refused") %>
+              <% push_words["unsupported"] = t("app.account.push_unsupported") %>
+              <% push_words["blocked"] = t("app.account.push_blocked") %>
+              <% push_words["on"] = t("app.account.push_state_on") %>
+              <% push_words["off"] = t("app.account.push_state_off") %>
+              <% push_words["on_failed"] = t("app.account.push_on_failed") %>
+              <% push_words["off_failed"] = t("app.account.push_off_failed") %>
+              <% push_words["sent_one"] = t("app.account.push_sent_one") %>
+              <% push_words["sent_other"] = t("app.account.push_sent_other") %>
+              <% push_words["sent_none"] = t("app.account.push_sent_none") %>
+              <% push_words["send_failed"] = t("app.account.push_send_failed") %>
               <script data-push-script>
                 (() => {
+                  const words = <%- push_words.to_json %>;
+                  const fill = (text, name, value) => text.replace(`{${name}}`, value);
                   const box = document.querySelector("[data-push]");
                   if (!box || box.dataset.ready) return;
                   box.dataset.ready = "1";
@@ -214,13 +239,13 @@
                   const csrf = document.querySelector('input[name="_csrf_token"]')?.value ?? "";
                   const say = (text) => { state.textContent = text; };
                   const count = (n) => {
-                    devices.textContent = n ? `${n} device${n === 1 ? "" : "s"} receive${n === 1 ? "s" : ""} them.` : "No device receives them yet.";
+                    devices.textContent = n ? fill(n === 1 ? words.one : words.other, "n", n) : words.none;
                     test.hidden = !n;
                   };
                   const post = async (url, body) => {
                     const answer = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify(body ?? {}) });
                     const data = await answer.json().catch(() => ({}));
-                    if (!answer.ok) throw new Error(data.error || "The server said no.");
+                    if (!answer.ok) throw new Error(data.error || words.refused);
                     return data;
                   };
                   // The public key, base64url, as the bytes subscribe() wants.
@@ -229,17 +254,17 @@
                     return Uint8Array.from(raw, (c) => c.charCodeAt(0));
                   };
                   if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
-                    say("This browser cannot receive push notifications.");
+                    say(words.unsupported);
                     return;
                   }
                   const show = (subscribed) => {
                     on.hidden = subscribed;
                     off.hidden = !subscribed;
                     if (Notification.permission === "denied") {
-                      say("Notifications are blocked for this site in the browser's settings: allow them there first.");
+                      say(words.blocked);
                       on.hidden = true;
                     } else {
-                      say(subscribed ? "On for this device." : "Off for this device.");
+                      say(subscribed ? words.on : words.off);
                     }
                   };
                   const ready = navigator.serviceWorker.ready;
@@ -254,7 +279,7 @@
                       count(answer.devices);
                       show(true);
                     } catch (error) {
-                      say(`Could not turn them on: ${error.message}`);
+                      say(fill(words.on_failed, "error", error.message));
                     } finally {
                       on.disabled = false;
                     }
@@ -270,7 +295,7 @@
                       }
                       show(false);
                     } catch (error) {
-                      say(`Could not turn them off: ${error.message}`);
+                      say(fill(words.off_failed, "error", error.message));
                     } finally {
                       off.disabled = false;
                     }
@@ -278,9 +303,9 @@
                   test.addEventListener("click", async () => {
                     try {
                       const answer = await post("<%= app_push_test_path() %>");
-                      say(answer.sent ? `Sent to ${answer.sent} device${answer.sent === 1 ? "" : "s"}.` : "Nothing could be sent: turn them on again on this device.");
+                      say(answer.sent ? fill(answer.sent === 1 ? words.sent_one : words.sent_other, "n", answer.sent) : words.sent_none);
                     } catch (error) {
-                      say(`Could not send: ${error.message}`);
+                      say(fill(words.send_failed, "error", error.message));
                     }
                   });
                 })();
@@ -293,83 +318,79 @@
       <%# ---- Plan (#393): set by Stripe's webhook only; Upgrade and Manage
           billing go to Stripe's own pages. ----------------------------------- %>
       <section class="account-panel" id="plan" aria-labelledby="plan-title">
-        <h2 id="plan-title">Plan</h2>
+        <h2 id="plan-title"><%- t("app.account.plan") %></h2>
         <% offer = user.plan_offer() %>
         <% summary = user.plan_summary() %>
-        <p data-plan-name>You are on <strong><%= user.plan_name() %></strong>.<% unless summary.nil? %> <%= summary %><% end %></p>
+        <p data-plan-name><%- t("app.account.plan_on", {"plan": h(user.plan_name())}) %><% unless summary.nil? %> <%= summary %><% end %></p>
         <% unless user.pro?() %>
-          <p class="muted">Pro runs the AI on your own key, records on every audio track with far more room for takes,
-            and shares a score with anyone: <%= offer["monthly"]["label"] %> a
-            month or <%= offer["annual"]["label"] %> a year. <a href="<%= pricing_path() %>">Compare the plans</a></p>
+          <p class="muted"><%= t("app.account.pro_pitch", {"monthly": offer["monthly"]["label"], "annual": offer["annual"]["label"]}) %>
+            <a href="<%= lp(pricing_path()) %>"><%- t("app.account.compare_plans") %></a></p>
           <div class="account-plan-actions">
             <form action="<%= app_billing_checkout_path() %>" method="POST">
               <%- csrf_field() %>
               <input type="hidden" name="interval" value="monthly">
-              <button type="submit" class="btn btn-primary">Upgrade: <%= offer["monthly"]["label"] %> a month</button>
+              <button type="submit" class="btn btn-primary"><%= t("app.account.upgrade_monthly", {"price": offer["monthly"]["label"]}) %></button>
             </form>
             <form action="<%= app_billing_checkout_path() %>" method="POST">
               <%- csrf_field() %>
               <input type="hidden" name="interval" value="annual">
-              <button type="submit" class="btn btn-ghost">Upgrade: <%= offer["annual"]["label"] %> a year</button>
+              <button type="submit" class="btn btn-ghost"><%= t("app.account.upgrade_annual", {"price": offer["annual"]["label"]}) %></button>
             </form>
           </div>
           <% unless offer["open"] %>
-            <p class="muted" data-payments-closed>Payments are not open yet: Pro will be on sale soon. Until then, everyone keeps what the site allows today, every audio track and as many people as you like included.</p>
+            <p class="muted" data-payments-closed><%- t("app.account.payments_closed") %></p>
           <% end %>
         <% end %>
         <% if user.billed?() %>
           <form action="<%= app_billing_portal_path() %>" method="POST" class="account-plan-actions">
             <%- csrf_field() %>
-            <button type="submit" class="btn btn-ghost">Manage billing</button>
+            <button type="submit" class="btn btn-ghost"><%- t("app.account.manage_billing") %></button>
           </form>
         <% end %>
       </section>
 
       <%# ---- AI key (#396) ------------------------------------------------ %>
       <section class="account-panel" id="ai" aria-labelledby="ai-title">
-        <h2 id="ai-title">AI for photos and the assistant</h2>
-        <p class="muted" data-ai-own-key>The AI runs on your own key: the site has no AI of its own. Your requests go to
-          the provider you choose, and that provider bills you for them.</p>
+        <h2 id="ai-title"><%- t("app.account.ai_title") %></h2>
+        <p class="muted" data-ai-own-key><%- t("app.account.ai_own_key") %></p>
         <% ai_plan_note = user.ai_plan_note() %>
         <% unless ai_plan_note.nil? %>
-          <p class="form-error" data-ai-plan><%= ai_plan_note %> <a href="<%= pricing_path() %>">See the plans</a></p>
+          <p class="form-error" data-ai-plan><%= ai_plan_note %> <a href="<%= lp(pricing_path()) %>"><%- t("app.account.see_plans") %></a></p>
         <% end %>
         <% if user.own_ai?() %>
           <div class="setting-row">
-            <p class="setting-what">Photos of scores are read, and the editor's assistant answers, with <strong><%= user.ai_provider_name() %></strong>, model
-              <code><%= user.ai_model %></code>, with your key ending in <code>…<%= user.ai_key_hint %></code>.</p>
+            <% ai_in_use = {"provider": h(user.ai_provider_name()), "model": h(user.ai_model), "hint": h(user.ai_key_hint)} %>
+            <p class="setting-what"><%- t("app.account.ai_in_use", ai_in_use) %></p>
             <form action="<%= app_account_ai_remove_path() %>" method="POST">
               <%- csrf_field() %>
-              <button type="submit" class="btn btn-ghost">Remove the key</button>
+              <button type="submit" class="btn btn-ghost"><%- t("app.account.remove_key") %></button>
             </form>
           </div>
         <% else %>
-          <p class="muted">An AI model reads photos of scores and answers the editor's assistant. Bring a key of your own
-            from one of these providers to use the model you choose: the site keeps it encrypted, uses it only for your
-            photos and the assistant, and never shows it again. Without one, there is no AI.</p>
+          <p class="muted"><%- t("app.account.ai_none") %></p>
         <% end %>
         <% if locals["ai_error"].present? %>
           <p class="form-error" role="alert"><%= locals["ai_error"] %></p>
         <% end %>
         <details class="setting-change"<%= !user.own_ai?() || locals["ai_error"].present? ? " open" : "" %>>
-          <summary><%= user.own_ai?() ? "Use another key or model" : "Add your key" %></summary>
+          <summary><%- user.own_ai?() ? t("app.account.ai_change") : t("app.account.ai_add") %></summary>
           <form action="<%= app_account_ai_path() %>" method="POST" class="auth-form" data-ai-form>
             <%- csrf_field() %>
-            <label class="field">Provider
+            <label class="field"><%- t("app.account.provider") %>
               <select name="provider" data-ai-provider>
                 <% for provider in user.ai_choices() %>
                   <option value="<%= provider["id"] %>" data-models="<%= provider["models"].join(",") %>"<%= provider["id"] == (user.ai_provider ?? "anthropic") ? " selected" : "" %>><%= provider["name"] %></option>
                 <% end %>
               </select>
             </label>
-            <label class="field"><span>Model <span class="muted">— one that reads images</span></span>
+            <label class="field"><span><%- t("app.account.model") %> <span class="muted"><%- t("app.account.model_hint") %></span></span>
               <input name="model" type="text" required list="ai-models" value="<%= user.ai_model.to_s %>" spellcheck="false" autocomplete="off" data-ai-model>
               <datalist id="ai-models" data-ai-models></datalist>
             </label>
-            <label class="field">API key
-              <input name="key" type="password" required autocomplete="off" spellcheck="false" placeholder="Paste the key from the provider's site">
+            <label class="field"><%- t("app.account.api_key") %>
+              <input name="key" type="password" required autocomplete="off" spellcheck="false" placeholder="<%- t("app.account.api_key_placeholder") %>">
             </label>
-            <button type="submit" class="btn btn-primary">Keep the key</button>
+            <button type="submit" class="btn btn-primary"><%- t("app.account.keep_key") %></button>
           </form>
         </details>
         <script>
@@ -390,20 +411,20 @@
 
       <%# ---- Claude and other MCP apps (#460, #461) ------------------------ %>
       <section class="account-panel" id="tokens" aria-labelledby="tokens-title">
-        <h2 id="tokens-title">Claude and other MCP apps</h2>
-        <p class="muted">Connect Claude to your account and it writes, reads and changes your scores, and reads photos of
-          scores. In Claude Code, run once:</p>
-        <div class="score-code command-box"><button type="button" class="score-copy" data-score-copy>Copy</button>
+        <h2 id="tokens-title"><%- t("app.account.tokens_title") %></h2>
+        <p class="muted"><%- t("app.account.tokens_lead") %></p>
+        <div class="score-code command-box"><button type="button" class="score-copy" data-score-copy><%- t("app.account.copy") %></button>
 <pre><code>claude mcp add --transport http score <%= locals["mcp_url"] ?? "https://score.solisoft.net/mcp" %></code></pre></div>
-        <p class="muted">Claude Code then opens Score in your browser: sign in and choose Allow. For claude.ai, Claude
-          Desktop and other apps, see <a href="<%= claude_path() %>">Score in Claude</a>.</p>
+        <% claude_href = attr(lp(claude_path())) %>
+        <% claude_link = "<a href=\"#{claude_href}\">#{h(t("app.account.score_in_claude"))}</a>" %>
+        <p class="muted"><%- t("app.account.tokens_then", {"link": claude_link}) %></p>
         <% if locals["new_token"].present? %>
           <div class="callout" data-new-token>
-            <p><strong>Your new token</strong> — copy it now: it is not shown again.</p>
-            <div class="score-code command-box"><button type="button" class="score-copy" data-score-copy>Copy</button>
+            <p><%- t("app.account.new_token") %></p>
+            <div class="score-code command-box"><button type="button" class="score-copy" data-score-copy><%- t("app.account.copy") %></button>
 <pre><code><%= locals["new_token"] %></code></pre></div>
-            <p>Give it to the app as the header <code>Authorization: Bearer …</code>. In Claude Code:</p>
-            <div class="score-code command-box"><button type="button" class="score-copy" data-score-copy>Copy</button>
+            <p><%- t("app.account.new_token_header") %></p>
+            <div class="score-code command-box"><button type="button" class="score-copy" data-score-copy><%- t("app.account.copy") %></button>
 <pre><code>claude mcp add --transport http score <%= locals["mcp_url"] %> --header "Authorization: Bearer <%= locals["new_token"] %>"</code></pre></div>
           </div>
         <% end %>
@@ -411,76 +432,75 @@
           <p class="form-error" role="alert"><%= locals["token_error"] %></p>
         <% end %>
         <% if connections > 0 %>
-          <h3>Connected</h3>
+          <h3><%- t("app.account.connected") %></h3>
           <ul class="token-list" data-tokens>
             <% for token in locals["tokens"] %>
               <li data-token="<%= token._key %>">
                 <span><strong><%= token.name %></strong>
                   <% if token.kind == "oauth" %>
-                    <span class="muted">connected by signing in,</span>
+                    <span class="muted"><%- t("app.account.by_signing_in") %></span>
                   <% else %>
                     <code><%= token.hint %>…</code>
                   <% end %>
-                  <span class="muted">made <%= time_ago(token.created_at) %>,
-                    <%= token.last_used_at.nil? ? "never used" : "last used " + time_ago(token.last_used_at) %></span></span>
+                  <span class="muted"><%= t("app.account.made_ago", {"ago": time_ago(token.created_at)}) %>
+                    <% used = token.last_used_at.nil? ? nil : time_ago(token.last_used_at) %>
+                    <%= used.nil? ? t("app.account.never_used") : t("app.account.last_used", {"ago": used}) %></span></span>
                 <form action="<%= app_account_token_revoke_path(token._key) %>" method="POST">
                   <%- csrf_field() %>
-                  <button type="submit" class="btn btn-ghost">Revoke</button>
+                  <button type="submit" class="btn btn-ghost"><%- t("app.account.revoke") %></button>
                 </form>
               </li>
             <% end %>
           </ul>
         <% end %>
         <details class="setting-change token-make"<%= locals["token_error"].present? ? " open" : "" %>>
-          <summary>Make a token, for an app that cannot sign in</summary>
+          <summary><%- t("app.account.make_token_summary") %></summary>
           <form action="<%= app_account_tokens_path() %>" method="POST" class="auth-form" data-token-form>
             <%- csrf_field() %>
-            <label class="field">Name <span class="muted">— where it is used</span>
-              <input name="name" type="text" required maxlength="60" placeholder="Claude Code on my laptop">
+            <label class="field"><%- t("app.account.token_name") %> <span class="muted"><%- t("app.account.token_name_hint") %></span>
+              <input name="name" type="text" required maxlength="60" placeholder="<%- t("app.account.token_placeholder") %>">
             </label>
-            <button type="submit" class="btn btn-primary">Make a token</button>
+            <button type="submit" class="btn btn-primary"><%- t("app.account.make_token") %></button>
           </form>
         </details>
       </section>
 
       <%# ---- Your data ---------------------------------------------------- %>
       <section class="account-panel" id="data" aria-labelledby="data-title">
-        <h2 id="data-title">Your data</h2>
+        <h2 id="data-title"><%- t("app.account.your_data") %></h2>
         <div class="setting" id="export">
-          <h3>Export all your data</h3>
-          <p class="muted">A zip with each of your scores as LilyPond (.ly) and every version kept of it, those in the trash
-            too; who each is shared with; your account details, with no password or secret; the comments and notifications; and the list of scores
-            others share with you.</p>
+          <h3><%- t("app.account.export_title") %></h3>
+          <p class="muted"><%- t("app.account.export_lead") %></p>
           <% if locals["export_error"].present? %>
             <p class="form-error" role="alert"><%= locals["export_error"] %></p>
           <% end %>
           <% export_parts = user.export_part_count() %>
           <% if export_parts > 1 %>
-            <p class="muted">Your scores are many: they come in <%= export_parts %> zips, so that none is too big.</p>
+            <p class="muted"><%= t("app.account.export_parts", {"n": export_parts}) %></p>
           <% end %>
           <div class="account-export">
             <% for part in range(1, export_parts + 1) %>
               <form action="<%= app_account_export_path() %>" method="POST">
                 <%- csrf_field() %>
                 <input type="hidden" name="part" value="<%= part %>">
-                <button type="submit" class="btn btn-ghost"><%= export_parts > 1 ? "Download part #{part} of #{export_parts}" : "Download my data (.zip)" %></button>
+                <button type="submit" class="btn btn-ghost"><%= export_parts > 1 ? t("app.account.download_part", {"part": part, "parts": export_parts}) : t("app.account.download") %></button>
               </form>
             <% end %>
           </div>
         </div>
 
         <div class="account-danger" id="delete">
-          <h3>Delete the account</h3>
-          <p class="muted">Your account and every score in it are deleted for good.</p>
+          <h3><%- t("app.account.delete_title") %></h3>
+          <p class="muted"><%- t("app.account.delete_lead") %></p>
           <details class="setting-change">
-            <summary>Delete my account…</summary>
+            <summary><%- t("app.account.delete_summary") %></summary>
             <form action="<%= app_account_path() %>" method="POST" class="auth-form">
               <%- csrf_field() %>
               <input type="hidden" name="_method" value="DELETE">
-              <label class="field">Your password, to confirm
+              <label class="field"><%- t("app.account.password_to_confirm") %>
                 <input id="delete_password" name="password" type="password" required autocomplete="current-password">
               </label>
-              <button type="submit" class="btn btn-danger">Delete my account</button>
+              <button type="submit" class="btn btn-danger"><%- t("app.account.delete_button") %></button>
             </form>
           </details>
         </div>

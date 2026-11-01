@@ -18,8 +18,8 @@ class ScoreShare < Model
   static def invite(score, email, role)
     address = email.to_s.trim.downcase
     owner = User.find_by("_key", score.user_id)
-    return {"error": "That is your own address."} if !owner.nil? && owner.email == address
-    return {"error": "Choose read or write."} unless SCORE_SHARE_ROLES.includes?(role)
+    return {"error": SiteText.t("app.scores.invite.own_address")} if !owner.nil? && owner.email == address
+    return {"error": SiteText.t("app.scores.invite.choose_role")} unless SCORE_SHARE_ROLES.includes?(role)
 
     share = ScoreShare.where({"score_id": score._key, "email": address}).first
     share = ScoreShare.new() if share.nil?
@@ -28,7 +28,7 @@ class ScoreShare < Model
     share.email = address
     share.role = role
     share.created_at ||= DateTime.utc.to_unix
-    return {"error": "That is not an email address."} unless share.save
+    return {"error": SiteText.t("app.scores.invite.not_an_email")} unless share.save
 
     share
   end
@@ -40,7 +40,7 @@ class ScoreShare < Model
   # payments are open (Plan.limits); nil asks Stripe's settings.
   static def invite_by(user, score, email, role, open = nil)
     if ScoreShare.invitations_left(user) <= 0
-      used_up = "You have sent the #{SCORE_INVITATIONS_PER_DAY} invitations a day allows: try again tomorrow."
+      used_up = SiteText.t("app.scores.invite.used_up", {"n": SCORE_INVITATIONS_PER_DAY})
       return {"error": used_up, "limit": true}
     end
 
@@ -71,7 +71,7 @@ class ScoreShare < Model
 
     return nil if ScoreShare.where({"score_id": score._key}).count < most
 
-    full = "On the Free plan a score is shared with #{most} people at most: Pro shares it with as many as you like."
+    full = SiteText.t("app.scores.invite.plan_full", {"n": most})
     {"error": full, "upgrade": true}
   end
 
@@ -92,10 +92,11 @@ class ScoreShare < Model
   # `mailed` says whether the invitation email left. When it did not, the
   # notice says so, so the owner sends the link themselves.
   static def invited_notice(share, title, mailed)
-    may = "#{share.email} may now #{share.role == "write" ? "open and change" : "open"} “#{title}”"
-    return "#{may}." if mailed
+    words = {"email": share.email, "title": title}
+    kind = share.role == "write" ? "write" : "read"
+    return SiteText.t("app.scores.invite.done_#{kind}", words) if mailed
 
-    "#{may}, but the invitation email could not be sent: send them the link yourself."
+    SiteText.t("app.scores.invite.unmailed_#{kind}", words)
   end
 
   # Whether the invitation is e-mailed: always to an address without an

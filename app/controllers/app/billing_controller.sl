@@ -25,10 +25,7 @@ class AppBillingController < AppBaseController
   # GET /app/billing/done — back from a payment: the plan shows once
   # Stripe's webhook has said so
   def done
-    flash(
-      "notice",
-      "Thank you! Your account moves to Pro as soon as Stripe confirms the payment, usually within a minute."
-    )
+    flash("notice", SiteText.t("app.account.billing_thanks"))
     redirect(app_account_path() + "#plan")
   end
 

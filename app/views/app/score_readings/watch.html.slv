@@ -1,7 +1,7 @@
 <%# One photo's reading (#465): followed live, the score growing as the AI
     writes it (#462); kept as a score, or tried again. %>
 <section class="start import-page" data-import-page="<%= reading._key %>" data-state="<%= reading.state %>">
-  <p class="breadcrumb"><a href="<%= app_imports_path() %>">Photo imports</a></p>
+  <p class="breadcrumb"><a href="<%= app_imports_path() %>"><%= t("app.readings.imports_title") %></a></p>
   <h1 data-import-title><%= reading.title %></h1>
   <% for message in flashes() %>
     <p class="form-error" role="alert"><%= message["message"] %></p>
@@ -9,11 +9,11 @@
   <div class="photo-reading-pair">
     <figure>
       <% if reading.picture.present? %>
-        <img src="data:image/jpeg;base64,<%= reading.picture %>" alt="The photo">
+        <img src="data:image/jpeg;base64,<%= reading.picture %>" alt="<%= t("app.readings.photo") %>">
       <% else %>
-        <div class="callout">The photo is no longer kept.</div>
+        <div class="callout"><%= t("app.readings.photo_gone") %></div>
       <% end %>
-      <figcaption class="muted">The photo</figcaption>
+      <figcaption class="muted"><%= t("app.readings.photo") %></figcaption>
     </figure>
     <figure>
       <div class="photo-reading-score" data-import-score>
@@ -21,21 +21,21 @@
       </div>
       <pre class="photo-reading-draft" data-import-draft aria-live="off" hidden></pre>
       <figcaption class="muted" data-import-status aria-live="polite">
-        <% if reading.state == "done" %>What was read. You can correct it in the editor.<% end %>
-        <% if reading.state == "failed" %><%= reading.error %><% end %>
-        <% if reading.state == "reading" %>Being read…<% end %>
+        <% if reading.state == "done" %><%= t("app.readings.done_caption") %><% end %>
+        <% if reading.state == "failed" %><%= reading.shown_error %><% end %>
+        <% if reading.state == "reading" %><%= t("app.readings.reading_caption") %><% end %>
       </figcaption>
     </figure>
   </div>
   <div class="import-actions">
     <form action="<%= app_import_score_path(reading._key) %>" method="POST" data-import-keep<%= reading.state == "done" ? "" : " hidden" %>>
       <%- csrf_field() %>
-      <button type="submit" class="btn btn-primary">Open as a score</button>
+      <button type="submit" class="btn btn-primary"><%= t("app.readings.open_as_score") %></button>
     </form>
     <% if reading.picture.present? %>
       <form action="<%= app_import_retry_path(reading._key) %>" method="POST" data-import-retry<%= reading.state == "reading" ? " hidden" : "" %>>
         <%- csrf_field() %>
-        <button type="submit" class="btn btn-ghost">Read it again</button>
+        <button type="submit" class="btn btn-ghost"><%= t("app.readings.read_again") %></button>
       </form>
     <% end %>
   </div>
@@ -47,7 +47,24 @@
     const status = page.querySelector("[data-import-status]");
     const score = page.querySelector("[data-import-score]");
     const draft = page.querySelector("[data-import-draft]");
-    const { readingSays } = await import("/js/score-photo.js?v=<%= eui_version %>");
+    const { took } = await import("/js/score-photo.js?v=<%= eui_version %>");
+    // What the page says of the reading going on, in the app's language (#505):
+    // score-photo.js's readingSays, its words from the locale files.
+    <% words = {"writing": t("app.readings.says_writing"), "thinking": t("app.readings.says_thinking")} %>
+    <% words["thoughtOne"] = t("app.readings.says_thought_one") %>
+    <% words["thoughtOther"] = t("app.readings.says_thought_other") %>
+    <% words["waiting"] = t("app.readings.says_waiting") %>
+    <% words["numbers"] = t("app.readings.number_locale") %>
+    const words = <%- words.to_json %>;
+    const readingSays = (news) => {
+      const time = took(news?.seconds);
+      const thought = Number(news?.thought) || 0;
+      let said = words.waiting;
+      if (news?.phase === "writing") said = words.writing;
+      else if (news?.phase === "thinking" && thought > 0) said = thought === 1 ? words.thoughtOne : words.thoughtOther;
+      else if (news?.phase === "thinking") said = words.thinking;
+      return said.replace("{time}", time).replace("{chars}", thought.toLocaleString(words.numbers));
+    };
     const at = "<%= app_reading_path(reading._key) %>";
     let events = null;
     let wake = () => {};

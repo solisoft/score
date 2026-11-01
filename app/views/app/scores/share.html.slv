@@ -1,15 +1,15 @@
 <section class="library share">
   <header class="library-head">
-    <h1>Share “<%= score.title %>”</h1>
-    <a class="btn btn-ghost" href="<%= app_score_path(score) %>">Back to the score</a>
+    <h1><%= t("app.scores.share.title", {"title": score.title}) %></h1>
+    <a class="btn btn-ghost" href="<%= app_score_path(score) %>"><%= t("app.scores.share.back") %></a>
   </header>
   <% if error.present? %>
     <p class="form-error" role="alert"><%= error %>
-      <% if locals["upgrade"].present? %><a href="<%= locals["upgrade"] %>" data-upgrade>See the plans</a><% end %></p>
+      <% if locals["upgrade"].present? %><a href="<%= locals["upgrade"] %>" data-upgrade><%= t("app.scores.share.see_plans") %></a><% end %></p>
   <% end %>
 
   <div class="start-card">
-    <h2>Who may read it</h2>
+    <h2><%= t("app.scores.share.who_reads") %></h2>
     <form action="<%= app_score_share_path(score) %>" method="POST" class="share-visibility">
       <%- csrf_field() %>
       <% for choice in choices %>
@@ -18,60 +18,60 @@
           <span><b><%= choice[1] %></b><small><%= choice[2] %></small></span>
         </label>
       <% end %>
-      <button type="submit" class="btn btn-primary">Save</button>
+      <button type="submit" class="btn btn-primary"><%= t("app.scores.share.save") %></button>
     </form>
   </div>
 
   <div class="start-card">
-    <h2>Its link</h2>
-    <p class="muted">The read page: the score engraved, Play, PDF, MIDI — no editing.
-      <% if score.visibility == "private" %>While the score is private, only you and the people invited can open it.<% end %></p>
+    <h2><%= t("app.scores.share.its_link") %></h2>
+    <p class="muted"><%= t("app.scores.share.link_lead") %>
+      <% if score.visibility == "private" %><%= t("app.scores.share.link_private") %><% end %></p>
     <div class="share-copy">
-      <input type="text" id="read-url" value="<%= absolute_url(read_path) %>" readonly aria-label="The score's link">
-      <button type="button" class="btn btn-ghost" data-copy="read-url">Copy</button>
+      <input type="text" id="read-url" value="<%= absolute_url(read_path) %>" readonly aria-label="<%= t("app.scores.share.link_label") %>">
+      <button type="button" class="btn btn-ghost" data-copy="read-url" data-copied="<%= t("app.scores.share.copied") %>"><%= t("app.scores.share.copy") %></button>
     </div>
     <form action="<%= app_score_new_link_path(score) %>" method="POST">
       <%- csrf_field() %>
-      <button type="submit" class="btn btn-ghost">New link (the old one stops working)</button>
+      <button type="submit" class="btn btn-ghost"><%= t("app.scores.share.new_link") %></button>
     </form>
   </div>
 
   <% unless score.visibility == "private" %>
     <div class="start-card">
-      <h2>On another site</h2>
-      <p class="muted">Paste this into any web page: the score is engraved there, and follows your changes.</p>
+      <h2><%= t("app.scores.share.elsewhere") %></h2>
+      <p class="muted"><%= t("app.scores.share.elsewhere_lead") %></p>
       <% script_tag = "<script type=\"module\" src=\"#{absolute_url("/eui-score.js")}\"></script>" %>
       <% embed = script_tag + "\n<eui-score src=\"#{absolute_url(source_path)}\"></eui-score>" %>
-      <textarea id="embed-code" class="share-embed" readonly rows="3" aria-label="Code to embed the score"><%= embed %></textarea>
-      <button type="button" class="btn btn-ghost" data-copy="embed-code">Copy the code</button>
+      <textarea id="embed-code" class="share-embed" readonly rows="3" aria-label="<%= t("app.scores.share.embed_label") %>"><%= embed %></textarea>
+      <button type="button" class="btn btn-ghost" data-copy="embed-code" data-copied="<%= t("app.scores.share.copied") %>"><%= t("app.scores.share.copy_code") %></button>
     </div>
   <% end %>
 
   <div class="start-card">
-    <h2>People</h2>
+    <h2><%= t("app.scores.share.people") %></h2>
     <form action="<%= app_score_invitations_path(score) %>" method="POST" class="share-invite">
       <%- csrf_field() %>
-      <label class="field">Email <input type="email" id="invite-email" name="email" required placeholder="name@example.com"></label>
-      <label class="field">May
+      <label class="field"><%= t("app.scores.share.email") %> <input type="email" id="invite-email" name="email" required placeholder="<%= t("app.scores.share.email_placeholder") %>"></label>
+      <label class="field"><%= t("app.scores.share.may") %>
         <select id="invite-role" name="role">
-          <option value="read">open it</option>
-          <option value="write">open and change it</option>
+          <option value="read"><%= t("app.scores.share.role_read") %></option>
+          <option value="write"><%= t("app.scores.share.role_write") %></option>
         </select>
       </label>
-      <button type="submit" class="btn btn-primary">Invite</button>
+      <button type="submit" class="btn btn-primary"><%= t("app.scores.share.invite") %></button>
     </form>
     <% if shares.length == 0 %>
-      <p class="muted">Nobody yet.</p>
+      <p class="muted"><%= t("app.scores.share.nobody") %></p>
     <% else %>
       <ul class="trash-list">
         <% for share in shares %>
           <li>
             <span class="trash-title"><%= share.email %></span>
-            <span class="muted"><%= share.role == "write" ? "may open and change it" : "may open it" %></span>
+            <span class="muted"><%= t(share.role == "write" ? "app.scores.share.share_write" : "app.scores.share.share_read") %></span>
             <form action="<%= app_score_invitation_path(score._key, share._key) %>" method="POST">
               <%- csrf_field() %>
               <input type="hidden" name="_method" value="DELETE">
-              <button type="submit" class="btn btn-danger">Remove</button>
+              <button type="submit" class="btn btn-danger"><%= t("app.scores.share.remove") %></button>
             </form>
           </li>
         <% end %>
@@ -85,7 +85,7 @@
       const box = document.getElementById(button.dataset.copy);
       try {
         await navigator.clipboard.writeText(box.value);
-        button.textContent = "Copied";
+        button.textContent = button.dataset.copied;
       } catch (error) {
         box.select();
       }

@@ -19,6 +19,16 @@ const SCORE_READING_SILENT = 240
 # again (#465); the reading itself, how long it is listed.
 const SCORE_READING_PICTURE_DAYS = 7
 const SCORE_READING_KEPT_DAYS = 30
+# The fixed sentences a reading may fail with (kept in English, as the MCP
+# server reads them), said in the page's language by shown_error (#505).
+const SCORE_READING_ERROR_KEYS = [
+  "app.readings.interrupted",
+  "app.readings.went_wrong",
+  "app.readings.unreadable",
+  "app.readings.no_music",
+  "app.readings.no_key",
+  "app.readings.pro_only"
+]
 
 class ScoreReading < Model
   validates("user_id", {"presence": true})
@@ -89,7 +99,7 @@ class ScoreReading < Model
     return false if DateTime.utc.to_unix - last < SCORE_READING_SILENT
 
     @state = "failed"
-    @error = "The reading was interrupted. Try again."
+    @error = SiteText.t("app.readings.interrupted", {}, "en")
     @finished_at = DateTime.utc.to_unix
     @save
     true
@@ -132,13 +142,36 @@ class ScoreReading < Model
     count
   end
 
-  # The title what was read (or is being written) gives, else "Photo of <when>".
+  # The title what was read (or is being written) gives, else "Photo of
+  # <when>" in the page's language.
   def title
 
     # What was read, else what is being written (#465): its title as soon as it has one.
     written = @source.blank? ? @draft.to_s : @source.to_s
     found = written.blank? ? nil : Score.title_in(written)
-    found ?? "Photo of " + DateTime.from_unix(@created_at.to_s.to_i).format("%d %b %Y, %H:%M")
+    return found unless found.nil?
+
+    taken = DateTime.from_unix(@created_at.to_s.to_i).format(SiteText.t("app.readings.photo_of_format"))
+    SiteText.t("app.readings.photo_of", {"when": taken})
+  end
+
+  # Why it failed, in the page's language when it is one of the fixed
+  # sentences (SCORE_READING_ERROR_KEYS); the provider's own words as they
+  # came. `error` stays English: the MCP server reads it.
+  def shown_error
+    said = @error.to_s
+    known = SCORE_READING_ERROR_KEYS.filter do |key|
+      SiteText.t(key, {}, "en") == said
+    end
+    known.length > 0 ? SiteText.t(known[0]) : said
+  end
+
+  # What a page says of a refusal (ScoreReading.refusal) to read one more
+  # photo, in its language.
+  static def refusal_words(refusal)
+    return SiteText.t("app.readings.used_up") if refusal == "used_up"
+
+    SiteText.t(refusal == "plan" ? "app.readings.pro_only" : "app.readings.no_key")
   end
 
   # The readings still "reading" after SCORE_AI_STUCK_SECONDS: failed, their
@@ -151,7 +184,7 @@ class ScoreReading < Model
     ).limit(5000).all
     stuck.each do |reading|
       reading.state = "failed"
-      reading.error = "The reading was interrupted. Try again."
+      reading.error = SiteText.t("app.readings.interrupted", {}, "en")
       reading.finished_at = DateTime.utc.to_unix
       reading.save
     end
@@ -167,7 +200,7 @@ class ScoreReading < Model
   def perform
     return true unless @state == "reading"
 
-    outcome = @_outcome rescue {"error": "Something went wrong while reading the photo. Try again."}
+    outcome = @_outcome rescue {"error": SiteText.t("app.readings.went_wrong", {}, "en")}
     @state = outcome["error"].nil? ? "done" : "failed"
     @source = outcome["source"]
     @error = outcome["error"]

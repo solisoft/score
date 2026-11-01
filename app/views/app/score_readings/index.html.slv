@@ -1,14 +1,12 @@
 <%# The photo imports (#465): the photos read, being read or not read. %>
 <section class="start imports">
-  <h1>Photo imports</h1>
-  <p class="muted">The photos of scores you had read, the latest first. One being read goes on when you leave its
-    page: come back here to follow it. Photos are kept a week, imports a month.</p>
+  <h1><%= t("app.readings.imports_title") %></h1>
+  <p class="muted"><%= t("app.readings.imports_lead") %></p>
   <% for message in flashes() %>
     <p class="form-notice" role="status"><%= message["message"] %></p>
   <% end %>
   <% if readings.length == 0 %>
-    <div class="callout" data-no-import>No photo read yet. On <a href="<%= app_home_path() %>">Start</a>, choose
-      From a photo.</div>
+    <div class="callout" data-no-import><%- t("app.readings.no_import_html", {"start": h(app_home_path())}) %></div>
   <% else %>
     <ul class="import-list" data-imports>
       <% for reading in readings %>
@@ -17,15 +15,16 @@
             <strong><%= reading.title %></strong>
             <span class="muted">
               <% if reading.state == "reading" %>
-                being read: <%= reading.phase == "writing" ? "the music is being written" : "the AI is thinking" %>, started <%= time_ago(reading.created_at) %>
+                <% being_read = reading.phase == "writing" ? "being_read_writing" : "being_read_thinking" %>
+                <%= t("app.readings." + being_read, {"when": time_ago(reading.created_at)}) %>
               <% elsif reading.state == "done" %>
-                read <%= time_ago(reading.finished_at ?? reading.created_at) %>
+                <%= t("app.readings.read_when", {"when": time_ago(reading.finished_at ?? reading.created_at)}) %>
               <% else %>
-                not read: <%= reading.error %>
+                <%= t("app.readings.not_read", {"error": reading.shown_error}) %>
               <% end %>
             </span>
           </a>
-          <span class="import-state"><%= {"reading": "Being read", "done": "Read", "failed": "Not read"}[reading.state] ?? reading.state %></span>
+          <span class="import-state"><%= ["reading", "done", "failed"].includes?(reading.state) ? t("app.readings.state_" + reading.state) : reading.state %></span>
         </li>
       <% end %>
     </ul>

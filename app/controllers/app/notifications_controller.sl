@@ -8,8 +8,8 @@ class AppNotificationsController < AppBaseController
     @unread = @notifications.filter do |notification|
       !notification.read?
     end.length
-    @title = "Notifications"
-    @description = "What happened on the scores you share."
+    @title = SiteText.t("app.notifications.title")
+    @description = SiteText.t("app.notifications.description")
   end
 
   # GET /app/notifications/unread — JSON {count}, for the bell
@@ -25,7 +25,7 @@ class AppNotificationsController < AppBaseController
     notification.read!
     score = Score.find_by("_key", notification.score_id)
     if score.nil? || score.trashed? || score.access_of(current_user()).nil?
-      flash("notice", "That score is no longer there for you.")
+      flash("notice", SiteText.t("app.notifications.gone"))
       return redirect(app_notifications_path())
     end
 
@@ -44,7 +44,7 @@ class AppNotificationsController < AppBaseController
   # POST /app/notifications/read-all — every one read
   def mark_all_read
     UserNotification.read_all(current_user())
-    flash("notice", "Everything is marked read.")
+    flash("notice", SiteText.t("app.notifications.all_read"))
     redirect(app_notifications_path())
   end
 
@@ -53,7 +53,7 @@ class AppNotificationsController < AppBaseController
   # The notification of the route, if it is the signed-in person's (404 otherwise).
   def _notification
     notification = UserNotification.of(current_user(), params["id"])
-    halt(404, "No such notification") if notification.nil?
+    halt(404, SiteText.t("app.notifications.not_found")) if notification.nil?
 
     notification
   end

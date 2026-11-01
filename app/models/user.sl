@@ -316,11 +316,11 @@ class User < Model
   # Why the password cannot become `new_password`, or nil: the current one
   # must be right, the new one acceptable, and typed the same twice.
   def password_change_error(current, new_password, confirmation)
-    return "That is not your current password" unless this.authenticate(current.to_s)
+    return SiteText.t("app.account.not_current_password") unless this.authenticate(current.to_s)
 
     error = this.password_error(new_password)
     return error unless error.nil?
-    return "The two new passwords differ" if new_password.to_s != confirmation.to_s
+    return SiteText.t("app.account.passwords_differ") if new_password.to_s != confirmation.to_s
 
     null
   end
@@ -384,14 +384,12 @@ class User < Model
   # this account's, and not another account's.
   def email_change_error(new_email, password, code)
     address = new_email.to_s.trim.downcase
-    return "That is not your password: the address is unchanged." unless this.authenticate(password.to_s)
-    if this.two_step?() && !this.second_step?(code)
-      return "That code is not right: type the one your authenticator app shows now, or a backup code."
-    end
+    return SiteText.t("app.account.email_wrong_password") unless this.authenticate(password.to_s)
+    return SiteText.t("app.account.email_wrong_code") if this.two_step?() && !this.second_step?(code)
 
-    return "That is not an email address." unless Regex.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", address)
-    return "That is already your address." if address == this.email
-    return "That address belongs to another account." unless User.find_by("email", address).nil?
+    return SiteText.t("app.account.email_invalid") unless Regex.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", address)
+    return SiteText.t("app.account.email_same") if address == this.email
+    return SiteText.t("app.account.email_taken") unless User.find_by("email", address).nil?
 
     nil
   end
@@ -672,10 +670,10 @@ class User < Model
   # shown only by its last four characters. An error message, or nil once
   # kept.
   def keep_ai_key(provider, model, key)
-    return "Choose a provider." unless AI_PROVIDERS.has_key(provider.to_s)
-    return "Name the model to use." if model.to_s.trim.blank?
-    return "Paste the API key." if key.to_s.trim.length < 8
-    return "Keys cannot be kept on this server." unless User.two_step_available?()
+    return SiteText.t("app.account.ai_choose_provider") unless AI_PROVIDERS.has_key(provider.to_s)
+    return SiteText.t("app.account.ai_name_model") if model.to_s.trim.blank?
+    return SiteText.t("app.account.ai_paste_key") if key.to_s.trim.length < 8
+    return SiteText.t("app.account.ai_no_keys_here") unless User.two_step_available?()
 
     this.ai_provider = provider
     this.ai_model = model.to_s.trim
@@ -736,9 +734,11 @@ class User < Model
   # (payments open, not on Pro), or nil: a kept key stays kept, unused.
   def ai_plan_note(open = nil)
     return nil unless @ai_refusal(open) == "plan"
-    return AI_PRO_ONLY unless @own_ai?
 
-    "#{AI_PRO_ONLY} Your key stays kept, unused, until then; you can remove it."
+    pro_only = SiteText.t("app.account.ai_pro_only")
+    return pro_only unless @own_ai?
+
+    "#{pro_only} #{SiteText.t("app.account.ai_key_kept")}"
   end
 
   # --- Notification e-mails (#385) ---------------------------------------------
@@ -848,29 +848,43 @@ class User < Model
 
   # The plan's name, as the account page shows it.
   def plan_name
-    @pro? ? "Pro" : "Free"
+    SiteText.t(@pro? ? "app.account.plan_pro" : "app.account.plan_free")
   end
 
   # What the account page says of the subscription at `now`, or nil on Free
   # with nothing to say.
   def plan_summary(now = nil)
     at = now ?? DateTime.utc.to_unix
-    ends = @current_period_end.nil? ? "" : DateTime.from_unix(@current_period_end.to_s.to_i).format("%B %-d, %Y")
+    ends = @current_period_end.nil? ? "" : User.plan_date(@current_period_end.to_s.to_i)
+    when_ends = {"date": ends}
     if @pro_at?(at)
-      return "Offered until #{ends}." if @plan_gift == true
-      return "Ends on #{ends}: it will not renew." if @cancel_at_period_end == true
-      return "On trial until #{ends}." if @plan_status == "trialing"
+      return SiteText.t("app.account.plan_offered", when_ends) if @plan_gift == true
+      return SiteText.t("app.account.plan_ends", when_ends) if @cancel_at_period_end == true
+      return SiteText.t("app.account.plan_trial", when_ends) if @plan_status == "trialing"
 
-      return "Renews on #{ends}."
+      return SiteText.t("app.account.plan_renews", when_ends)
     end
 
-    if ["past_due", "unpaid"].includes?(@plan_status.to_s)
-      return "The last payment failed, so the account is on Free: Manage billing updates the card."
-    end
-
-    return "Pro ended on #{ends}." if @plan == "pro" && !ends.blank?
+    return SiteText.t("app.account.plan_failed") if ["past_due", "unpaid"].includes?(@plan_status.to_s)
+    return SiteText.t("app.account.plan_ended", when_ends) if @plan == "pro" && !ends.blank?
 
     nil
+  end
+
+  # `unix` as the account page writes a date, in the request's language:
+  # "November 1, 2026", "1er novembre 2026".
+  static def plan_date(unix)
+    day = DateTime.from_unix(unix)
+    number = day.format("%-d")
+    number = SiteText.t("app.account.plan_first_day") if number == "1"
+    SiteText.t(
+      "app.account.plan_date",
+      {
+        "month": SiteText.t("date.months.m#{day.format("%m").to_i}"),
+        "d": number,
+        "year": day.format("%Y")
+      }
+    )
   end
 
   # Whether there is a Stripe customer to manage (Manage billing).

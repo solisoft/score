@@ -19,6 +19,8 @@ const BILLING_EVENTS = [
 ]
 # A subscription in one of these is over: the account is on Free again.
 const BILLING_ENDED = ["canceled", "incomplete_expired"]
+# The English of two refusals, as the specs check them: the pages say them
+# in the request's language (SiteText, app.account.billing_*).
 const BILLING_NOT_OPEN = "Payments are not open yet: the Pro plan will be on sale soon. Free stays as it is."
 const BILLING_STRIPE_DOWN = "Stripe could not be reached: nothing was charged. Try again in a moment."
 
@@ -28,7 +30,7 @@ class Billing
   # Where to send `user` to pay for Pro every `interval`: {"url"}, or
   # {"error"} to show them.
   static def checkout(user, interval, success_url, cancel_url)
-    return {"error": BILLING_NOT_OPEN} unless Stripe.configured?
+    return {"error": SiteText.t("app.account.billing_not_open")} unless Stripe.configured?
 
     Billing.start_checkout(user, Stripe.price_id(interval), Plan.interval(interval), success_url, cancel_url)
   end
@@ -36,14 +38,14 @@ class Billing
   # The Checkout session itself, for `price_id`: the user's Stripe customer
   # made first if they have none, reused if they have.
   static def start_checkout(user, price_id, interval, success_url, cancel_url, transport = nil)
-    return {"error": "You are on Pro already: Manage billing changes or cancels it."} if user.pro?
+    return {"error": SiteText.t("app.account.billing_already_pro")} if user.pro?
 
     customer = Billing.customer_of(user, transport)
     return customer if customer["id"].nil?
 
     form = Stripe.checkout_form(customer["id"], price_id, user._key, interval, success_url, cancel_url)
     answer = Stripe.call("POST", "checkout/sessions", form, transport)
-    return {"error": BILLING_STRIPE_DOWN} unless answer["ok"]
+    return {"error": SiteText.t("app.account.billing_stripe_down")} unless answer["ok"]
 
     Billing.stripe_page(answer["data"])
   end
@@ -52,7 +54,7 @@ class Billing
   # {"error"} when the answer holds none.
   static def stripe_page(data)
     stripe_url = data["url"].to_s
-    return {"error": BILLING_STRIPE_DOWN} unless stripe_url.starts_with?("https://")
+    return {"error": SiteText.t("app.account.billing_stripe_down")} unless stripe_url.starts_with?("https://")
 
     {"url": stripe_url}
   end
@@ -63,7 +65,7 @@ class Billing
     return {"id": user.stripe_customer_id} if user.stripe_customer_id.present?
 
     answer = Stripe.call("POST", "customers", Stripe.customer_form(user), transport)
-    return {"error": BILLING_STRIPE_DOWN} unless answer["ok"]
+    return {"error": SiteText.t("app.account.billing_stripe_down")} unless answer["ok"]
 
     user.stripe_customer_id = answer["data"]["id"].to_s
     user.update()
@@ -73,17 +75,17 @@ class Billing
   # Stripe's customer portal for `user`, to come back to `return_url`:
   # {"url"}, or {"error"}.
   static def portal(user, return_url)
-    return {"error": BILLING_NOT_OPEN} unless Stripe.configured?
+    return {"error": SiteText.t("app.account.billing_not_open")} unless Stripe.configured?
 
     Billing.open_portal(user, return_url)
   end
 
   static def open_portal(user, return_url, transport = nil)
-    return {"error": "There is no billing to manage yet: Upgrade starts it."} if user.stripe_customer_id.blank?
+    return {"error": SiteText.t("app.account.billing_nothing_to_manage")} if user.stripe_customer_id.blank?
 
     form = Stripe.form({"customer": user.stripe_customer_id, "return_url": return_url})
     answer = Stripe.call("POST", "billing_portal/sessions", form, transport)
-    return {"error": BILLING_STRIPE_DOWN} unless answer["ok"]
+    return {"error": SiteText.t("app.account.billing_stripe_down")} unless answer["ok"]
 
     Billing.stripe_page(answer["data"])
   end

@@ -3159,6 +3159,11 @@
   .account-signout .btn {
     white-space: nowrap;
   }
+  .account-language {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
   @media (prefers-reduced-motion: reduce) {
     .setting-change > summary::before {
       transition: none;

@@ -178,26 +178,33 @@ class UserNotification < Model
     count
   end
 
-  # The people who did it, said: "Ana", "Ana and Ben", "Ana, Ben and Chloé".
-  def actors_said
+  # The people who did it, said: "Ana", "Ana and Ben", "Ana, Ben and Chloé"
+  # (in `locale`, #505: "Ana et Ben").
+  def actors_said(locale = "en")
     names = (@actor_names ?? []).map do |name|
       name.to_s
     end
-    return "Someone" if names.length == 0
+    return SiteText.t("app.notifications.someone", {}, locale) if names.length == 0
     return names[0] if names.length == 1
 
-    names.slice(0, names.length - 1).join(", ") + " and " + names[names.length - 1]
+    SiteText.t("app.notifications.and", {
+      "first": names.slice(0, names.length - 1).join(", "),
+      "last": names[names.length - 1]
+    }, locale)
   end
 
-  # The notification, in a sentence.
-  def sentence
-    title = "“#{this.score_title}”"
+  # The notification, in a sentence: in English unless `locale` says
+  # otherwise (#505) — the app's list asks in its own language; the e-mails
+  # and pushes stay in English.
+  def sentence(locale = "en")
+    key = @kind == "changed" ? "changed_#{(this.actor_names ?? []).length > 1 ? "other" : "one"}" : @kind
     place = @label.blank? ? "" : ", #{this.label}"
-    return "#{this.actors_said} shared #{title} with you" if @kind == "shared"
-    return "#{this.actors_said} replied in a thread on #{title}#{place}" if @kind == "reply"
-    return "#{this.actors_said} mentioned you on #{title}#{place}" if @kind == "mention"
-
-    "#{this.actors_said} changed #{title}"
+    words = {
+      "actors": @actors_said(locale),
+      "place": place,
+      "title": this.score_title.to_s
+    }
+    SiteText.t("app.notifications.#{key}", words, locale)
   end
 
   # The e-mails due at `now` sent (NotificationMailJob): a reply or a mention

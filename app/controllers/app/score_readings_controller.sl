@@ -11,11 +11,11 @@ class AppScoreReadingsController < AppBaseController
     return @_ai_refused(allowed) unless allowed.nil?
 
     data = (req["json"] ?? params)["picture"].to_s
-    return render_json({"error": "Choose a photo of the score."}, 422) if data.blank?
-    return render_json({"error": "The photo is too large."}, 422) if data.length > SCORE_READER_BYTES
+    return render_json({"error": SiteText.t("app.readings.choose_photo")}, 422) if data.blank?
+    return render_json({"error": SiteText.t("app.readings.too_large")}, 422) if data.length > SCORE_READER_BYTES
 
     picture = ScoreReader.picture(data)
-    return render_json({"error": "That file is not a picture."}, 422) if picture.nil?
+    return render_json({"error": SiteText.t("app.readings.not_picture")}, 422) if picture.nil?
 
     refusal = ScoreReading.refusal(user)
     return @_refusal_json(refusal) unless refusal.nil?
@@ -33,7 +33,7 @@ class AppScoreReadingsController < AppBaseController
   # or `error` once failed
   def show
     reading = ScoreReading.find(params["id"])
-    halt(404, "No such reading") unless reading.owned_by?(current_user())
+    halt(404, SiteText.t("app.readings.no_such")) unless reading.owned_by?(current_user())
 
     reading.expire_if_silent
     if reading.state == "reading"
@@ -45,7 +45,7 @@ class AppScoreReadingsController < AppBaseController
       return render_json(news)
     end
     if reading.state == "failed"
-      return render_json({"state": "failed", "error": reading.error})
+      return render_json({"state": "failed", "error": reading.shown_error})
     end
 
     render_json({
@@ -60,7 +60,7 @@ class AppScoreReadingsController < AppBaseController
   # and "done", then the reading is asked after (show) as before (#435)
   def events
     reading = ScoreReading.find(params["id"])
-    halt(404, "No such reading") unless reading.owned_by?(current_user())
+    halt(404, SiteText.t("app.readings.no_such")) unless reading.owned_by?(current_user())
 
     sse_subscribe(req, ScoreReading.topic(reading._key))
   end
@@ -68,8 +68,8 @@ class AppScoreReadingsController < AppBaseController
   # GET /app/imports — the photos read, being read or not read, the latest first (#465)
   def index
     @readings = ScoreReading.of(current_user())
-    @title = "Photo imports"
-    @description = "The photos of scores you had read, and those being read."
+    @title = SiteText.t("app.readings.imports_title")
+    @description = SiteText.t("app.readings.imports_description")
   end
 
   # GET /app/imports/:id — one photo's reading: followed live, the score
@@ -80,16 +80,16 @@ class AppScoreReadingsController < AppBaseController
     @eui_version = ScoreAssets.version
     @figure = @reading.state == "done" ? ScoreSvg.figure(@reading.source, 1000, 7) : nil
     @title = @reading.title
-    @description = "A photo of a score, read into one."
+    @description = SiteText.t("app.readings.watch_description")
   end
 
   # POST /app/imports/:id/score — what was read, kept as a new score, opened in the editor
   def keep
     reading = @_own_reading
-    halt(422, "This photo is not read yet.") unless reading.state == "done"
+    halt(422, SiteText.t("app.readings.not_read_yet")) unless reading.state == "done"
 
     score = Score.start(current_user(), reading.source)
-    halt(422, "That score could not be created.") if score._errors
+    halt(422, SiteText.t("app.readings.not_created")) if score._errors
 
     redirect(app_score_path(score))
   end
@@ -97,13 +97,12 @@ class AppScoreReadingsController < AppBaseController
   # POST /app/imports/:id/retry — the same photo read again
   def retry
     reading = @_own_reading
-    halt(422, "This photo is not kept any more: choose it again from Start.") if reading.picture.blank?
-    halt(422, "This photo is still being read.") if reading.state == "reading"
+    halt(422, SiteText.t("app.readings.picture_gone")) if reading.picture.blank?
+    halt(422, SiteText.t("app.readings.still_reading")) if reading.state == "reading"
 
     refusal = ScoreReading.refusal(current_user())
     unless refusal.nil?
-      said = refusal == "used_up" ? "You have read all of today's photos: try again tomorrow." : nil
-      flash("error", said ?? AiClient.refusal_text(refusal))
+      flash("error", ScoreReading.refusal_words(refusal))
       return redirect(app_import_path(reading._key))
     end
 
@@ -118,7 +117,7 @@ class AppScoreReadingsController < AppBaseController
   # The reading of the route, if it is the signed-in person's (404 otherwise).
   def _own_reading
     reading = ScoreReading.find(params["id"])
-    halt(404, "No such reading") unless reading.owned_by?(current_user())
+    halt(404, SiteText.t("app.readings.no_such")) unless reading.owned_by?(current_user())
 
     reading
   end
@@ -126,9 +125,7 @@ class AppScoreReadingsController < AppBaseController
   # The answer refusing one more photo now (`refusal`, ScoreReading.refusal):
   # the day's used up (429), or the key or the plan (403, with its link).
   def _refusal_json(refusal)
-    if refusal == "used_up"
-      return render_json({"error": "You have read all of today's photos: try again tomorrow."}, 429)
-    end
+    return render_json({"error": SiteText.t("app.readings.used_up")}, 429) if refusal == "used_up"
 
     @_ai_refused(refusal)
   end

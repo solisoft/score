@@ -1,11 +1,10 @@
 <section class="auth auth-wide">
-  <h1>Two-step sign-in is on</h1>
-  <p>Keep these backup codes somewhere safe — a password manager, or on paper. Each one signs you in once without your
-    phone. They are shown only now.</p>
+  <h1><%- t("app.account.backup_heading") %></h1>
+  <p><%- t("app.account.backup_lead") %></p>
   <ul class="two-step-codes">
     <% for code in codes %>
       <li><code><%= code %></code></li>
     <% end %>
   </ul>
-  <p><a class="btn btn-primary" href="<%= app_account_path() %>">Done</a></p>
+  <p><a class="btn btn-primary" href="<%= app_account_path() %>"><%- t("app.account.done") %></a></p>
 </section>

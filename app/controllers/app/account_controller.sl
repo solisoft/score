@@ -4,8 +4,8 @@ class AppAccountController < AppBaseController
   # GET /app/account
   def show
     @user = current_user()
-    @title = "Account"
-    @description = "Your Score account."
+    @title = SiteText.t("app.account.page_title")
+    @description = SiteText.t("app.account.page_description")
     @error = ""
     @tokens = AccessToken.of(@user)
     base = auth_base_url()
@@ -17,8 +17,8 @@ class AppAccountController < AppBaseController
   def create_token
     @user = current_user()
     made = AccessToken.issue(@user, params["name"])
-    @title = "Account"
-    @description = "Your Score account."
+    @title = SiteText.t("app.account.page_title")
+    @description = SiteText.t("app.account.page_description")
     @error = ""
     @tokens = AccessToken.of(@user)
     unless made["error"].nil?
@@ -36,9 +36,9 @@ class AppAccountController < AppBaseController
   # POST /app/account/tokens/:id/revoke — the token stops working at once
   def revoke_token
     revoked = AccessToken.revoke(current_user(), params["id"])
-    halt(404, "No such token") unless revoked
+    halt(404, SiteText.t("app.account.no_token")) unless revoked
 
-    flash("notice", "The token is revoked: whatever used it can no longer reach your scores.")
+    flash("notice", SiteText.t("app.account.token_revoked"))
     account = app_account_path()
     redirect(account + "#tokens")
   end
@@ -52,7 +52,7 @@ class AppAccountController < AppBaseController
       params["password_confirmation"]
     )
     unless @error.nil?
-      @title = "Account"
+      @title = SiteText.t("app.account.page_title")
       return render("app/account/show", {}, {"status": 422})
     end
 
@@ -61,7 +61,7 @@ class AppAccountController < AppBaseController
     session_regenerate()
     session_set("user_id", @user["_key"])
     session_set("session_version", @user.current_session_version())
-    flash("notice", "Password changed. Your other browsers are signed out.")
+    flash("notice", SiteText.t("app.account.password_changed"))
     redirect(app_account_path())
   end
 
@@ -80,12 +80,12 @@ class AppAccountController < AppBaseController
     return redirect(app_account_path()) if secret.nil?
 
     codes = @user.confirm_two_step(params["code"])
-    wrong = "That code is not the app's: check its clock, and type the code it shows now."
+    wrong = SiteText.t("app.account.enrol_wrong_code")
     return @_show_enrolment(secret, wrong) if codes.nil?
 
     @codes = codes
-    @title = "Your backup codes"
-    @description = "The codes that sign you in without your phone."
+    @title = SiteText.t("app.account.backup_title")
+    @description = SiteText.t("app.account.backup_description")
     render("app/account/backup_codes")
   end
 
@@ -93,14 +93,14 @@ class AppAccountController < AppBaseController
   def stop_two_step
     @user = current_user()
     unless @user.authenticate(params["password"].to_s) && @user.second_step?(params["code"])
-      @title = "Account"
-      @description = "Your Score account."
-      @error = "Two-step sign-in is still on: that password or that code is not right."
+      @title = SiteText.t("app.account.page_title")
+      @description = SiteText.t("app.account.page_description")
+      @error = SiteText.t("app.account.two_step_still_on")
       return render("app/account/show", {}, {"status": 422})
     end
 
     @user.stop_two_step()
-    flash("notice", "Two-step sign-in is off.")
+    flash("notice", SiteText.t("app.account.two_step_stopped"))
     redirect(app_account_path())
   end
 
@@ -109,21 +109,34 @@ class AppAccountController < AppBaseController
     @user = current_user()
     @ai_error = @user.keep_ai_key(params["provider"], params["model"], params["key"]).to_s
     unless @ai_error.blank?
-      @title = "Account"
-      @description = "Your Score account."
+      @title = SiteText.t("app.account.page_title")
+      @description = SiteText.t("app.account.page_description")
       @error = ""
       return render("app/account/show", {}, {"status": 422})
     end
 
-    flash("notice", "The AI features now use your #{AiClient.provider_name(this.user.ai_provider)} key.")
+    flash("notice", SiteText.t("app.account.ai_saved", {"provider": AiClient.provider_name(@user.ai_provider)}))
     redirect(app_account_path())
   end
 
   # POST /app/account/ai/remove — the key forgotten: no AI until another one
   def forget_ai_key
     current_user().forget_ai_key()
-    flash("notice", "Your AI key is removed.")
+    flash("notice", SiteText.t("app.account.ai_removed"))
     redirect(app_account_path())
+  end
+
+  # POST /app/account/language — `locale`, "en" or "fr": the app's language
+  # on this browser, and the account's on the next one (#505)
+  def language
+    locale = params["locale"].to_s
+    return redirect(app_account_path()) unless SITE_LOCALES.includes?(locale)
+
+    set_cookie("locale", locale)
+    I18n.set_locale(locale)
+    AppLocale.remember(current_user(), locale)
+    flash("notice", SiteText.t("app.account.language_saved"))
+    redirect(app_account_path() + "#language")
   end
 
   # POST /app/account/notifications — the e-mails wanted: `kinds[]` checked
@@ -134,7 +147,7 @@ class AppAccountController < AppBaseController
     current_user().keep_mail_prefs(wanted.filter(&{ |kind|
       NOTIFICATION_KINDS.includes?(kind)
     }))
-    flash("notice", "Your e-mail settings are saved.")
+    flash("notice", SiteText.t("app.account.mails_saved"))
     redirect(app_account_path() + "#notifications")
   end
 
@@ -145,7 +158,7 @@ class AppAccountController < AppBaseController
     current_user().keep_push_prefs(wanted.filter(&{ |kind|
       NOTIFICATION_KINDS.includes?(kind)
     }))
-    flash("notice", "Your push notification settings are saved.")
+    flash("notice", SiteText.t("app.account.push_saved"))
     redirect(app_account_path() + "#push")
   end
 
@@ -153,8 +166,8 @@ class AppAccountController < AppBaseController
   def destroy
     @user = current_user()
     unless @user.authenticate(params["password"].to_s)
-      @title = "Account"
-      @error = "That is not your password: the account is still here."
+      @title = SiteText.t("app.account.page_title")
+      @error = SiteText.t("app.account.not_your_password")
       return render("app/account/show", {}, {"status": 422})
     end
 
@@ -162,7 +175,7 @@ class AppAccountController < AppBaseController
     session_destroy()
     session_regenerate()
     # "signed_out": the layout clears what this browser kept of the app.
-    flash("signed_out", "Your account is deleted.")
+    flash("signed_out", SiteText.t("app.account.account_deleted"))
     redirect(app_home_path())
   end
 
@@ -171,13 +184,13 @@ class AppAccountController < AppBaseController
   def download_data
     user = current_user()
     unless AccountExport.allowed?(user)
-      @export_error = "You have downloaded your data #{EXPORTS_PER_WINDOW} times this hour: try again in an hour."
+      @export_error = SiteText.t("app.account.exports_too_many", {"n": EXPORTS_PER_WINDOW})
       return @_refuse(user, "", 429)
     end
 
     parts = AccountExport.parts(user)
     number = params["part"].blank? ? 1 : params["part"].to_s.to_i
-    halt(404, "That part of the export does not exist.") if number < 1 || number > parts.length
+    halt(404, SiteText.t("app.account.export_no_part")) if number < 1 || number > parts.length
 
     now = DateTime.utc.to_unix
     name = "eui-score-#{DateTime.from_unix(now).to_iso.substring(0, 10)}"
@@ -198,14 +211,14 @@ class AppAccountController < AppBaseController
   def change_email
     user = current_user()
     unless User.email_change_allowed?(user)
-      wait = "You have asked to change your address #{EMAIL_CHANGES_PER_HOUR} times this hour: try again in an hour."
+      wait = SiteText.t("app.account.email_changes_too_many", {"n": EMAIL_CHANGES_PER_HOUR})
       return @_refuse(user, wait, 429)
     end
 
     error = user.email_change_error(params["email"], params["password"], params["code"])
     return @_refuse(user, error, 422) unless error.nil?
     unless User.account_email_allowed?(params["email"], client_ip(req))
-      return @_refuse(user, AUTH_EMAILS_REFUSED, 429)
+      return @_refuse(user, SiteText.t("app.account.emails_refused"), 429)
     end
 
     token = user.start_email_change(params["email"])
@@ -213,19 +226,14 @@ class AppAccountController < AppBaseController
     unless sent
       user.forget_email_change()
       user.update()
-      return @_refuse(
-        user,
-        "The email to #{params["email"].to_s.trim} could not be sent: try again in a moment.",
-        503
-      )
+      return @_refuse(user, SiteText.t("app.account.email_not_sent", {"email": params["email"].to_s.trim}), 503)
     end
 
     MailDelivery.attempt("email change notice", fn() { AuthMailer.email_change_requested(user) })
-    flash(
-      "notice",
-      "A link is on its way to #{user.email_change_to}: follow it within a day to use that address."
-      + " Until then, your address is still #{user.email}."
-    )
+    flash("notice", SiteText.t(
+      "app.account.email_link_sent",
+      {"new_email": user.email_change_to, "email": user.email}
+    ))
     redirect(app_account_path())
   end
 
@@ -234,7 +242,7 @@ class AppAccountController < AppBaseController
     user = current_user()
     user.forget_email_change()
     user.update()
-    flash("notice", "The change of address is cancelled: the link sent stops working.")
+    flash("notice", SiteText.t("app.account.email_change_cancelled"))
     redirect(app_account_path())
   end
 
@@ -242,8 +250,8 @@ class AppAccountController < AppBaseController
   # was refused.
   def _refuse(user, message, status)
     @user = user
-    @title = "Account"
-    @description = "Your Score account."
+    @title = SiteText.t("app.account.page_title")
+    @description = SiteText.t("app.account.page_description")
     @error = ""
     @email_error = message
     @typed_email = params["email"].to_s.trim
@@ -255,8 +263,8 @@ class AppAccountController < AppBaseController
     @secret = secret
     @uri = @user.two_step_uri(secret)
     @error = error
-    @title = "Two-step sign-in"
-    @description = "Sign in with a code from your phone, too."
+    @title = SiteText.t("app.account.enrol_title")
+    @description = SiteText.t("app.account.enrol_description")
     render("app/account/two_step", {}, {"status": error.blank? ? 200 : 422})
   end
 end

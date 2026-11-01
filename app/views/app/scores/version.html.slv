@@ -2,15 +2,15 @@
   <header class="library-head">
     <h1><%= version.title %> <span class="muted">— <%= time_ago(version.created_at) %></span></h1>
     <div class="version-actions">
-      <a class="btn btn-ghost" href="<%= app_score_versions_path(score) %>">All versions</a>
+      <a class="btn btn-ghost" href="<%= app_score_versions_path(score) %>"><%= t("app.scores.version.all") %></a>
       <form action="<%= app_score_copy_version_path(score._key, version._key) %>" method="POST">
         <%- csrf_field() %>
-        <button type="submit" class="btn btn-ghost">Make a copy</button>
+        <button type="submit" class="btn btn-ghost"><%= t("app.scores.version.make_copy") %></button>
       </form>
       <% if can_restore %>
         <form action="<%= app_score_restore_version_path(score._key, version._key) %>" method="POST">
           <%- csrf_field() %>
-          <button type="submit" class="btn btn-primary">Restore this version</button>
+          <button type="submit" class="btn btn-primary"><%= t("app.scores.version.restore") %></button>
         </form>
       <% end %>
     </div>

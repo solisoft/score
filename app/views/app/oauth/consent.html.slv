@@ -1,17 +1,16 @@
 <%# The consent page of an MCP client asking to connect (#461). %>
 <section class="auth" data-oauth-consent>
-  <h1>Connect <%= client_name %>?</h1>
-  <p><strong><%= client_name %></strong> asks to reach your scores on Score, as <strong><%= email %></strong>.</p>
+  <h1><%= t("app.oauth.heading", {"name": client_name}) %></h1>
+  <p><%- t("app.oauth.asks_html", {"name": h(client_name), "email": h(email)}) %></p>
   <ul class="oauth-can">
-    <li>List and read your scores</li>
-    <li>Create scores and change them (each change kept in the score's history)</li>
-    <li>Transcribe photos of scores with your AI key</li>
+    <li><%= t("app.oauth.can_list") %></li>
+    <li><%= t("app.oauth.can_change") %></li>
+    <li><%= t("app.oauth.can_transcribe") %></li>
   </ul>
-  <p class="muted">It will go back to <code><%= redirect_host %></code>. You can disconnect it any time in
-    Account › Access tokens.</p>
+  <p class="muted"><%- t("app.oauth.goes_back_html", {"host": h(redirect_host)}) %></p>
   <form action="<%= app_oauth_consent_path() %>" method="POST" class="oauth-decide">
     <%- csrf_field() %>
-    <button type="submit" name="decision" value="allow" class="btn btn-primary" data-oauth-allow>Allow</button>
-    <button type="submit" name="decision" value="deny" class="btn btn-ghost" data-oauth-deny>Deny</button>
+    <button type="submit" name="decision" value="allow" class="btn btn-primary" data-oauth-allow><%= t("app.oauth.allow") %></button>
+    <button type="submit" name="decision" value="deny" class="btn btn-ghost" data-oauth-deny><%= t("app.oauth.deny") %></button>
   </form>
 </section>

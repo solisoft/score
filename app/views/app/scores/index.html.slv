@@ -1,34 +1,35 @@
 <section class="library">
   <header class="library-head">
-    <h1>Your scores</h1>
-    <a class="btn btn-primary" href="<%= app_home_path() %>">New score</a>
+    <h1><%= t("app.scores.index.title") %></h1>
+    <a class="btn btn-primary" href="<%= app_home_path() %>"><%= t("app.scores.index.new_score") %></a>
   </header>
 
   <form action="<%= app_scores_path() %>" method="GET" class="library-tools" role="search">
-    <label class="field library-search">Search the titles and composers
-      <input type="search" id="library-q" name="q" value="<%= query %>" placeholder="Title or composer">
+    <label class="field library-search"><%= t("app.scores.index.search_label") %>
+      <input type="search" id="library-q" name="q" value="<%= query %>" placeholder="<%= t("app.scores.index.search_placeholder") %>">
     </label>
-    <label class="field">Order
+    <label class="field"><%= t("app.scores.index.order") %>
       <select id="library-sort" name="sort">
-        <% for option in [["updated", "Last changed"], ["title", "Title"], ["created", "Newest"]] %>
+        <% sort_options = ["updated", "title", "created"].map { |key| [key, t("app.scores.index.sort_#{key}")] } %>
+        <% for option in sort_options %>
           <option value="<%= option[0] %>"<%- option[0] == sort ? " selected" : "" %>><%= option[1] %></option>
         <% end %>
       </select>
     </label>
-    <button type="submit" class="btn btn-ghost">Search</button>
+    <button type="submit" class="btn btn-ghost"><%= t("app.scores.index.search") %></button>
   </form>
 
   <% if scores.length == 0 %>
     <div class="library-empty">
       <% if page > 1 %>
-        <h2>No score on this page</h2>
-        <p><a href="<%= page_path %>1">Back to the first page</a></p>
+        <h2><%= t("app.scores.index.empty_page") %></h2>
+        <p><a href="<%= page_path %>1"><%= t("app.scores.index.first_page") %></a></p>
       <% elsif query.blank? %>
-        <h2>No score yet</h2>
-        <p>Start one with <strong>New score</strong>: it is saved here as you write.</p>
+        <h2><%= t("app.scores.index.none_yet") %></h2>
+        <p><%- t("app.scores.index.none_yet_lead") %></p>
       <% else %>
-        <h2>No title or composer has “<%= query %>” in it</h2>
-        <p><a href="<%= app_scores_path() %>">All your scores</a></p>
+        <h2><%= t("app.scores.index.no_match", {"query": query}) %></h2>
+        <p><a href="<%= app_scores_path() %>"><%= t("app.scores.index.all_scores") %></a></p>
       <% end %>
     </div>
   <% else %>
@@ -42,23 +43,23 @@
           <% unless score.composer.blank? %>
             <span class="score-card-by"><%= score.composer %></span>
           <% end %>
-          <span class="score-card-when muted">Changed <%= time_ago(score.updated_at) %></span>
+          <span class="score-card-when muted"><%= t("app.scores.index.changed", {"when": time_ago(score.updated_at)}) %></span>
           <details class="score-card-more">
-            <summary aria-label="More for <%= score.title %>">More</summary>
+            <summary aria-label="<%= t("app.scores.index.more_for", {"title": score.title}) %>"><%= t("app.scores.index.more") %></summary>
             <form action="<%= app_score_rename_path(score) %>" method="POST" class="score-card-rename">
               <%- csrf_field() %>
-              <label class="field">New title
+              <label class="field"><%= t("app.scores.index.new_title") %>
                 <input type="text" name="title" value="<%= score.title %>" required maxlength="200">
               </label>
-              <button type="submit" class="btn btn-ghost">Rename</button>
+              <button type="submit" class="btn btn-ghost"><%= t("app.scores.index.rename") %></button>
             </form>
             <form action="<%= app_score_duplicate_path(score) %>" method="POST">
               <%- csrf_field() %>
-              <button type="submit" class="btn btn-ghost">Make a copy</button>
+              <button type="submit" class="btn btn-ghost"><%= t("app.scores.index.make_copy") %></button>
             </form>
             <form action="<%= app_score_trash_path(score) %>" method="POST">
               <%- csrf_field() %>
-              <button type="submit" class="btn btn-danger">Move to the trash</button>
+              <button type="submit" class="btn btn-danger"><%= t("app.scores.index.move_to_trash") %></button>
             </form>
           </details>
         </li>
@@ -67,20 +68,20 @@
   <% end %>
 
   <% if page > 1 || more %>
-    <nav class="library-pages" aria-label="Pages of your scores" data-library-pages>
+    <nav class="library-pages" aria-label="<%= t("app.scores.index.pages_label") %>" data-library-pages>
       <% if page > 1 %>
-        <a class="btn btn-ghost" rel="prev" href="<%= page_path %><%= page - 1 %>">← Previous</a>
+        <a class="btn btn-ghost" rel="prev" href="<%= page_path %><%= page - 1 %>"><%= t("app.scores.index.previous") %></a>
       <% end %>
-      <span class="muted">Page <%= page %></span>
+      <span class="muted"><%= t("app.scores.index.page", {"n": page}) %></span>
       <% if more %>
-        <a class="btn btn-ghost" rel="next" href="<%= page_path %><%= page + 1 %>">Next →</a>
+        <a class="btn btn-ghost" rel="next" href="<%= page_path %><%= page + 1 %>"><%= t("app.scores.index.next") %></a>
       <% end %>
     </nav>
   <% end %>
 
   <% if shared.length > 0 %>
     <section class="start-recent">
-      <h2>Shared with you</h2>
+      <h2><%= t("app.scores.index.shared_with_you") %></h2>
       <ul class="library-grid">
         <% for entry in shared %>
           <li class="score-card">
@@ -89,14 +90,13 @@
               <span class="score-card-title"><%= entry["score"].title %></span>
             </a>
             <% unless entry["owner"].blank? %>
-              <span class="score-card-by" data-shared-by>Shared by <%= entry["owner"] %></span>
+              <span class="score-card-by" data-shared-by><%= t("app.scores.index.shared_by", {"name": entry["owner"]}) %></span>
             <% end %>
-            <span class="score-card-when muted"><%= entry["role"] == "write" ? "You may change it" : "You may read it" %></span>
+            <span class="score-card-when muted"><%= t(entry["role"] == "write" ? "app.scores.index.may_change" : "app.scores.index.may_read") %></span>
             <details class="score-card-more">
-              <summary aria-label="More for <%= entry["score"].title %>">More</summary>
-              <%- button_to("Remove from my list", app_score_leave_path(entry["score"]), {
-                "confirm": "Remove “#{entry["score"].title}” from your list? "
-                  + "It stays its owner's: they may share it with you again.",
+              <summary aria-label="<%= t("app.scores.index.more_for", {"title": entry["score"].title}) %>"><%= t("app.scores.index.more") %></summary>
+              <%- button_to(t("app.scores.index.leave"), app_score_leave_path(entry["score"]), {
+                "confirm": t("app.scores.index.leave_confirm", {"title": entry["score"].title}),
                 "class": "btn btn-ghost"
               }) %>
             </details>
@@ -106,5 +106,5 @@
     </section>
   <% end %>
 
-  <p class="library-trash-link"><a href="<%= app_trash_path() %>">Trash<% if trash_count > 0 %> (<%= trash_count %>)<% end %></a></p>
+  <p class="library-trash-link"><a href="<%= app_trash_path() %>"><%= t("app.scores.index.trash_link") %><% if trash_count > 0 %> (<%= trash_count %>)<% end %></a></p>
 </section>

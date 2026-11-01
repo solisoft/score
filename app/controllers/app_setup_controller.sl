@@ -6,8 +6,8 @@ class AppSetupController < Controller
 
   # GET /app/setup
   def show
-    @title = "Being set up"
-    @description = "The score-writing app is being set up on this server."
+    @title = SiteText.t("app.setup.title")
+    @description = SiteText.t("app.setup.description")
     render("app/setup/show", {}, {"status": 503})
   end
 end

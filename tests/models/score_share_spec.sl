@@ -20,4 +20,14 @@ describe("ScoreShare.invited_notice") do
       + "send them the link yourself."
     )
   end
+
+  test("in French, for the app in French (#505)") do
+    writer = ScoreShare.new({"email": "writer@example.com", "role": "write"})
+    I18n.set_locale("fr")
+    done = ScoreShare.invited_notice(writer, "Duo", true)
+    unmailed = ScoreShare.invited_notice(writer, "Duo", false)
+    I18n.set_locale("en")
+    assert_eq(done, "writer@example.com peut maintenant ouvrir et modifier « Duo ».")
+    assert_contains(unmailed, "mais l'invitation n'a pas pu être envoyée")
+  end
 end

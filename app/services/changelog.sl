@@ -13,6 +13,14 @@ class Changelog
       {"date": "2026-11-01", "entries": [
         {
           "area": "site",
+          "title": "The app in French",
+          "text": "Coming from the site in French, the app is in French too: the Start page, your scores, sharing, "
+          + "the trash and versions, photo imports, notifications and the account. Account › Language switches it, "
+          + "and the account remembers the choice on another browser. The editor itself is still in English.",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "The AI key in use, on one line",
           "text": "In the account, the sentence that names your AI provider, its model and the end of your key read "
           + "one piece per line. It reads as a sentence again.",

@@ -1,33 +1,33 @@
 <section class="library">
   <header class="library-head">
-    <h1>Trash</h1>
-    <a class="btn btn-ghost" href="<%= app_scores_path() %>">Back to your scores</a>
+    <h1><%= t("app.scores.trash.title") %></h1>
+    <a class="btn btn-ghost" href="<%= app_scores_path() %>"><%= t("app.scores.trash.back") %></a>
   </header>
-  <p class="muted">A score stays here <%= trash_days %> days, then it is deleted for good.</p>
+  <p class="muted"><%= t(trash_days == 1 ? "app.scores.trash.kept_one" : "app.scores.trash.kept_other", {"n": trash_days}) %></p>
 
   <% if scores.length == 0 %>
-    <div class="library-empty"><h2>The trash is empty</h2></div>
+    <div class="library-empty"><h2><%= t("app.scores.trash.empty") %></h2></div>
   <% else %>
     <ul class="trash-list">
       <% for score in scores %>
         <li>
           <span class="trash-title"><%= score.title %></span>
-          <span class="muted">moved <%= time_ago(score.trashed_at) %></span>
+          <span class="muted"><%= t("app.scores.trash.moved", {"when": time_ago(score.trashed_at)}) %></span>
           <form action="<%= app_score_restore_path(score) %>" method="POST">
             <%- csrf_field() %>
-            <button type="submit" class="btn btn-ghost">Restore</button>
+            <button type="submit" class="btn btn-ghost"><%= t("app.scores.trash.restore") %></button>
           </form>
-          <%- button_to("Delete for good", app_score_path(score), {
+          <%- button_to(t("app.scores.trash.delete"), app_score_path(score), {
             "method": "delete",
-            "confirm": "Delete “#{score.title}” for good? It cannot be brought back.",
+            "confirm": t("app.scores.trash.delete_confirm", {"title": score.title}),
             "class": "btn btn-danger"
           }) %>
         </li>
       <% end %>
     </ul>
     <div class="trash-empty">
-      <%- button_to("Empty the trash", app_trash_empty_path(), {
-        "confirm": "Delete every score in the trash for good? They cannot be brought back.",
+      <%- button_to(t("app.scores.trash.empty_trash"), app_trash_empty_path(), {
+        "confirm": t("app.scores.trash.empty_confirm"),
         "class": "btn btn-danger",
         "data-empty-trash": "true"
       }) %>

@@ -21,8 +21,8 @@ class AppScoresController < AppBaseController
     library_path = app_scores_path()
     @page_path = library_path + "?q=#{url_encode(this.query)}&sort=#{this.sort}&page="
     @shared = ScoreShare.shared_with(@user)
-    @title = "Your scores"
-    @description = "Your scores, saved to your account."
+    @title = SiteText.t("app.scores.index.title")
+    @description = SiteText.t("app.scores.index.description")
   end
 
   # GET /app/trash — what was moved to the trash, kept SCORE_TRASH_DAYS days
@@ -30,14 +30,17 @@ class AppScoresController < AppBaseController
     @user = current_user()
     @scores = Score.trash_of(@user)
     @trash_days = SCORE_TRASH_DAYS
-    @title = "Trash"
-    @description = "Scores moved to the trash."
+    @title = SiteText.t("app.scores.trash.title")
+    @description = SiteText.t("app.scores.trash.description")
   end
 
   # POST /app/trash/empty — every score in the trash deleted for good
   def empty_trash
     erased = Score.empty_trash_of(current_user())
-    flash("notice", erased == 1 ? "One score is deleted for good." : "#{erased} scores are deleted for good.")
+    flash(
+      "notice",
+      SiteText.t(erased == 1 ? "app.scores.flash.erased_one" : "app.scores.flash.erased_other", {"n": erased})
+    )
     redirect(app_trash_path())
   end
 
@@ -131,13 +134,13 @@ class AppScoresController < AppBaseController
     @versions = ScoreVersion.history(@score)
     @authors = ScoreVersion.authors_of(@versions)
     @reasons = {
-      "auto": "kept on the way",
-      "manual": "kept on request",
-      "restore": "before a restore",
-      "conflict": "not saved: changed elsewhere"
+      "auto": SiteText.t("app.scores.versions.reason_auto"),
+      "manual": SiteText.t("app.scores.versions.reason_manual"),
+      "restore": SiteText.t("app.scores.versions.reason_restore"),
+      "conflict": SiteText.t("app.scores.versions.reason_conflict")
     }
-    @title = "History of #{this.score.title}"
-    @description = "The versions kept of #{this.score.title}."
+    @title = SiteText.t("app.scores.versions.title", {"title": @score.title})
+    @description = SiteText.t("app.scores.versions.description", {"title": @score.title})
   end
 
   # GET /app/scores/:id/versions/:version_id — one version, engraved, to
@@ -148,15 +151,15 @@ class AppScoresController < AppBaseController
     @figure = ScoreSvg.figure(@version.source, 1000, 7)
     @file_name = @score.file_name
     @can_restore = @score.writable_by?(current_user())
-    @title = "#{this.version.title} — a version"
-    @description = "A version of #{this.score.title}."
+    @title = SiteText.t("app.scores.version.title", {"title": @version.title})
+    @description = SiteText.t("app.scores.version.description", {"title": @score.title})
   end
 
   # POST /app/scores/:id/versions/:version_id/restore — the score as it was
   def restore_version
     score = @_score("update")
     score.restore_version(@_version_of(score), current_user())
-    flash("notice", "The score is back as it was. What it was just before is kept in its history.")
+    flash("notice", SiteText.t("app.scores.flash.version_restored"))
     redirect(app_score_path(score))
   end
 
@@ -166,9 +169,12 @@ class AppScoresController < AppBaseController
     score = @_score("show")
     version = @_version_of(score)
     copy = Score.copy_of(current_user()._key, version.source, version.title ?? score.title)
-    halt(422, "That version could not be copied.") if copy._errors
+    halt(422, SiteText.t("app.scores.errors.version_not_copied")) if copy._errors
 
-    flash("notice", "“#{copy.title}” is a copy of a version of “#{score.title}”.")
+    flash("notice", SiteText.t(
+      "app.scores.flash.version_copied",
+      {"copy": copy.title, "title": score.title}
+    ))
     redirect(app_score_path(copy))
   end
 
@@ -186,7 +192,7 @@ class AppScoresController < AppBaseController
   def rename
     score = @_score("update")
     score.rename(params["title"].to_s)
-    flash("notice", "Renamed “#{score.title}”.")
+    flash("notice", SiteText.t("app.scores.flash.renamed", {"title": score.title}))
     redirect(app_scores_path())
   end
 
@@ -194,9 +200,12 @@ class AppScoresController < AppBaseController
   def duplicate
     score = @_score("show")
     copy = score.duplicate(current_user())
-    halt(422, "That score could not be copied.") if copy._errors
+    halt(422, SiteText.t("app.scores.errors.not_copied")) if copy._errors
 
-    flash("notice", "“#{copy.title}” is a copy of “#{score.title}”.")
+    flash("notice", SiteText.t(
+      "app.scores.flash.copied",
+      {"copy": copy.title, "title": score.title}
+    ))
     redirect(app_score_path(copy))
   end
 
@@ -204,9 +213,9 @@ class AppScoresController < AppBaseController
   # share goes, the score stays its owner's, untouched
   def leave
     score = @_score("show")
-    halt(422, "This score is not shared with you.") unless ScoreShare.leave(score, current_user())
+    halt(422, SiteText.t("app.scores.errors.not_shared")) unless ScoreShare.leave(score, current_user())
 
-    flash("notice", "“#{score.title}” is no longer in your list.")
+    flash("notice", SiteText.t("app.scores.flash.left", {"title": score.title}))
     redirect(app_scores_path())
   end
 
@@ -214,7 +223,11 @@ class AppScoresController < AppBaseController
   def move_to_trash
     score = @_score("destroy")
     score.move_to_trash
-    flash("notice", "“#{score.title}” is in the trash for #{SCORE_TRASH_DAYS} days.")
+    trashed = SCORE_TRASH_DAYS == 1 ? "app.scores.flash.trashed_one" : "app.scores.flash.trashed_other"
+    flash("notice", SiteText.t(
+      trashed,
+      {"title": score.title, "n": SCORE_TRASH_DAYS}
+    ))
     redirect(app_scores_path())
   end
 
@@ -222,17 +235,17 @@ class AppScoresController < AppBaseController
   def restore
     score = @_score("destroy")
     score.restore_from_trash
-    flash("notice", "“#{score.title}” is back in your scores.")
+    flash("notice", SiteText.t("app.scores.flash.restored", {"title": score.title}))
     redirect(app_trash_path())
   end
 
   # DELETE /app/scores/:id — for good, from the trash only
   def destroy
     score = @_score("destroy")
-    halt(422, "Move the score to the trash first.") unless score.trashed?
+    halt(422, SiteText.t("app.scores.errors.trash_first")) unless score.trashed?
 
     score.erase
-    flash("notice", "“#{score.title}” is deleted.")
+    flash("notice", SiteText.t("app.scores.flash.deleted", {"title": score.title}))
     redirect(app_trash_path())
   end
 
@@ -247,9 +260,13 @@ class AppScoresController < AppBaseController
   # POST /app/scores/:id/share — visibility: private, link or public
   def update_sharing
     score = @_score("share")
-    halt(422, "Choose private, link or public.") unless score.make_visible(params["visibility"].to_s)
+    halt(422, SiteText.t("app.scores.errors.choose_visibility")) unless score.make_visible(params["visibility"].to_s)
 
-    flash("notice", "“#{score.title}” is now #{this._visibility_words[score.visibility]}.")
+    visibility = SiteText.t("app.scores.flash.visibility_#{score.visibility}")
+    flash("notice", SiteText.t(
+      "app.scores.flash.visibility",
+      {"title": score.title, "visibility": visibility}
+    ))
     redirect(app_score_share_path(score))
   end
 
@@ -257,7 +274,7 @@ class AppScoresController < AppBaseController
   def new_link
     score = @_score("share")
     score.new_link
-    flash("notice", "A new link: the old one no longer opens the score.")
+    flash("notice", SiteText.t("app.scores.flash.new_link"))
     redirect(app_score_share_path(score))
   end
 
@@ -288,10 +305,13 @@ class AppScoresController < AppBaseController
   def uninvite
     score = @_score("share")
     share = ScoreShare.find(params["share_id"])
-    halt(404, "Not shared that way") unless share.score_id == score._key
+    halt(404, SiteText.t("app.scores.errors.no_such_share")) unless share.score_id == score._key
 
     share.delete
-    flash("notice", "#{share.email} no longer has “#{score.title}”.")
+    flash("notice", SiteText.t(
+      "app.scores.flash.uninvited",
+      {"email": share.email, "title": score.title}
+    ))
     redirect(app_score_share_path(score))
   end
 
@@ -306,21 +326,11 @@ class AppScoresController < AppBaseController
     # Paths: the view makes them absolute (absolute_url is a view helper).
     @read_path = shared_score_path(score.share_token)
     @source_path = "#{shared_score_path(score.share_token)}/source.ly"
-    @choices = [
-      ["private", "Private", "You, and the people you invite below."],
-      ["link", "Anyone with the link", "Not listed anywhere: whoever has the link may read it, play it and print it."],
-      ["public", "Public", "Anyone, and search engines may list it."]
-    ]
-    @title = "Share “#{score.title}”"
-    @description = "Who may read or change #{score.title}."
-  end
-
-  def _visibility_words
-    {
-      "private": "private",
-      "link": "open to whoever has its link",
-      "public": "public"
-    }
+    @choices = ["private", "link", "public"].map do |choice|
+      [choice, SiteText.t("app.scores.share.#{choice}"), SiteText.t("app.scores.share.#{choice}_hint")]
+    end
+    @title = SiteText.t("app.scores.share.title", {"title": score.title})
+    @description = SiteText.t("app.scores.share.description", {"title": score.title})
   end
 
   # The editor's AI entry points (File › Open a photo, the AI menu): which
@@ -330,7 +340,7 @@ class AppScoresController < AppBaseController
   def _ai_entry(user)
     refusal = AiClient.refusal(user)
     unless refusal.nil?
-      @ai_with = AiClient.refusal_text(refusal)
+      @ai_with = AiClient.refusal_words(refusal)
       @ai_left = nil
       @ai_link = @_ai_link(refusal)
       return nil
@@ -356,7 +366,7 @@ class AppScoresController < AppBaseController
   # The version of the route, if it is one of `score`'s (404 otherwise).
   def _version_of(score)
     version = ScoreVersion.find(params["version_id"])
-    halt(404, "No such version of this score") unless version.score_id == score._key
+    halt(404, SiteText.t("app.scores.errors.no_such_version")) unless version.score_id == score._key
 
     version
   end
