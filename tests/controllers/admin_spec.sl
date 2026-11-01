@@ -156,7 +156,8 @@ describe("The admin section") do
           "remember_me": "1"
         }
       )
-      remembered = str(res_headers(post("/login/code", {"code": codes[0]}))).split("remember_token=")[1].to_s.split(";")[0]
+      headers = str(res_headers(post("/login/code", {"code": codes[0]})))
+      remembered = headers.split("remember_token=")[1].to_s.split(";")[0]
       assert(remembered.present?, "a remembered browser")
       clear_cookies()
       set_request_cookie("remember_token", remembered)
