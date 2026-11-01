@@ -12,6 +12,15 @@ class Changelog
     [
       {"date": "2026-11-01", "entries": [
         {
+          "area": "site",
+          "title": "Two-step sign-in that holds",
+          "text": "A password reset now asks for your two-step code before signing you in. Wrong codes count against "
+          + "the account, wherever they come from, and pause the code step after ten; turning two-step on asks for "
+          + "your password and signs out every other browser, and deleting the account asks for a code too. A "
+          + "code, or a backup code, works once.",
+          "app": true
+        },
+        {
           "area": "engine",
           "title": "A score cannot balloon any more",
           "text": "A few lines of LilyPond could write out to millions of notes and tie up the engraver for minutes. "
