@@ -1445,9 +1445,18 @@ fr:
   # ---
   # (#540) security: engraving limits and MCP batches — keys under `security_540:` right below
   security_540:
-    not_saved_too_much_music: "Non enregistrée : écrite en entier, reprises et variables comprises, la partition dépasse ce que Score grave (30 000 notes et signes au plus)."
-    too_much_music: "s'écrit en plus de musique que Score n'en grave (30 000 notes et signes au plus)"
-    too_much_to_engrave: "Trop de musique à graver : écrite en entier, reprises et variables comprises, elle dépasse 30 000 notes et signes."
+    not_saved: "Non enregistrée : {why}"
+    not_restored: "Non restaurée : {why}"
+    too_much_music: "dépasse ce que Score grave : {why}"
+    at_character: "(au caractère {at})"
+    limits:
+      notes: "Écrite en entier — reprises et variables, signes, armures et mesures de silence comptés — cette musique dépasse 20 000 notes, plus que Score n'en grave."
+      music: "Écrite en entier, reprises et variables comprises, cette musique dépasse ce que Score grave."
+      length: "Cette partition est plus longue que ce que Score grave."
+      words: "Cette musique s'écrit en plus de 40 000 caractères de texte, plus que Score n'en grave."
+      drawn: "Cette musique se dessine en plus de formes que Score n'en grave (400 000 au plus)."
+      nesting: "Cette musique s'imbrique trop profondément pour que Score la grave : blocs, reprises ou commandes plus de 64 fois les uns dans les autres."
+      pitch: "Une note sort du clavier de tout instrument (do-1 à sol9) : Score ne la grave pas."
     too_many_engravings: "Trop de gravures demandées depuis ici : réessayez dans une minute."
   # ---
   # (#541) security: the OAuth server — keys under `security_541:` right below

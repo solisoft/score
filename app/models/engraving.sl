@@ -14,8 +14,8 @@ const ENGRAVINGS_KEPT = 2000
 # made again each time rather than weigh on the database. The symphony's
 # PDF, the gallery's biggest, is half of it.
 const ENGRAVED_FILE_KEPT = 1000000
-# The biggest drawing kept: one at the bound (SCORE_MOST_WRITTEN_OUT) is
-# some 4 MB, and drawing it again costs seconds.
+# The biggest drawing kept: one at the engraver's limit (EngraverLimit) is
+# some 3 MB, and drawing it again costs seconds.
 const ENGRAVED_SVG_KEPT = 4500000
 # What all kept engravings may weigh together, in characters. Weighed when
 # a heavy one (past ENGRAVING_HEAVY) comes in — the light ones are held by
@@ -28,8 +28,9 @@ const ENGRAVING_HEAVY = 100000
 # 4: Soli 2.28.5, the engine with movements, mid-bar changes and gathered
 # rests; 7: Soli 2.28.9, cross-staff notation, \paper and line breaking, overrides,
 # empty staves hidden, \partCombine; 8: eui 354d650, scaled staves, mid-bar \time,
-# polymetre, vertical springs and beam quanting).
-const ENGRAVING_FORMAT = 8
+# polymetre, vertical springs and beam quanting; 9: eui e50f836, Soli 2.29.3,
+# the engraver's own limits on what it reads and draws).
+const ENGRAVING_FORMAT = 9
 
 class Engraving < Model
   # The engraving kept under `digest`, as `ScoreSvg.engrave` answers it

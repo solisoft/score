@@ -1445,9 +1445,18 @@ en:
   # ---
   # (#540) security: engraving limits and MCP batches — keys under `security_540:` right below
   security_540:
-    not_saved_too_much_music: "Not saved: written out in full, its repeats and variables included, the score is more music than Score engraves (30,000 notes and signs at most)."
-    too_much_music: "writes out to more music than Score engraves (30,000 notes and signs at most)"
-    too_much_to_engrave: "Too much music to engrave: written out in full, its repeats and variables included, it comes to more than 30,000 notes and signs."
+    not_saved: "Not saved: {why}"
+    not_restored: "Not restored: {why}"
+    too_much_music: "is more than Score engraves: {why}"
+    at_character: "(at character {at})"
+    limits:
+      notes: "Written out in full — its repeats and variables, marks, keys and rest bars counted — this music comes to more than 20,000 notes, more than Score engraves."
+      music: "Written out in full, its repeats and variables included, this music is more than Score engraves."
+      length: "This score is longer than Score engraves."
+      words: "This music writes out to more than 40,000 characters of words, more than Score engraves."
+      drawn: "This music draws more shapes than Score engraves (400,000 at most)."
+      nesting: "This music nests too deep for Score to engrave: blocks, repeats or commands more than 64 inside one another."
+      pitch: "A note lies beyond the keys of any instrument (C-1 to G9): Score does not engrave it."
     too_many_engravings: "Too many engravings asked from here: try again in a minute."
   # ---
   # (#541) security: the OAuth server — keys under `security_541:` right below

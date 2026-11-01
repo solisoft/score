@@ -157,13 +157,14 @@ class AppScoresController < AppBaseController
   end
 
   # POST /app/scores/:id/versions/:version_id/restore — the score as it was
-  # (not a version that writes out to more music than the server engraves)
+  # (not a version past the engraver's limits)
   def restore_version
     score = @_score("update")
-    if score.restore_version(@_version_of(score), current_user())
+    version = @_version_of(score)
+    if score.restore_version(version, current_user())
       flash("notice", SiteText.t("app.scores.flash.version_restored"))
     else
-      flash("error", SiteText.t("security_540.not_saved_too_much_music"))
+      flash("error", Score.restore_refusal(version))
     end
     redirect(app_score_path(score))
   end

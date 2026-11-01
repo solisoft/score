@@ -1,14 +1,16 @@
-# What the server engraves, and how often (#540): a source that writes out to
-# more music than Score engraves is refused wherever it is saved — the
-# editor, the MCP tools, a shared section — with nothing written; one stored
-# before the bound is refused at once, not engraved; a read page's PDF is
+# What the server engraves, and how often (#540): a source past the
+# engraver's own limits (EngraverLimit) is refused wherever it is saved —
+# the editor, the MCP tools, a shared section — with nothing written; one
+# stored before them is refused as the engraver reads it, in milliseconds; a read page's PDF is
 # printed once, then read back; the engravings a sender may have made — made,
 # not read back — are so many a minute; and an MCP batch counts each of its
 # messages.
 
 const LIMITS_PASSWORD = "correct horse battery"
-# 80 characters that lay out 262,144 notes.
+# 80 characters that write out to 262,144 notes.
 const LIMITS_BOMB = "{ \\repeat unfold 64 { \\repeat unfold 64 { \\repeat unfold 16 { c4 d e f } } } }"
+# What the engraver says of it, in the app's language.
+const LIMITS_SAID = "security_540.limits.notes"
 const LIMITS_SOURCE = "\\header { title = \"Little tune\" }\n\\new Staff { \\time 3/4 c'4 d' e' | f'2. }\n"
 
 def limits_user
@@ -68,6 +70,11 @@ def limits_pings(count)
   end
 end
 
+# A bomb of the reviews (tests/fixtures/bombs).
+def limits_bomb(name)
+  File.read("tests/fixtures/bombs/#{name}.ly")
+end
+
 def limits_scores(user)
   Score.where({"user_id": user._key}).count
 end
@@ -85,7 +92,7 @@ describe("Engraving limits (#540)") do
     clear_headers()
   end
 
-  describe("a source that writes out to too much music") do
+  describe("a source past the engraver's limits") do
     test("is refused from the editor, and nothing is written") do
       owner = limits_user()
       score = Score.start(owner, Score.blank_source("Calm"))
@@ -95,8 +102,20 @@ describe("Engraving limits (#540)") do
         {"source": LIMITS_BOMB, "revision": score.revision}
       )
       assert_eq(res_status(refused), 422)
-      assert_eq(res_json(refused)["error"], SiteText.t("security_540.not_saved_too_much_music"), "the estimator's")
-      assert_contains(res_json(refused)["error"], "30,000")
+      assert_eq(
+        res_json(refused)["error"],
+        SiteText.t("security_540.not_saved", {"why": SiteText.t(LIMITS_SAID) + " (at character 2)"}),
+        "the engraver's, said"
+      )
+      assert_contains(res_json(refused)["error"], "20,000")
+      ["keys", "scheme", "ledgers", "variables"].each do |name|
+        bomb = put(
+          "/app/scores/#{score._key}",
+          {"source": limits_bomb(name), "revision": score.revision}
+        )
+        assert_eq(res_status(bomb), 422, name)
+        assert(res_json(bomb)["error"].starts_with?("Not saved: "), name)
+      end
       stored = Score.find(score._key)
       assert_eq(stored.revision, score.revision)
       assert_contains(stored.source, "r1")
@@ -107,7 +126,7 @@ describe("Engraving limits (#540)") do
       assert_eq(res_status(within), 200, "a repeat within the bound is saved")
     end
 
-    test("is refused by the MCP tools before the engraver reads it, and nothing is created or changed") do
+    test("is refused by the MCP tools in the engraver's words, and nothing is created or changed") do
       owner = limits_user()
       token = AccessToken.issue(owner, "Spec client")["token"]
       kept = Score.start(owner, LIMITS_SOURCE)
@@ -118,17 +137,22 @@ describe("Engraving limits (#540)") do
         "source": LIMITS_BOMB
       })))["result"]
       checked = res_json(limits_mcp(token, limits_tool(3, "check_source", {"source": LIMITS_BOMB})))["result"]
+      said = "this music writes out to more than 20,000 notes; the engraver stops there"
       assert(created["isError"])
       assert_contains(created["content"][0]["text"], "Not created")
-      assert_contains(created["content"][0]["text"], "30,000")
+      assert_contains(created["content"][0]["text"], said)
       assert(updated["isError"])
-      assert_contains(updated["content"][0]["text"], "30,000")
+      assert_contains(updated["content"][0]["text"], said)
       assert(checked["isError"])
-      assert_contains(checked["content"][0]["text"], "30,000")
-      assert_null(
-        Engraving.find_by("_key", ScoreSvg.file_digest("check", "", LIMITS_BOMB)),
-        "the engraver never read it"
+      assert_contains(checked["content"][0]["text"], said)
+      assert_contains(
+        Engraving.find(ScoreSvg.file_digest("check", "", LIMITS_BOMB)).error,
+        said,
+        "its answer kept: asked again, it is read back"
       )
+      scheme = res_json(limits_mcp(token, limits_tool(5, "check_source", {"source": limits_bomb("scheme")})))["result"]
+      assert(scheme["isError"])
+      assert_contains(scheme["content"][0]["text"], "more than 64 deep")
       assert_eq(limits_scores(owner), before)
       assert_eq(Score.find(kept._key).source, LIMITS_SOURCE)
       fine = res_json(limits_mcp(token, limits_tool(4, "create_score", {"source": LIMITS_SOURCE})))["result"]
@@ -158,28 +182,37 @@ describe("Engraving limits (#540)") do
       }
       response = post("/app/sections", fields)
       assert_eq(res_status(response), 422)
-      assert_contains(res_json(response)["error"], SiteText.t("security_540.too_much_to_engrave"))
+      assert_contains(res_json(response)["error"], SiteText.t(LIMITS_SAID))
+      fields["source"] = limits_bomb("voices")
+      assert_eq(res_status(post("/app/sections", fields)), 422)
       assert_eq(SharedSection.where({"user_id": author._key}).count, 0)
     end
   end
 
-  describe("a source stored before the bound") do
-    test("its read page, PDF and preview answer the estimator's refusal: the engraver never sees it") do
+  describe("a source stored before the limits") do
+    test("its read page, PDF and preview answer the engraver's refusal, fast") do
       owner = limits_user()
       score = limits_stored(owner, LIMITS_BOMB)
-      refused = SiteText.t("security_540.too_much_to_engrave")
+      refused = SiteText.t(LIMITS_SAID) + " (at character 2)"
+      words = "score: this music writes out to more than 20,000 notes; the engraver stops there (at character 2)"
       clear_cookies()
+      started = clock()
       page = get("/s/#{score.share_token}")
       pdf = get("/s/#{score.share_token}/score.pdf")
+      assert_lt(clock() - started, 2.0, "refused as it is read, not engraved")
       assert_eq(res_status(page), 200)
-      assert_eq(Engraving.find(ScoreSvg.digest(LIMITS_BOMB, 1040, 7, 0, {})).error, refused)
+      assert_contains(res_body(page), refused)
+      assert_eq(Engraving.find(ScoreSvg.digest(LIMITS_BOMB, 1040, 7, 0, {})).error, words)
       assert_eq(res_status(pdf), 422)
       assert_eq(res_body(pdf), refused)
       limits_sign_in(owner)
       preview = get("/app/scores/#{score._key}/preview.svg")
       assert_eq(res_status(preview), 200)
       assert_contains(res_body(preview), "width=\"1\"")
-      assert_eq(Engraving.find(ScoreSvg.digest(LIMITS_BOMB, 560, 5.5, 230, {})).error, refused)
+      assert_eq(Engraving.find(ScoreSvg.digest(LIMITS_BOMB, 560, 5.5, 230, {})).error, words)
+      each_bomb = limits_stored(owner, limits_bomb("trills"))
+      clear_cookies()
+      assert_eq(res_status(get("/s/#{each_bomb.share_token}/score.pdf")), 422)
     end
 
     test("a section's MIDI is refused, not written") do
@@ -204,7 +237,9 @@ describe("Engraving limits (#540)") do
       })
       midi = get("/sections/#{section._key}/play.mid")
       assert_eq(res_status(midi), 422)
-      assert_null(Engraving.find_by("_key", ScoreSvg.file_digest("midi", 96, LIMITS_BOMB)), "never written")
+      kept = Engraving.find(ScoreSvg.file_digest("midi", 96, LIMITS_BOMB))
+      assert_null(kept.file, "never written")
+      assert_contains(kept.error, "the engraver stops there", "the refusal kept: asked again, read back")
     end
   end
 
@@ -299,7 +334,7 @@ describe("Engraving limits (#540)") do
 
     # Signed in, so the address the other specs read from stays free: the
     # limit of an address signed out is ScoreSvg's own spec
-    # (tests/services/written_out_spec.sl), the same sender either way.
+    # (tests/services/engraver_limit_spec.sl), the same sender either way.
     test("a read page: a reader is held to so many pictures made a minute") do
       owner = limits_user()
       score = Score.start(owner, Score.blank_source("Read"))
@@ -362,23 +397,19 @@ describe("Engraving limits (#540)") do
       assert_not(again["isError"] ?? false, "a source checked before is read back, not counted")
     end
 
-    test("an MCP tool reads a source's music once, though it checks it twice") do
+    test("an MCP tool reads the bounds first: a source too long is never laid out, nor counted") do
       owner = limits_user()
-      readings = WrittenOut.readings
-      created = ScoreMcp.create_score(owner, {"source": LIMITS_SOURCE + "% create #{uuid_v4}\n"})
-      assert_not(created["isError"] ?? false)
-      assert_eq(WrittenOut.readings, readings + 1, "its bounds, then the new score's validation")
-      readings = WrittenOut.readings
-      checked = ScoreMcp.check_source(owner, {"source": LIMITS_SOURCE + "% check #{uuid_v4}\n"})
-      assert_not(checked["isError"] ?? false)
-      assert_eq(WrittenOut.readings, readings + 1)
-      # update_score: its bounds, then the editor's save, which reads them again.
-      kept = Score.start(owner, LIMITS_SOURCE)
-      source = LIMITS_SOURCE + "% update #{uuid_v4}\n"
-      readings = WrittenOut.readings
-      assert_null(Score.refusal_of(source))
-      assert_eq(kept.save_from_editor(source, kept.revision, owner)["status"], 200)
-      assert_eq(WrittenOut.readings, readings + 1)
+      long = "{ " + "c'4 " * 250001 + "}"
+      created = ScoreMcp.create_score(owner, {"source": long})
+      assert(created["isError"])
+      assert_contains(created["content"][0]["text"], "a million characters at most")
+      checked = ScoreMcp.check_source(owner, {"source": long})
+      assert(checked["isError"])
+      assert_null(Engraving.find_by("_key", ScoreSvg.file_digest("check", "", long)), "never laid out")
+      assert_eq(limits_scores(owner), 0)
+      fine = ScoreMcp.create_score(owner, {"source": LIMITS_SOURCE + "% create #{uuid_v4}\n"})
+      assert_not(fine["isError"] ?? false)
+      assert_eq(limits_scores(owner), 1)
     end
   end
 

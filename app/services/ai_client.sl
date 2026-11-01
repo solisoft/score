@@ -466,12 +466,10 @@ class AiClient
     end.join("")
   end
 
-  # What the engraver says against `source`, or nil when it engraves —
-  # never asked of an answer that writes out to more than it engraves.
+  # What the engraver says against `source`, in its own words, or nil when
+  # it engraves: an answer past its limits (EngraverLimit) is refused as it
+  # reads it, in milliseconds.
   static def problem(source)
-    refusal = ScoreSvg.refusal(source)
-    return refusal unless refusal.nil?
-
     laid = eui_score_layout(source, 160, {}) rescue {"error": "it could not be engraved"}
     laid["error"]
   end

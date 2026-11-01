@@ -29,7 +29,8 @@ const ENGRAVING_RETRY_AFTER = 60
 
 class ScoreSvg
   # {"svg": markup, "error": nil}, or {"svg": nil, "error": the engraver's
-  # refusal, "score: … (at character N)"}. `width` and `staff_space` in px;
+  # refusal, "score: … (at character N)" — one of its limits said in the
+  # app's language (EngraverLimit.said)}. `width` and `staff_space` in px;
   # `max_height` px keeps only the bands that start above it (a preview),
   # 0 keeps them all. `marks` lights items as an editor shows a selection:
   # an item's number among the notes and rests, from 0, as a string, to a
@@ -44,12 +45,28 @@ class ScoreSvg
   static def engrave(src, width, staff_space, max_height, marks, sender = nil)
     digest = ScoreSvg.digest(src, width, staff_space, max_height, marks)
     kept = Engraving.recall(digest)
-    return kept unless kept.nil?
+    return ScoreSvg.said(kept) unless kept.nil?
     return ScoreSvg.throttled("svg") unless ScoreSvg.allowed?(sender)
 
     engraved = ScoreSvg.draw(src, width, staff_space, max_height, marks)
     Engraving.remember(digest, engraved)
-    engraved
+    ScoreSvg.said(engraved)
+  end
+
+  # `answer` with its error said in the app's language when it is one of
+  # the engraver's limits: what is kept is the engraver's English, read by
+  # people of either language.
+  static def said(answer)
+    return answer if answer["error"].nil?
+
+    answer.merge({"error": EngraverLimit.said(answer["error"])})
+  end
+
+  # The engraver's message in `error`, raised by one of its functions: its
+  # own words, "score: … (at character N)", without what Soli adds after.
+  static def engraver_message(error, otherwise)
+    found = Regex.capture("(?P<message>score: .*\\(at character [0-9]+\\))", str(error))
+    found.nil? ? otherwise : found["message"]
   end
 
   # What an engraving is kept under: all that makes it. ENGRAVING_FORMAT is
@@ -59,26 +76,26 @@ class ScoreSvg
     Crypto.sha256("#{ENGRAVING_FORMAT}|#{width}|#{staff_space}|#{max_height}|#{marks.to_json}|#{src}")
   end
 
-  # The engraving itself: `engrave`'s answer, every time anew. A source
-  # that writes out to more music than a score may hold (Score.too_much_music?)
-  # is refused before the engraver sees it: one stored before that bound,
-  # or an AI's answer, costs no more than one saved now.
+  # The engraving itself: `engrave`'s answer, every time anew, in the
+  # engraver's words. Music past the engraver's limits (EngraverLimit) is
+  # refused as it reads it, in milliseconds, or as it draws it: a score
+  # stored before them, or an AI's answer, costs no more than one saved now.
   static def draw(src, width, staff_space, max_height, marks)
-    refusal = ScoreSvg.refusal(src)
-    unless refusal.nil?
-      return {"svg": nil, "error": refusal}
-    end
-
     laid = eui_score_layout(src, width / staff_space, {})
     if laid.has_key("error")
       return {"svg": nil, "error": laid["error"]}
     end
 
     total = (laid["height"] * staff_space).ceil()
-    bands = eui_score_bands(laid, staff_space, {
-      "colour": "ink",
-      "marks": marks
-    }, total)
+    bands = nil
+    try
+      bands = eui_score_bands(laid, staff_space, {
+        "colour": "ink",
+        "marks": marks
+      }, total)
+    catch error
+      return {"svg": nil, "error": ScoreSvg.engraver_message(error, "score: it could not be drawn")}
+    end
     prefix = "g" + Crypto.sha256("#{width}|#{staff_space}|#{max_height}|#{src}").substring(0, 8)
     glyph_ids = {}
     glyphs = []
@@ -286,11 +303,6 @@ class ScoreSvg
     Crypto.sha256("#{kind}|#{ENGRAVING_FORMAT}|#{made_with}|#{src}")
   end
 
-  # Why the server does not engrave `src` at all, or nil.
-  static def refusal(src)
-    Score.too_much_music?(src) ? SiteText.t("security_540.too_much_to_engrave") : nil
-  end
-
   # The MIDI file of `src` at `bpm` a quarter, in Base64; nil when refused.
   static def midi_base64(src, bpm)
     ScoreSvg.midi(src, bpm, nil)["file"]
@@ -303,18 +315,17 @@ class ScoreSvg
   static def midi(src, bpm, sender = nil)
     digest = ScoreSvg.file_digest("midi", bpm, src)
     kept = Engraving.recall(digest)
-    return kept unless kept.nil?
+    return ScoreSvg.said(kept) unless kept.nil?
     return ScoreSvg.throttled("file") unless ScoreSvg.allowed?(sender)
 
-    refusal = ScoreSvg.refusal(src)
-    unless refusal.nil?
-      return {"file": nil, "error": refusal}
+    written = nil
+    try
+      written = {"file": Base64.encode(eui_score_midi(src, {"bpm": bpm})), "error": nil}
+    catch error
+      written = {"file": nil, "error": ScoreSvg.engraver_message(error, "score: it could not be played")}
     end
-
-    bytes = eui_score_midi(src, {"bpm": bpm}) rescue nil
-    written = {"file": bytes.nil? ? nil : Base64.encode(bytes), "error": bytes.nil? ? "refused" : nil}
     Engraving.remember(digest, written)
-    written
+    ScoreSvg.said(written)
   end
 
   # The score printed, as a PDF titled `title`: {"file": the document,
@@ -325,31 +336,32 @@ class ScoreSvg
   static def pdf(src, title, sender = nil)
     digest = ScoreSvg.file_digest("pdf", title, src)
     kept = Engraving.recall(digest)
-    return kept unless kept.nil?
+    return ScoreSvg.said(kept) unless kept.nil?
     return ScoreSvg.throttled("file") unless ScoreSvg.allowed?(sender)
 
-    refusal = ScoreSvg.refusal(src)
-    unless refusal.nil?
-      return {"file": nil, "error": refusal}
+    printed = nil
+    try
+      printed = {"file": eui_score_pdf(src, title), "error": nil}
+    catch error
+      printed = {"file": nil, "error": ScoreSvg.engraver_message(error, "score: it could not be printed")}
     end
-
-    document = eui_score_pdf(src, title) rescue nil
-    printed = {"file": document, "error": document.nil? ? "score: it could not be printed" : nil}
-    Engraving.remember(digest, printed) if document.nil? || document.length <= ENGRAVED_FILE_KEPT
-    printed
+    Engraving.remember(digest, printed) if printed["file"].to_s.length <= ENGRAVED_FILE_KEPT
+    ScoreSvg.said(printed)
   end
 
-  # Why the engraver does not read `src` ({"error": why}), or {"error":
-  # nil} when it does — "throttled" past the sender's engravings. Asked once
-  # the bounds hold (Score.refusal_of); its answer is kept as an engraving
-  # is, so a source checked, then saved, is laid out once.
+  # Why the engraver does not read `src` ({"error": why, in its own
+  # English: the MCP tools answer it}), or {"error": nil} when it does —
+  # "throttled" past the sender's engravings. Asked once the bounds read
+  # without it hold (Score.bounds_refusal); its answer is kept as an
+  # engraving is, and the engraver keeps its last layouts, so a source
+  # checked, then saved, is laid out once.
   static def check(src, sender = nil)
     digest = ScoreSvg.file_digest("check", "", src)
     kept = Engraving.recall(digest)
     return kept unless kept.nil?
     return ScoreSvg.throttled("file") unless ScoreSvg.allowed?(sender)
 
-    laid = eui_score_layout(src, 100, {}) rescue {"error": "the engraver could not read it"}
+    laid = eui_score_layout(src, ENGRAVER_LIMIT_WIDTH, {}) rescue {"error": "the engraver could not read it"}
     checked = {"file": nil, "error": laid.has_key("error") ? laid["error"].to_s : nil}
     Engraving.remember(digest, checked)
     checked

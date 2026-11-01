@@ -331,9 +331,11 @@ class ScoreMcp
   end
 
   # Whether the engraver reads `source`, for `user` (ScoreSvg.check):
-  # {"error": nil}, {"error": why}, or "throttled" past the account's
-  # engravings of the minute. Asked once its bounds hold (Score.refusal_of,
-  # which reads its music once: WrittenOut keeps the last count).
+  # {"error": nil}, {"error": why, the engraver's own English — its limits
+  # (EngraverLimit) among them}, or "throttled" past the account's
+  # engravings of the minute. Asked once the bounds read without it hold
+  # (Score.bounds_refusal), so a source refused for its length is never
+  # laid out.
   static def engraver_check(user, source)
     ScoreSvg.check(source, ScoreSvg.sender("mcp", user, nil))
   end
@@ -398,7 +400,7 @@ class ScoreMcp
     source = args["source"].to_s
     return ScoreMcp.refused("The source is empty.") if source.trim.blank?
 
-    bounds = Score.refusal_of(source)
+    bounds = Score.bounds_refusal(source)
     return ScoreMcp.refused("The engraver does not read it: #{bounds}") unless bounds.nil?
 
     checked = ScoreMcp.engraver_check(user, source)
@@ -413,8 +415,8 @@ class ScoreMcp
     source = args["source"].to_s
     source = Score.blank_source(title) if source.trim.blank?
     source = Score.with_title(source, title) if Score.title_in(source).nil? && !title.blank?
-    # The bounds first, read without engraving; then the engraver.
-    refusal = Score.refusal_of(source) ?? ScoreMcp.engraver_check(user, source)["error"]
+    # The bounds first, read without engraving; then the engraver, counted.
+    refusal = Score.bounds_refusal(source) ?? ScoreMcp.engraver_check(user, source)["error"]
     return ScoreMcp.refused("Not created: #{refusal}") unless refusal.nil?
 
     score = Score.start(user, source)
@@ -435,7 +437,7 @@ class ScoreMcp
     return ScoreMcp.refused("“#{score.title}” is read-only for this account.") unless score.writable_by?(user)
 
     source = args["source"].to_s
-    bounds = Score.refusal_of(source)
+    bounds = Score.bounds_refusal(source)
     return ScoreMcp.refused(bounds) unless bounds.nil?
 
     checked = ScoreMcp.engraver_check(user, source)
