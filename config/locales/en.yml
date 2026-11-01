@@ -1365,8 +1365,6 @@ en:
       photo_of: "Photo of {when}"
       photo_of_format: "%d %b %Y, %H:%M"
     oauth:
-      title: "Connect {name}"
-      heading: "Connect {name}?"
       description: "An application asks to reach your Score scores."
       asks_html: "<strong>{name}</strong> asks to reach your scores on Score, as <strong>{email}</strong>."
       can_list: "List and read your scores"
@@ -1430,6 +1428,16 @@ en:
   # (#540) security: engraving limits and MCP batches — keys under `security_540:` right below
   # ---
   # (#541) security: the OAuth server — keys under `security_541:` right below
+  security_541:
+    title: "Connect {host}"
+    title_local: "Connect an app on this computer"
+    heading: "{host} wants to reach your scores, calling itself “{name}”"
+    heading_local: "An app on this computer wants to reach your scores, calling itself “{name}”"
+    name_unchecked: "Score does not check that name: allow only if you have just asked this application to connect."
+    stale_title: "This request was replaced"
+    stale_body: "Another connection request was started since this page was shown, so nothing was allowed. Start again from the application that asked to connect."
+    outdated_title: "This page is out of date"
+    outdated_body: "This page is out of date: start the connection again from your app. Nothing was allowed."
   # ---
   # (#542) security: live sharing and rights — keys under `security_542:` right below
   # ---
