@@ -27,6 +27,28 @@ def take_sign_in(user)
   )
 end
 
+# `user` on Pro, whose limits do not depend on payments being open.
+def take_pro(user)
+  user.plan = "pro"
+  user.plan_status = "active"
+  user.current_period_end = DateTime.utc.to_unix + 30 * 86400
+  user.save
+  User.find(user._key)
+end
+
+# A take of `owner`'s on `score`'s track 2 leaving `room_left` bytes of
+# Pro's room for takes.
+def take_fill(score, owner, room_left)
+  ScoreTake.create({
+    "score_id": score._key,
+    "user_id": owner._key,
+    "track": 2,
+    "name": "Long",
+    "size": Plan.pro_limits["take_bytes"] - room_left,
+    "created_at": DateTime.utc.to_unix
+  })
+end
+
 # A score of its owner's, shared with an editor and a reader.
 def take_room
   owner = take_user("Olga")
@@ -165,32 +187,41 @@ describe("AppTakesController") do
     test("refuses a take past the room an account keeps, and stores nothing (#543)") do
       room = take_room()
       score = room["score"]
-      owner = room["owner"]
-      ScoreTake.create({
-        "score_id": score._key,
-        "user_id": owner._key,
-        "track": 2,
-        "name": "Long",
-        "size": Plan.limits(owner)["take_bytes"] - TAKE_WAV.length + 1,
-        "created_at": DateTime.utc.to_unix
-      })
+      owner = take_pro(room["owner"])
+      take_fill(score, owner, TAKE_WAV.length - 1)
       take_sign_in(owner)
       answer = take_upload(score)
       assert_eq(res_status(answer), 422)
-      assert_contains(res_json(answer)["error"], "would pass the 2 GB")
+      assert_eq(res_json(answer)["error"], "Your takes would pass the 2 GB your plan keeps: delete some first.")
       assert_eq(take_count(score), 1)
       assert_eq(ScoreTake.where({
         "score_id": score._key,
         "track": 1
       }).count, 0)
 
-      room_left = Plan.limits(owner)["take_bytes"] - TAKE_WAV.length
+      room_left = Plan.pro_limits["take_bytes"] - TAKE_WAV.length
       ScoreTake.where({"score_id": score._key, "track": 2}).first.update({"size": room_left})
       assert_eq(res_status(take_upload(score)), 201, "at the limit")
       assert_eq(ScoreTake.where({
         "score_id": score._key,
         "track": 1
       }).count, 1)
+    end
+
+    test("says the room is full in French with the cookie (#543)") do
+      room = take_room()
+      score = room["score"]
+      owner = take_pro(room["owner"])
+      take_fill(score, owner, TAKE_WAV.length - 1)
+      take_sign_in(owner)
+      set_request_cookie("locale", "fr")
+      answer = take_upload(score)
+      assert_eq(res_status(answer), 422)
+      assert_eq(
+        res_json(answer)["error"],
+        "Vos prises dépasseraient les 2 GB que garde votre offre : supprimez-en d'abord."
+      )
+      assert_eq(take_count(score), 1)
     end
 
     test("refuses details out of range, or no sound, and writes nothing") do

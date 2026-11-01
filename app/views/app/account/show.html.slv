@@ -223,6 +223,7 @@
               <% push_words["queued_one"] = t("security_543.push_queued_one") %>
               <% push_words["queued_other"] = t("security_543.push_queued_other") %>
               <% push_words["sent_none"] = t("app.account.push_sent_none") %>
+              <% push_words["unavailable"] = t("app.account.not_available") %>
               <% push_words["send_failed"] = t("app.account.push_send_failed") %>
               <script data-push-script>
                 (() => {
@@ -303,8 +304,10 @@
                   test.addEventListener("click", async () => {
                     try {
                       const answer = await post("<%= app_push_test_path() %>");
-                      // Sent by a job (#543): on its way, not yet arrived.
-                      say(answer.queued ? fill(answer.devices === 1 ? words.queued_one : words.queued_other, "n", answer.devices) : words.sent_none);
+                      // Sent by a job (#543): on its way, not yet arrived;
+                      // nothing when the server cannot sign a message.
+                      if (answer.unavailable) say(words.unavailable);
+                      else say(answer.queued ? fill(answer.devices === 1 ? words.queued_one : words.queued_other, "n", answer.devices) : words.sent_none);
                     } catch (error) {
                       say(fill(words.send_failed, "error", error.message));
                     }

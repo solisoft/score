@@ -344,8 +344,6 @@ en:
       push_state_off: "Off for this device."
       push_on_failed: "Could not turn them on: {error}"
       push_off_failed: "Could not turn them off: {error}"
-      push_sent_one: "Sent to {n} device."
-      push_sent_other: "Sent to {n} devices."
       push_sent_none: "Nothing could be sent: turn them on again on this device."
       push_send_failed: "Could not send: {error}"
       plan_on: "You are on <strong>{plan}</strong>."
@@ -1438,6 +1436,7 @@ en:
     push_test_limited: "Too many test messages: try again in an hour."
     push_queued_one: "On its way to {n} device."
     push_queued_other: "On its way to {n} devices."
+    take_room_full: "Your takes would pass the {room} your plan keeps: delete some first."
   # ---
   # (#544) security: CSP, configuration and admin — keys under `security_544:` right below
   # ---

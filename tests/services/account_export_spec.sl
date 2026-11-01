@@ -42,6 +42,76 @@ def export_folder_files(user, parts, folder)
   found
 end
 
+# Every file of every part of `user`'s export (parts of `limit`), each
+# with its part: [{"name", "text", "part"}], a name once a part holds it.
+def export_every_file(user, limit)
+  parts = AccountExport.parts(user, limit)
+  found = []
+  (1 .. parts.length + 1).each do |number|
+    AccountExport.files(user, parts, number, 1792700073).each do |file|
+      found.push({
+        "name": file["name"],
+        "text": file["text"],
+        "part": number
+      })
+    end
+  end
+  found
+end
+
+# The version files under `folder` of `every` (export_every_file), by name.
+def export_version_texts(every, folder)
+  texts = {}
+  every.each do |file|
+    texts[file["name"]] = file["text"] if file["name"].starts_with?("#{folder}/versions/")
+  end
+  texts
+end
+
+# `count` versions of `score`, saved a second apart from `since`.
+def export_versions(score, user, count, since)
+  (0 .. count).map do |i|
+    version = ScoreVersion.keep(score, "{ e'#{i + 1} " + "e'4 " * 20 + "}", "auto", user._key)
+    version.created_at = since + i
+    version.update()
+    version
+  end
+end
+
+# Those of `names` that name the version whose key is `key`.
+def export_names_with(names, key)
+  names.filter do |name|
+    name.contains(key)
+  end
+end
+
+# The versions part `number` of `every` lists for the score in `folder`.
+def export_listed_versions(every, number, folder)
+  listing = every.find do |file|
+    file["part"] == number && file["name"] == "scores.json"
+  end
+  entry = JSON.parse(listing["text"]).find do |row|
+    row["folder"] == folder
+  end
+  entry["versions"] ?? []
+end
+
+# The files of `listed` (a score's versions in scores.json) whose "part"
+# is not the part of `held` (export_every_file) holding them.
+def export_misplaced(listed, held, folder)
+  listed.filter do |version|
+    version["part"] != export_part_holding(held, "#{folder}/#{version["file"]}")
+  end.map(&:file)
+end
+
+# The part of `held` (export_every_file) whose file is `name`.
+def export_part_holding(held, name)
+  holder = held.find do |file|
+    file["name"] == name
+  end
+  holder&.part
+end
+
 describe("AccountExport") do
   describe("files") do
     test("each score in its folder with every version, the trash flagged, and the sharing") do
@@ -67,8 +137,8 @@ describe("AccountExport") do
       end
       assert_eq(versions.length, 2)
       assert_eq(files[versions[0]], "\\header { title = \"Chorale\" }\n{ c'1 }", "the oldest first")
-      assert_match(versions[0], "versions/001-\\d{4}-\\d\\d-\\d\\dT\\d\\d-\\d\\d-\\d\\d-manual\\.ly$")
-      assert_match(versions[1], "versions/002-.*-auto\\.ly$")
+      assert_match(versions[0], "versions/\\d{4}-\\d\\d-\\d\\dT\\d\\d-\\d\\d-\\d\\d-#{earlier._key}-manual\\.ly$")
+      assert_match(versions[1], "versions/\\d{4}-.*-auto\\.ly$")
       listed = JSON.parse(files["scores.json"])
       assert_eq(listed.length, 2)
       entry = listed.find do |row|
@@ -314,7 +384,7 @@ describe("AccountExport") do
       assert_eq(names.length, sources.length + 1)
       assert_eq(names[0], "#{folder}/many.ly")
       names.slice(1, names.length).each_with_index do |name, i|
-        assert_match(name, "versions/00#{i + 1}-.*-manual\\.ly$")
+        assert_match(name, "versions/\\d{4}-.*-manual\\.ly$")
         assert_eq(exported[name], sources[i])
       end
 
@@ -325,6 +395,50 @@ describe("AccountExport") do
       assert_eq(listed[0]["versions"].length, sources.length)
       assert_eq(listed[0]["versions"].map(&:part).uniq.length, parts.length)
       assert_eq(listed[0]["versions"][sources.length - 1]["part"], parts.length)
+    end
+  end
+
+  describe("versions across parts and downloads (#543)") do
+    test("an old version keeps its file name when a new one comes and the oldest goes") do
+      user = export_user("stable")
+      score = Score.start(user, Score.blank_source("Stable"))
+      kept = export_versions(score, user, 6, 1792600000)
+      folder = "scores/stable-#{score._key}"
+      before = export_version_texts(export_every_file(user, 300), folder)
+      assert_eq(before.keys.length, kept.length)
+
+      newer = ScoreVersion.keep(score, "\\header { title = \"Stable\" }\n{ f'1 }", "auto", user._key)
+      kept[0].delete
+      after = export_version_texts(export_every_file(user, 300), folder)
+      assert_eq(after.keys.length, kept.length)
+      kept.slice(1, kept.length).each do |version|
+        names = export_names_with(before.keys, version._key)
+        assert_eq(names.length, 1, version._key)
+        assert_eq(after[names[0]], before[names[0]], "#{names[0]} the same file in both downloads")
+      end
+      assert_eq(export_names_with(after.keys, newer._key).length, 1)
+      assert_eq(export_names_with(after.keys, kept[0]._key).length, 0)
+    end
+
+    test("each version is in exactly one part, and every part holding one lists them all") do
+      user = export_user("once")
+      score = Score.start(user, Score.blank_source("Once"))
+      export_versions(score, user, 9, 1792650000)
+      folder = "scores/once-#{score._key}"
+      every = export_every_file(user, 300)
+      held = every.filter do |file|
+        file["name"].starts_with?("#{folder}/versions/")
+      end
+      names = held.map(&:name)
+      assert_eq(names.length, 9)
+      assert_eq(names.uniq.length, names.length, "a version in two parts")
+      parts_with_versions = held.map(&:part).uniq
+      assert_gt(parts_with_versions.length, 1)
+      parts_with_versions.each do |number|
+        listed = export_listed_versions(every, number, folder)
+        assert_eq(listed.length, 9, "part #{number} lists every version")
+        assert_eq(export_misplaced(listed, held, folder), [], "part #{number} says where each is")
+      end
     end
   end
 

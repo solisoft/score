@@ -10,17 +10,15 @@ const PUSH_DEVICES_MAX = 20
 # other host is refused, so the app never posts to an address a person
 # chose. Chrome, Opera, Brave and Samsung Internet use Google's FCM;
 # Firefox, Mozilla's autopush; Safari, Apple's; Edge on Windows,
-# Microsoft's WNS. A host here, or one under a domain below.
+# Microsoft's WNS. A host here, or one under a domain below. A row kept
+# before this check, on any other host, is deleted (prune_unreachable),
+# never counted.
 const PUSH_SERVICE_HOSTS = [
   "fcm.googleapis.com",
   "updates.push.services.mozilla.com",
   "web.push.apple.com"
 ]
-const PUSH_SERVICE_DOMAINS = [
-  "push.services.mozilla.com",
-  "notify.windows.com",
-  "push.apple.com"
-]
+const PUSH_SERVICE_DOMAINS = ["push.services.mozilla.com", "notify.windows.com"]
 
 class PushSubscription < Model
   validates("user_id", {"presence": true})
@@ -57,7 +55,7 @@ class PushSubscription < Model
     end
 
     existing = PushSubscription.find_by("endpoint", endpoint)
-    if existing.nil? && PushSubscription.where({"user_id": user._key}).count >= PUSH_DEVICES_MAX
+    if existing.nil? && PushSubscription.count_of(user) >= PUSH_DEVICES_MAX
       return {"error": "Push notifications are on for #{PUSH_DEVICES_MAX} devices already: turn one off first."}
     end
 
@@ -102,21 +100,48 @@ class PushSubscription < Model
     end
   end
 
-  # The devices of `user`.
+  # The devices of `user`: those on a push service, at most
+  # PUSH_DEVICES_MAX (a row kept before #543 checked the host is not one).
   static def of(user)
-    PushSubscription.where({"user_id": user._key}).limit(PUSH_DEVICES_MAX).all
+    PushSubscription.of_key(user._key)
   end
 
-  # The devices of `user` a message may go to: those on a push service (a
-  # row kept before #543 checked the host is skipped).
-  static def reachable_of(user)
-    PushSubscription.of(user).filter do |device|
+  # The devices of the person whose key is `key`.
+  static def of_key(key)
+    PushSubscription.reachable(PushSubscription.where({"user_id": key}).all).slice(0, PUSH_DEVICES_MAX)
+  end
+
+  # The devices of `user` counted: on a push service only.
+  static def count_of(user)
+    PushSubscription.of(user).length
+  end
+
+  # Those of `rows` on a push service.
+  static def reachable(rows)
+    rows.filter do |device|
       PushSubscription.push_service?(device.endpoint)
     end
   end
 
-  static def count_of(user)
-    PushSubscription.where({"user_id": user._key}).count
+  # `user`'s rows on a host that is not a push service deleted: how many.
+  static def prune_unreachable(user)
+    PushSubscription.prune(PushSubscription.where({"user_id": user._key}).all)
+  end
+
+  # Everyone's rows on a host that is not a push service deleted (the
+  # migration prune_unreachable_push_subscriptions): how many.
+  static def prune_unreachable_all
+    PushSubscription.prune(PushSubscription.all)
+  end
+
+  static def prune(rows)
+    stray = rows.filter do |device|
+      !PushSubscription.push_service?(device.endpoint)
+    end
+    stray.each do |device|
+      device.delete
+    end
+    stray.length
   end
 
   # Gone with their account (User#destroy_account).

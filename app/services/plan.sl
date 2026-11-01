@@ -28,7 +28,8 @@ class Plan
   #
   # Until payments are open (`open`, Stripe.configured? when nil), no one
   # can move to Pro, so the Free plan's new limits do not apply yet: those
-  # not on Pro keep what the site allowed before (`today_limits`).
+  # not on Pro keep what the site allowed before, but for the room for
+  # takes, Pro's (`today_limits`, #543).
   static def limits(user, open = nil)
     return Plan.pro_limits if !user.nil? && user.pro?
 

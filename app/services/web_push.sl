@@ -44,7 +44,14 @@ class WebPush
   # its person has a device: whether it was.
   static def queue(notification)
     return false if notification.nil? || !WebPush.configured?
-    return false if PushSubscription.where({"user_id": notification.user_id}).count == 0
+
+    WebPush.queue_job(notification)
+  end
+
+  # `notification` handed to PushNotificationJob if its person has a device
+  # on a push service: whether it was.
+  static def queue_job(notification)
+    return false if PushSubscription.of_key(notification.user_id).length == 0
 
     PushNotificationJob.perform_later({"notification_id": notification._key}, {"max_retries": 0})
     true
@@ -68,10 +75,12 @@ class WebPush
     WebPush.send_all(user, WebPush.payload(notification).to_json, transport)
   end
 
-  # `payload` sent to each of `user`'s devices on a push service: the counts.
+  # `payload` sent to each of `user`'s devices on a push service, a row on
+  # any other host deleted first (#543): the counts.
   static def send_all(user, payload, transport = nil)
     done = WebPush.counts(0)
-    PushSubscription.reachable_of(user).each do |device|
+    PushSubscription.prune_unreachable(user)
+    PushSubscription.of(user).each do |device|
       outcome = WebPush.outcome(WebPush.call(device.subscription, payload, transport))
       WebPush.after(device, outcome)
       done[outcome] = done[outcome] + 1
@@ -131,9 +140,23 @@ class WebPush
   end
 
   # A test message for `user`'s devices handed to PushTestJob, so no
-  # request waits on a push service (#543): {"devices", "queued"}, queued
-  # only when they have one.
+  # request waits on a push service (#543): {"devices", "queued"}, and
+  # "unavailable" when push is not set up (no key to sign it with).
   static def queue_test(user)
+    unless WebPush.configured?
+      return {
+        "devices": PushSubscription.count_of(user),
+        "queued": false,
+        "unavailable": true
+      }
+    end
+
+    WebPush.queue_test_job(user)
+  end
+
+  # The test message handed to PushTestJob when `user` has a device on a
+  # push service: {"devices", "queued"}.
+  static def queue_test_job(user)
     devices = PushSubscription.count_of(user)
     if devices == 0
       return {"devices": 0, "queued": false}
