@@ -95,7 +95,7 @@
       // when a comment comes in (window.euiBell).
       <% bell_words = {"none": t("app.layout.notifications"), "one": t("app.layout.unread_one")} %>
       <% bell_words["other"] = t("app.layout.unread_other") %>
-      window.euiBellWords = <%- bell_words.to_json %>;
+      window.euiBellWords = <%- json_for_script(bell_words) %>;
       window.euiBell = async () => {
         const count = document.querySelector("[data-bell-count]");
         if (!count) return;

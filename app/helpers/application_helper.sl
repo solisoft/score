@@ -81,6 +81,16 @@ def absolute_url(path)
   base + path
 end
 
+# `value` as JSON to write inside a <script> with `<%-` (#537). `to_json`
+# leaves `<` as it is, so a string holding `</script>` would close the script
+# and start HTML; U+2028 and U+2029 end a line in older JavaScript. All three
+# written as \u escapes: the same value once read.
+def json_for_script(value)
+  return "null" if value.nil?
+
+  value.to_json.replace("<", "\\u003c").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
+end
+
 # Whether the score-writing app (/app) is open here: it needs a database.
 # Views cannot reach AppSetup (app/services is not loaded for templates), so
 # the rule is written twice — keep this one and AppSetup.ready? alike.

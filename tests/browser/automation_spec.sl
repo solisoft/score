@@ -178,6 +178,24 @@ describe("The automation lane, in a browser") do
     assert_no_page_errors()
   end
 
+  test("a meta line written to inject markup draws none: velocities and curves read as numbers (#537)") do
+    payload = "<img src=x onerror=\"window.injected = 1\">"
+    meta = {"velocity": {"0:0:72": payload, "0:20160:74": 300}, "cc": {"0": {"1": [[0, payload], [40320, 90]]}}}
+    auto_type_source("{ c''4 d'' e'' f'' }\n%% eui-score " + meta.to_json + "\n")
+    wait_for(".vel-strip")
+    sleep(0.5)
+    assert_eq(evaluate("document.querySelectorAll('.studio-roll img').length"), 0, "no element injected")
+    assert_eq(evaluate("window.injected === undefined"), true, "no script run")
+    assert_eq(
+      evaluate("[...document.querySelectorAll('.vel-strip title')].filter((t) => t.textContent === '127').length"),
+      1,
+      "the velocity too loud clamped"
+    )
+    assert_eq(evaluate("document.querySelectorAll('.cc-point').length"), 1, "the point that is no number left out")
+    assert_eq(evaluate("document.querySelector('.cc-point title').textContent"), "90")
+    assert_no_page_errors()
+  end
+
   test("the sustain pedal of the notation wins: its curve is drawn, and said not to be heard") do
     auto_type_source("{ c''4\\sustainOn d'' e''\\sustainOff f'' }")
     auto_choose("[data-cc-id]", "64")
