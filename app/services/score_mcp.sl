@@ -40,6 +40,9 @@ const MCP_SKILL_DIR = "public/skills/transcribe-score"
 const MCP_SKILL_FILES = [
   "SKILL.md",
   "scripts/staff.py",
+  "scripts/compare.py",
+  "scripts/marks.py",
+  "scripts/tiles.py",
   "scripts/proof.py"
 ]
 

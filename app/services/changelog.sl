@@ -21,6 +21,15 @@ class Changelog
         },
         {
           "area": "site",
+          "title": "A photo transcription checked against the photo, marks included",
+          "text": "The skill transcribe_photo (Score in Claude) now asks for the printed original rather than a "
+          + "copy, counts the dynamics, hairpins, slurs and accents of each line of the photo before writing, and "
+          + "checks the score against those counts and against the note heads it measures: three new scripts "
+          + "find a run written from the wrong note or a missing hairpin, and set notes in doubt side by side.",
+          "link": "claude"
+        },
+        {
+          "area": "site",
           "title": "The account page, set in order",
           "text": "Your account opens on a summary (plan, two-step sign-in, AI key, apps connected) and groups its "
           + "settings: sign-in and security, notifications, plan, AI key, Claude and apps, your data, reached from a "

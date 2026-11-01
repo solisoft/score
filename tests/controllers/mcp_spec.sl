@@ -260,7 +260,11 @@ describe("The MCP server") do
       assert(text.starts_with?("Transcribe the photo ~/Downloads/tonnerre.jpg into a Score score"))
       assert_contains(text, "/skills/transcribe-score/scripts/staff.py -o \"$SKILL/scripts/staff.py\"")
       assert_contains(text, "/skills/transcribe-score/scripts/proof.py")
+      ["compare.py", "marks.py", "tiles.py"].each do |script|
+        assert_contains(text, "/skills/transcribe-score/scripts/#{script} -o \"$SKILL/scripts/#{script}\"")
+      end
       assert_contains(text, "## 4. Markings pass")
+      assert_contains(text, "## 0. Read the original, never a copy")
       assert_not(text.includes?("name: transcribe-score"), "the skill's front matter stays out")
     end
 

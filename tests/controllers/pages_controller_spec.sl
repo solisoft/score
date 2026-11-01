@@ -269,7 +269,8 @@ describe("Score in Claude (#464)") do
     body = res_body(get("/claude"))
     assert_contains(body, "/mcp__score__transcribe_photo")
     assert_contains(body, "~/.claude/skills/transcribe-score")
-    ["SKILL.md", "scripts/staff.py", "scripts/proof.py"].each do |file|
+    skill_files = ["SKILL.md", "scripts/staff.py", "scripts/compare.py", "scripts/marks.py", "scripts/tiles.py"]
+    (skill_files + ["scripts/proof.py"]).each do |file|
       assert_contains(body, file)
     end
     assert_contains(body, "/skills/transcribe-score/SKILL.md\">SKILL.md</a>")
