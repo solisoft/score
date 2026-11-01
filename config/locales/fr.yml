@@ -1421,3 +1421,19 @@ fr:
     title_changed: "Adresse changée"
     title: "Changement d'adresse e-mail"
     description: "Confirmez la nouvelle adresse d'un compte Score."
+  # (#537) security: the editor's score data — keys under `security_537:` right below
+  # ---
+  # (#538) security: two-step sign-in and resets — keys under `security_538:` right below
+  # ---
+  # (#539) security: tokens, passwords and accounts — keys under `security_539:` right below
+  # ---
+  # (#540) security: engraving limits and MCP batches — keys under `security_540:` right below
+  # ---
+  # (#541) security: the OAuth server — keys under `security_541:` right below
+  # ---
+  # (#542) security: live sharing and rights — keys under `security_542:` right below
+  # ---
+  # (#543) security: push, storage and export — keys under `security_543:` right below
+  # ---
+  # (#544) security: CSP, configuration and admin — keys under `security_544:` right below
+  # ---
