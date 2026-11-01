@@ -17,6 +17,21 @@ def app_code(secret, steps)
   Crypto.totp_generate(secret, DateTime.utc.to_unix + 30 * steps, 30)
 end
 
+# An account that notes what its second step had counted when a code was
+# checked: the code "right" is right, any other wrong.
+class TwoStepProbe < User
+  # The account it stands for (its class reads no collection of its own).
+  def _key
+    @probe_key
+  end
+
+  def second_step?(code)
+    row = TwoStepGuard.find_by("user_id", this._key)
+    @wrong_at_check = row.nil? ? 0 : row.wrong
+    code == "right"
+  end
+end
+
 describe("User two-step sign-in") do
   test("a secret is kept aside, encrypted, until a code of it turns it on") do
     user = two_step_user()
@@ -155,6 +170,72 @@ describe("User two-step sign-in") do
     assert(TwoStepGuard.spend_backup(seen, other, valid))
     assert_eq(TwoStepGuard.of(user).spent.length, 2)
     assert_not(User.find(user._key).second_step?(codes[3]))
+  end
+
+  test("a backup code spent, then another: the first, from an older list of the account, is refused") do
+    user = two_step_user()
+    secret = user.start_two_step
+    codes = User.find(user._key).confirm_two_step(app_code(secret, 0))
+    stale_list = User.find(user._key).totp_backup
+    first = Crypto.sha256(User.backup_digest_text(codes[1]))
+    second = Crypto.sha256(User.backup_digest_text(codes[2]))
+    assert(TwoStepGuard.spend_backup(TwoStepGuard.of(user), first, stale_list))
+    # The next one checked against a list that no longer has the first.
+    fresh_list = stale_list.filter do |d|
+      d != first
+    end
+    assert(TwoStepGuard.spend_backup(TwoStepGuard.of(user), second, fresh_list))
+    assert_not(TwoStepGuard.spend_backup(TwoStepGuard.of(user), first, stale_list), "the first, again")
+    assert_not(User.find(user._key).second_step?(codes[1]))
+    assert_eq(User.find(user._key).backup_codes_left, 8)
+  end
+
+  test("a whole-record save from a copy read before a code was spent does not make it good again") do
+    user = two_step_user()
+    secret = user.start_two_step
+    codes = User.find(user._key).confirm_two_step(app_code(secret, 0))
+    stale = User.find(user._key)
+    assert(User.find(user._key).second_step?(codes[4]))
+    stale.name = "Saved from an older copy"
+    stale.update()
+    assert_eq(User.find(user._key).name, "Saved from an older copy")
+    assert_not(User.find(user._key).second_step?(codes[4]), "spent stays spent")
+    assert_eq(User.find(user._key).backup_codes_left, 9)
+  end
+
+  test("an account with two-step on from before #538, without a guard row: a used step refused, a backup code once") do
+    user = two_step_user()
+    secret = user.start_two_step
+    codes = User.find(user._key).confirm_two_step(app_code(secret, 0))
+    assert_null(TwoStepGuard.find_by("user_id", user._key), "no row yet")
+    # The step its enrolment used, kept on the account only.
+    assert_not(User.find(user._key).second_step?(app_code(secret, 0)), "the step used before")
+    assert(User.find(user._key).second_step?(codes[7]))
+    assert_not(User.find(user._key).second_step?(codes[7]), "once")
+    assert_eq(User.find(user._key).backup_codes_left, 9)
+    assert(User.find(user._key).second_step?(app_code(secret, 1)))
+  end
+
+  test("a code typed is counted before it is checked; a right one gives the count back") do
+    user = two_step_user()
+    probe = TwoStepProbe.new()
+    probe.probe_key = user._key
+    probe.email = user.email
+    assert_not(probe.second_step_counted?("wrong"))
+    assert_eq(probe.wrong_at_check, 1, "counted before the check")
+    assert(probe.second_step_counted?("right"))
+    assert_eq(probe.wrong_at_check, 2, "the right one too, before its check")
+    assert_eq(TwoStepGuard.of(user).wrong, 0, "given back")
+    # The last try of the window: counted, and the pause already on when
+    # it is checked; the next is not checked at all.
+    (0 .. TWO_STEP_MAX_WRONG).each do |_|
+      probe.second_step_counted?("wrong")
+    end
+    assert_eq(probe.wrong_at_check, TWO_STEP_MAX_WRONG)
+    assert(TwoStepGuard.locked?(user))
+    probe.wrong_at_check = nil
+    assert_not(probe.second_step_counted?("right"))
+    assert_null(probe.wrong_at_check, "not checked at all")
   end
 
   test("wrong codes pause the code step, apart from the password's lock, and a reset keeps them") do

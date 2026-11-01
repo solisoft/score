@@ -1065,32 +1065,30 @@ class User < Model
   end
 
   # The backup code of `digest` spent from `guard`, if it is one of
-  # `valid` (the account's): whether it was. The account's list loses it
-  # too, for the count it shows.
+  # `valid` (the account's set): whether it was. The set itself stays as
+  # issued — the codes left are counted against the guard's `spent`
+  # (`backup_codes_left`): a list written back from a copy read before
+  # another code was spent would make that code good again.
   def _spent_backup(guard, digest, valid)
-    return false unless TwoStepGuard.spend_backup(guard, digest, valid)
-
-    left = valid.filter do |d|
-      d != digest
-    end
-    @_patch_stored({"totp_backup": left})
-    this.totp_backup = left
-    true
+    TwoStepGuard.spend_backup(guard, digest, valid)
   end
 
-  # Whether `code` passes the second step, counted (#538): while the code
-  # step is paused (TwoStepGuard) no code is looked at, the right one
-  # included; a wrong one counts towards the pause, wherever it is typed —
-  # signing in, turning two-step off, a new address, deleting the account;
-  # a right one clears the count.
+  # Whether `code` passes the second step, counted (#538): the try is
+  # counted first (TwoStepGuard.take_try), so requests sent together cannot
+  # all pass the pause's check before any is counted; while the code step
+  # is paused no code is looked at, the right one included. A wrong one
+  # stays counted, wherever it is typed — signing in, turning two-step off,
+  # a new address, deleting the account — and the owner is told when it
+  # paused the code step; a right one gives the count back.
   def second_step_counted?(code)
-    return false if this.codes_locked?()
+    tried = TwoStepGuard.take_try(this)
+    return false if tried.nil?
 
     if this.second_step?(code)
       TwoStepGuard.clear_wrong(this)
       return true
     end
-    this.count_wrong_code()
+    @_tell_paused if tried == "pausing"
     false
   end
 
@@ -1099,22 +1097,25 @@ class User < Model
     TwoStepGuard.locked?(this)
   end
 
-  # One more wrong code: when it pauses the code step, the owner is told
-  # (queued, AuthMailJob), once a pause.
+  # One more wrong code (a try counted, known wrong): whether it paused the
+  # code step, the owner then told (queued, AuthMailJob), once a pause.
   def count_wrong_code
-    paused = TwoStepGuard.count_wrong(this)
-    if paused
-      AuthMailJob.ask("account_locked", @email, {
-        "lock": "code",
-        "by_code": true
-      })
-    end
+    paused = TwoStepGuard.take_try(this) == "pausing"
+    @_tell_paused if paused
     paused
   end
 
+  def _tell_paused
+    AuthMailJob.ask("account_locked", @email, {
+      "lock": "code",
+      "by_code": true
+    })
+  end
+
+  # The backup codes not spent yet: the set issued, less those the
+  # second step's record has as spent (TwoStepGuard).
   def backup_codes_left
-    left = this.totp_backup ?? []
-    left.length
+    TwoStepGuard.codes_left(this, this.totp_backup ?? [])
   end
 
   def stop_two_step
@@ -1302,10 +1303,9 @@ class User < Model
   end
 
   # Signing in allowed again after too many wrong passwords, from every
-  # address.
+  # address, and the code step's pause lifted too (#538): an admin lifts
+  # the lock whole.
   def unlock
-
-    # The code step's pause too (#538): an admin lifts the lock whole.
     TwoStepGuard.clear_wrong(this)
     @locked_at = nil
     @failed_attempts = 0

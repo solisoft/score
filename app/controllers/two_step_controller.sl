@@ -45,6 +45,12 @@ class TwoStepController < SessionsController
 
     return @_start_again(user, @_locked_message) if user.codes_locked?
 
+    # This sign-in's try counted before the code is checked, as the
+    # account's is (User#second_step_counted?).
+    tries = (session_get("two_step_tries") ?? 0) + 1
+    session_set("two_step_tries", tries)
+    return @_start_again(user, SiteText.t("auth.too_many_codes")) if tries > TWO_STEP_TRIES
+
     if user.second_step_counted?(params["code"])
       remember = session_get("two_step_remember") == true
       back = session_get("two_step_return").to_s
@@ -59,11 +65,8 @@ class TwoStepController < SessionsController
     end
 
     return @_start_again(user, @_locked_message) if user.codes_locked?
-
-    tries = (session_get("two_step_tries") ?? 0) + 1
     return @_start_again(user, SiteText.t("auth.too_many_codes")) if tries >= TWO_STEP_TRIES
 
-    session_set("two_step_tries", tries)
     @_refuse(SiteText.t("auth.bad_code"), 401)
   end
 

@@ -17,10 +17,20 @@
 # codes there has the password already, so neither a password reset nor a
 # right password clears the count: only a right code, or the time.
 #
+# Every code typed is counted here BEFORE it is checked (`take_try`), in
+# the same compare-and-set: requests sent together cannot all pass the
+# pause's check and only then be counted, so at most TWO_STEP_MAX_WRONG
+# codes are ever looked at in a window. A right one gives the count back.
+#
 # Codes spent: `last_step`, the time step of the last code of the app
 # used (a code is good once, and none older than it), and `spent`, the
-# digests of the backup codes used. The account (User#totp_last_step,
-# User#totp_backup) keeps a copy for what it shows; this row decides.
+# digests of every backup code ever used — never trimmed: a list read from
+# an older copy of the account (one saved whole since) must not make a
+# spent code good again, and a new set's codes are new random digests, so
+# the old ones cost ten entries a set and nothing else. The account keeps
+# the step too (User#totp_last_step, for what it shows) and the set of
+# backup codes as issued (User#totp_backup); the codes left are that set
+# minus `spent`, and this row decides.
 # (TWO_STEP_MAX_WRONG and TWO_STEP_LOCK_SECONDS are in user.sl, with the
 # sign-in's other limits.)
 # How often a write is tried again when another one landed since its read.
@@ -62,10 +72,13 @@ class TwoStepGuard < Model
     now - since <= TWO_STEP_LOCK_SECONDS
   end
 
-  # One more wrong code at `user`'s second step: whether it paused the
-  # code step (the owner is then told, once a pause). Not counted while
-  # paused: the pause runs out on schedule however many come.
-  static def count_wrong(user)
+  # One more code typed at `user`'s second step, counted before it is
+  # checked: "tried" (it may be checked), "pausing" (it may be checked, and
+  # if it is wrong the code step is now paused — the owner is then told),
+  # or nil (paused already, or the count could not be written: no code is
+  # checked). Not counted while paused: the pause runs out on schedule
+  # however many come. A right code gives the count back (`clear_wrong`).
+  static def take_try(user)
     TwoStepGuard._written(TwoStepGuard.of(user), fn(row) {
       now = DateTime.utc.to_unix
       return nil if row.locked_at?(now)
@@ -76,8 +89,8 @@ class TwoStepGuard < Model
       row.wrong = count
       row.wrong_at = now
       row.locked_at = count >= TWO_STEP_MAX_WRONG ? now : 0
-      count >= TWO_STEP_MAX_WRONG ? "paused" : "counted"
-    }) == "paused"
+      count >= TWO_STEP_MAX_WRONG ? "pausing" : "tried"
+    })
   end
 
   # A right code: the wrong ones are forgotten.
@@ -109,20 +122,25 @@ class TwoStepGuard < Model
   end
 
   # The backup code of digest `digest` spent, from `row`: whether it was —
-  # not when it was spent before. Those of `valid` (the account's codes)
-  # are the only ones kept in `spent`: an older set's are of no use.
+  # not when it was spent before, nor when it is not one of `valid` (the
+  # account's set). `spent` only ever grows.
   static def spend_backup(row, digest, valid)
     TwoStepGuard._written(row, fn(current) {
       before = current.spent ?? []
       return false if before.includes?(digest) || !valid.includes?(digest)
 
-      kept = before.filter(&{ |d|
-        valid.includes?(d)
-      })
-      kept.push(digest)
-      current.spent = kept
+      current.spent = before + [digest]
       true
     }) == true
+  end
+
+  # How many of the backup codes of digests `codes` (an account's set) are
+  # not spent yet, for `user`.
+  static def codes_left(user, codes)
+    row = TwoStepGuard.find_by("user_id", user._key)
+    return codes.length if row.nil?
+
+    row.unspent(codes).length
   end
 
   # The codes of `codes` (backup digests) not spent yet.
