@@ -8,7 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import init, { editor_view, midi, score_json } from "../../public/eui-score/eui_score_web.js";
+import init, { editor_view, midi, pdf, score_json } from "../../public/eui-score/eui_score_web.js";
 import * as M from "../../public/eui-score/score-model.js";
 import * as X from "../../public/eui-score/musicxml.js";
 
@@ -273,4 +273,16 @@ test("the dot goes round: none, one, two, none (#469)", () => {
   assert.equal(M.notated(4, 2), M.notated(4) + M.notated(8) + M.notated(16));
   M.setDuration(score, 0, 0, 4, M.nextDots(score.staves[0].events[0].dots));
   assert.doesNotMatch(engrave(score), /a''4\./, "and back to none");
+});
+
+test("a PDF two lines too long for a page is set a little smaller, onto one page (#470)", () => {
+  const pages = (src) => (pdf(src, "").match(/\/Type \/Page\b/g) ?? []).length;
+  const tune = (bars) => `{ ${Array(bars).fill("c'4 d' e' f'").join(" | ")} }`;
+  const at20 = (bars) => `#(set-global-staff-size 20)\n${tune(bars)}`;
+  // The first length that spills onto a second page at 20 pt.
+  let bars = 20;
+  while (pages(at20(bars)) < 2) bars += 1;
+  assert.equal(pages(at20(bars)), 2, "a staff size it chooses is kept");
+  assert.equal(pages(tune(bars)), 1, "no size chosen: one page");
+  assert.equal(pages(tune(4)), 1);
 });

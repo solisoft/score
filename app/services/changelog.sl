@@ -10,6 +10,14 @@
 class Changelog
   static def days
     [
+      {"date": "2026-11-01", "entries": [{
+        "area": "engine",
+        "title": "A PDF a page shorter when a little smaller fits",
+        "text": "When the last page of a PDF would hold a line or two, the score is now set a little smaller, down "
+        + "to 85 % at most, so that everything fits on a page fewer; Tonnerre et Éclairs comes back to one page at "
+        + "18.5 pt. A score that sets its own staff size (set-global-staff-size) keeps it, and the screen does not "
+        + "change."
+      }]},
       {"date": "2026-10-31", "entries": [
         {
           "area": "editor",
