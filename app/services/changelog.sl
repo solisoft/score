@@ -13,6 +13,13 @@ class Changelog
       {"date": "2026-11-01", "entries": [
         {
           "area": "site",
+          "title": "The app in the language just chosen",
+          "text": "Switched to French on the site, Open the app could still show it in English until a reload: the "
+          + "copy fetched ahead in English was reused. Each language now gets its own copy.",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "The app in French",
           "text": "Coming from the site in French, the app is in French too: the Start page, your scores, sharing, "
           + "the trash and versions, photo imports, notifications and the account. Account › Language switches it, "

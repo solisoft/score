@@ -79,6 +79,18 @@ describe("The app's language") do
     assert_not(res_header(response, "Set-Cookie").to_s.includes?("locale=fr"))
   end
 
+  test("its pages vary on the cookie, so a copy prefetched in one language is not shown in the other") do
+    assert_contains(res_header(get("/app"), "Vary").to_s, "Cookie")
+    user = lang_user()
+    lang_sign_in(user)
+    assert_contains(res_header(get("/app/account"), "Vary").to_s, "Cookie")
+    set_header("Purpose", "prefetch")
+    prefetched = get("/app/scores")
+    clear_headers()
+    assert_contains(res_header(prefetched, "Cache-Control").to_s, "max-age")
+    assert_contains(res_header(prefetched, "Vary").to_s, "Cookie")
+  end
+
   test("the site's pages keep the language of their address") do
     set_request_cookie("locale", "fr")
     assert_contains(res_body(get("/pricing")), "<html lang=\"en\">")
