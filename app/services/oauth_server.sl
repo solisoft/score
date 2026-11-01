@@ -9,6 +9,14 @@
 # The tokens are AccessTokens: the bearer /mcp already takes, listed and
 # revoked in Account › Access tokens (AccessToken.issue_oauth).
 const OAUTH_SCOPE = "score"
+# What one address may ask of the open endpoints (#541): registrations an
+# hour (a client registers once per connection), token and revocation
+# calls a minute. Generous: a hosted client (claude.ai's connectors)
+# registers and refreshes for all its users from a few addresses. Each one
+# is set in the server's .env (deploy/README.md).
+const OAUTH_REGISTRATIONS_PER_IP_HOUR = (getenv("OAUTH_REGISTRATIONS_PER_IP_HOUR") ?? "600").to_i
+const OAUTH_TOKEN_CALLS_PER_IP_MINUTE = (getenv("OAUTH_TOKEN_CALLS_PER_IP_MINUTE") ?? "600").to_i
+const OAUTH_REVOCATIONS_PER_IP_MINUTE = (getenv("OAUTH_REVOCATIONS_PER_IP_MINUTE") ?? "300").to_i
 
 class OauthServer
   # Score's public origin, which is also the issuer.
@@ -71,12 +79,16 @@ class OauthServer
     host = parts["host"].to_s
     return !host.blank? if parts["scheme"] == "https"
 
-    parts["scheme"] == "http" && [
-      "localhost",
-      "127.0.0.1",
-      "[::1]",
-      "::1"
-    ].includes?(host)
+    parts["scheme"] == "http" && OauthServer.loopback?(text)
+  end
+
+  # Whether `uri` goes back to the person's own machine: what the consent
+  # page calls "an app on this computer" (#541).
+  static def loopback?(uri)
+    parts = Url.parse(uri.to_s) rescue nil
+    return false if parts.nil?
+
+    ["localhost", "127.0.0.1", "[::1]", "::1"].includes?(parts["host"].to_s)
   end
 
   # PKCE S256 (RFC 7636): BASE64URL(SHA256(verifier)) is the challenge the
@@ -214,6 +226,27 @@ class OauthServer
       },
       "body": payload.to_json
     }
+  end
+
+  # The count of `endpoint` ("register", "token" or "revoke") for address `ip`.
+  static def limiter(endpoint, ip)
+    limits = {
+      "register": [OAUTH_REGISTRATIONS_PER_IP_HOUR, 3600],
+      "token": [OAUTH_TOKEN_CALLS_PER_IP_MINUTE, 60],
+      "revoke": [OAUTH_REVOCATIONS_PER_IP_MINUTE, 60]
+    }
+    limit = limits[endpoint]
+    RateLimiter("oauth-#{endpoint}:#{ip}", limit[0], limit[1])
+  end
+
+  # nil while address `ip` may still call `endpoint`, else the 429 to answer.
+  static def throttled(endpoint, ip)
+    limiter = OauthServer.limiter(endpoint, ip)
+    return nil if limiter.allowed()
+
+    answer = OauthServer.error(429, "too_many_requests", "too many requests from this address: try again later")
+    answer["headers"]["Retry-After"] = limiter.throttle().to_s
+    answer
   end
 
   # An RFC 6749 error body.

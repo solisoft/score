@@ -14,7 +14,7 @@
     looks its modules' English sentences up in them; none in English. %>
 <% studio_words = locals["editor_words"] ?? {} %>
 <% if studio_words.length > 0 %>
-<script>window.EUI_WORDS = <%- studio_words.to_json %>; window.EUI_WORDS_LOCALE = "<%= I18n.locale() %>";</script>
+<script>window.EUI_WORDS = <%- json_for_script(studio_words) %>; window.EUI_WORDS_LOCALE = "<%= I18n.locale() %>";</script>
 <% else %>
 <script>window.EUI_WORDS = null; window.EUI_WORDS_LOCALE = "en";</script>
 <% end %>

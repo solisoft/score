@@ -12,6 +12,22 @@ class Changelog
     [
       {"date": "2026-11-01", "entries": [
         {
+          "area": "site",
+          "title": "Connecting an app is safer",
+          "text": "The page that lets an app such as Claude reach your scores now names where the answer goes, not "
+          + "just the name the app gives itself, and it approves only the request it showed. A connection whose "
+          + "renewal is replayed is closed, and the connection endpoints are rate-limited.",
+          "app": true
+        },
+        {
+          "area": "editor",
+          "title": "A score cannot hide a script any more",
+          "text": "A score's hidden settings line (note velocities, controller curves) could carry code that ran when "
+          + "someone opened the MIDI view. They are now read as numbers only, and what is drawn is escaped. A synth "
+          + "preset or reverb room named after a JavaScript property no longer breaks the panels.",
+          "app": true
+        },
+        {
           "area": "engine",
           "title": "Instrument and composer apart on a phone",
           "text": "On a narrow page, a score's instrument (centred) and its composer (on the right) ran into each "

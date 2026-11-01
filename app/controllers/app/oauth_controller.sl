@@ -14,8 +14,20 @@ class AppOauthController < AppBaseController
 
     @client_name = checked["client"].client_name
     @redirect_host = OauthServer.host_of(checked["redirect_uri"])
+    # Who asks is told by where the answer goes, which Score checks; the
+    # name is the client's own choice, only quoted (#541).
+    if OauthServer.loopback?(checked["redirect_uri"])
+      @heading = SiteText.t("security_541.heading_local", {"name": @client_name})
+      @title = SiteText.t("security_541.title_local")
+    else
+      @heading = SiteText.t(
+        "security_541.heading",
+        {"host": @redirect_host, "name": @client_name}
+      )
+      @title = SiteText.t("security_541.title", {"host": @redirect_host})
+    end
+    @request_id = pending["request_id"].to_s
     @email = current_user().email.to_s
-    @title = SiteText.t("app.oauth.title", {"name": @client_name})
     @description = SiteText.t("app.oauth.description")
   end
 
@@ -26,6 +38,15 @@ class AppOauthController < AppBaseController
     return @_nothing_pending unless type(pending) == "hash"
 
     session_delete("oauth_pending")
+    # The answer is to the request its page showed: another one started since
+    # (in a tab, or by a page opening /oauth/authorize behind the person's
+    # back) is not approved by it (#541).
+    # A page with no id at all was shown before the ids came (a deploy since).
+    shown = params["request_id"].to_s
+    expected = pending["request_id"].to_s
+    return @_stale_request("outdated") if shown.blank? || expected.blank?
+    return @_stale_request("stale") unless secure_compare(shown, expected)
+
     checked = OauthServer.check_authorization(pending)
     return @_nothing_pending unless checked["ok"] == true
 
@@ -38,7 +59,13 @@ class AppOauthController < AppBaseController
       ))
     end
 
-    code = OauthCode.issue(checked["client"].client_id, current_user(), redirect_uri, checked["code_challenge"])
+    code = OauthCode.issue(
+      checked["client"].client_id,
+      current_user(),
+      redirect_uri,
+      checked["code_challenge"],
+      !pending["redirect_uri"].to_s.blank?
+    )
     redirect_external(OauthServer.callback(
       redirect_uri,
       {
@@ -55,6 +82,15 @@ class AppOauthController < AppBaseController
     @title = SiteText.t("app.oauth.nothing_title")
     @description = SiteText.t("app.oauth.nothing_description")
     @reason = "nothing_pending"
+    render("oauth_server/error", {}, {"status": 400})
+  end
+
+  # `why`: "stale" (another request replaced it) or "outdated" (no id on it).
+  def _stale_request(why)
+    @title = SiteText.t("security_541.#{why}_title")
+    @description = SiteText.t("app.oauth.nothing_description")
+    @reason = "stale_request"
+    @stale_body = SiteText.t("security_541.#{why}_body")
     render("oauth_server/error", {}, {"status": 400})
   end
 end

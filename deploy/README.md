@@ -64,7 +64,11 @@ It is `/health/deep`, not `/health/ready`: soli-proxy answers `/health/ready` it
 ## Client addresses (the per-address limits)
 
 The sign-in, sign-up and reset throttle (`AUTH_ATTEMPTS_PER_IP`, 15 in 5
-minutes) and the account e-mails' limit (`AUTH_EMAILS_PER_IP`, 20 an hour)
+minutes), the account e-mails' limit (`AUTH_EMAILS_PER_IP`, 20 an hour) and
+the OAuth server's open endpoints (`OAUTH_REGISTRATIONS_PER_IP_HOUR`, 600
+registrations an hour; `OAUTH_TOKEN_CALLS_PER_IP_MINUTE`, 600 token calls a
+minute; `OAUTH_REVOCATIONS_PER_IP_MINUTE`, 300 revocations a minute — raise
+them in `.env` if a hosted MCP client is refused with a 429)
 count requests per client address (`client_ip(req)`, the rate limiter). The
 app only sees soli-proxy, on `127.0.0.1`: **without the lines below, every
 visitor is the same address**, and 15 sign-ins or 20 e-mails in the window

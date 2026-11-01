@@ -8,14 +8,16 @@ class OauthCode < Model
 
   # A code for `user`'s approval of `client_id`, to come back with
   # `redirect_uri` and the verifier of `code_challenge`: the code itself
-  # (only its digest is kept).
-  static def issue(client_id, user, redirect_uri, code_challenge)
+  # (only its digest is kept). `redirect_uri_sent`: whether the request
+  # named the URI, which the exchange must then name too (#541).
+  static def issue(client_id, user, redirect_uri, code_challenge, redirect_uri_sent = true)
     raw = Crypto.random_token(32)
     OauthCode.create({
       "code_digest": Crypto.sha256(raw),
       "client_id": client_id,
       "user_id": user._key,
       "redirect_uri": redirect_uri,
+      "redirect_uri_sent": redirect_uri_sent,
       "code_challenge": code_challenge,
       "expires_at": DateTime.utc.to_unix + OAUTH_CODE_SECONDS
     })
