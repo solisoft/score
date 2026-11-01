@@ -13,6 +13,14 @@ class Changelog
       {"date": "2026-11-01", "entries": [
         {
           "area": "site",
+          "title": "Push, recordings and exports kept in bounds",
+          "text": "Push notifications go only to the browsers' own push services, and the test message is sent in the "
+          + "background, a few an hour. Audio takes keep at most 2 GB an account while Pro is not on sale. The data "
+          + "export splits a score's versions across its zips, each version named by when it was kept.",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "Sharing that stops when you say so",
           "text": "Readers of a shared link now show as « A reader », never by their address. A new link, a score "
           + "made private, someone uninvited or a score put in the trash now closes at once the live view of those "

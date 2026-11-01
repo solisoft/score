@@ -22,8 +22,12 @@ class AppPushController < AppBaseController
     render_json({"removed": forgotten, "devices": PushSubscription.count_of(current_user())})
   end
 
-  # POST /app/push/test — a message to each of one's devices
+  # POST /app/push/test — a message to each of one's devices, sent by a
+  # job: {"devices", "queued"} at once, or 429 past PUSH_TESTS_PER_HOUR
   def test
-    render_json(WebPush.test(current_user()))
+    user = current_user()
+    return render_json({"error": SiteText.t("security_543.push_test_limited")}, 429) unless WebPush.test_allowed?(user)
+
+    render_json(WebPush.queue_test(user))
   end
 end

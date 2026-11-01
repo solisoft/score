@@ -153,7 +153,8 @@ describe("Plan") do
         assert_eq(limits["upgrade"], false)
         assert_eq(limits["own_key_ai"], true)
         assert_eq(limits["take_tracks"], SCORE_TAKE_TRACKS)
-        assert_null(limits["take_bytes"])
+        # The room Pro keeps (#543): not unbounded while no one can pay.
+        assert_eq(limits["take_bytes"], Plan.pro_limits["take_bytes"])
         assert_null(limits["people_per_score"])
       end
       assert_eq(Plan.limits(user, true)["take_tracks"], 1)
@@ -164,13 +165,26 @@ describe("Plan") do
       assert_eq(Plan.limits(plan_pro())["own_key_ai"], true)
     end
 
-    test("audio takes: every track, and no account total, as #390 allowed") do
+    test("audio takes: every track, and past Free's 50 MB, as #390 allowed") do
       user = plan_user()
       score = Score.start(user, Score.blank_source("As before"))
       plan_take(score, user, 1, 60000000)
       assert_null(ScoreTake.plan_refusal(score, user, 4, 8000000))
       assert_null(ScoreTake.plan_refusal(score, user, 4, 8000000, false))
       assert_not_null(ScoreTake.plan_refusal(score, user, 4, 8000000, true))
+    end
+
+    test("audio takes: an account keeps Pro's 2 GB at most, not without end (#543)") do
+      user = plan_user()
+      score = Score.start(user, Score.blank_source("Too much"))
+      room = Plan.pro_limits["take_bytes"]
+      plan_take(score, user, 1, room - 8000000)
+      assert_null(ScoreTake.plan_refusal(score, user, 2, 8000000, false), "up to the limit")
+      refused = ScoreTake.plan_refusal(score, user, 2, 8000001, false)
+      assert_contains(refused["error"], "would pass the 2 GB your plan keeps")
+      assert_null(refused["upgrade"])
+      # The take it replaces does not count.
+      assert_null(ScoreTake.plan_refusal(score, user, 1, room, false))
     end
 
     test("people: a score shared with as many as before") do
