@@ -13,6 +13,14 @@ class Changelog
       {"date": "2026-11-01", "entries": [
         {
           "area": "site",
+          "title": "Sharing that stops when you say so",
+          "text": "Readers of a shared link now show as « A reader », never by their address. A new link, a score "
+          + "made private, someone uninvited or a score put in the trash now closes at once the live view of those "
+          + "who may no longer read it, and a score in the trash can no longer be changed by its collaborators.",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "Connecting an app is safer",
           "text": "The page that lets an app such as Claude reach your scores now names where the answer goes, not "
           + "just the name the app gives itself, and it approves only the request it showed. A connection whose "
