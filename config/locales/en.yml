@@ -1424,6 +1424,11 @@ en:
   # (#537) security: the editor's score data — keys under `security_537:` right below
   # ---
   # (#538) security: two-step sign-in and resets — keys under `security_538:` right below
+  security_538:
+    locked_by_code: "The password was right, but the code of the authenticator app was not, too many times: someone has your password. Change it once the lock is over, or reset it now with the button below."
+    too_many_codes: "Too many wrong codes for this account: sign-in is paused for {minutes} minutes."
+    two_step_password: "That is not your password: two-step sign-in is still off."
+    delete_wrong_code: "That code is not right, or it was already used: the account is still here."
   # ---
   # (#539) security: tokens, passwords and accounts — keys under `security_539:` right below
   # ---

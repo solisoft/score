@@ -7,7 +7,11 @@
     <%- t("mail.account_locked.body", words) %>
   </p>
   <p style="color: #666; font-size: 13px;">
-    <%- t("mail.account_locked.advice", words) %>
+    <% if locals["by_code"] == true %>
+      <%- t("security_538.locked_by_code", words) %>
+    <% else %>
+      <%- t("mail.account_locked.advice", words) %>
+    <% end %>
   </p>
   <p style="margin: 24px 0;">
     <a href="<%= reset_url %>"

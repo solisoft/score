@@ -65,10 +65,20 @@ class AppAccountController < AppBaseController
     redirect(app_account_path())
   end
 
-  # POST /app/account/two-step — a new secret for an authenticator app, to confirm
+  # POST /app/account/two-step — the password, then a new secret for an
+  # authenticator app, to confirm. The password (#538): a browser left signed
+  # in must not be enough to tie the account to someone else's app.
   def two_step
     @user = current_user()
     return redirect(app_account_path()) if @user.two_step?() || !User.two_step_available?()
+
+    unless @user.authenticate(params["password"].to_s)
+      @title = SiteText.t("app.account.page_title")
+      @description = SiteText.t("app.account.page_description")
+      @error = ""
+      @two_step_error = SiteText.t("security_538.two_step_password")
+      return render("app/account/show", {}, {"status": 422})
+    end
 
     @_show_enrolment(@user.start_two_step(), "")
   end
@@ -83,6 +93,11 @@ class AppAccountController < AppBaseController
     wrong = SiteText.t("app.account.enrol_wrong_code")
     return @_show_enrolment(secret, wrong) if codes.nil?
 
+    # Every other browser is signed out (User#confirm_two_step); this one
+    # stays, on the new version.
+    session_regenerate()
+    session_set("user_id", @user["_key"])
+    session_set("session_version", @user.current_session_version())
     @codes = codes
     @title = SiteText.t("app.account.backup_title")
     @description = SiteText.t("app.account.backup_description")
@@ -162,12 +177,18 @@ class AppAccountController < AppBaseController
     redirect(app_account_path() + "#push")
   end
 
-  # DELETE /app/account — the password confirms it
+  # DELETE /app/account — the password confirms it, and a code with two-step
+  # sign-in on (#538), as turning that off asks
   def destroy
     @user = current_user()
     unless @user.authenticate(params["password"].to_s)
       @title = SiteText.t("app.account.page_title")
       @error = SiteText.t("app.account.not_your_password")
+      return render("app/account/show", {}, {"status": 422})
+    end
+    if @user.two_step?() && !@user.second_step?(params["code"])
+      @title = SiteText.t("app.account.page_title")
+      @error = SiteText.t("security_538.delete_wrong_code")
       return render("app/account/show", {}, {"status": 422})
     end
 

@@ -78,6 +78,63 @@ describe("User two-step sign-in") do
     assert_not(off.second_step?(app_code(secret, 1)))
   end
 
+  test("an app's code passes once, even to two copies read before either used it") do
+    user = two_step_user()
+    secret = user.start_two_step
+    User.find(user._key).confirm_two_step(app_code(secret, 0))
+    # Two requests at once: each has read the account before the other wrote.
+    first = User.find(user._key)
+    second = User.find(user._key)
+    code = app_code(secret, 1)
+    assert(first.second_step?(code))
+    assert_not(second.second_step?(code), "the same code, from the copy read before")
+    assert_not(User.find(user._key).second_step?(code))
+  end
+
+  test("a backup code passes once, even to two copies read before either used it") do
+    user = two_step_user()
+    secret = user.start_two_step
+    codes = User.find(user._key).confirm_two_step(app_code(secret, 0))
+    first = User.find(user._key)
+    second = User.find(user._key)
+    assert(first.second_step?(codes[4]))
+    assert_not(second.second_step?(codes[4]), "the same code, from the copy read before")
+    assert_eq(User.find(user._key).backup_codes_left, 9)
+    # The other codes stay good, from a stale copy too.
+    assert(second.second_step?(codes[5]))
+    assert_eq(User.find(user._key).backup_codes_left, 8)
+  end
+
+  test("a code of a secret turned off passes no more, from a copy read before") do
+    user = two_step_user()
+    secret = user.start_two_step
+    User.find(user._key).confirm_two_step(app_code(secret, 0))
+    stale = User.find(user._key)
+    User.find(user._key).stop_two_step
+    assert_not(stale.second_step?(app_code(secret, 1)))
+  end
+
+  test("turning it on signs out every session and remembered browser opened before") do
+    user = two_step_user()
+    user.start_remember_me
+    before = User.find(user._key).current_session_version
+    secret = User.find(user._key).start_two_step
+    User.find(user._key).confirm_two_step(app_code(secret, 0))
+    on = User.find(user._key)
+    assert_eq(on.current_session_version, before + 1)
+    assert_null(on.remember_token_digest)
+  end
+
+  test("wrong codes lock the account as wrong passwords do") do
+    user = two_step_user()
+    (1 .. AUTH_MAX_FAILED_ATTEMPTS).each do |_|
+      User.find(user._key).register_failed_attempt(true)
+    end
+    assert_not(User.find(user._key).locked?, "one short of the limit")
+    User.find(user._key).register_failed_attempt(true)
+    assert(User.find(user._key).locked?)
+  end
+
   test("the server offers it only with a key to encrypt the secrets") do
     assert(User.two_step_available?())
     assert(two_step_user().can_use_two_step?)

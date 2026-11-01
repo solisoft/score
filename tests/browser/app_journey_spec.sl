@@ -643,7 +643,11 @@ describe("The app, in a browser") do
     email = journey_email()
     sign_up_in_browser(email)
     visit("/app/account")
-    click_button("Turn two-step sign-in on")
+    fill_in("#two_step_password", JOURNEY_PASSWORD)
+    # Low on the page now that it asks for the password (#538): a click by
+    # position lands mid-scroll, so the button is pressed as account_data_spec does.
+    wait_for("#two-step form button[type=submit]")
+    evaluate("document.querySelector('#two-step form button[type=submit]').click()")
     wait_for(".two-step-qr svg")
     secret = User.find_by("email", email).pending_two_step
     assert_text(secret)
@@ -651,7 +655,12 @@ describe("The app, in a browser") do
     click("form.auth-form button[type=submit]")
     wait_for_text("Two-step sign-in is on")
     assert_eq(evaluate("document.querySelectorAll('.two-step-codes li').length"), 10)
-    sign_out_in_browser()
+    # Turning it on renewed this browser's session (#538), and visit() would
+    # put the old, signed-out one back: to the account page as a person goes.
+    evaluate("location.assign('/app/account')")
+    wait_for("form[action=\"/logout\"] button")
+    evaluate("document.querySelector('form[action=\"/logout\"] button').click()")
+    assert_page_path("/login")
     fill_in("#email", email)
     fill_in("#password", JOURNEY_PASSWORD)
     click("form.auth-form button[type=submit]")

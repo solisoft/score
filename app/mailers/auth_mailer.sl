@@ -41,9 +41,11 @@ class AuthMailer < Mailer
   # nothing about the lock — telling the browser "this account is locked" also
   # tells whoever is guessing that they found the right password — so this is
   # how the owner finds out.
-  def account_locked(user, lock_minutes)
+  # `by_code`: locked by wrong second-step codes, so after a right password.
+  def account_locked(user, lock_minutes, by_code = false)
     @user = user
     @lock_minutes = lock_minutes
+    @by_code = by_code
     @reset_url = auth_base_url() + SiteLocale.path("/password/reset")
     this.mail(to: user.email, subject: SiteText.t("mail.account_locked.title"))
   end

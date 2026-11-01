@@ -513,7 +513,10 @@ class User < Model
     true
   end
 
-  def register_failed_attempt
+  # A wrong password, or with `by_code` a wrong second-step code (#538):
+  # both count towards the same lock, so that the codes cannot be guessed
+  # by opening sign-in after sign-in with a password already known.
+  def register_failed_attempt(by_code = false)
 
     # Don't re-stamp `locked_at` on an account that is *currently* locked:
     # doing so slides the 30-minute window forward on every further guess, so
@@ -538,7 +541,7 @@ class User < Model
     # was the right one. Delivery failures must not break sign-in.
     if just_locked
       try
-        AuthMailer.account_locked(this, AUTH_LOCKOUT_SECONDS / 60).deliver()
+        AuthMailer.account_locked(this, AUTH_LOCKOUT_SECONDS / 60, by_code).deliver()
       catch error
         Logger.warn("account-locked notification failed: " + str(error))
       end
@@ -620,12 +623,24 @@ class User < Model
       Crypto.sha256(User.backup_digest_text(c))
     end
     this.totp_enabled_at = DateTime.utc().to_unix()
+    # Every session and remembered browser opened on the password alone is
+    # signed out (#538): turned on because the password may be known, it
+    # would otherwise leave in whoever got in with it. The browser that
+    # turned it on is stamped again by the controller.
+    this.session_version = (this.session_version ?? 0) + 1
+    this.remember_token_digest = null
     this.update()
     codes
   end
 
   # Whether `code` passes the second step: a code of the app not used
   # before, or a backup code not used before — which is then spent.
+  #
+  # Spent in one conditional statement each (#538): reading the account,
+  # then writing it, let two requests sent together both pass with the same
+  # code, each having read it unused. The statement matches only while the
+  # code is still unused and the same secret still on; matching nothing is a
+  # refusal.
   def second_step?(code)
     return false unless this.two_step?()
 
@@ -635,18 +650,49 @@ class User < Model
       step = User.totp_step(secret, text, DateTime.utc().to_unix())
       return false if step.nil? || step <= (this.totp_last_step ?? -1)
 
-      this.totp_last_step = step
-      this.update()
-      return true
+      return this._spend_step(step)
     end
     digest = Crypto.sha256(User.backup_digest_text(text))
     left = this.totp_backup ?? []
     return false unless left.includes?(digest)
 
-    this.totp_backup = left.filter do |d|
-      d != digest
-    end
-    this.update()
+    this._spend_backup(digest)
+  end
+
+  # `step` kept as the last one used, unless a code of it or of a later one
+  # was used meanwhile: whether it was.
+  def _spend_step(step)
+    user_key = this._key
+    secret = this.totp_secret
+    written = @sdbql{
+      FOR u IN users
+      FILTER u._key == #{user_key} AND u.totp_secret == #{secret}
+      FILTER u.totp_last_step == null OR u.totp_last_step < #{step}
+      UPDATE u WITH { totp_last_step: #{step} } IN users
+      RETURN NEW
+    }
+    raise("The code could not be spent: #{written}") if type(written) == "string"
+    return false if written.length == 0
+
+    this.totp_last_step = step
+    true
+  end
+
+  # The backup code of `digest` taken off the list, unless it was meanwhile:
+  # whether it was.
+  def _spend_backup(digest)
+    user_key = this._key
+    secret = this.totp_secret
+    written = @sdbql{
+      FOR u IN users
+      FILTER u._key == #{user_key} AND u.totp_secret == #{secret} AND POSITION(u.totp_backup, #{digest})
+      UPDATE u WITH { totp_backup: (FOR d IN u.totp_backup FILTER d != #{digest} RETURN d) } IN users
+      RETURN NEW
+    }
+    raise("The code could not be spent: #{written}") if type(written) == "string"
+    return false if written.length == 0
+
+    this.totp_backup = written[0]["totp_backup"]
     true
   end
 
