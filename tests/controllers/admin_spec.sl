@@ -134,6 +134,73 @@ describe("The admin section") do
       assert_eq(res_status(get("/admin")), 200)
     end
 
+    test("a session that passed no second step is refused, even once the account has two-step on") do
+      admin = admin_spec_user("admin", nil, false)
+      target = admin_spec_user()
+      # Signed in with the password alone, then two-step turned on behind
+      # this session's back (by whoever holds the password, say).
+      admin_spec_sign_in(admin)
+      secret = User.find(admin._key).start_two_step
+      User.find(admin._key).confirm_two_step(Crypto.totp_generate(secret, DateTime.utc.to_unix, 30))
+      assert(User.find(admin._key).two_step?)
+      ["/admin", "/admin/customers", "/admin/actions"].each do |path|
+        response = get(path)
+        assert_eq(res_status(response), 302, path)
+        assert_eq(res_location(response), "/admin/two-step", path)
+      end
+      gift = post("/admin/customers/#{target._key}/gift", {"days": "365"})
+      assert_eq(res_location(gift), "/admin/two-step")
+      assert_not(User.find(target._key).pro?)
+      assert_eq(AdminAction.about(target._key).length, 0)
+      page = get("/admin/two-step")
+      assert_eq(res_status(page), 200)
+      assert_contains(res_body(page), "Sign out, then sign in again with the code of your authenticator app")
+      assert_contains(res_body(page), "data-sign-in-again")
+      assert_not(res_body(page).contains("data-turn-on-two-step"))
+
+      # The same account, signed in again with its code: the section opens.
+      admin_spec_sign_in(User.find(admin._key))
+      assert_eq(res_status(get("/admin")), 200)
+      assert_eq(res_location(get("/admin/two-step")), "/admin")
+    end
+
+    test("a code sign-in opens it for that account only, not for the next one signed in on the browser") do
+      admin = admin_spec_user("admin")
+      admin_spec_sign_in(admin)
+      assert_eq(res_status(get("/admin")), 200)
+      # Another admin signs in on the same browser with the password alone,
+      # then turns two-step on outside this session: the first one's code
+      # does not carry over.
+      other = admin_spec_user("admin", nil, false)
+      post(
+        "/login",
+        {"email": other.email, "password": ADMIN_SPEC_PASSWORD}
+      )
+      secret = User.find(other._key).start_two_step
+      User.find(other._key).confirm_two_step(Crypto.totp_generate(secret, DateTime.utc.to_unix, 30))
+      assert_eq(res_location(get("/admin")), "/admin/two-step")
+    end
+
+    test("turning two-step on in this session, with a first code, opens it") do
+      admin = admin_spec_user("admin", nil, false)
+      admin_spec_sign_in(admin)
+      assert_eq(res_location(get("/admin")), "/admin/two-step")
+      post("/app/account/two-step", {"password": ADMIN_SPEC_PASSWORD})
+      secret = User.find(admin._key).pending_two_step
+      assert_not_null(secret)
+      # A wrong first code turns nothing on, and opens nothing.
+      post("/app/account/two-step/confirm", {"code": "000000"})
+      assert_eq(res_location(get("/admin")), "/admin/two-step")
+      confirmed = post("/app/account/two-step/confirm", {"code": Crypto.totp_generate(
+        secret,
+        DateTime.utc.to_unix,
+        30
+      )})
+      assert_eq(res_status(confirmed), 200)
+      assert(User.find(admin._key).two_step?)
+      assert_eq(res_status(get("/admin")), 200)
+    end
+
     test("an admin sees the overview, and an Admin link in the nav") do
       admin = admin_spec_user("admin")
       admin_spec_sign_in(admin)

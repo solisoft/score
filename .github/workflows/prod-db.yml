@@ -66,11 +66,16 @@
 #   csrf    — form posts must carry their CSRF token (#544):
 #             SOLI_CSRF_TOKENS=require (a form post without the token is a
 #             403) and SOLI_SESSION_HOST_PREFIX=1 (the session cookie becomes
-#             __Host-session_id, which a subdomain cannot plant; everyone signs
-#             in once more). In place of the .env's lines of those names (kept
-#             beside as .env.before-csrf). The site restarts, must answer
-#             /health/deep with "ok", and a sign-in posted without a token
-#             must be refused with 403; or the old .env comes back.
+#             __Host-session_id, which a subdomain cannot plant). Sessions
+#             opened before keep their old cookie until they sign in again or
+#             expire. In place of the .env's lines of those names; the .env of
+#             the first run is kept beside as .env.before-csrf (a second run
+#             keeps it, and rolls back to the .env it found). The site
+#             restarts, must answer /health/deep with "ok", a sign-in posted
+#             without a token must be refused with 403, and GET /login must
+#             set __Host-session_id (Soli names it so only on a Secure cookie:
+#             through soli-proxy, X-Forwarded-Proto https and SOLI_TRUST_PROXY
+#             make it one); or the .env it found comes back.
 name: production database
 
 on:
@@ -623,8 +628,10 @@ jobs:
           ssh "$USER@$HOST" SITES_DIR="$SITES_DIR" DOMAIN="$DOMAIN" PROXY_CONF="$PROXY_CONF" APP="$APP" bash -s <<'REMOTE'
           set -euo pipefail
           cd "$SITES_DIR/$DOMAIN"
-          cp -p .env .env.before-csrf
-          grep -vE '^(# Form posts carry their CSRF token|SOLI_CSRF_TOKENS=|SOLI_SESSION_HOST_PREFIX=)' .env.before-csrf > .env.next || true
+          # The first .env replaced stays as it was; this run's rolls back.
+          [ -f .env.before-csrf ] || cp -p .env .env.before-csrf
+          cp -p .env .env.csrf-rollback
+          grep -vE '^(# Form posts carry their CSRF token|SOLI_CSRF_TOKENS=|SOLI_SESSION_HOST_PREFIX=)' .env.csrf-rollback > .env.next || true
           {
             echo "# Form posts carry their CSRF token; the session cookie is __Host- (#544)."
             echo "SOLI_CSRF_TOKENS=require"
@@ -641,13 +648,17 @@ jobs:
           # Same origin, no token: the requirement, not the Origin gate, refuses it.
           tokenless="$(curl -sk -m 8 --resolve "$DOMAIN:443:127.0.0.1" -o /dev/null -w '%{http_code}' \
             -X POST -H "Origin: https://$DOMAIN" --data 'email=nobody%40example.com&password=x' "https://$DOMAIN/login" || echo 000)"
-          echo "ready: $ready — a sign-in posted without a token -> $tokenless"
-          if echo "$ready" | grep -q '"status":"ok"' && [ "$tokenless" = "403" ]; then
+          # The sign-in page, through the proxy: its session cookie has the new name.
+          cookie="$(curl -sk -m 8 --resolve "$DOMAIN:443:127.0.0.1" -o /dev/null -D - "https://$DOMAIN/login" \
+            | grep -i '^set-cookie:' | grep -o '__Host-session_id=' | head -1 || true)"
+          echo "ready: $ready — a sign-in posted without a token -> $tokenless — GET /login sets: ${cookie:-no __Host-session_id}"
+          if echo "$ready" | grep -q '"status":"ok"' && [ "$tokenless" = "403" ] && [ -n "$cookie" ]; then
+            rm -f .env.csrf-rollback
             echo "done: SOLI_CSRF_TOKENS=require and SOLI_SESSION_HOST_PREFIX=1 set"
             exit 0
           fi
-          echo "not as expected: the old .env comes back" >&2
-          cp -p .env.before-csrf .env
+          echo "not as expected: the .env it found comes back" >&2
+          mv .env.csrf-rollback .env
           soli-proxy restart -c "$PROXY_CONF" "$APP" >/dev/null 2>&1 || true
           exit 1
           REMOTE

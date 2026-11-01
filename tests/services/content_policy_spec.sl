@@ -47,19 +47,33 @@ describe("The Content-Security-Policy") do
 
   describe("the policy") do
     test("runs the site's scripts and the engraver, never a plugin, a <base> or a frame of another site") do
-      policy = ContentPolicy.policy(["'sha256-abc='"])
+      policy = ContentPolicy.policy(["'sha256-abc='"], "")
       assert_contains(policy, "default-src 'self'")
       assert_contains(policy, "script-src 'self' 'wasm-unsafe-eval' 'sha256-abc=' #{CSP_MP3_ENCODER}")
       assert_contains(policy, "object-src 'none'")
       assert_contains(policy, "base-uri 'none'")
       assert_contains(policy, "frame-ancestors 'self'")
       assert_contains(policy, "connect-src 'self' blob:;")
+      # A violation is reported to the site, and still refused: no -Report-Only.
+      assert(policy.ends_with("; report-uri /csp-report"))
       # No inline script but those named: neither 'unsafe-inline' nor eval for scripts.
       script_src = policy.split("; ").filter do |directive|
         directive.starts_with("script-src")
       end[0]
       assert_not(script_src.contains("unsafe-inline"))
       assert_not(script_src.contains("'unsafe-eval'"))
+    end
+
+    test("names the site's WebSocket by its host, for a Safari that does not count wss: as 'self'") do
+      policy = ContentPolicy.policy([], "https://score.example.com")
+      assert_contains(policy, "connect-src 'self' wss://score.example.com blob:;")
+      assert_contains(
+        ContentPolicy.policy([], "http://localhost:5011/"),
+        "connect-src 'self' ws://localhost:5011 blob:;"
+      )
+      # No address configured, nothing guessed.
+      assert_contains(ContentPolicy.policy([], ""), "connect-src 'self' blob:;")
+      assert_contains(ContentPolicy.policy([], "not a url"), "connect-src 'self' blob:;")
     end
 
     test("the MP3 encoder named is the one the audio export loads") do
@@ -89,6 +103,16 @@ describe("The Content-Security-Policy") do
       hashes = ContentPolicy.script_hashes("app/views")
       assert(hashes.length >= 15, "the views' inline scripts")
       assert_eq(hashes, hashes.uniq)
+    end
+
+    test("no view carries an inline event handler, which the policy would block") do
+      assert_eq(ContentPolicy.inline_handlers("app/views"), [])
+      # What it finds: a handler attribute in a tag, not a script's own code.
+      handled = "<form onsubmit=\"return confirm('x')\"><button ONCLICK='go()'>Go</button></form>"
+      code = "<script>button.onclick = () => go();</script><p data-onload=\"x\">once upon</p>"
+      found = ContentPolicy.handlers_in(handled + code)
+      assert_eq(found, ["onsubmit", "onclick"])
+      assert_eq(ContentPolicy.handlers_in("<button data-confirm=\"Sure?\">Delete</button>"), [])
     end
   end
 

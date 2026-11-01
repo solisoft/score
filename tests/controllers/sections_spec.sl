@@ -376,6 +376,12 @@ describe("SectionsController and AppSectionsController") do
       assert_eq(res_status(post("/app/sections/#{section._key}/remove", {})), 403)
       assert_not_null(SharedSection.find_by("_key", section._key))
       lib_sign_in(author)
+      # Asked first by the button's data-confirm, which the policy lets run
+      # (an inline onsubmit it would block, and the form would go unasked).
+      page = res_body(get("/sections/#{section._key}"))
+      asked = "Take this section away from the library? Its ratings and comments go with it."
+      assert_contains(page, "data-confirm=\"#{asked}\" data-section-remove")
+      assert_not(page.contains("onsubmit"))
       response = post("/app/sections/#{section._key}/remove", {})
       assert_eq(res_location(response), "/sections")
       assert_null(SharedSection.find_by("_key", section._key))

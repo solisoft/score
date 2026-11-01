@@ -236,6 +236,12 @@ jobs:
             --exclude='/public/js/CLAUDE.md' \
             ./ "$USER@$HOST:$SITES_DIR/$DOMAIN/"
 
+      # The exclusion above also shields the copy an older deploy put on the
+      # server from --delete: taken off here, every time (nothing left, nothing
+      # done), so /js/CLAUDE.md is never served.
+      - name: Take the agents' notes off the server
+        run: ssh "$USER@$HOST" "rm -f '$SITES_DIR/$DOMAIN/public/js/CLAUDE.md'"
+
       - name: Note the version the server runs
         run: |
           installed="$(ssh "$USER@$HOST" 'soli --version' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"

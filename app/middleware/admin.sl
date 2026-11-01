@@ -3,10 +3,12 @@
 # the section does not say it exists. `require_login` (order 40) has sent a
 # guest to sign in before this runs.
 #
-# An admin reaches it with two-step sign-in on (#544): a stolen password
-# alone must not open every account. An admin without it is sent to a page
-# that says so and leads to the account's two-step setting
-# (/admin/two-step, outside this middleware), never locked out of the rest.
+# An admin reaches it from a session that passed a second step (#544,
+# SecondStep): a stolen password alone must not open every account — nor a
+# session opened before two-step was turned on. Anyone else is sent to a
+# page that says what to do (/admin/two-step, outside this middleware):
+# turn two-step on, or sign in again with the code. Never locked out of the
+# rest of the app.
 
 # order: 45
 # scope_only: true
@@ -14,7 +16,7 @@
 def require_admin(req)
   user = req["current_user"]
   halt(404, "Not found") if user.nil? || !user.admin?
-  return req if user.two_step?
+  return req if SecondStep.passed?(user)
 
   redirect(admin_two_step_path())
 end

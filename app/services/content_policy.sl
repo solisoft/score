@@ -15,7 +15,15 @@
 #
 # Connections: the site itself (its pages, its WebSocket, its event
 # streams) and blob: — the files a page makes itself, a saved score read
-# back before it is handed over.
+# back before it is handed over. The WebSocket is also named by the host of
+# APP_URL: an older Safari does not count wss: as 'self'.
+#
+# Inline event handlers (onclick=…) are blocked like any inline script: a
+# view asks before a destructive submit with `data-confirm`, which
+# /__soli/nav.js answers (`inline_handlers` finds any left).
+#
+# Enforced, and reported: a browser posts what it refused to /csp-report
+# (CspReportsController), where each report is one log line (`violations`).
 #
 # Styles stay 'unsafe-inline': the views and the engraver's components set
 # style attributes, and a style cannot run a script.
@@ -38,10 +46,20 @@ const CSP_SCRIPT_TYPES = [
   "application/javascript"
 ]
 
+# Where browsers report a violation, and how much of one is read: a report
+# is a few hundred bytes, each field a URL cut short in the log.
+const CSP_REPORT_PATH = "/csp-report"
+const CSP_REPORT_MAX_BYTES = 8192
+const CSP_REPORT_FIELD_CHARS = 200
+const CSP_REPORTS_PER_IP = 30
+const CSP_REPORT_WINDOW_SECONDS = 60
+
 class ContentPolicy
-  # The policy, with the inline scripts' `hashes` ("'sha256-…'" sources).
-  static def policy(hashes)
+  # The policy, with the inline scripts' `hashes` ("'sha256-…'" sources),
+  # for the site at `app_url` (its WebSocket's host).
+  static def policy(hashes, app_url = getenv("APP_URL"))
     script_sources = ["'self'", "'wasm-unsafe-eval'"] + hashes + [CSP_MP3_ENCODER]
+    connect_sources = ["'self'"] + ContentPolicy.socket_sources(app_url) + ["blob:"]
     [
       "default-src 'self'",
       "script-src #{script_sources.join(" ")}",
@@ -49,12 +67,23 @@ class ContentPolicy
       "font-src 'self' https://fonts.gstatic.com data:",
       "img-src 'self' data: blob:",
       "media-src 'self' data: blob:",
-      "connect-src 'self' blob:",
+      "connect-src #{connect_sources.join(" ")}",
       "worker-src 'self'",
       "object-src 'none'",
       "base-uri 'none'",
-      "frame-ancestors 'self'"
+      "frame-ancestors 'self'",
+      "report-uri #{CSP_REPORT_PATH}"
     ].join("; ")
+  end
+
+  # The site's WebSocket, by the host of `app_url`: wss:// for https, ws://
+  # for http; none when no address is configured.
+  static def socket_sources(app_url)
+    found = Regex.capture("^(?P<scheme>https?)://(?P<host>[^/?#\\s]+)", app_url.to_s.trim)
+    return [] if found.nil?
+
+    scheme = found["scheme"] == "https" ? "wss" : "ws"
+    ["#{scheme}://#{found["host"]}"]
   end
 
   # The policy for the views under `dir`, set on every response.
@@ -65,6 +94,10 @@ class ContentPolicy
         "content policy: an inline script holds a template tag, its hash cannot match",
         {"views": templated}
       )
+    end
+    handled = ContentPolicy.inline_handlers(dir)
+    unless handled.length == 0
+      Logger.warn("content policy: an inline event handler is blocked, use data-confirm", {"views": handled})
     end
     set_csp(ContentPolicy.policy(ContentPolicy.script_hashes(dir)))
   end
@@ -93,6 +126,93 @@ class ContentPolicy
         body.contains("<%")
       end
     end
+  end
+
+  # The views with an inline event handler (onsubmit=…, onclick=…), which
+  # the policy blocks. Must be none.
+  static def inline_handlers(dir = CSP_VIEWS_DIR)
+    ContentPolicy.view_files(dir).filter do |path|
+      ContentPolicy.handlers_in(File.read(path)).length > 0
+    end
+  end
+
+  # The handler attributes (lower-cased) in the tags of `html`, outside its
+  # scripts, whose own `button.onclick = …` is code, not an attribute.
+  static def handlers_in(html)
+    markup = Regex.replace_all("(?s)<%.*?%>", html, "x")
+    markup = Regex.replace_all("(?s)<script\\b[^>]*>.*?</script>", markup, "")
+    handlers = []
+    Regex.find_all("(?i)<[a-z][^>]*>", markup).each do |tag|
+      Regex.find_all("(?i)\\s(on[a-z]+)\\s*=", tag["match"]).each do |found|
+        handlers.push(found["match"].trim.replace("=", "").trim.downcase)
+      end
+    end
+    handlers
+  end
+
+  # What a browser's report says was refused, one compact hash per
+  # violation: the page (without its query), the directive, what was
+  # blocked, and where. Reads the legacy report (application/csp-report,
+  # {"csp-report": {…}}) and the Reporting API's list
+  # (application/reports+json, [{"type": "csp-violation", "body": {…}}]);
+  # anything else gives none, and nothing raises.
+  static def violations(content_type, body)
+    parsed = JSON.parse(body.to_s) rescue nil
+    return [] if parsed.nil?
+
+    reporting_api = content_type.to_s.downcase.starts_with("application/reports+json")
+    return ContentPolicy.reported_violations(parsed) if reporting_api
+    return [] unless parsed.class == "hash" && parsed["csp-report"].class == "hash"
+
+    found = parsed["csp-report"]
+    [ContentPolicy.violation(
+      found["document-uri"],
+      found["effective-directive"] ?? found["violated-directive"],
+      found["blocked-uri"],
+      found["source-file"],
+      found["line-number"]
+    )]
+  end
+
+  # The CSP reports of a Reporting API list; its other kinds left out.
+  static def reported_violations(parsed)
+    return [] unless parsed.class == "array"
+
+    reports = parsed.filter do |entry|
+      entry.class == "hash" && entry["type"] == "csp-violation" && entry["body"].class == "hash"
+    end
+    reports.map do |entry|
+      found = entry["body"]
+      ContentPolicy.violation(
+        found["documentURL"],
+        found["effectiveDirective"],
+        found["blockedURL"],
+        found["sourceFile"],
+        found["lineNumber"]
+      )
+    end
+  end
+
+  # Whether address `ip` may send one more report this minute.
+  static def report_allowed?(ip)
+    RateLimiter("csp-report:#{ip}", CSP_REPORTS_PER_IP, CSP_REPORT_WINDOW_SECONDS).allowed()
+  end
+
+  # One violation, each field on one line and cut short.
+  static def violation(page, directive, blocked, source, line)
+    where = ContentPolicy.report_field(source)
+    where = "#{where}:#{line}" unless where.blank? || line.nil?
+    {
+      "page": ContentPolicy.report_field(page.to_s.split("?")[0]),
+      "directive": ContentPolicy.report_field(directive),
+      "blocked": ContentPolicy.report_field(blocked),
+      "source": where
+    }
+  end
+
+  static def report_field(value)
+    text = Regex.replace_all("\\s+", value.to_s, " ").trim
+    text.length > CSP_REPORT_FIELD_CHARS ? text.substring(0, CSP_REPORT_FIELD_CHARS) : text
   end
 
   # The text of each script `html` holds that a browser runs inline: no

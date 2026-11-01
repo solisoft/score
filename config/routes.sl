@@ -83,6 +83,9 @@ get("/playground", "playground#show", name: "playground")
 # One fixed path: the ticket names the score (a dynamic segment in a
 # websocket route is not matched by Soli 2.28).
 router_websocket("/ws/scores", "score_room#handle")
+# What the Content-Security-Policy refused, reported by browsers (#544):
+# logged, with or without the app's database.
+post("/csp-report", "csp_reports#create", name: "csp_report")
 get("/app/setup", "app_setup#show", name: "app_setup")
 middleware("require_app_database", fn() {
   get("/app", "app/home#index", name: "app_home")

@@ -1457,4 +1457,6 @@ en:
     admin_two_step_do: "Turn on two-step sign-in in your account to use the admin."
     admin_two_step_button: "Turn on two-step sign-in"
     admin_two_step_unavailable: "This server cannot keep two-step secrets yet: whoever runs it must set SOLI_ENCRYPTION_KEY first."
+    admin_two_step_again: "This session was opened without your code: before two-step sign-in was turned on, or on a remembered browser. Sign out, then sign in again with the code of your authenticator app to use the admin."
+    admin_two_step_sign_out: "Sign out"
   # ---

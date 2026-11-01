@@ -1457,4 +1457,6 @@ fr:
     admin_two_step_do: "Activez la connexion en deux étapes dans votre compte pour utiliser l'administration."
     admin_two_step_button: "Activer la connexion en deux étapes"
     admin_two_step_unavailable: "Ce serveur ne peut pas encore garder les secrets de la connexion en deux étapes : la personne qui l'administre doit d'abord définir SOLI_ENCRYPTION_KEY."
+    admin_two_step_again: "Cette session a été ouverte sans votre code : avant d'activer la connexion en deux étapes, ou sur un navigateur mémorisé. Déconnectez-vous, puis reconnectez-vous avec le code de votre application d'authentification pour utiliser l'administration."
+    admin_two_step_sign_out: "Se déconnecter"
   # ---

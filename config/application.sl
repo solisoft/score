@@ -82,6 +82,11 @@ skip_csrf("/oauth/register")
 skip_csrf("/oauth/token")
 skip_csrf("/oauth/revoke")
 
+# Browsers post a Content-Security-Policy report on their own (#544): no
+# token, and often no Origin. It changes nothing; CspReportsController only
+# logs it.
+skip_csrf("/csp-report")
+
 # ---------------------------------------------------------------------
 # set_max_body_size — request body cap.
 # ---------------------------------------------------------------------

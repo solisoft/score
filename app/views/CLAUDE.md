@@ -370,6 +370,12 @@ a full page load (Turbo-Drive style). Write views knowing that:
   per tab.** Code in an external file that sets up widgets must re-run on
   `document.addEventListener("soli:load", init)`. `DOMContentLoaded`
   listeners registered by inline scripts are replayed, so they keep working.
+- **Inline scripts are allowed by their hash (#544, Content-Security-Policy):
+  an inline `<script>` holds no template tag** — pass values through a
+  `page_data(id, value)` JSON block and `JSON.parse` it — and **no `on*=`
+  handler attribute** (ask before a submit with `data-confirm`). `--dev`
+  sends no CSP, so a broken script still runs there: only
+  `tests/services/content_policy_spec.sl` catches it.
 - **`init()` must be idempotent and must stop what the previous page
   started.** `requestAnimationFrame` loops, intervals, observers and
   `document` listeners survive the swap. The full pattern is in

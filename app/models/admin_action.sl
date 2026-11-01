@@ -23,7 +23,8 @@ class AdminAction < Model
 
   # `admin` did `action` to `target_type` ("user" or "report") `target_id`;
   # `details` says how (a hash, kept as given). The admin's address is kept
-  # too, so the line still names them if the account goes.
+  # too, so the line still names them if the account goes, and `at` is to
+  # the microsecond: two changes in the same second keep their order.
   static def record(admin, action, target_type, target_id, details = {})
     AdminAction.create({
       "admin_id": admin._key,
@@ -37,8 +38,6 @@ class AdminAction < Model
     })
   end
 
-  # To the microsecond: two changes in the same second keep their order.
-
   # What was done to one account or report, the latest first.
   static def about(target_id)
     AdminAction.where({"target_id": target_id.to_s}).order("at", "desc").limit(ADMIN_ACTIONS_SHOWN).all
@@ -51,8 +50,9 @@ class AdminAction < Model
 
   # The line an admin reads: what was done, in a few words.
   def summary
-    days = (@details ?? {})["days"]
-    outcome = (@details ?? {})["outcome"]
+    details = @details ?? {}
+    days = details["days"]
+    outcome = details["outcome"]
     return "Offered #{days} days of Pro" if @action == "gift" && !days.nil?
     return "Ended the offer of Pro" if @action == "stop_gift"
     return "Unlocked signing in" if @action == "unlock"
