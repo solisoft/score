@@ -12,6 +12,13 @@ class Changelog
     [
       {"date": "2026-11-01", "entries": [
         {
+          "area": "engine",
+          "title": "Instrument and composer apart on a phone",
+          "text": "On a narrow page, a score's instrument (centred) and its composer (on the right) ran into each "
+          + "other: Saxo Ténor Sib over Johann Strauss. When they would touch, the instrument now takes its own "
+          + "line and the composer goes below it, still on the right. A wide page keeps them on one line."
+        },
+        {
           "area": "editor",
           "title": "The editor in French",
           "text": "With the app in French, the score editor is too: its menus, tools, dialogs, the mixer, recording, "
