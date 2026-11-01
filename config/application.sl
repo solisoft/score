@@ -124,6 +124,13 @@ skip_csrf("/oauth/revoke")
 #
 # `enable_security_headers` / `disable_security_headers` toggle the
 # whole bundle.
+#
+# The site's Content-Security-Policy (#544): its own scripts, the engraver's
+# WebAssembly, and each inline script of the views by its hash, read from
+# app/views here at boot (app/services/content_policy.sl). Sent wherever the
+# headers are (not under --dev, whose dev bar runs inline scripts of its
+# own). HSTS is left to soli-proxy, which sends it already.
+ContentPolicy.apply()
 
 # ---------------------------------------------------------------------
 # Sessions live in SoliDB, next to the app's accounts and scores: they

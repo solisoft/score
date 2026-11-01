@@ -1436,4 +1436,11 @@ fr:
   # (#543) security: push, storage and export — keys under `security_543:` right below
   # ---
   # (#544) security: CSP, configuration and admin — keys under `security_544:` right below
+  security_544:
+    admin_two_step_title: "Connexion en deux étapes requise"
+    admin_two_step_description: "L'administration s'ouvre à un administrateur qui se connecte en deux étapes."
+    admin_two_step_lead: "L'administration modifie les comptes des autres : elle ne s'ouvre qu'à un administrateur qui se connecte en deux étapes, pour qu'un mot de passe seul ne suffise jamais."
+    admin_two_step_do: "Activez la connexion en deux étapes dans votre compte pour utiliser l'administration."
+    admin_two_step_button: "Activer la connexion en deux étapes"
+    admin_two_step_unavailable: "Ce serveur ne peut pas encore garder les secrets de la connexion en deux étapes : la personne qui l'administre doit d'abord définir SOLI_ENCRYPTION_KEY."
   # ---

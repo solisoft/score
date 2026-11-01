@@ -224,9 +224,17 @@
               <% push_words["sent_other"] = t("app.account.push_sent_other") %>
               <% push_words["sent_none"] = t("app.account.push_sent_none") %>
               <% push_words["send_failed"] = t("app.account.push_send_failed") %>
+              <%# Beside the script, not in it: its text never changes (#544). %>
+              <%- page_data("push-data", {
+                "words": push_words,
+                "subscribe": app_push_subscriptions_path(),
+                "unsubscribe": app_push_subscriptions_remove_path(),
+                "test": app_push_test_path()
+              }) %>
               <script data-push-script>
                 (() => {
-                  const words = <%- json_for_script(push_words) %>;
+                  const page = JSON.parse(document.getElementById("push-data").textContent);
+                  const words = page.words;
                   const fill = (text, name, value) => text.replace(`{${name}}`, value);
                   const box = document.querySelector("[data-push]");
                   if (!box || box.dataset.ready) return;
@@ -275,7 +283,7 @@
                       if ((await Notification.requestPermission()) !== "granted") return show(false);
                       const registration = await ready;
                       const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytes(box.dataset.key) });
-                      const answer = await post("<%= app_push_subscriptions_path() %>", subscription.toJSON());
+                      const answer = await post(page.subscribe, subscription.toJSON());
                       count(answer.devices);
                       show(true);
                     } catch (error) {
@@ -289,7 +297,7 @@
                     try {
                       const subscription = await (await ready).pushManager.getSubscription();
                       if (subscription) {
-                        const answer = await post("<%= app_push_subscriptions_remove_path() %>", { endpoint: subscription.endpoint });
+                        const answer = await post(page.unsubscribe, { endpoint: subscription.endpoint });
                         await subscription.unsubscribe();
                         count(answer.devices);
                       }
@@ -302,7 +310,7 @@
                   });
                   test.addEventListener("click", async () => {
                     try {
-                      const answer = await post("<%= app_push_test_path() %>");
+                      const answer = await post(page.test);
                       say(answer.sent ? fill(answer.sent === 1 ? words.sent_one : words.sent_other, "n", answer.sent) : words.sent_none);
                     } catch (error) {
                       say(fill(words.send_failed, "error", error.message));

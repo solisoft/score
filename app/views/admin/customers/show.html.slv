@@ -97,6 +97,11 @@
     <% end %>
   </section>
 
+  <section class="admin-panel" id="admin-actions">
+    <h2>What the admins did</h2>
+    <%- partial("admin/actions", {"actions": admin_actions, "names": {customer._key: customer.display_name}}) %>
+  </section>
+
   <section class="admin-panel">
     <h2>Events from Stripe</h2>
     <%- partial("admin/events", {"events": picture["events"], "names": picture["names"]}) %>

@@ -258,9 +258,12 @@ function Score({ source }) {
   </div>
 </div>
 
+<%# The version beside the script, not in it: its text never changes (#544). %>
+<%- page_data("embed-data", {"v": eui_version}) %>
 <script type="module">
-  const { toPdf, toMidi, download } = await import("/eui-score/eui-score.js?v=<%= eui_version %>");
-  await import("/eui-score/eui-score-editor.js?v=<%= eui_version %>");
+  const { v } = JSON.parse(document.getElementById("embed-data").textContent);
+  const { toPdf, toMidi, download } = await import(`/eui-score/eui-score.js?v=${v}`);
+  await import(`/eui-score/eui-score-editor.js?v=${v}`);
 
   const slider = document.getElementById("embed-size");
   const sized = document.getElementById("embed-sized");

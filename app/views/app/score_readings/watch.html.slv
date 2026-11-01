@@ -41,21 +41,25 @@
   </div>
 </section>
 <% if reading.state == "reading" %>
+  <%# What the page says of the reading going on, in the app's language (#505):
+      score-photo.js's readingSays, its words from the locale files. Beside the
+      script, not in it: its text never changes, its hash is in the
+      Content-Security-Policy (#544). %>
+  <% words = {"writing": t("app.readings.says_writing"), "thinking": t("app.readings.says_thinking")} %>
+  <% words["thoughtOne"] = t("app.readings.says_thought_one") %>
+  <% words["thoughtOther"] = t("app.readings.says_thought_other") %>
+  <% words["waiting"] = t("app.readings.says_waiting") %>
+  <% words["numbers"] = t("app.readings.number_locale") %>
+  <%- page_data("reading-data", {"words": words, "v": eui_version, "at": app_reading_path(reading._key)}) %>
   <script type="module">
     // Followed live (#462): the news every few seconds, the music written so far engraved.
+    const data = JSON.parse(document.getElementById("reading-data").textContent);
     const page = document.querySelector("[data-import-page]");
     const status = page.querySelector("[data-import-status]");
     const score = page.querySelector("[data-import-score]");
     const draft = page.querySelector("[data-import-draft]");
-    const { took } = await import("/js/score-photo.js?v=<%= eui_version %>");
-    // What the page says of the reading going on, in the app's language (#505):
-    // score-photo.js's readingSays, its words from the locale files.
-    <% words = {"writing": t("app.readings.says_writing"), "thinking": t("app.readings.says_thinking")} %>
-    <% words["thoughtOne"] = t("app.readings.says_thought_one") %>
-    <% words["thoughtOther"] = t("app.readings.says_thought_other") %>
-    <% words["waiting"] = t("app.readings.says_waiting") %>
-    <% words["numbers"] = t("app.readings.number_locale") %>
-    const words = <%- json_for_script(words) %>;
+    const { took } = await import(`/js/score-photo.js?v=${data.v}`);
+    const words = data.words;
     const readingSays = (news) => {
       const time = took(news?.seconds);
       const thought = Number(news?.thought) || 0;
@@ -65,7 +69,7 @@
       else if (news?.phase === "thinking") said = words.thinking;
       return said.replace("{time}", time).replace("{chars}", thought.toLocaleString(words.numbers));
     };
-    const at = "<%= app_reading_path(reading._key) %>";
+    const at = data.at;
     let events = null;
     let wake = () => {};
     try {

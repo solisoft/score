@@ -373,7 +373,7 @@ a full page load (Turbo-Drive style). Write views knowing that:
 - **`init()` must be idempotent and must stop what the previous page
   started.** `requestAnimationFrame` loops, intervals, observers and
   `document` listeners survive the swap. The full pattern is in
-  `public/js/CLAUDE.md`.
+  `docs/app/public-js.md`.
 - **Test with a link click.** A reload always runs your scripts, so it hides
   the bug: open a page without the widget, click through to one with it,
   leave and come back.

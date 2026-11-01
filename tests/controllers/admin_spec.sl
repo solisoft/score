@@ -3,12 +3,14 @@
 # figures, finds a customer by address, name or plan, opens one, offers
 # Pro and takes it back, unlocks signing in, confirms an address; a paying
 # account's Pro is left to Stripe. Stripe's invoices are read through a
-# stand-in, never the network.
+# stand-in, never the network. An admin signs in in two steps, or is sent to
+# turn it on (#544); every change an admin makes is kept as an AdminAction.
 
 const ADMIN_SPEC_PASSWORD = "correct horse battery"
 const ADMIN_SPEC_DAY = 86400
 
-def admin_spec_user(role = "member", name = nil)
+# An account; an admin has two-step sign-in on unless `two_step` is false.
+def admin_spec_user(role = "member", name = nil, two_step = true)
   user = User.new()
   user.email = "admin-spec-#{uuid_v4}@example.com"
   user.name = name unless name.nil?
@@ -16,15 +18,25 @@ def admin_spec_user(role = "member", name = nil)
   user.set_password(ADMIN_SPEC_PASSWORD)
   user.confirmed_at = DateTime.utc.to_unix
   user.save
+  if role == "admin" && two_step
+    secret = User.find(user._key).start_two_step
+    User.find(user._key).confirm_two_step(Crypto.totp_generate(secret, DateTime.utc.to_unix, 30))
+  end
   User.find(user._key)
 end
 
+# Signed in as `user`: the password, then the code when two-step is on.
 def admin_spec_sign_in(user)
   clear_cookies()
-  post(
+  response = post(
     "/login",
     {"email": user.email, "password": ADMIN_SPEC_PASSWORD}
   )
+  account = User.find(user._key)
+  return response unless account.two_step?
+
+  secret = Crypto.decrypt(account.totp_secret, getenv("SOLI_ENCRYPTION_KEY"))
+  post("/login/code", {"code": Crypto.totp_generate(secret, DateTime.utc.to_unix + 30, 30)})
 end
 
 def admin_spec_paying(user, interval = "monthly")
@@ -82,6 +94,44 @@ describe("The admin section") do
       again = User.find(target._key)
       assert_not(again.pro?)
       assert_not(again.locked_at.nil?)
+    end
+
+    test("an admin without two-step is sent to turn it on, and changes nothing") do
+      admin = admin_spec_user("admin", nil, false)
+      target = admin_spec_user()
+      admin_spec_sign_in(admin)
+      [
+        "/admin",
+        "/admin/customers",
+        "/admin/customers/#{target._key}",
+        "/admin/payments",
+        "/admin/reports",
+        "/admin/actions"
+      ].each do |path|
+        response = get(path)
+        assert_eq(res_status(response), 302, path)
+        assert_eq(res_location(response), "/admin/two-step", path)
+      end
+      gift = post("/admin/customers/#{target._key}/gift", {"days": "365"})
+      assert_eq(res_location(gift), "/admin/two-step")
+      assert_not(User.find(target._key).pro?)
+      assert_eq(AdminAction.about(target._key).length, 0)
+
+      page = get("/admin/two-step")
+      assert_eq(res_status(page), 200)
+      assert_contains(res_body(page), "Turn on two-step sign-in in your account to use the admin.")
+      assert_contains(res_body(page), "href=\"/app/account#two-step\" data-turn-on-two-step")
+      # Not locked out: the rest of the app still opens.
+      assert_eq(res_status(get("/app/account")), 200)
+    end
+
+    test("the two-step page: 404 for a member, the section for an admin with two-step, sign-in for a guest") do
+      assert_contains(res_location(get("/admin/two-step")), "/login")
+      admin_spec_sign_in(admin_spec_user())
+      assert_eq(res_status(get("/admin/two-step")), 404)
+      admin_spec_sign_in(admin_spec_user("admin"))
+      assert_eq(res_location(get("/admin/two-step")), "/admin")
+      assert_eq(res_status(get("/admin")), 200)
     end
 
     test("an admin sees the overview, and an Admin link in the nav") do
@@ -208,6 +258,65 @@ describe("The admin section") do
       ended = User.find(customer._key)
       assert_not(ended.pro?)
       assert_eq(ended.plan_gift, false)
+
+      # Each change kept, the latest first: by whom, what, how long.
+      kept = AdminAction.about(customer._key)
+      assert_eq(kept.map(&:action), [
+        "stop_gift",
+        "gift",
+        "gift"
+      ])
+      assert_eq(kept.map(&:admin_id).uniq, [admin._key])
+      assert_eq(kept[0].admin_email, admin.email)
+      assert_eq(kept[1].details["days"], 30)
+      assert_eq(kept[1].target_type, "user")
+      assert(kept[0].created_at > 0)
+      assert_eq(kept[1].summary, "Offered 30 days of Pro")
+      assert_eq(kept[0].summary, "Ended the offer of Pro")
+    end
+
+    test("a refused change is not kept as done") do
+      paying = admin_spec_paying(admin_spec_user())
+      free = admin_spec_user()
+      admin_spec_sign_in(admin_spec_user("admin"))
+      post("/admin/customers/#{paying._key}/gift", {"days": "30"})
+      post("/admin/customers/#{free._key}/gift", {"days": "0"})
+      post("/admin/customers/#{free._key}/gift/stop", {})
+      post("/admin/customers/#{free._key}/confirm", {})
+      assert_eq(AdminAction.about(paying._key).length, 0)
+      assert_eq(AdminAction.about(free._key).length, 0, "already confirmed, no offer to end")
+    end
+
+    test("the account's page and the Activity tab show what the admins did") do
+      admin = admin_spec_user("admin")
+      customer = admin_spec_user()
+      customer.locked_at = DateTime.utc.to_unix
+      customer.update()
+      admin_spec_sign_in(admin)
+      assert_contains(res_body(get("/admin/customers/#{customer._key}")), "Nothing done by an admin yet.")
+      post("/admin/customers/#{customer._key}/unlock", {})
+      page = res_body(get("/admin/customers/#{customer._key}"))
+      assert_contains(page, "data-admin-action=\"unlock\"")
+      assert_contains(page, "Unlocked signing in")
+      assert_contains(page, admin.email)
+      activity = get("/admin/actions")
+      assert_eq(res_status(activity), 200)
+      assert_contains(res_body(activity), "data-admin-action=\"unlock\"")
+      assert_contains(res_body(activity), "/admin/customers/#{customer._key}")
+      assert(assigns()["actions"].length >= 1)
+      # A member still learns nothing of it.
+      admin_spec_sign_in(admin_spec_user())
+      assert_eq(res_status(get("/admin/actions")), 404)
+    end
+
+    test("an action of an unknown kind is not kept") do
+      admin = admin_spec_user("admin")
+      refused = AdminAction.record(admin, "delete_everything", "user", admin._key, {})
+      assert_eq(refused._errors[0]["field"], "action")
+      assert_eq(AdminAction.about(admin._key).length, 0)
+      kept = AdminAction.record(admin, "unlock", "user", admin._key)
+      assert_null(kept._errors)
+      assert_eq(AdminAction.about(admin._key).length, 1)
     end
 
     test("refuses an offer to a paying account, a length out of range, and an end with no offer") do
@@ -271,6 +380,10 @@ describe("The admin section") do
       assert(again.locked_at.nil?)
       assert_eq(again.failed_attempts, 0)
       assert(again.confirmed?)
+      kept = AdminAction.about(customer._key)
+      assert_eq(kept.map(&:action), ["confirm", "unlock"])
+      assert_eq(kept[0].details["email"], customer.email)
+      assert_eq(kept[0].summary, "Confirmed the address")
 
       response = post("/admin/customers/#{customer._key}/confirm", {})
       assert_contains(res_body(get(res_location(response))), "confirmed already")

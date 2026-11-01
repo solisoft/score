@@ -1,0 +1,12 @@
+<%# An admin without two-step sign-in, sent here by `require_admin` (#544):
+    why the admin section is closed to them, and where to open it. %>
+<section class="auth" data-admin-two-step>
+  <h1><%- t("security_544.admin_two_step_title") %></h1>
+  <p><%- t("security_544.admin_two_step_lead") %></p>
+  <p><strong><%- t("security_544.admin_two_step_do") %></strong></p>
+  <% if available %>
+    <p><a class="btn btn-primary" href="<%= account_two_step %>" data-turn-on-two-step><%- t("security_544.admin_two_step_button") %></a></p>
+  <% else %>
+    <p class="form-error" role="alert" data-two-step-unavailable><%- t("security_544.admin_two_step_unavailable") %></p>
+  <% end %>
+</section>

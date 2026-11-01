@@ -16,15 +16,26 @@ def lib_user(name = nil, role = "member")
   user.set_password(LIB_PASSWORD)
   user.confirmed_at = DateTime.utc.to_unix
   user.save
+  # An admin reaches the admin section only with two-step on (#544).
+  if role == "admin"
+    secret = User.find(user._key).start_two_step
+    User.find(user._key).confirm_two_step(Crypto.totp_generate(secret, DateTime.utc.to_unix, 30))
+  end
   user
 end
 
+# Signed in as `user`: the password, then the code when two-step is on.
 def lib_sign_in(user)
   clear_cookies()
-  post(
+  response = post(
     "/login",
     {"email": user.email, "password": LIB_PASSWORD}
   )
+  account = User.find(user._key)
+  return response unless account.two_step?
+
+  secret = Crypto.decrypt(account.totp_secret, getenv("SOLI_ENCRYPTION_KEY"))
+  post("/login/code", {"code": Crypto.totp_generate(secret, DateTime.utc.to_unix + 30, 30)})
 end
 
 def lib_fields(title = "Waltz strum")
@@ -263,8 +274,8 @@ describe("SectionsController and AppSectionsController") do
       into = post("/app/sections/#{section._key}/import", {"score_id": mine._key})
       assert_eq(res_location(into), "/app/scores/#{mine._key}?section=#{section._key}")
       editor = res_body(get("/app/scores/#{mine._key}?section=#{section._key}"))
-      assert_contains(editor, "importSection: \"/sections/#{section._key}/data.json\"")
-      assert_contains(res_body(get("/app/scores/#{mine._key}?section=%22%3E%3Cscript%3E")), "importSection: \"\"")
+      assert_contains(editor, "\"import_section\":\"/sections/#{section._key}/data.json\"")
+      assert_contains(res_body(get("/app/scores/#{mine._key}?section=%22%3E%3Cscript%3E")), "\"import_section\":\"\"")
       assert_eq(Score.find(mine._key).source, "{ c'1 }\n", "the score itself changes only in the editor")
     end
 
@@ -390,6 +401,9 @@ describe("SectionsController and AppSectionsController") do
       reports = SectionReport.where({"user_id": reporter._key}).all
       assert_eq(reports.length, 2, "one a thing, none without a reason")
       assert_eq(res_status(get("/admin/reports")), 404)
+      assert_eq(res_status(post("/admin/reports/#{reports[0]._key}/dismiss", {})), 404)
+      assert_null(SectionReport.find(reports[0]._key).resolved_at)
+      assert_eq(AdminAction.about(reports[0]._key).length, 0)
     end
 
     test("an admin hides a reported section, shows it again, and takes a reported comment away") do
@@ -399,7 +413,8 @@ describe("SectionsController and AppSectionsController") do
       reporter = lib_user()
       SectionReport.file(section, nil, reporter, "Not music")
       SectionReport.file(section, comment, reporter, "Rude")
-      lib_sign_in(lib_user("Admin", "admin"))
+      admin = lib_user("Admin", "admin")
+      lib_sign_in(admin)
       page = get("/admin/reports")
       assert_eq(res_status(page), 200)
       assert_contains(res_body(page), "Rude words")
@@ -422,6 +437,16 @@ describe("SectionsController and AppSectionsController") do
       post("/admin/reports/#{on_comment._key}/remove", {})
       assert_null(SectionComment.find_by("_key", comment._key))
       assert_eq(SharedSection.find(section._key).comments_count, 0)
+      # Each act kept with the report, and who did it (#544).
+      on_hidden = AdminAction.about(on_section._key)
+      assert_eq(on_hidden.map(&:action), ["report_show", "report_hide"])
+      assert_eq(on_hidden[1].admin_id, admin._key)
+      assert_eq(on_hidden[1].details["section_id"], section._key)
+      assert_eq(on_hidden[1].summary, "Report: hidden")
+      on_removed = AdminAction.about(on_comment._key)
+      assert_eq(on_removed.map(&:action), ["report_remove"])
+      assert_eq(on_removed[0].details["target_id"], comment._key)
+      assert_eq(on_removed[0].target_type, "report")
     end
 
     test("an admin dismisses a report: the section stays as it was") do
@@ -432,6 +457,7 @@ describe("SectionsController and AppSectionsController") do
       post("/admin/reports/#{report._key}/dismiss", {})
       assert_eq(SectionReport.find(report._key).outcome, "dismissed")
       assert_not(SharedSection.find(section._key).hidden)
+      assert_eq(AdminAction.about(report._key).map(&:action), ["report_dismiss"])
     end
   end
 end
