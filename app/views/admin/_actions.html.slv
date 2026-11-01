@@ -1,0 +1,27 @@
+<%# What the admins did (`actions`, AdminAction rows, #544), with the name of
+    each account they were done to (`names`, key to name). %>
+<% if actions.length == 0 %>
+  <p class="admin-empty">Nothing done by an admin yet.</p>
+<% else %>
+  <div class="table-scroll">
+    <table class="ref-table admin-table" data-admin-actions>
+      <thead><tr><th>When</th><th>Admin</th><th>What</th><th>On</th></tr></thead>
+      <tbody>
+        <% for action in actions %>
+          <tr data-admin-action="<%= action.action %>">
+            <td><%= admin_day(action.created_at) %></td>
+            <td><%= action.admin_email %></td>
+            <td><%= action.summary() %></td>
+            <td>
+              <% if action.target_type == "user" %>
+                <a href="<%= admin_customer_path(action.target_id) %>"><%= names[action.target_id] ?? action.target_id %></a>
+              <% else %>
+                <a href="<%= admin_reports_path() %>">A report</a>
+              <% end %>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+<% end %>

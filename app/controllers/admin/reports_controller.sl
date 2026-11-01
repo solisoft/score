@@ -1,6 +1,7 @@
 # The shared library's reports, for an admin (#444): each section or
 # comment people reported, with why, and what to do — hide it (and show it
-# again), take it away, or dismiss the report.
+# again), take it away, or dismiss the report. What an admin does to a
+# report is kept as an AdminAction (#544).
 class AdminReportsController < AdminBaseController
   # GET /admin/reports — the open reports, the oldest first
   def index
@@ -37,6 +38,7 @@ class AdminReportsController < AdminBaseController
     report = SectionReport.find(params["id"])
     @_set_hidden(report, true)
     report.close("hidden")
+    @_record("report_hide", report, "hidden")
     @_back("Hidden: no one but the admins sees it now.")
   end
 
@@ -45,6 +47,7 @@ class AdminReportsController < AdminBaseController
     report = SectionReport.find(params["id"])
     @_set_hidden(report, false)
     report.close("shown")
+    @_record("report_show", report, "shown")
     @_back("Shown again.")
   end
 
@@ -60,6 +63,7 @@ class AdminReportsController < AdminBaseController
       report.close("removed")
       SharedSection.find_by("_key", report.section_id)&.remove
     end
+    @_record("report_remove", report, "removed")
     @_back("Taken away.")
   end
 
@@ -67,10 +71,21 @@ class AdminReportsController < AdminBaseController
   def dismiss
     report = SectionReport.find(params["id"])
     report.close("dismissed")
+    @_record("report_dismiss", report, "dismissed")
     @_back("Dismissed.")
   end
 
   private
+
+  # What was done to `report`, kept with the thing it reports.
+  def _record(action, report, outcome)
+    AdminAction.record(current_user(), action, "report", report._key, {
+      "outcome": outcome,
+      "target": report.target,
+      "target_id": report.target_id,
+      "section_id": report.section_id
+    })
+  end
 
   def _set_hidden(report, hidden)
     if report.target == "comment"

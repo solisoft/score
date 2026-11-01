@@ -83,6 +83,8 @@ class AppAccountController < AppBaseController
     wrong = SiteText.t("app.account.enrol_wrong_code")
     return @_show_enrolment(secret, wrong) if codes.nil?
 
+    # A right code, given in this session: as good as a code sign-in (#544).
+    SecondStep.mark(@user)
     @codes = codes
     @title = SiteText.t("app.account.backup_title")
     @description = SiteText.t("app.account.backup_description")

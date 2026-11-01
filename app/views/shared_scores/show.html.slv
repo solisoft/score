@@ -54,18 +54,29 @@
   <%# The score's room, listened to (#392; ScoreRoom): the people of the
       score hear the comments as they are written and see who else is
       there; anyone else the score is open to hears only that it changed.
-      Nothing is sent from here but the connection itself. %>
+      Nothing is sent from here but the connection itself. What the script
+      needs comes beside it: its text never changes, its hash is in the
+      Content-Security-Policy (#544). %>
+  <%- page_data("read-data", {
+    "comments": comments_url,
+    "people": people_url,
+    "me": me.to_s,
+    "v": eui_version,
+    "revision": score.revision,
+    "ticket": ticket_url
+  }) %>
   <script type="module">
-    const commentsUrl = <%- comments_url.nil? ? "null" : "\"" + comments_url + "\"" %>;
+    const page = JSON.parse(document.getElementById("read-data").textContent);
+    const commentsUrl = page.comments;
     const origin = crypto.randomUUID?.() ?? String(Math.random()).slice(2);
     let comments = null;
     if (commentsUrl) {
-      const { startComments } = await import("/eui-score/comments.js?v=<%= eui_version %>");
+      const { startComments } = await import(`/eui-score/comments.js?v=${page.v}`);
       const panel = document.querySelector(".read-comments .studio-comments-body");
       comments = startComments(panel, {
         url: commentsUrl,
-        people: <%- people_url.nil? ? "null" : "\"" + people_url + "\"" %>,
-        me: "<%= me %>",
+        people: page.people,
+        me: page.me,
         origin,
         manual: true,
       });
@@ -76,7 +87,7 @@
 
     const roomBox = document.querySelector("[data-read-room]");
     const updated = document.querySelector("[data-read-updated]");
-    const me = "<%= me %>";
+    const me = page.me;
     let people = {};
     const shortName = (name) => String(name ?? "").replace(/@.*$/, "") || "Someone";
     const showPeople = () => {
@@ -89,11 +100,11 @@
       location.reload();
     });
     let delay = 3000;
-    let revision = <%= score.revision %>;
+    let revision = page.revision;
     async function listen() {
       let ticket;
       try {
-        const answer = await fetch("<%= ticket_url %>", { headers: { Accept: "application/json" }, credentials: "same-origin" });
+        const answer = await fetch(page.ticket, { headers: { Accept: "application/json" }, credentials: "same-origin" });
         // No longer open to this reader: nothing more to hear.
         if ([401, 403, 404].includes(answer.status)) return;
         if (!answer.ok) throw new Error(`ticket: ${answer.status}`);

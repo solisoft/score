@@ -1450,4 +1450,13 @@ en:
     take_room_full: "Your takes would pass the {room} your plan keeps: delete some first."
   # ---
   # (#544) security: CSP, configuration and admin — keys under `security_544:` right below
+  security_544:
+    admin_two_step_title: "Two-step sign-in needed"
+    admin_two_step_description: "The admin section opens to an admin who signs in in two steps."
+    admin_two_step_lead: "The admin section changes other people's accounts: it opens only to an admin who signs in in two steps, so that a password alone never opens it."
+    admin_two_step_do: "Turn on two-step sign-in in your account to use the admin."
+    admin_two_step_button: "Turn on two-step sign-in"
+    admin_two_step_unavailable: "This server cannot keep two-step secrets yet: whoever runs it must set SOLI_ENCRYPTION_KEY first."
+    admin_two_step_again: "This session was opened without your code: before two-step sign-in was turned on, or on a remembered browser. Sign out, then sign in again with the code of your authenticator app to use the admin."
+    admin_two_step_sign_out: "Sign out"
   # ---

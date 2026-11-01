@@ -39,7 +39,8 @@ describe("json_for_script") do
       template = File.read(view)
       assert_not(template.contains(".to_json %>"), view)
       assert_not(template.contains(".to_json :"), view)
-      assert(template.contains("<%- json_for_script("), view)
+      # Or in a JSON block beside the script, through json_for_script (#544).
+      assert(template.contains("<%- json_for_script(") || template.contains("<%- page_data("), view)
     end
   end
 

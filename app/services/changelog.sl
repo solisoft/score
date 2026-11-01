@@ -13,6 +13,14 @@ class Changelog
       {"date": "2026-11-01", "entries": [
         {
           "area": "site",
+          "title": "Pages that run only their own scripts",
+          "text": "Every page now tells the browser exactly which of its scripts may run, so a script slipped into a "
+          + "page is refused. The administration asks for a two-step code in the same session and keeps a log of "
+          + "every change it makes.",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "Push, recordings and exports kept in bounds",
           "text": "Push notifications go only to the browsers' own push services, and the test message is sent in the "
           + "background, a few an hour. Audio takes keep at most 2 GB an account while Pro is not on sale. The data "

@@ -26,8 +26,26 @@ cat > .env <<'ENV'
 APP_ENV=production
 APP_URL=https://score.solisoft.net
 SOLI_APP_HOSTS=score.solisoft.net
+# Form posts must carry their CSRF token (a missing one is a 403, not only
+# an Origin check), and the session cookie is __Host-session_id, which a
+# subdomain cannot plant (#544).
+SOLI_CSRF_TOKENS=require
+SOLI_SESSION_HOST_PREFIX=1
 ENV
 ```
+
+- On a site made before #544, Actions › production database › `csrf` adds
+  the last two lines to the server's `.env` (the first one it replaced kept
+  as `.env.before-csrf`), restarts, and checks that a token-less sign-in is
+  refused and that `/login` sets `__Host-session_id` — or puts the `.env`
+  back. The cookie's name changes: a session opened before keeps its old
+  cookie until it signs in again or expires.
+- The policy is enforced, and browsers report what it refused to
+  `/csp-report`: each violation is a `csp violation` line in the app's log
+  (page, directive, what was blocked), never a database write.
+- The site's Content-Security-Policy is set by the app
+  (`config/application.sl`, `ContentPolicy`); HSTS comes from soli-proxy
+  (`max-age=63072000; includeSubDomains`), so the app does not send it twice.
 
 - DNS: `score.solisoft.net` → the server (soli-proxy gets the certificate).
 - Soli on the server must be ≥ 2.26.0 (the `eui_score_*` builtins); the
