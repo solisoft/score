@@ -36,6 +36,12 @@ describe("The site in two languages") do
     # Chose English: kept, no redirect.
     set_request_cookie("locale", "en")
     assert_eq(res_status(get("/pricing")), 200)
+    # A client that takes anything, or names neither language, stays in English.
+    clear_cookies()
+    set_header("Accept-Language", "*")
+    assert_eq(res_status(get("/pricing")), 200, "* is not French")
+    set_header("Accept-Language", "de-DE,de;q=0.9")
+    assert_eq(res_status(get("/pricing")), 200)
     # An English browser stays in English.
     clear_cookies()
     set_header("Accept-Language", "en-GB,en;q=0.9")
@@ -64,6 +70,12 @@ describe("The site in two languages") do
     assert_null(SiteLocale.first_visit("GET", "/fr/login", "", "fr"))
     assert_null(SiteLocale.first_visit("GET", "/login", "en", "fr"))
     assert_eq(SiteLocale.first_visit("GET", "/", "", "fr"), "/fr")
+    assert_eq(SiteLocale.preferred("fr-FR,fr;q=0.9,en;q=0.8"), "fr")
+    assert_eq(SiteLocale.preferred("en-US,fr;q=0.9"), "en")
+    assert_eq(SiteLocale.preferred("de;q=1,fr;q=0.5,en;q=0.7"), "en", "by weight, not by order")
+    assert_null(SiteLocale.preferred("*"))
+    assert_null(SiteLocale.preferred("de-DE,de;q=0.9"))
+    assert_null(SiteLocale.preferred(nil))
   end
 
   test("every reading page answers in French at /fr, with its French title and links") do

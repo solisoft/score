@@ -63,6 +63,31 @@ class SiteLocale
     end
   end
 
+  # The site's language a browser asks for first, from its Accept-Language
+  # header: the named language of highest weight among English and French,
+  # or nil when it names neither. `*` names none: a client that takes
+  # anything (a crawler, a script) stays in English.
+  static def preferred(header)
+    best = nil
+    best_weight = 0.0
+    for part in header.to_s.split(",")
+      pieces = part.trim.split(";")
+      language = pieces[0].trim.downcase.split("-")[0]
+      next unless SITE_LOCALES.includes?(language)
+
+      weight = 1.0
+      for param in pieces.slice(1, pieces.length)
+        kv = param.trim.split("=")
+        weight = kv[1].to_f if kv.length == 2 && kv[0].trim == "q"
+      end
+      if weight > best_weight
+        best = language
+        best_weight = weight
+      end
+    end
+    best
+  end
+
   # Where a request is sent first, or nil: an English page read with a
   # browser preferring `preferred`, by someone who has not chosen yet.
   static def first_visit(method, path, chosen, preferred)
