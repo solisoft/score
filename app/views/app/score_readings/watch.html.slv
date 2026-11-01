@@ -55,7 +55,7 @@
     <% words["thoughtOther"] = t("app.readings.says_thought_other") %>
     <% words["waiting"] = t("app.readings.says_waiting") %>
     <% words["numbers"] = t("app.readings.number_locale") %>
-    const words = <%- words.to_json %>;
+    const words = <%- json_for_script(words) %>;
     const readingSays = (news) => {
       const time = took(news?.seconds);
       const thought = Number(news?.thought) || 0;
