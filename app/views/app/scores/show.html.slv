@@ -100,7 +100,7 @@
   const { startComments, markersOf } = await import("/eui-score/comments.js?v=<%= eui_version %>");
   const root = document.getElementById("studio");
   // What this page says, in the app's language (#508): `say("saved_by", { name })`.
-  const words = <%- editor_page_words().to_json %>;
+  const words = <%- json_for_script(editor_page_words()) %>;
   const say = (key, vars = {}) => Object.keys(vars).reduce((text, name) => text.split(`{${name}}`).join(String(vars[name])), words[key]);
   const url = "<%= app_score_path(score) %>";
   const saveState = document.querySelector("[data-save-state]");
