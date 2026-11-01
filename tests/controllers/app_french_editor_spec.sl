@@ -44,7 +44,7 @@ describe("The score editor in French") do
     assert_contains(page, "<summary class=\"studio-menu\">Fichier</summary>")
     assert_contains(page, "<summary class=\"studio-menu\">Édition</summary>")
     assert_contains(page, "<summary class=\"studio-menu\">Affichage</summary>")
-    assert_contains(page, "<summary class=\"studio-menu\">Insérer</summary>")
+    assert_contains(page, "<summary class=\"studio-menu\">Insertion</summary>")
     assert_contains(page, "<summary class=\"studio-menu\">Lecture</summary>")
     assert_contains(page, "title=\"Annuler (Ctrl+Z)\" aria-label=\"Annuler\"")
     assert_contains(page, "<summary><h3>Nuances</h3></summary>")
