@@ -62,6 +62,16 @@ def sign_out_in_browser
   assert_page_path("/login")
 end
 
+# Waits, ten seconds at most, for the confirmation link AuthMailJob mints
+# after a signup to be stored.
+def journey_wait_for_mailed_link(email)
+  tries = 0
+  while tries < 40 && User.find_by("email", email).confirmation_sent_at.nil?
+    sleep(0.25)
+    tries += 1
+  end
+end
+
 def sign_up_in_browser(email)
   visit("/signup")
   fill_in("#email", email)
@@ -74,6 +84,9 @@ def sign_up_in_browser(email)
   # browser shares with the request helpers (a sign-in clicked in the browser
   # renews the session, which the next visit() would put back as it was).
   wait_for_text("Check your inbox")
+  # The signup's own link is minted by AuthMailJob, queued (#539): wait for
+  # it, so it cannot replace the one minted here after it is opened.
+  journey_wait_for_mailed_link(email)
   token = User.find_by("email", email).start_email_confirmation
   visit("/confirm_email?token=#{token}")
   wait_for_text("Your email address is confirmed")
