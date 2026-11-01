@@ -376,7 +376,7 @@ describe("An AI key of one's own, on the account page") do
     user = reading_user(true)
     page = res_body(get("/app/account"))
     # The key serves photos and the editor's assistant: the page says both.
-    assert_contains(page, "<h2 id=\"ai\">AI for photos and the assistant</h2>")
+    assert_contains(page, "<h2 id=\"ai-title\">AI for photos and the assistant</h2>")
     assert_contains(page, "the editor's assistant")
     assert_not(page.contains("AI for reading photos"))
     # Whose AI it is, and who pays for it.

@@ -12,6 +12,14 @@ class Changelog
     [
       {"date": "2026-11-01", "entries": [
         {
+          "area": "site",
+          "title": "The account page, set in order",
+          "text": "Your account opens on a summary (plan, two-step sign-in, AI key, apps connected) and groups its "
+          + "settings: sign-in and security, notifications, plan, AI key, Claude and apps, your data, reached from a "
+          + "side menu, tabs on a phone. Each form opens from its Change link; deleting the account stands apart.",
+          "app": true
+        },
+        {
           "area": "editor",
           "title": "A tempo in words takes a number",
           "text": "A score whose tempo was written in words alone (Presto, rit.) refused a number typed in Tempo, "

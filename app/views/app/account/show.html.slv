@@ -1,400 +1,511 @@
-<section class="auth auth-wide">
-  <h1>Your account</h1>
-  <% if error.present? %>
-    <p class="form-error" role="alert"><%= error %></p>
-  <% end %>
-  <dl class="account-facts">
-    <dt>Email</dt><dd><%= user.email %></dd>
-    <dt>Address</dt>
-    <dd>
-      <% if user.confirmed?() %>
-        <span class="account-confirmed">Confirmed</span>
-      <% else %>
-        <span class="account-unconfirmed">Not confirmed yet</span>
-        <form action="<%= confirmation_resend_path() %>" method="POST" class="account-resend">
-          <%- csrf_field() %>
-          <input type="hidden" name="email" value="<%= user.email %>">
-          <button type="submit" class="btn btn-ghost">Send the link again</button>
-        </form>
-      <% end %>
-    </dd>
-  </dl>
-
-  <h2>Two-step sign-in</h2>
-  <% if user.two_step?() %>
-    <p>On: signing in asks for a code from your authenticator app as well as your password.
-      <span class="muted"><%= user.backup_codes_left() %> backup codes left.</span></p>
-    <form action="<%= app_account_two_step_stop_path() %>" method="POST" class="auth-form">
-      <%- csrf_field() %>
-      <label class="field">Your password
-        <input id="stop_password" name="password" type="password" required autocomplete="current-password">
-      </label>
-      <label class="field">A code from the app, or a backup code
-        <input id="stop_code" name="code" type="text" required autocomplete="one-time-code" maxlength="12" spellcheck="false">
-      </label>
-      <button type="submit" class="btn btn-ghost">Turn two-step sign-in off</button>
-    </form>
-  <% elsif user.can_use_two_step?() %>
-    <p class="muted">Off. Turned on, signing in asks for a six-digit code from an authenticator app on your phone
-      (Google Authenticator, 1Password, Authy…) as well as your password.</p>
-    <form action="<%= app_account_two_step_path() %>" method="POST">
-      <%- csrf_field() %>
-      <button type="submit" class="btn btn-primary">Turn two-step sign-in on</button>
-    </form>
-  <% else %>
-    <p class="muted">Not available on this server yet.</p>
-  <% end %>
-
-  <%# The e-mails of notifications (#385): each kind on or off. The bell
-      lists them all either way. %>
-  <h2 id="notifications">E-mails</h2>
-  <p class="muted">The bell at the top lists everything. Choose what is also sent to <%= user.email %>:</p>
-  <form action="<%= app_account_notifications_path() %>" method="POST" class="auth-form account-mails" data-mail-prefs>
-    <%- csrf_field() %>
-    <input type="hidden" name="kinds[]" value="none">
-    <label class="tool-check"><input type="checkbox" name="kinds[]" value="shared"<%= user.mails?("shared") ? " checked" : "" %>> <span>A score shared with me <span class="muted">— the invitation</span></span></label>
-    <label class="tool-check"><input type="checkbox" name="kinds[]" value="reply"<%= user.mails?("reply") ? " checked" : "" %>> <span>A reply in a thread I wrote in</span></label>
-    <label class="tool-check"><input type="checkbox" name="kinds[]" value="mention"<%= user.mails?("mention") ? " checked" : "" %>> <span>A comment that mentions me <span class="muted">— @name or @e-mail</span></span></label>
-    <label class="tool-check"><input type="checkbox" name="kinds[]" value="changed"<%= user.mails?("changed") ? " checked" : "" %>> <span>Changes to the scores shared with me <span class="muted">— gathered in a digest, not an e-mail a save</span></span></label>
-    <button type="submit" class="btn btn-ghost">Save the e-mail settings</button>
-  </form>
-
-  <%# Push notifications (#400): this device subscribed by the script below
-      (the browser asks permission), the kinds chosen by the form. %>
-  <h2 id="push">Push notifications</h2>
-  <% push = user.push_setup() %>
-  <% if push["key"].blank? %>
-    <p class="muted" data-push-unavailable>Not available on this server yet.</p>
-  <% else %>
-    <div class="account-push" data-push data-key="<%= push["key"] %>" data-devices="<%= push["devices"] %>">
-      <p data-push-state>Notifications on this phone or computer, even when the app is closed.</p>
-      <% one = push["devices"] == 1 %>
-      <% devices_said = "#{push["devices"]} #{one ? "device receives" : "devices receive"} them." %>
-      <p class="muted" data-push-devices><%= push["devices"] == 0 ? "No device receives them yet." : devices_said %></p>
-      <div class="account-plan-actions">
-        <button type="button" class="btn btn-primary" data-push-on hidden>Turn on for this device</button>
-        <button type="button" class="btn btn-ghost" data-push-off hidden>Turn off for this device</button>
-        <button type="button" class="btn btn-ghost" data-push-test<%= push["devices"] == 0 ? " hidden" : "" %>>Send a test</button>
+<%# The account (#503): a summary of who you are, then each theme in a panel
+    of its own — sign-in and security, notifications, plan, AI, Claude and
+    apps, your data — reached from a side menu (tabs on a phone). Settings
+    read as rows: what it is, how it stands, Change to open its form. %>
+<% two_step_on = user.two_step?() %>
+<% connections = (locals["tokens"] ?? []).length %>
+<div class="account-page">
+  <header class="account-head">
+    <div class="account-who">
+      <span class="account-avatar" aria-hidden="true"><%= user.email.to_s.substring(0, 1).upcase %></span>
+      <div class="account-who-text">
+        <h1>Your account</h1>
+        <p class="account-email"><%= user.email %>
+          <% if user.confirmed?() %>
+            <span class="account-badge account-confirmed">Confirmed</span>
+          <% else %>
+            <span class="account-badge account-unconfirmed">Not confirmed yet</span>
+          <% end %>
+        </p>
       </div>
-      <p class="muted">On an iPhone or iPad, add the app to the Home Screen first (Share, then Add to Home Screen), and turn them on from there.</p>
+      <div class="account-signout">
+        <%- button_to("Sign out", logout_path(), {"method": "delete", "class": "btn btn-ghost"}) %>
+      </div>
     </div>
-    <form action="<%= app_account_push_path() %>" method="POST" class="auth-form account-mails" data-push-prefs>
-      <%- csrf_field() %>
-      <input type="hidden" name="kinds[]" value="none">
-      <label class="tool-check"><input type="checkbox" name="kinds[]" value="shared"<%= user.pushes?("shared") ? " checked" : "" %>> <span>A score shared with me</span></label>
-      <label class="tool-check"><input type="checkbox" name="kinds[]" value="reply"<%= user.pushes?("reply") ? " checked" : "" %>> <span>A reply in a thread I wrote in</span></label>
-      <label class="tool-check"><input type="checkbox" name="kinds[]" value="mention"<%= user.pushes?("mention") ? " checked" : "" %>> <span>A comment that mentions me</span></label>
-      <label class="tool-check"><input type="checkbox" name="kinds[]" value="changed"<%= user.pushes?("changed") ? " checked" : "" %>> <span>Changes to the scores shared with me <span class="muted">— once an hour a score</span></span></label>
-      <button type="submit" class="btn btn-ghost">Save the push settings</button>
-    </form>
-    <script data-push-script>
-      (() => {
-        const box = document.querySelector("[data-push]");
-        if (!box || box.dataset.ready) return;
-        box.dataset.ready = "1";
-        const state = box.querySelector("[data-push-state]");
-        const devices = box.querySelector("[data-push-devices]");
-        const on = box.querySelector("[data-push-on]");
-        const off = box.querySelector("[data-push-off]");
-        const test = box.querySelector("[data-push-test]");
-        const csrf = document.querySelector('input[name="_csrf_token"]')?.value ?? "";
-        const say = (text) => { state.textContent = text; };
-        const count = (n) => {
-          devices.textContent = n ? `${n} device${n === 1 ? "" : "s"} receive${n === 1 ? "s" : ""} them.` : "No device receives them yet.";
-          test.hidden = !n;
-        };
-        const post = async (url, body) => {
-          const answer = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify(body ?? {}) });
-          const data = await answer.json().catch(() => ({}));
-          if (!answer.ok) throw new Error(data.error || "The server said no.");
-          return data;
-        };
-        // The public key, base64url, as the bytes subscribe() wants.
-        const bytes = (text) => {
-          const raw = atob((text + "=".repeat((4 - (text.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/"));
-          return Uint8Array.from(raw, (c) => c.charCodeAt(0));
-        };
-        if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
-          say("This browser cannot receive push notifications.");
-          return;
-        }
-        const show = (subscribed) => {
-          on.hidden = subscribed;
-          off.hidden = !subscribed;
-          if (Notification.permission === "denied") {
-            say("Notifications are blocked for this site in the browser's settings: allow them there first.");
-            on.hidden = true;
-          } else {
-            say(subscribed ? "On for this device." : "Off for this device.");
-          }
-        };
-        const ready = navigator.serviceWorker.ready;
-        ready.then((registration) => registration.pushManager.getSubscription()).then((subscription) => show(Boolean(subscription)));
-        on.addEventListener("click", async () => {
-          on.disabled = true;
-          try {
-            if ((await Notification.requestPermission()) !== "granted") return show(false);
-            const registration = await ready;
-            const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytes(box.dataset.key) });
-            const answer = await post("<%= app_push_subscriptions_path() %>", subscription.toJSON());
-            count(answer.devices);
-            show(true);
-          } catch (error) {
-            say(`Could not turn them on: ${error.message}`);
-          } finally {
-            on.disabled = false;
-          }
-        });
-        off.addEventListener("click", async () => {
-          off.disabled = true;
-          try {
-            const subscription = await (await ready).pushManager.getSubscription();
-            if (subscription) {
-              const answer = await post("<%= app_push_subscriptions_remove_path() %>", { endpoint: subscription.endpoint });
-              await subscription.unsubscribe();
-              count(answer.devices);
-            }
-            show(false);
-          } catch (error) {
-            say(`Could not turn them off: ${error.message}`);
-          } finally {
-            off.disabled = false;
-          }
-        });
-        test.addEventListener("click", async () => {
-          try {
-            const answer = await post("<%= app_push_test_path() %>");
-            say(answer.sent ? `Sent to ${answer.sent} device${answer.sent === 1 ? "" : "s"}.` : "Nothing could be sent: turn them on again on this device.");
-          } catch (error) {
-            say(`Could not send: ${error.message}`);
-          }
-        });
-      })();
-    </script>
-  <% end %>
-
-  <%# The plan (#393): set by Stripe's webhook only; Upgrade and Manage
-      billing go to Stripe's own pages. %>
-  <h2 id="plan">Subscription</h2>
-  <% offer = user.plan_offer() %>
-  <% summary = user.plan_summary() %>
-  <p data-plan-name>You are on <strong><%= user.plan_name() %></strong>.<% unless summary.nil? %> <%= summary %><% end %></p>
-  <% unless user.pro?() %>
-    <p class="muted">Pro runs the AI on your own key, records on every audio track with far more room for takes,
-      and shares a score with anyone: <%= offer["monthly"]["label"] %> a
-      month or <%= offer["annual"]["label"] %> a year. <a href="<%= pricing_path() %>">Compare the plans</a></p>
-    <div class="account-plan-actions">
-      <form action="<%= app_billing_checkout_path() %>" method="POST">
-        <%- csrf_field() %>
-        <input type="hidden" name="interval" value="monthly">
-        <button type="submit" class="btn btn-primary">Upgrade: <%= offer["monthly"]["label"] %> a month</button>
-      </form>
-      <form action="<%= app_billing_checkout_path() %>" method="POST">
-        <%- csrf_field() %>
-        <input type="hidden" name="interval" value="annual">
-        <button type="submit" class="btn btn-ghost">Upgrade: <%= offer["annual"]["label"] %> a year</button>
-      </form>
-    </div>
-    <% unless offer["open"] %>
-      <p class="muted" data-payments-closed>Payments are not open yet: Pro will be on sale soon. Until then, everyone keeps what the site allows today, every audio track and as many people as you like included.</p>
-    <% end %>
-  <% end %>
-  <% if user.billed?() %>
-    <form action="<%= app_billing_portal_path() %>" method="POST" class="account-plan-actions">
-      <%- csrf_field() %>
-      <button type="submit" class="btn btn-ghost">Manage billing</button>
-    </form>
-  <% end %>
-
-  <h2 id="ai">AI for photos and the assistant</h2>
-  <p class="muted" data-ai-own-key>The AI runs on your own key: the site has no AI of its own. Your requests go to
-    the provider you choose, and that provider bills you for them.</p>
-  <% ai_plan_note = user.ai_plan_note() %>
-  <% unless ai_plan_note.nil? %>
-    <p class="form-error" data-ai-plan><%= ai_plan_note %> <a href="<%= pricing_path() %>">See the plans</a></p>
-  <% end %>
-  <% if user.own_ai?() %>
-    <p>Photos of scores are read, and the editor's assistant answers, with <strong><%= user.ai_provider_name() %></strong>, model
-      <code><%= user.ai_model %></code>, with your key ending in <code>…<%= user.ai_key_hint %></code>.</p>
-    <form action="<%= app_account_ai_remove_path() %>" method="POST">
-      <%- csrf_field() %>
-      <button type="submit" class="btn btn-ghost">Remove the key</button>
-    </form>
-    <p class="muted">Or use another one:</p>
-  <% else %>
-    <p class="muted">An AI model reads photos of scores and answers the editor's assistant. Bring a key of your own
-      from one of these providers to use the model you choose: the site keeps it encrypted, uses it only for your
-      photos and the assistant, and never shows it again. Without one, there is no AI.</p>
-  <% end %>
-  <% if locals["ai_error"].present? %>
-    <p class="form-error" role="alert"><%= locals["ai_error"] %></p>
-  <% end %>
-  <form action="<%= app_account_ai_path() %>" method="POST" class="auth-form" data-ai-form>
-    <%- csrf_field() %>
-    <label class="field">Provider
-      <select name="provider" data-ai-provider>
-        <% for provider in user.ai_choices() %>
-          <option value="<%= provider["id"] %>" data-models="<%= provider["models"].join(",") %>"<%= provider["id"] == (user.ai_provider ?? "anthropic") ? " selected" : "" %>><%= provider["name"] %></option>
-        <% end %>
-      </select>
-    </label>
-    <label class="field"><span>Model <span class="muted">— one that reads images</span></span>
-      <input name="model" type="text" required list="ai-models" value="<%= user.ai_model.to_s %>" spellcheck="false" autocomplete="off" data-ai-model>
-      <datalist id="ai-models" data-ai-models></datalist>
-    </label>
-    <label class="field">API key
-      <input name="key" type="password" required autocomplete="off" spellcheck="false" placeholder="Paste the key from the provider's site">
-    </label>
-    <button type="submit" class="btn btn-primary">Keep the key</button>
-  </form>
-  <script>
-    (() => {
-      const select = document.querySelector("[data-ai-provider]");
-      const model = document.querySelector("[data-ai-model]");
-      const list = document.querySelector("[data-ai-models]");
-      const suggest = (fill) => {
-        const models = select.selectedOptions[0].dataset.models.split(",");
-        list.replaceChildren(...models.map((id) => Object.assign(document.createElement("option"), { value: id })));
-        if (fill) model.value = models[0];
-      };
-      suggest(!model.value);
-      select.addEventListener("change", () => suggest(true));
-    })();
-  </script>
-
-  <%# Personal access tokens, for the MCP server (#460). %>
-  <h2 id="tokens">Claude and other MCP apps</h2>
-  <p class="muted">Connect Claude to your account and it writes, reads and changes your scores, and reads photos of
-    scores. In Claude Code, run once:</p>
-  <div class="score-code command-box"><button type="button" class="score-copy" data-score-copy>Copy</button>
-<pre><code>claude mcp add --transport http score <%= locals["mcp_url"] ?? "https://score.solisoft.net/mcp" %></code></pre></div>
-  <p class="muted">Claude Code then opens Score in your browser: sign in and choose Allow. For claude.ai, Claude
-    Desktop and other apps, see <a href="<%= claude_path() %>">Score in Claude</a>.</p>
-  <% if locals["new_token"].present? %>
-    <div class="callout" data-new-token>
-      <p><strong>Your new token</strong> — copy it now: it is not shown again.</p>
-      <div class="score-code command-box"><button type="button" class="score-copy" data-score-copy>Copy</button>
-<pre><code><%= locals["new_token"] %></code></pre></div>
-      <p>Give it to the app as the header <code>Authorization: Bearer …</code>. In Claude Code:</p>
-      <div class="score-code command-box"><button type="button" class="score-copy" data-score-copy>Copy</button>
-<pre><code>claude mcp add --transport http score <%= locals["mcp_url"] %> --header "Authorization: Bearer <%= locals["new_token"] %>"</code></pre></div>
-    </div>
-    <%# Shown once: brought into view, not left at the foot of the page. %>
-    <script>document.querySelector("[data-new-token]")?.scrollIntoView({ block: "center", inline: "nearest" });</script>
-  <% end %>
-  <% if locals["token_error"].present? %>
-    <p class="form-error" role="alert"><%= locals["token_error"] %></p>
-  <% end %>
-  <% if (locals["tokens"] ?? []).length > 0 %>
-    <ul class="token-list" data-tokens>
-      <% for token in locals["tokens"] %>
-        <li data-token="<%= token._key %>">
-          <span><strong><%= token.name %></strong>
-            <% if token.kind == "oauth" %>
-              <span class="muted">connected by signing in,</span>
-            <% else %>
-              <code><%= token.hint %>…</code>
-            <% end %>
-            <span class="muted">made <%= time_ago(token.created_at) %>,
-              <%= token.last_used_at.nil? ? "never used" : "last used " + time_ago(token.last_used_at) %></span></span>
-          <form action="<%= app_account_token_revoke_path(token._key) %>" method="POST">
-            <%- csrf_field() %>
-            <button type="submit" class="btn btn-ghost">Revoke</button>
-          </form>
-        </li>
-      <% end %>
+    <ul class="account-glance" aria-label="At a glance">
+      <li><span>Plan</span><strong><%= user.plan_name() %></strong></li>
+      <li><span>Two-step sign-in</span><strong class="<%= two_step_on ? "is-on" : "is-off" %>"><%= two_step_on ? "On" : "Off" %></strong></li>
+      <li><span>AI key</span><strong class="<%= user.own_ai?() ? "is-on" : "is-off" %>"><%= user.own_ai?() ? user.ai_provider_name() : "None" %></strong></li>
+      <li><span>Apps connected</span><strong><%= connections %></strong></li>
     </ul>
-  <% end %>
-  <details class="token-make"<%= locals["token_error"].present? ? " open" : "" %>>
-    <summary>Make a token, for an app that cannot sign in</summary>
-  <form action="<%= app_account_tokens_path() %>" method="POST" class="auth-form" data-token-form>
-    <%- csrf_field() %>
-    <label class="field">Name <span class="muted">— where it is used</span>
-      <input name="name" type="text" required maxlength="60" placeholder="Claude Code on my laptop">
-    </label>
-    <button type="submit" class="btn btn-primary">Make a token</button>
-  </form>
-  </details>
+    <% if error.present? %>
+      <p class="form-error" role="alert"><%= error %></p>
+    <% end %>
+  </header>
 
-  <h2>Change your password</h2>
-  <form action="<%= app_account_password_path() %>" method="POST" class="auth-form">
-    <%- csrf_field() %>
-    <label class="field">Current password
-      <input id="current_password" name="current_password" type="password" required autocomplete="current-password">
-    </label>
-    <label class="field"><span>New password <span class="muted">— 12 characters or more</span></span>
-      <input id="new_password" name="password" type="password" required minlength="12" autocomplete="new-password">
-    </label>
-    <label class="field">The same again
-      <input id="password_confirmation" name="password_confirmation" type="password" required minlength="12" autocomplete="new-password">
-    </label>
-    <button type="submit" class="btn btn-primary">Change the password</button>
-  </form>
+  <div class="account-layout">
+    <nav class="account-nav" aria-label="Account sections">
+      <a href="#security">Sign-in &amp; security</a>
+      <a href="#notifications">Notifications</a>
+      <a href="#plan">Plan</a>
+      <a href="#ai">AI key</a>
+      <a href="#tokens">Claude &amp; apps</a>
+      <a href="#data">Your data</a>
+    </nav>
 
-  <h2 id="email">Change your email address</h2>
-  <% if locals["email_error"].present? %>
-    <p class="form-error" role="alert"><%= locals["email_error"] %></p>
-  <% end %>
-  <% if user.email_change_to.present? %>
-    <div class="account-pending">
-      <p>Waiting for <strong><%= user.email_change_to %></strong>: follow the link sent to it to use it. Until then you
-        sign in with <%= user.email %>.</p>
-      <form action="<%= app_account_email_cancel_path() %>" method="POST">
-        <%- csrf_field() %>
-        <button type="submit" class="btn btn-ghost">Cancel the change</button>
-      </form>
+    <div class="account-panels">
+      <%# ---- Sign-in and security ---------------------------------------- %>
+      <section class="account-panel" id="security" aria-labelledby="security-title">
+        <h2 id="security-title">Sign-in &amp; security</h2>
+
+        <div class="setting" id="email">
+          <div class="setting-row">
+            <div class="setting-what"><h3>Email address</h3><p class="setting-value"><%= user.email %></p></div>
+            <% unless user.confirmed?() %>
+              <form action="<%= confirmation_resend_path() %>" method="POST" class="account-resend">
+                <%- csrf_field() %>
+                <input type="hidden" name="email" value="<%= user.email %>">
+                <button type="submit" class="btn btn-ghost">Send the link again</button>
+              </form>
+            <% end %>
+          </div>
+          <% if user.email_change_to.present? %>
+            <div class="account-pending">
+              <p>Waiting for <strong><%= user.email_change_to %></strong>: follow the link sent to it to use it. Until then you
+                sign in with <%= user.email %>.</p>
+              <form action="<%= app_account_email_cancel_path() %>" method="POST">
+                <%- csrf_field() %>
+                <button type="submit" class="btn btn-ghost">Cancel the change</button>
+              </form>
+            </div>
+          <% end %>
+          <% if locals["email_error"].present? %>
+            <p class="form-error" role="alert"><%= locals["email_error"] %></p>
+          <% end %>
+          <details class="setting-change"<%= locals["email_error"].present? ? " open" : "" %>>
+            <summary>Change your email address</summary>
+            <p class="muted">A link goes to the new address, and the change is made when it is followed. Your current address
+              is told too.</p>
+            <form action="<%= app_account_email_path() %>" method="POST" class="auth-form">
+              <%- csrf_field() %>
+              <label class="field">New email address
+                <input id="new_email" name="email" type="email" required autocomplete="email" value="<%= locals["typed_email"].to_s %>">
+              </label>
+              <label class="field">Your password, to confirm
+                <input id="email_password" name="password" type="password" required autocomplete="current-password">
+              </label>
+              <% if two_step_on %>
+                <label class="field">A code from the app, or a backup code
+                  <input id="email_code" name="code" type="text" required autocomplete="one-time-code" maxlength="12" spellcheck="false">
+                </label>
+              <% end %>
+              <button type="submit" class="btn btn-primary">Send the link</button>
+            </form>
+          </details>
+        </div>
+
+        <div class="setting" id="password">
+          <div class="setting-row">
+            <div class="setting-what"><h3>Password</h3><p class="setting-value" aria-label="Hidden">••••••••••••</p></div>
+          </div>
+          <details class="setting-change">
+            <summary>Change your password</summary>
+            <form action="<%= app_account_password_path() %>" method="POST" class="auth-form">
+              <%- csrf_field() %>
+              <label class="field">Current password
+                <input id="current_password" name="current_password" type="password" required autocomplete="current-password">
+              </label>
+              <label class="field"><span>New password <span class="muted">— 12 characters or more</span></span>
+                <input id="new_password" name="password" type="password" required minlength="12" autocomplete="new-password">
+              </label>
+              <label class="field">The same again
+                <input id="password_confirmation" name="password_confirmation" type="password" required minlength="12" autocomplete="new-password">
+              </label>
+              <button type="submit" class="btn btn-primary">Change the password</button>
+            </form>
+          </details>
+        </div>
+
+        <div class="setting" id="two-step">
+          <div class="setting-row">
+            <div class="setting-what">
+              <h3>Two-step sign-in</h3>
+              <% if two_step_on %>
+                <p>On: signing in asks for a code from your authenticator app as well as your password.
+                  <span class="muted"><%= user.backup_codes_left() %> backup codes left.</span></p>
+              <% elsif user.can_use_two_step?() %>
+                <p class="muted">Off. Turned on, signing in asks for a six-digit code from an authenticator app on your phone
+                  (Google Authenticator, 1Password, Authy…) as well as your password.</p>
+              <% else %>
+                <p class="muted">Not available on this server yet.</p>
+              <% end %>
+            </div>
+            <% if !two_step_on && user.can_use_two_step?() %>
+              <form action="<%= app_account_two_step_path() %>" method="POST">
+                <%- csrf_field() %>
+                <button type="submit" class="btn btn-primary">Turn two-step sign-in on</button>
+              </form>
+            <% end %>
+          </div>
+          <% if two_step_on %>
+            <details class="setting-change">
+              <summary>Turn two-step sign-in off</summary>
+              <form action="<%= app_account_two_step_stop_path() %>" method="POST" class="auth-form">
+                <%- csrf_field() %>
+                <label class="field">Your password
+                  <input id="stop_password" name="password" type="password" required autocomplete="current-password">
+                </label>
+                <label class="field">A code from the app, or a backup code
+                  <input id="stop_code" name="code" type="text" required autocomplete="one-time-code" maxlength="12" spellcheck="false">
+                </label>
+                <button type="submit" class="btn btn-ghost">Turn two-step sign-in off</button>
+              </form>
+            </details>
+          <% end %>
+        </div>
+      </section>
+
+      <%# ---- Notifications (#385, #400) ------------------------------------ %>
+      <section class="account-panel" id="notifications" aria-labelledby="notifications-title">
+        <h2 id="notifications-title">Notifications</h2>
+        <p class="muted">The bell at the top lists everything. Choose what also reaches you.</p>
+        <div class="account-pair">
+          <div class="setting">
+            <h3>E-mails</h3>
+            <p class="muted">Sent to <%= user.email %>.</p>
+            <form action="<%= app_account_notifications_path() %>" method="POST" class="auth-form account-mails" data-mail-prefs>
+              <%- csrf_field() %>
+              <input type="hidden" name="kinds[]" value="none">
+              <label class="tool-check"><input type="checkbox" name="kinds[]" value="shared"<%= user.mails?("shared") ? " checked" : "" %>> <span>A score shared with me <span class="muted">— the invitation</span></span></label>
+              <label class="tool-check"><input type="checkbox" name="kinds[]" value="reply"<%= user.mails?("reply") ? " checked" : "" %>> <span>A reply in a thread I wrote in</span></label>
+              <label class="tool-check"><input type="checkbox" name="kinds[]" value="mention"<%= user.mails?("mention") ? " checked" : "" %>> <span>A comment that mentions me <span class="muted">— @name or @e-mail</span></span></label>
+              <label class="tool-check"><input type="checkbox" name="kinds[]" value="changed"<%= user.mails?("changed") ? " checked" : "" %>> <span>Changes to the scores shared with me <span class="muted">— gathered in a digest, not an e-mail a save</span></span></label>
+              <button type="submit" class="btn btn-ghost">Save the e-mail settings</button>
+            </form>
+          </div>
+
+          <div class="setting" id="push">
+            <h3>Push notifications</h3>
+            <% push = user.push_setup() %>
+            <% if push["key"].blank? %>
+              <p class="muted" data-push-unavailable>Not available on this server yet.</p>
+            <% else %>
+              <div class="account-push" data-push data-key="<%= push["key"] %>" data-devices="<%= push["devices"] %>">
+                <p data-push-state>Notifications on this phone or computer, even when the app is closed.</p>
+                <% one = push["devices"] == 1 %>
+                <% devices_said = "#{push["devices"]} #{one ? "device receives" : "devices receive"} them." %>
+                <p class="muted" data-push-devices><%= push["devices"] == 0 ? "No device receives them yet." : devices_said %></p>
+                <div class="account-plan-actions">
+                  <button type="button" class="btn btn-primary" data-push-on hidden>Turn on for this device</button>
+                  <button type="button" class="btn btn-ghost" data-push-off hidden>Turn off for this device</button>
+                  <button type="button" class="btn btn-ghost" data-push-test<%= push["devices"] == 0 ? " hidden" : "" %>>Send a test</button>
+                </div>
+                <p class="muted">On an iPhone or iPad, add the app to the Home Screen first (Share, then Add to Home Screen), and turn them on from there.</p>
+              </div>
+              <form action="<%= app_account_push_path() %>" method="POST" class="auth-form account-mails" data-push-prefs>
+                <%- csrf_field() %>
+                <input type="hidden" name="kinds[]" value="none">
+                <label class="tool-check"><input type="checkbox" name="kinds[]" value="shared"<%= user.pushes?("shared") ? " checked" : "" %>> <span>A score shared with me</span></label>
+                <label class="tool-check"><input type="checkbox" name="kinds[]" value="reply"<%= user.pushes?("reply") ? " checked" : "" %>> <span>A reply in a thread I wrote in</span></label>
+                <label class="tool-check"><input type="checkbox" name="kinds[]" value="mention"<%= user.pushes?("mention") ? " checked" : "" %>> <span>A comment that mentions me</span></label>
+                <label class="tool-check"><input type="checkbox" name="kinds[]" value="changed"<%= user.pushes?("changed") ? " checked" : "" %>> <span>Changes to the scores shared with me <span class="muted">— once an hour a score</span></span></label>
+                <button type="submit" class="btn btn-ghost">Save the push settings</button>
+              </form>
+              <script data-push-script>
+                (() => {
+                  const box = document.querySelector("[data-push]");
+                  if (!box || box.dataset.ready) return;
+                  box.dataset.ready = "1";
+                  const state = box.querySelector("[data-push-state]");
+                  const devices = box.querySelector("[data-push-devices]");
+                  const on = box.querySelector("[data-push-on]");
+                  const off = box.querySelector("[data-push-off]");
+                  const test = box.querySelector("[data-push-test]");
+                  const csrf = document.querySelector('input[name="_csrf_token"]')?.value ?? "";
+                  const say = (text) => { state.textContent = text; };
+                  const count = (n) => {
+                    devices.textContent = n ? `${n} device${n === 1 ? "" : "s"} receive${n === 1 ? "s" : ""} them.` : "No device receives them yet.";
+                    test.hidden = !n;
+                  };
+                  const post = async (url, body) => {
+                    const answer = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify(body ?? {}) });
+                    const data = await answer.json().catch(() => ({}));
+                    if (!answer.ok) throw new Error(data.error || "The server said no.");
+                    return data;
+                  };
+                  // The public key, base64url, as the bytes subscribe() wants.
+                  const bytes = (text) => {
+                    const raw = atob((text + "=".repeat((4 - (text.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/"));
+                    return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+                  };
+                  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+                    say("This browser cannot receive push notifications.");
+                    return;
+                  }
+                  const show = (subscribed) => {
+                    on.hidden = subscribed;
+                    off.hidden = !subscribed;
+                    if (Notification.permission === "denied") {
+                      say("Notifications are blocked for this site in the browser's settings: allow them there first.");
+                      on.hidden = true;
+                    } else {
+                      say(subscribed ? "On for this device." : "Off for this device.");
+                    }
+                  };
+                  const ready = navigator.serviceWorker.ready;
+                  ready.then((registration) => registration.pushManager.getSubscription()).then((subscription) => show(Boolean(subscription)));
+                  on.addEventListener("click", async () => {
+                    on.disabled = true;
+                    try {
+                      if ((await Notification.requestPermission()) !== "granted") return show(false);
+                      const registration = await ready;
+                      const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytes(box.dataset.key) });
+                      const answer = await post("<%= app_push_subscriptions_path() %>", subscription.toJSON());
+                      count(answer.devices);
+                      show(true);
+                    } catch (error) {
+                      say(`Could not turn them on: ${error.message}`);
+                    } finally {
+                      on.disabled = false;
+                    }
+                  });
+                  off.addEventListener("click", async () => {
+                    off.disabled = true;
+                    try {
+                      const subscription = await (await ready).pushManager.getSubscription();
+                      if (subscription) {
+                        const answer = await post("<%= app_push_subscriptions_remove_path() %>", { endpoint: subscription.endpoint });
+                        await subscription.unsubscribe();
+                        count(answer.devices);
+                      }
+                      show(false);
+                    } catch (error) {
+                      say(`Could not turn them off: ${error.message}`);
+                    } finally {
+                      off.disabled = false;
+                    }
+                  });
+                  test.addEventListener("click", async () => {
+                    try {
+                      const answer = await post("<%= app_push_test_path() %>");
+                      say(answer.sent ? `Sent to ${answer.sent} device${answer.sent === 1 ? "" : "s"}.` : "Nothing could be sent: turn them on again on this device.");
+                    } catch (error) {
+                      say(`Could not send: ${error.message}`);
+                    }
+                  });
+                })();
+              </script>
+            <% end %>
+          </div>
+        </div>
+      </section>
+
+      <%# ---- Plan (#393): set by Stripe's webhook only; Upgrade and Manage
+          billing go to Stripe's own pages. ----------------------------------- %>
+      <section class="account-panel" id="plan" aria-labelledby="plan-title">
+        <h2 id="plan-title">Plan</h2>
+        <% offer = user.plan_offer() %>
+        <% summary = user.plan_summary() %>
+        <p data-plan-name>You are on <strong><%= user.plan_name() %></strong>.<% unless summary.nil? %> <%= summary %><% end %></p>
+        <% unless user.pro?() %>
+          <p class="muted">Pro runs the AI on your own key, records on every audio track with far more room for takes,
+            and shares a score with anyone: <%= offer["monthly"]["label"] %> a
+            month or <%= offer["annual"]["label"] %> a year. <a href="<%= pricing_path() %>">Compare the plans</a></p>
+          <div class="account-plan-actions">
+            <form action="<%= app_billing_checkout_path() %>" method="POST">
+              <%- csrf_field() %>
+              <input type="hidden" name="interval" value="monthly">
+              <button type="submit" class="btn btn-primary">Upgrade: <%= offer["monthly"]["label"] %> a month</button>
+            </form>
+            <form action="<%= app_billing_checkout_path() %>" method="POST">
+              <%- csrf_field() %>
+              <input type="hidden" name="interval" value="annual">
+              <button type="submit" class="btn btn-ghost">Upgrade: <%= offer["annual"]["label"] %> a year</button>
+            </form>
+          </div>
+          <% unless offer["open"] %>
+            <p class="muted" data-payments-closed>Payments are not open yet: Pro will be on sale soon. Until then, everyone keeps what the site allows today, every audio track and as many people as you like included.</p>
+          <% end %>
+        <% end %>
+        <% if user.billed?() %>
+          <form action="<%= app_billing_portal_path() %>" method="POST" class="account-plan-actions">
+            <%- csrf_field() %>
+            <button type="submit" class="btn btn-ghost">Manage billing</button>
+          </form>
+        <% end %>
+      </section>
+
+      <%# ---- AI key (#396) ------------------------------------------------ %>
+      <section class="account-panel" id="ai" aria-labelledby="ai-title">
+        <h2 id="ai-title">AI for photos and the assistant</h2>
+        <p class="muted" data-ai-own-key>The AI runs on your own key: the site has no AI of its own. Your requests go to
+          the provider you choose, and that provider bills you for them.</p>
+        <% ai_plan_note = user.ai_plan_note() %>
+        <% unless ai_plan_note.nil? %>
+          <p class="form-error" data-ai-plan><%= ai_plan_note %> <a href="<%= pricing_path() %>">See the plans</a></p>
+        <% end %>
+        <% if user.own_ai?() %>
+          <div class="setting-row">
+            <p class="setting-what">Photos of scores are read, and the editor's assistant answers, with <strong><%= user.ai_provider_name() %></strong>, model
+              <code><%= user.ai_model %></code>, with your key ending in <code>…<%= user.ai_key_hint %></code>.</p>
+            <form action="<%= app_account_ai_remove_path() %>" method="POST">
+              <%- csrf_field() %>
+              <button type="submit" class="btn btn-ghost">Remove the key</button>
+            </form>
+          </div>
+        <% else %>
+          <p class="muted">An AI model reads photos of scores and answers the editor's assistant. Bring a key of your own
+            from one of these providers to use the model you choose: the site keeps it encrypted, uses it only for your
+            photos and the assistant, and never shows it again. Without one, there is no AI.</p>
+        <% end %>
+        <% if locals["ai_error"].present? %>
+          <p class="form-error" role="alert"><%= locals["ai_error"] %></p>
+        <% end %>
+        <details class="setting-change"<%= !user.own_ai?() || locals["ai_error"].present? ? " open" : "" %>>
+          <summary><%= user.own_ai?() ? "Use another key or model" : "Add your key" %></summary>
+          <form action="<%= app_account_ai_path() %>" method="POST" class="auth-form" data-ai-form>
+            <%- csrf_field() %>
+            <label class="field">Provider
+              <select name="provider" data-ai-provider>
+                <% for provider in user.ai_choices() %>
+                  <option value="<%= provider["id"] %>" data-models="<%= provider["models"].join(",") %>"<%= provider["id"] == (user.ai_provider ?? "anthropic") ? " selected" : "" %>><%= provider["name"] %></option>
+                <% end %>
+              </select>
+            </label>
+            <label class="field"><span>Model <span class="muted">— one that reads images</span></span>
+              <input name="model" type="text" required list="ai-models" value="<%= user.ai_model.to_s %>" spellcheck="false" autocomplete="off" data-ai-model>
+              <datalist id="ai-models" data-ai-models></datalist>
+            </label>
+            <label class="field">API key
+              <input name="key" type="password" required autocomplete="off" spellcheck="false" placeholder="Paste the key from the provider's site">
+            </label>
+            <button type="submit" class="btn btn-primary">Keep the key</button>
+          </form>
+        </details>
+        <script>
+          (() => {
+            const select = document.querySelector("[data-ai-provider]");
+            const model = document.querySelector("[data-ai-model]");
+            const list = document.querySelector("[data-ai-models]");
+            const suggest = (fill) => {
+              const models = select.selectedOptions[0].dataset.models.split(",");
+              list.replaceChildren(...models.map((id) => Object.assign(document.createElement("option"), { value: id })));
+              if (fill) model.value = models[0];
+            };
+            suggest(!model.value);
+            select.addEventListener("change", () => suggest(true));
+          })();
+        </script>
+      </section>
+
+      <%# ---- Claude and other MCP apps (#460, #461) ------------------------ %>
+      <section class="account-panel" id="tokens" aria-labelledby="tokens-title">
+        <h2 id="tokens-title">Claude and other MCP apps</h2>
+        <p class="muted">Connect Claude to your account and it writes, reads and changes your scores, and reads photos of
+          scores. In Claude Code, run once:</p>
+        <div class="score-code command-box"><button type="button" class="score-copy" data-score-copy>Copy</button>
+<pre><code>claude mcp add --transport http score <%= locals["mcp_url"] ?? "https://score.solisoft.net/mcp" %></code></pre></div>
+        <p class="muted">Claude Code then opens Score in your browser: sign in and choose Allow. For claude.ai, Claude
+          Desktop and other apps, see <a href="<%= claude_path() %>">Score in Claude</a>.</p>
+        <% if locals["new_token"].present? %>
+          <div class="callout" data-new-token>
+            <p><strong>Your new token</strong> — copy it now: it is not shown again.</p>
+            <div class="score-code command-box"><button type="button" class="score-copy" data-score-copy>Copy</button>
+<pre><code><%= locals["new_token"] %></code></pre></div>
+            <p>Give it to the app as the header <code>Authorization: Bearer …</code>. In Claude Code:</p>
+            <div class="score-code command-box"><button type="button" class="score-copy" data-score-copy>Copy</button>
+<pre><code>claude mcp add --transport http score <%= locals["mcp_url"] %> --header "Authorization: Bearer <%= locals["new_token"] %>"</code></pre></div>
+          </div>
+        <% end %>
+        <% if locals["token_error"].present? %>
+          <p class="form-error" role="alert"><%= locals["token_error"] %></p>
+        <% end %>
+        <% if connections > 0 %>
+          <h3>Connected</h3>
+          <ul class="token-list" data-tokens>
+            <% for token in locals["tokens"] %>
+              <li data-token="<%= token._key %>">
+                <span><strong><%= token.name %></strong>
+                  <% if token.kind == "oauth" %>
+                    <span class="muted">connected by signing in,</span>
+                  <% else %>
+                    <code><%= token.hint %>…</code>
+                  <% end %>
+                  <span class="muted">made <%= time_ago(token.created_at) %>,
+                    <%= token.last_used_at.nil? ? "never used" : "last used " + time_ago(token.last_used_at) %></span></span>
+                <form action="<%= app_account_token_revoke_path(token._key) %>" method="POST">
+                  <%- csrf_field() %>
+                  <button type="submit" class="btn btn-ghost">Revoke</button>
+                </form>
+              </li>
+            <% end %>
+          </ul>
+        <% end %>
+        <details class="setting-change token-make"<%= locals["token_error"].present? ? " open" : "" %>>
+          <summary>Make a token, for an app that cannot sign in</summary>
+          <form action="<%= app_account_tokens_path() %>" method="POST" class="auth-form" data-token-form>
+            <%- csrf_field() %>
+            <label class="field">Name <span class="muted">— where it is used</span>
+              <input name="name" type="text" required maxlength="60" placeholder="Claude Code on my laptop">
+            </label>
+            <button type="submit" class="btn btn-primary">Make a token</button>
+          </form>
+        </details>
+      </section>
+
+      <%# ---- Your data ---------------------------------------------------- %>
+      <section class="account-panel" id="data" aria-labelledby="data-title">
+        <h2 id="data-title">Your data</h2>
+        <div class="setting" id="export">
+          <h3>Export all your data</h3>
+          <p class="muted">A zip with each of your scores as LilyPond (.ly) and every version kept of it, those in the trash
+            too; who each is shared with; your account details, with no password or secret; the comments and notifications; and the list of scores
+            others share with you.</p>
+          <% if locals["export_error"].present? %>
+            <p class="form-error" role="alert"><%= locals["export_error"] %></p>
+          <% end %>
+          <% export_parts = user.export_part_count() %>
+          <% if export_parts > 1 %>
+            <p class="muted">Your scores are many: they come in <%= export_parts %> zips, so that none is too big.</p>
+          <% end %>
+          <div class="account-export">
+            <% for part in range(1, export_parts + 1) %>
+              <form action="<%= app_account_export_path() %>" method="POST">
+                <%- csrf_field() %>
+                <input type="hidden" name="part" value="<%= part %>">
+                <button type="submit" class="btn btn-ghost"><%= export_parts > 1 ? "Download part #{part} of #{export_parts}" : "Download my data (.zip)" %></button>
+              </form>
+            <% end %>
+          </div>
+        </div>
+
+        <div class="account-danger" id="delete">
+          <h3>Delete the account</h3>
+          <p class="muted">Your account and every score in it are deleted for good.</p>
+          <details class="setting-change">
+            <summary>Delete my account…</summary>
+            <form action="<%= app_account_path() %>" method="POST" class="auth-form">
+              <%- csrf_field() %>
+              <input type="hidden" name="_method" value="DELETE">
+              <label class="field">Your password, to confirm
+                <input id="delete_password" name="password" type="password" required autocomplete="current-password">
+              </label>
+              <button type="submit" class="btn btn-danger">Delete my account</button>
+            </form>
+          </details>
+        </div>
+      </section>
     </div>
-  <% end %>
-  <p class="muted">A link goes to the new address, and the change is made when it is followed. Your current address
-    is told too.</p>
-  <form action="<%= app_account_email_path() %>" method="POST" class="auth-form">
-    <%- csrf_field() %>
-    <label class="field">New email address
-      <input id="new_email" name="email" type="email" required autocomplete="email" value="<%= locals["typed_email"].to_s %>">
-    </label>
-    <label class="field">Your password, to confirm
-      <input id="email_password" name="password" type="password" required autocomplete="current-password">
-    </label>
-    <% if user.two_step?() %>
-      <label class="field">A code from the app, or a backup code
-        <input id="email_code" name="code" type="text" required autocomplete="one-time-code" maxlength="12" spellcheck="false">
-      </label>
-    <% end %>
-    <button type="submit" class="btn btn-primary">Send the link</button>
-  </form>
-
-  <h2 id="export">Export all your data</h2>
-  <p class="muted">A zip with each of your scores as LilyPond (.ly) and every version kept of it, those in the trash
-    too; who each is shared with; your account details, with no password or secret; the comments and notifications; and the list of scores
-    others share with you.</p>
-  <% if locals["export_error"].present? %>
-    <p class="form-error" role="alert"><%= locals["export_error"] %></p>
-  <% end %>
-  <% export_parts = user.export_part_count() %>
-  <% if export_parts > 1 %>
-    <p class="muted">Your scores are many: they come in <%= export_parts %> zips, so that none is too big.</p>
-  <% end %>
-  <div class="account-export">
-    <% for part in range(1, export_parts + 1) %>
-      <form action="<%= app_account_export_path() %>" method="POST">
-        <%- csrf_field() %>
-        <input type="hidden" name="part" value="<%= part %>">
-        <button type="submit" class="btn btn-ghost"><%= export_parts > 1 ? "Download part #{part} of #{export_parts}" : "Download my data (.zip)" %></button>
-      </form>
-    <% end %>
   </div>
-
-  <h2>Sign out</h2>
-  <%- button_to("Sign out", logout_path(), {"method": "delete", "class": "btn btn-ghost"}) %>
-
-  <h2>Delete the account</h2>
-  <p class="muted">Your account and every score in it are deleted for good.</p>
-  <form action="<%= app_account_path() %>" method="POST" class="auth-form">
-    <%- csrf_field() %>
-    <input type="hidden" name="_method" value="DELETE">
-    <label class="field">Your password, to confirm
-      <input id="delete_password" name="password" type="password" required autocomplete="current-password">
-    </label>
-    <button type="submit" class="btn btn-danger">Delete my account</button>
-  </form>
-</section>
+</div>
+<script>
+  // Back from a refused form, or with a token just made: its panel in view, its form open (#503).
+  (() => {
+    const shown = document.querySelector(".account-page [data-new-token], .account-page .account-panel [role=alert]");
+    if (!shown) return;
+    shown.closest("details")?.setAttribute("open", "");
+    shown.scrollIntoView({ block: "center", inline: "nearest" });
+  })();
+  // The menu marks the panel in view.
+  (() => {
+    const links = [...document.querySelectorAll(".account-nav a")];
+    if (!links.length || !("IntersectionObserver" in window)) return;
+    const mark = (id) => links.forEach((a) => a.toggleAttribute("aria-current", a.hash === "#" + id));
+    const seen = new IntersectionObserver((entries) => {
+      const top = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      if (top) mark(top.target.id);
+    }, { rootMargin: "-20% 0px -60% 0px" });
+    document.querySelectorAll(".account-panel").forEach((panel) => seen.observe(panel));
+    mark("security");
+  })();
+</script>
