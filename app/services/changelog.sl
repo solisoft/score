@@ -12,6 +12,13 @@ class Changelog
     [
       {"date": "2026-11-01", "entries": [
         {
+          "area": "site",
+          "title": "The AI key in use, on one line",
+          "text": "In the account, the sentence that names your AI provider, its model and the end of your key read "
+          + "one piece per line. It reads as a sentence again.",
+          "app": true
+        },
+        {
           "area": "editor",
           "title": "A hairpin over the whole selection",
           "text": "A crescendo or diminuendo set on selected notes now runs to the last of them. A hairpin that "

@@ -3099,6 +3099,9 @@
     display: grid;
     gap: 2px;
   }
+  p.setting-what {
+    display: block;
+  }
   .setting-value {
     color: var(--muted);
     overflow-wrap: anywhere;
