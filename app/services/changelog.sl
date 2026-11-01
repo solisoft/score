@@ -22,7 +22,7 @@ class Changelog
         {
           "area": "editor",
           "title": "A slur over the notes or under them, as you choose",
-          "text": "Next to Slur, Above and Below draw a slur on that side of the notes, or turn an existing one "
+          "text": "Under Slur, in Slur side, Above and Below draw a slur on that side of the notes, or turn one "
           + "over; pressed again, it goes back to where the stems leave room. It is written ^( or _( in the "
           + "LilyPond, read back as such. Hairpins and dynamics under the staff now go under a slur drawn below "
           + "the notes, where they used to cross it.",

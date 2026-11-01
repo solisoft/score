@@ -114,7 +114,7 @@
           curve thickens in the middle and rises over the notes in its way, to the height LilyPond would give it.
           It goes on the side the stems leave free; <code>^( … )</code> puts it over the notes, <code>_( … )</code>
           under them, whatever the stems — <code>^\( … \)</code> and <code>_\( … \)</code> do the same for a
-          phrasing slur. In the editor: <strong>Above</strong> and <strong>Below</strong>, next to <strong>Slur</strong>.
+          phrasing slur. In the editor: <strong>Above</strong> and <strong>Below</strong>, under <strong>Slur side</strong>.
         </p>
         <%- score_snippet(figures, "ties-slurs", sandbox) %>
       </section>

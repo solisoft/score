@@ -445,9 +445,12 @@
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="tie" title="Tie to the next note (T)">⁀ Tie</button>
           <button type="button" class="tool tool-wide" data-act="slur" title="Slur the selected notes (S)">⌒ Slur</button>
-          <button type="button" class="tool" data-act="slur-up" title="A slur over the selected notes, or turn theirs over">⌒ Above</button>
-          <button type="button" class="tool" data-act="slur-down" title="A slur under the selected notes, or turn theirs under">‿ Below</button>
           <button type="button" class="tool tool-wide" data-act="phrase" title="Phrasing slur over the selected notes (Shift+S)">⌒ Phrase</button>
+        </div>
+        <p class="tool-sub">Slur side</p>
+        <div class="tool-row" aria-label="Slur side">
+          <button type="button" class="tool tool-wide" data-act="slur-up" title="A slur over the selected notes, or turn theirs over; again: back to where the stems leave room">⌒ Above</button>
+          <button type="button" class="tool tool-wide" data-act="slur-down" title="A slur under the selected notes, or turn theirs under; again: back to where the stems leave room">‿ Below</button>
         </div>
         <p class="tool-sub">Ottava</p>
         <div class="tool-row" aria-label="Ottava">
