@@ -1,6 +1,10 @@
 // The studio's selection (studio.js), kept in times: the bars and the notes
 // it covers, the note the tools act on — sounded as the person works.
 
+// The editor's words in the page's language (#508).
+const V = new URL(import.meta.url).search;
+const { tr } = await import(`./words.js${V}`);
+
 /** Answers the selection, the note the tools act on, and hearing it. */
 export function install(ctx) {
   const { root, st, M, P } = ctx;
@@ -73,7 +77,7 @@ export function install(ctx) {
       const b = M.barAt(st.score, st.input.t);
       return [b, b];
     }
-    if (!st.sel) throw new Error("Select the bars — drag across them, or click the first and Shift+click the last");
+    if (!st.sel) throw new Error(tr("Select the bars — drag across them, or click the first and Shift+click the last"));
     if (st.sel.bars) return st.sel.bars;
     const a = M.barAt(st.score, Math.min(st.sel.t0, st.sel.t1));
     const b = M.barAt(st.score, Math.max(st.sel.t0, st.sel.t1));
@@ -104,8 +108,8 @@ export function install(ctx) {
     const drums = M.isDrums(st.score, t.s);
     const keys = heads.map((p) => (drums ? M.drumKey(p.drum) : M.midiKey(p.d, p.alter)));
     if (!P.preview(keys, M.programOf(sound), { drums, channel: laneChannel(t.s) }) && !P.isReady()) {
-      say("Loading the sounds, to hear the notes… (38 MB, once)");
-      P.prepare().then(() => say("The notes sound as you write them; Hear the notes turns it off.")).catch(() => {});
+      say(tr("Loading the sounds, to hear the notes… (38 MB, once)"));
+      P.prepare().then(() => say(tr("The notes sound as you write them; Hear the notes turns it off."))).catch(() => {});
     }
   }
 
@@ -135,7 +139,7 @@ export function install(ctx) {
 
   function need() {
     const t = target();
-    if (!t) throw new Error("Select a note first — click it, or press N to write notes");
+    if (!t) throw new Error(tr("Select a note first — click it, or press N to write notes"));
     return t;
   }
 

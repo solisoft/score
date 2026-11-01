@@ -1,6 +1,16 @@
 // The studio's clipboard (studio.js): notes, or bars as a section, copied
 // and pasted — the system's clipboard too.
 
+// The editor's words in the page's language (#508).
+const V = new URL(import.meta.url).search;
+const { tr } = await import(`./words.js${V}`);
+
+/** "1 bar" or "3 bars". */
+const barsCount = (n) => (n === 1 ? tr("1 bar") : tr("{n} bars", { n }));
+
+/** "bar 4" or "bars 4–6", from bar number `a` on, `n` bars. */
+const barsAt = (a, n, barNo) => (n === 1 ? tr("bar {n}", { n: barNo(a) }) : tr("bars {a}–{b}", { a: barNo(a), b: barNo(a + n - 1) }));
+
 /** Answers copy, cut and paste, of notes and of sections. */
 export function install(ctx) {
   const { st, M, score_json } = ctx;
@@ -16,11 +26,11 @@ export function install(ctx) {
   function copy(cut) {
     if (st.sel?.bars && st.score) return copySection(cut);
     const r = range();
-    if (!r) return say("Select what to copy", true);
+    if (!r) return say(tr("Select what to copy"), true);
     try {
       st.clip = M.copy(st.score, r.s, r.a, r.b);
       st.clipText = M.clipText(st.clip);
-      say(`${r.b - r.a + 1} copied`);
+      say(tr("{n} copied", { n: r.b - r.a + 1 }));
     } catch (error) {
       return say(error.message, true);
     }
@@ -42,8 +52,8 @@ export function install(ctx) {
     st.clip = { section };
     st.clipText = M.sectionText(section);
     navigator.clipboard?.writeText(st.clipText).catch(() => {});
-    const what = `${section.bars === 1 ? "1 bar" : `${section.bars} bars`} of ${lanes.length === 1 ? "1 track" : `${lanes.length} tracks`}`;
-    if (!cut) return say(`${what} copied`);
+    const what = { bars: barsCount(section.bars), tracks: lanes.length === 1 ? tr("1 track") : tr("{n} tracks", { n: lanes.length }) };
+    if (!cut) return say(tr("{bars} of {tracks} copied", what));
     edit((score) => {
       const [t0, t1] = [M.barStart(score, a), M.barStart(score, b + 1)];
       for (const s of lanes) {
@@ -51,7 +61,7 @@ export function install(ctx) {
         for (let i = at.length - 1; i >= 0; i--) if (at[i] >= t0 && at[i] < t1 && !score.staves[s].events[i].rest) M.remove(score, s, i);
       }
     });
-    say(`${what} cut`);
+    say(tr("{bars} of {tracks} cut", what));
   }
 
   /** Where a section goes: the selected bar of the selected track (or the cursor's). */
@@ -62,16 +72,17 @@ export function install(ctx) {
   }
 
   function sectionSaid(skipped) {
-    return skipped ? ` (${skipped === 1 ? "one track" : `${skipped} tracks`} had no staff below to go to)` : "";
+    if (!skipped) return "";
+    return ` ${skipped === 1 ? tr("(one track had no staff below to go to)") : tr("({n} tracks had no staff below to go to)", { n: skipped })}`;
   }
 
   /** The copied bars put in before the selected bar, as new bars: nothing written over. */
   async function insertCopied() {
-    if (!st.score) return say("Inserting bars needs the score tools: this piece is edited in its text.", true);
+    if (!st.score) return say(tr("Inserting bars needs the score tools: this piece is edited in its text."), true);
     const place = sectionPlace();
-    if (!place) return say("Select the bar to put the copied bars before", true);
+    if (!place) return say(tr("Select the bar to put the copied bars before"), true);
     const clip = await clipboard().catch(() => null);
-    if (!clip?.section) return say("Copy bars first: select them (drag across them), then Ctrl+C", true);
+    if (!clip?.section) return say(tr("Copy bars first: select them (drag across them), then Ctrl+C"), true);
     let skipped = 0;
     barsEdit((score) => {
       skipped = M.insertSection(score, place.lane, place.bar, clip.section);
@@ -79,7 +90,7 @@ export function install(ctx) {
       return { at: place.bar, removed: 0, added: clip.section.bars };
     });
     const n = clip.section.bars;
-    say(`${n === 1 ? "1 bar" : `${n} bars`} put in as bar${n === 1 ? "" : "s"} ${barNo(place.bar)}${n === 1 ? "" : `–${barNo(place.bar + n - 1)}`}${sectionSaid(skipped)}`);
+    say(`${tr("{bars} put in as {at}", { bars: barsCount(n), at: barsAt(place.bar, n, barNo) })}${sectionSaid(skipped)}`);
   }
 
   /** After a paste or an insert: the bars written selected, on the tracks they went to. */
@@ -104,23 +115,23 @@ export function install(ctx) {
   async function paste() {
     const s = st.input.on ? st.input.staff : st.sel?.staff;
     const t = st.input.on ? st.input.t : st.sel?.t0;
-    if (s == null || t == null) return say("Select where to paste", true);
+    if (s == null || t == null) return say(tr("Select where to paste"), true);
     let clip;
     try {
       clip = await clipboard();
     } catch (error) {
-      return say(`The clipboard's text is not music this reads: ${error.message ?? error}`, true);
+      return say(tr("The clipboard's text is not music this reads: {error}", { error: error.message ?? error }), true);
     }
-    if (!clip) return say("Nothing copied yet", true);
+    if (!clip) return say(tr("Nothing copied yet"), true);
     if (clip.section) {
-      if (!st.score) return say("Pasting bars needs the score tools", true);
+      if (!st.score) return say(tr("Pasting bars needs the score tools"), true);
       const place = sectionPlace();
       let skipped = 0;
       edit((score) => {
         skipped = M.pasteSection(score, place.lane, place.bar, clip.section);
         selectSectionQuietly(score, place.bar, place.bar + clip.section.bars - 1, place.lane, clip.section);
       });
-      return say(`Pasted over bar${clip.section.bars === 1 ? "" : "s"} ${barNo(place.bar)}${clip.section.bars === 1 ? "" : `–${barNo(place.bar + clip.section.bars - 1)}`}${sectionSaid(skipped)}`);
+      return say(`${tr("Pasted over {at}", { at: barsAt(place.bar, clip.section.bars, barNo) })}${sectionSaid(skipped)}`);
     }
     edit((score) => {
       M.paste(score, s, t, clip);
@@ -136,9 +147,9 @@ export function install(ctx) {
    * no place for it.
    */
   function putSection(section, over = false) {
-    if (!st.score) return say("Putting bars in needs the score tools: this piece is edited in its text.", true);
+    if (!st.score) return say(tr("Putting bars in needs the score tools: this piece is edited in its text."), true);
     const place = sectionPlace();
-    if (!place) return say(`Select the bar to put it ${over ? "over" : "before"} first`, true);
+    if (!place) return say(over ? tr("Select the bar to put it over first") : tr("Select the bar to put it before first"), true);
     let skipped = 0;
     const done = over
       ? edit((score) => {
@@ -152,8 +163,8 @@ export function install(ctx) {
         });
     if (!done) return false;
     const n = section.bars;
-    const bars = `bar${n === 1 ? "" : "s"} ${barNo(place.bar)}${n === 1 ? "" : `–${barNo(place.bar + n - 1)}`}`;
-    say(`${over ? "Written over" : "Put in as"} ${bars}${sectionSaid(skipped)}`);
+    const at = barsAt(place.bar, n, barNo);
+    say(`${over ? tr("Written over {at}", { at }) : tr("Put in as {at}", { at })}${sectionSaid(skipped)}`);
     return true;
   }
 

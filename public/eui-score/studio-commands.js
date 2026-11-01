@@ -3,6 +3,7 @@
 
 // Served immutable: this module's version goes to the ones it loads.
 const V = new URL(import.meta.url).search;
+const { tr } = await import(`./words.js${V}`);
 /** The drum grid, the arpeggiator, the chord track and the accompaniment (Edit menu), loaded the first time one is opened. */
 const patternTools = () => import(`./pattern-tools.js${V}`);
 /** Quantize, swing and humanize (Edit and Play menus), loaded the first time one is opened. */
@@ -22,7 +23,8 @@ export function install(ctx) {
     openParts, barNo, edit, barsEdit, undo, redo, staffOf, range, hear, target, need, keepOn, inputTicks, setInput,
     inputWrite, inputBack, inputTuplet, selectedBarsOrNull, selectedBars, duration, toggleDot, step, chordHead, copy,
     insertCopied, paste, openWords, draw, place, toVoice, onField, share, refuse, say, title, fileName, openChosen,
-    heardMidi, exportPractice, togglePlay, stopPlay, mixCommit, saveWav, saveSound, saveImage, setLoop, record
+    heardMidi, exportPractice, togglePlay, stopPlay, mixCommit, saveWav, saveSound, saveImage, setLoop, record,
+    intervalName, instrumentName
   } = ctx.call;
 
   // ---- Actions ------------------------------------------------------------------
@@ -39,7 +41,7 @@ export function install(ctx) {
   function placeSource(beside) {
     root.classList.toggle("studio-source-side", beside);
     const label = root.querySelector("[data-source-side-label]");
-    if (label) label.firstChild.textContent = beside ? "Source under the score " : "Source beside the score ";
+    if (label) label.firstChild.textContent = `${beside ? tr("Source under the score") : tr("Source beside the score")} `;
   }
   try {
     placeSource(localStorage.getItem(SOURCE_SIDE) === "1");
@@ -56,12 +58,12 @@ export function install(ctx) {
       case "new": return newDialog.showModal();
       case "properties": return root.querySelector("[data-properties]")?.showModal();
       case "midi-view": {
-        if (!st.score) return say("The MIDI view needs the score tools: this piece is edited in its text.", true);
+        if (!st.score) return say(tr("The MIDI view needs the score tools: this piece is edited in its text."), true);
         st.mode = st.mode === "midi" ? "score" : "midi";
         const label = root.querySelector("[data-midi-label]");
-        if (label) label.firstChild.textContent = st.mode === "midi" ? "Score view " : "MIDI view ";
+        if (label) label.firstChild.textContent = `${st.mode === "midi" ? tr("Score view") : tr("MIDI view")} `;
         root.querySelector("[data-midi-button]")?.setAttribute("aria-pressed", String(st.mode === "midi"));
-        say(st.mode === "midi" ? "MIDI view: drag across bars and tracks to select a section." : "Score view.");
+        say(st.mode === "midi" ? tr("MIDI view: drag across bars and tracks to select a section.") : tr("Score view."));
         return draw();
       }
       case "roll-layout":
@@ -82,19 +84,19 @@ export function install(ctx) {
           localStorage.setItem(SOURCE_SIDE, beside ? "1" : "0");
         } catch (error) {}
         const wide = matchMedia(SIDE_WIDTH).matches;
-        return say(beside ? (wide ? "The source beside the score: View ▸ Source under the score puts it back." : "The source goes beside the score on a wider window; here it stays under it.") : "The source under the score.");
+        return say(beside ? (wide ? tr("The source beside the score: View ▸ Source under the score puts it back.") : tr("The source goes beside the score on a wider window; here it stays under it.")) : tr("The source under the score."));
       }
       case "written": {
-        if (!st.score) return say("Written pitch needs the score tools: this piece is edited in its text.", true);
+        if (!st.score) return say(tr("Written pitch needs the score tools: this piece is edited in its text."), true);
         st.written = !st.written;
-        root.querySelector("[data-written-label]").firstChild.textContent = st.written ? "Concert pitch " : "Written pitch ";
+        root.querySelector("[data-written-label]").firstChild.textContent = `${st.written ? tr("Concert pitch") : tr("Written pitch")} `;
         const moved = M.staffLanes(st.score).some((s) => M.transpositionOf(st.score.staves[s]));
-        say(st.written ? (moved ? "Written pitch: transposing instruments as their players read them. For reading only." : "Written pitch: no instrument here is written apart from how it sounds.") : "Concert pitch: as it sounds, and as it is written into.");
+        say(st.written ? (moved ? tr("Written pitch: transposing instruments as their players read them. For reading only.") : tr("Written pitch: no instrument here is written apart from how it sounds.")) : tr("Concert pitch: as it sounds, and as it is written into."));
         return draw();
       }
       case "parts": return openParts();
       case "comment": {
-        if (!options.onComment) return say("Comments are for scores saved in the app: open this one there to comment.", true);
+        if (!options.onComment) return say(tr("Comments are for scores saved in the app: open this one there to comment."), true);
         return options.onComment(place());
       }
       // Edit ▸ Share the selected bars…, Library of sections…: section-library.js's dialogs (#444).
@@ -117,10 +119,15 @@ export function install(ctx) {
         try {
           bar = selectedBars()[1];
         } catch (error) {
-          return say("Select a bar first: the line or the page ends after it.", true);
+          return say(tr("Select a bar first: the line or the page ends after it."), true);
         }
         const kind = (st.score?.breaks ?? {})[bar] === data.kind ? null : data.kind;
-        if (edit((score) => M.setBreak(score, bar, kind))) say(kind ? `A new ${kind} after bar ${barNo(bar)}: the PDF is laid out so.` : `Bar ${barNo(bar)}: the line goes on.`);
+        if (edit((score) => M.setBreak(score, bar, kind))) {
+          const n = barNo(bar);
+          // A line or a page (the Layout menu's two).
+          if (!kind) say(tr("Bar {n}: the line goes on.", { n }));
+          else say(kind === "page" ? tr("A new page after bar {n}: the PDF is laid out so.", { n }) : tr("A new line after bar {n}: the PDF is laid out so.", { n }));
+        }
         return;
       }
       case "undo": return undo();
@@ -153,7 +160,7 @@ export function install(ctx) {
       case "save-ly": return download(st.text, `${fileName()}.ly`, "text/x-lilypond");
       case "save-musicxml": {
         // Written from the editor's own score: a text it cannot read has none.
-        if (!st.score) return say("MusicXML is written from the score the editor reads; this text holds what it does not edit.", true);
+        if (!st.score) return say(tr("MusicXML is written from the score the editor reads; this text holds what it does not edit."), true);
         return musicXml()
           .then((X) => download(X.toMusicXML(st.score), `${fileName()}.musicxml`, "application/vnd.recordare.musicxml+xml"))
           .catch((error) => say(error.message ?? String(error), true));
@@ -167,14 +174,19 @@ export function install(ctx) {
         const it = M.INTERVALS[Number(root.querySelector("[data-transpose-interval]").value)];
         const way = Number(root.querySelector("[data-transpose-way]").value);
         const by = { steps: way * it.steps, semitones: way * it.semitones };
-        const words = `${way > 0 ? "up" : "down"} a${/^[ao]/.test(it.name) ? "n" : ""} ${it.name}`;
+        // "up a major second", "down an octave": the interval in the page's language.
+        const an = /^[ao]/.test(it.name);
+        const interval = intervalName(it.name);
+        const words = way > 0
+          ? (an ? tr("up an {interval}", { interval }) : tr("up a {interval}", { interval }))
+          : (an ? tr("down an {interval}", { interval }) : tr("down a {interval}", { interval }));
         if (data.scope === "score") {
-          if (edit((score) => M.transpose(score, by))) say(`The score, ${words}.`);
+          if (edit((score) => M.transpose(score, by))) say(tr("The score, {words}.", { words }));
           return;
         }
         const r = range();
-        if (!r) return say("Select the notes to transpose, or transpose the score", true);
-        if (edit((score) => M.transpose(score, { ...by, s: r.s, a: r.a, b: r.b }))) say(`${r.b - r.a + 1} selected, ${words}.`);
+        if (!r) return say(tr("Select the notes to transpose, or transpose the score"), true);
+        if (edit((score) => M.transpose(score, { ...by, s: r.s, a: r.a, b: r.b }))) say(tr("{n} selected, {words}.", { n: r.b - r.a + 1, words }));
         return;
       }
       case "save-midi": return heardMidi(st.score, undefined, { mix: X.mixOf(st.score), practice: exportPractice() }).then((m) => download(m, `${fileName()}.mid`, "audio/midi")).catch((e) => refuse(e));
@@ -208,7 +220,7 @@ export function install(ctx) {
       case "rest":
         if (st.input.on) return inputWrite(null);
         return edit((score) => {
-          const r = range() ?? (() => { throw new Error("Select a note first"); })();
+          const r = range() ?? (() => { throw new Error(tr("Select a note first")); })();
           for (let i = r.b; i >= r.a; i--) M.remove(score, r.s, i, r.a === r.b ? st.sel.head : -1);
         });
       case "move": return edit((score) => {
@@ -257,80 +269,80 @@ export function install(ctx) {
           M.toggleTie(score, t.s, t.i);
         });
       case "slur": return edit((score) => {
-        const r = range() ?? (() => { throw new Error("Select the notes to slur: click the first, Shift+click the last"); })();
+        const r = range() ?? (() => { throw new Error(tr("Select the notes to slur: click the first, Shift+click the last")); })();
         M.toggleSlur(score, r.s, r.a, r.b);
       });
       // A slur over or under the notes (#467): drawn so, or turned to that side.
       case "slur-up":
       case "slur-down": return edit((score) => {
-        const r = range() ?? (() => { throw new Error("Select the notes to slur: click the first, Shift+click the last"); })();
+        const r = range() ?? (() => { throw new Error(tr("Select the notes to slur: click the first, Shift+click the last")); })();
         M.setSlurSide(score, r.s, r.a, r.b, name === "slur-up" ? 1 : -1);
       });
       case "phrase": return edit((score) => {
-        const r = range() ?? (() => { throw new Error("Select the notes of the phrase: click the first, Shift+click the last"); })();
+        const r = range() ?? (() => { throw new Error(tr("Select the notes of the phrase: click the first, Shift+click the last")); })();
         M.togglePhrase(score, r.s, r.a, r.b);
       });
       // An ottava line over the selection (again: taken away), or ended at its first note.
       case "ottava": return edit((score) => {
-        const r = range() ?? (() => { throw new Error("Select the notes the line goes over"); })();
+        const r = range() ?? (() => { throw new Error(tr("Select the notes the line goes over")); })();
         M.setOttava(score, r.s, r.a, r.b, Number(data.value));
       });
       case "ottava-end": return edit((score) => {
-        const r = range() ?? (() => { throw new Error("Select the note the line ends before"); })();
+        const r = range() ?? (() => { throw new Error(tr("Select the note the line ends before")); })();
         M.endOttava(score, r.s, r.a);
       });
       // Stems up, down or as the voice wants over the selection; X flips them: up, down, back.
       case "stem": case "stem-flip": return edit((score) => {
-        const r = range() ?? (() => { throw new Error("Select the notes whose stems to turn"); })();
+        const r = range() ?? (() => { throw new Error(tr("Select the notes whose stems to turn")); })();
         const now = M.stemAt(score, r.s, r.a);
         const dir = name === "stem" ? Number(data.dir) : now > 0 ? -1 : now < 0 ? 0 : 1;
         M.setStem(score, r.s, r.a, r.b, dir);
-        say(["Stems down", "Stems as the voice wants", "Stems up"][dir + 1]);
+        say([tr("Stems down"), tr("Stems as the voice wants"), tr("Stems up")][dir + 1]);
       });
       // A beam written by hand over the selection (again: none), or broken before the selected note.
       case "beam": return edit((score) => {
-        const r = range() ?? (() => { throw new Error("Select the notes to beam: click the first, Shift+click the last"); })();
+        const r = range() ?? (() => { throw new Error(tr("Select the notes to beam: click the first, Shift+click the last")); })();
         M.toggleBeam(score, r.s, r.a, r.b);
       });
       case "beam-break": return edit((score) => {
-        const r = range() ?? (() => { throw new Error("Select the note the beam breaks before"); })();
+        const r = range() ?? (() => { throw new Error(tr("Select the note the beam breaks before")); })();
         M.breakBeam(score, r.s, r.a);
       });
       // The selected notes spelled the other way: C♯ and D♭.
       case "enharmonic": return edit((score) => {
-        const r = range() ?? (() => { throw new Error("Select the notes to spell the other way"); })();
+        const r = range() ?? (() => { throw new Error(tr("Select the notes to spell the other way")); })();
         M.enharmonic(score, r.s, r.a, r.b, r.a === r.b ? st.sel.head : -1);
       });
       // The selected notes drawn on the staff above or below (\\change Staff), again to bring them back.
       case "cross": return edit((score) => {
-        const r = range() ?? (() => { throw new Error("Select the notes to draw on the other staff"); })();
+        const r = range() ?? (() => { throw new Error(tr("Select the notes to draw on the other staff")); })();
         M.setCross(score, r.s, r.a, r.b, Number(data.dir));
       });
       // A finger (1–5) or a string (1–6) on the selected notes — on the selected note of a chord.
       case "finger": case "string-number": return edit((score) => {
-        const r = range() ?? (() => { throw new Error("Select a note first"); })();
+        const r = range() ?? (() => { throw new Error(tr("Select a note first")); })();
         const head = r.a === r.b ? st.sel.head : -1;
         const circled = name === "string-number";
         for (let i = r.a; i <= r.b; i++) if (!r.staff.events[i].rest) M.setFingering(score, r.s, i, data.n, { head, circled });
       });
       case "finger-remove": return edit((score) => {
-        const r = range() ?? (() => { throw new Error("Select a note first"); })();
+        const r = range() ?? (() => { throw new Error(tr("Select a note first")); })();
         for (let i = r.a; i <= r.b; i++) M.removeFingerings(score, r.s, i);
       });
       case "hairpin": return edit((score) => {
-        const r = range() ?? (() => { throw new Error("Select the notes the hairpin spans"); })();
+        const r = range() ?? (() => { throw new Error(tr("Select the notes the hairpin spans")); })();
         M.setHairpin(score, r.s, r.a, r.b, data.kind);
       });
       case "art": return edit((score) => {
-        const r = range() ?? (() => { throw new Error("Select a note first"); })();
+        const r = range() ?? (() => { throw new Error(tr("Select a note first")); })();
         for (let i = r.a; i <= r.b; i++) if (!r.staff.events[i].rest || data.name === "fermata") M.toggleArticulation(score, r.s, i, data.name);
       });
       case "breath": return edit((score) => {
-        const r = range() ?? (() => { throw new Error("Select a note first"); })();
+        const r = range() ?? (() => { throw new Error(tr("Select a note first")); })();
         M.toggleBreath(score, r.s, r.b, data.kind);
       });
       case "reminder": return edit((score) => {
-        const r = range() ?? (() => { throw new Error("Select a note first"); })();
+        const r = range() ?? (() => { throw new Error(tr("Select a note first")); })();
         const head = r.a === r.b ? st.sel.head : -1;
         for (let i = r.a; i <= r.b; i++) if (!r.staff.events[i].rest) M.toggleReminder(score, r.s, i, data.kind, head);
       });
@@ -376,7 +388,9 @@ export function install(ctx) {
         const bars = selectedBarsOrNull();
         let count = 0;
         if (edit((score) => (count = Voicings.diagramsFromSymbols(score, staffOf(), bars ? { a: bars[0], b: bars[1] } : {})))) {
-          say(`${count} guitar diagram${count === 1 ? "" : "s"} put, each in its chord's shape. Double-click one to change it.`);
+          say(count === 1
+            ? tr("1 guitar diagram put, each in its chord's shape. Double-click one to change it.")
+            : tr("{n} guitar diagrams put, each in its chord's shape. Double-click one to change it.", { n: count }));
         }
       });
       case "text": return openWords("text");
@@ -385,13 +399,16 @@ export function install(ctx) {
         const [b] = selectedBars();
         M.setMark(score, b, data.mark);
         const on = M.changeAt(score, b)?.mark === data.mark;
-        say(`Bar ${barNo(b)}: ${on ? { letter: "a rehearsal letter", segno: "a segno", coda: "a coda" }[data.mark] : "mark taken away"}`);
+        const n = barNo(b);
+        say(!on ? tr("Bar {n}: mark taken away", { n }) : { letter: tr("Bar {n}: a rehearsal letter", { n }), segno: tr("Bar {n}: a segno", { n }), coda: tr("Bar {n}: a coda", { n }) }[data.mark]);
       });
       case "jump": return edit((score) => {
         const [, b] = selectedBars();
         const jump = root.querySelector("[data-jump]").value;
         M.setJump(score, b, jump);
-        say(M.changeAt(score, b)?.jump === jump ? `${M.JUMPS[jump]} at the end of bar ${barNo(b)} — Play takes it` : `Bar ${barNo(b)}: ${M.JUMPS[jump]} taken away`);
+        // The jump's own words (D.S. al Coda…) are the score's, as written in it.
+        const words = { jump: M.JUMPS[jump], n: barNo(b) };
+        say(M.changeAt(score, b)?.jump === jump ? tr("{jump} at the end of bar {n} — Play takes it", words) : tr("Bar {n}: {jump} taken away", words));
       });
       case "pedal": return edit((score) => {
         const t = need();
@@ -401,22 +418,23 @@ export function install(ctx) {
       case "swap-voices": return edit((score) => {
         const [a, b] = selectedBars();
         M.swapVoices(score, staffOf(), a, b);
-        say(`Voices 1 and 2 swapped in bar${a === b ? ` ${barNo(a)}` : `s ${barNo(a)}–${barNo(b)}`}`);
+        say(a === b ? tr("Voices 1 and 2 swapped in bar {n}", { n: barNo(a) }) : tr("Voices 1 and 2 swapped in bars {a}–{b}", { a: barNo(a), b: barNo(b) }));
       });
       case "repeat": return edit((score) => {
         const [a, b] = selectedBars();
         M.toggleRepeat(score, a, b);
-        say(`Bars ${barNo(a)}–${barNo(b)}${(score.repeats ?? []).some((r) => r.from === a && r.to === b) ? " repeated" : ": repeat taken away"}`);
+        const bars = { a: barNo(a), b: barNo(b) };
+        say((score.repeats ?? []).some((r) => r.from === a && r.to === b) ? tr("Bars {a}–{b} repeated", bars) : tr("Bars {a}–{b}: repeat taken away", bars));
       });
       case "ending": return edit((score) => {
         const [a, b] = selectedBars();
         const ending = M.endingFromBars(score, a, b);
         const r = score.repeats.find((x) => x.to < a && M.repeatEnd(x) >= b);
         const at = (k) => barNo(r.to + 1) + r.endings.slice(0, k).reduce((x, y) => x + y, 0);
-        const bars = (k) => (r.endings[k] > 1 ? `bars ${at(k)}–${at(k) + r.endings[k] - 1}` : `bar ${at(k)}`);
+        const bars = (k) => (r.endings[k] > 1 ? tr("bars {a}–{b}", { a: at(k), b: at(k) + r.endings[k] - 1 }) : tr("bar {n}", { n: at(k) }));
         say(ending === 1
-          ? `Ending 1: ${bars(0)} · ending 2: ${bars(1)} — drag the 2. handle to change it`
-          : `Ending ${ending + 1}: ${bars(ending)}`);
+          ? tr("Ending 1: {first} · ending 2: {second} — drag the 2. handle to change it", { first: bars(0), second: bars(1) })
+          : tr("Ending {n}: {bars}", { n: ending + 1, bars: bars(ending) }));
       });
       case "endings": return edit((score) => {
         const [a, b] = selectedBars();
@@ -439,7 +457,7 @@ export function install(ctx) {
         M.insertBars(score, at, 1);
         if (st.input.on) st.input.t = M.barStart(score, at);
         else if (st.sel) st.sel = { staff: st.sel.staff, t0: M.barStart(score, at), t1: M.barStart(score, at), head: -1 };
-        say(`A bar put in as bar ${barNo(at)}`);
+        say(tr("A bar put in as bar {n}", { n: barNo(at) }));
         return { at, removed: 0, added: 1 };
       });
       case "delete-bars": return barsEdit((score) => {
@@ -447,7 +465,7 @@ export function install(ctx) {
         M.deleteBars(score, a, b);
         st.sel = null;
         if (st.input.on) st.input = { ...st.input, t: Math.min(st.input.t, M.barStart(score, Math.min(a, M.barsOf(score) - 1))), last: null };
-        say(a === b ? `Bar ${barNo(a)} taken away` : `Bars ${barNo(a)}–${barNo(b)} taken away`);
+        say(a === b ? tr("Bar {n} taken away", { n: barNo(a) }) : tr("Bars {a}–{b} taken away", { a: barNo(a), b: barNo(b) }));
         return { at: Math.min(a, b), removed: Math.abs(b - a) + 1, added: 0 };
       });
       // A line of chord names over the selected staff: K on its notes then types the chords, beat by beat.
@@ -455,17 +473,17 @@ export function install(ctx) {
         const s = staffOf();
         M.addChordStaff(score, s);
         st.sel = { staff: s + 1, t0: 0, t1: 0, head: -1 };
-        say("A line of chord names: select a note of the staff under it and press K, then Space for the next beat.");
+        say(tr("A line of chord names: select a note of the staff under it and press K, then Space for the next beat."));
       });
       // A figured bass under the selected staff: Figures on its notes then types them, beat by beat.
       case "figure-line": return edit((score) => {
         const s = staffOf();
         M.addFigureStaff(score, s);
-        say("A figured bass: select a note of the staff over it, Insert › Figures, then Space for the next beat.");
+        say(tr("A figured bass: select a note of the staff over it, Insert › Figures, then Space for the next beat."));
       });
       // A finger (1–5) on the selected note's last grace note; again to take it away.
       case "grace-finger": return edit((score) => {
-        const r = range() ?? (() => { throw new Error("Select the note after the grace note"); })();
+        const r = range() ?? (() => { throw new Error(tr("Select the note after the grace note")); })();
         M.setGraceFingering(score, r.s, r.a, data.n);
       });
       case "add-staff": return edit((score) => {
@@ -477,7 +495,10 @@ export function install(ctx) {
         st.sel = { staff: lane, t0: 0, t1: 0, head: -1 };
         // In note input, the writing goes on in the new staff, from its start (#429).
         if (st.input.on) Object.assign(st.input, { staff: lane, t: 0, last: null });
-        say(`A ${it.name.toLowerCase()} staff added, under the others${st.input.on ? ": note input goes on in it" : ""}. Bars & staves › − This staff takes it away.`);
+        const added = { name: instrumentName(it.name).toLowerCase() };
+        say(st.input.on
+          ? tr("A {name} staff added, under the others: note input goes on in it. Bars & staves › − This staff takes it away.", added)
+          : tr("A {name} staff added, under the others. Bars & staves › − This staff takes it away.", added));
       });
       case "voice": return toVoice(Number(data.voice));
       case "voice-remove": return edit((score) => {
@@ -492,7 +513,7 @@ export function install(ctx) {
         const moved = (lane) => (lane >= upper + had ? lane - (had - has) : lane >= upper + has ? upper : lane);
         if (st.sel) st.sel = { ...st.sel, staff: moved(st.sel.staff), head: -1 };
         st.input.staff = moved(st.input.staff);
-        say(`Voice ${voice} taken away`);
+        say(tr("Voice {n} taken away", { n: voice }));
       });
       case "remove-staff": return edit((score) => {
         M.removeStaff(score, staffOf());
@@ -532,7 +553,7 @@ export function install(ctx) {
   const keysList = root.querySelector("[data-keys-list]");
   if (keysList) {
     keysList.replaceChildren(...K.SHORTCUTS.flatMap(({ keys, does }) => [
-      Object.assign(document.createElement("dt"), { textContent: K.keyLabel(keys, mac) }),
+      Object.assign(document.createElement("dt"), { textContent: K.keyLabel(K.keysShown(keys), mac) }),
       Object.assign(document.createElement("dd"), { textContent: K.keyLabel(does, mac) }),
     ]));
   }

@@ -12,6 +12,13 @@ const press = (key, more = {}) => ({ key, code: more.code ?? "", ctrlKey: !!more
 const entryOf = (event, ctx = {}) =>
   SHORTCUTS.find((entry) => entry.match({ key: event.key, code: event.code, mod: event.ctrlKey || event.metaKey, shiftKey: event.shiftKey, altKey: event.altKey }, { inputOn: false, alter: 0, onButton: false, ...ctx }));
 
+// The editor's menus as they read, each label (a `t("…")` in the app's
+// language, #508) taken for its text: the shortcuts stay literal.
+function studioMarkup() {
+  const template = readFileSync(new URL("../../app/views/shared/_studio.html.slv", import.meta.url), "utf8");
+  return template.replace(/<%[-=] t\("[^"]+"\) %>/g, "label");
+}
+
 test("shortcuts: every entry of the sheet says its keys and what they do", () => {
   assert.ok(SHORTCUTS.length > 15);
   for (const entry of SHORTCUTS) {
@@ -58,7 +65,7 @@ test("shortcuts: the keys the audit found missing are handled, and listed", () =
   assert.deepEqual(resolveKey(press("4", { meta: true, alt: true, code: "Numpad4" })), ["voice", { voice: "4" }]);
   assert.notEqual(resolveKey(press("5", { ctrl: true, alt: true, code: "Digit5" }))?.[0], "voice", "a staff holds four voices");
   // The Add menu names voices 2 to 4 with their keys.
-  const markup = readFileSync(new URL("../../app/views/shared/_studio.html.slv", import.meta.url), "utf8");
+  const markup = studioMarkup();
   for (const v of [2, 3, 4]) assert.match(markup, new RegExp(`data-act="voice" data-voice="${v}">[^<]+<kbd>Ctrl\\+Alt\\+${v}</kbd>`));
 });
 
@@ -132,7 +139,7 @@ test("shortcuts: what each key does, and what it leaves to the browser", () => {
 });
 
 test("shortcuts: every shortcut a menu names does what the menu item does", () => {
-  const markup = readFileSync(new URL("../../app/views/shared/_studio.html.slv", import.meta.url), "utf8");
+  const markup = studioMarkup();
   const names = { Esc: "Escape", Del: "Delete", Space: " ", "−": "-" };
   const items = [...markup.matchAll(/data-act="([a-z-]+)"[^>]*>[^<]*<kbd>([^<]+)<\/kbd>/g)].map((m) => [m[1], m[2]]);
   const keyed = items.filter(([, kbd]) => /^((Ctrl|Alt|Shift)\+)*([A-Z0-9?\]+−]|Esc|Del|Insert|Space)$/.test(kbd));

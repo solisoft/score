@@ -4,6 +4,10 @@
 // (showState, fillFields) and the score's settings their fields change
 // (onField).
 
+// The editor's words in the page's language (#508).
+const V = new URL(import.meta.url).search;
+const { tr } = await import(`./words.js${V}`);
+
 /** The Playback and Recording panels' width, as the CSS has it. */
 const PANEL_WIDTH = 340;
 
@@ -20,6 +24,133 @@ export function neededSection(score, sel) {
   if (!score || !sel) return null;
   if (score.staves[sel.staff]?.chords) return "words";
   return sel.bars ? "bars-and-staves" : null;
+}
+
+/** A note value's name, in the page's language: "quarter", "eighth"… */
+function valueWord(base) {
+  return { 1: tr("whole"), 2: tr("half"), 4: tr("quarter"), 8: tr("eighth"), 16: tr("16th"), 32: tr("32nd") }[base];
+}
+
+/** An interval's name (score-model.js's INTERVALS), in the page's language. */
+export function intervalName(name) {
+  const names = {
+    "minor second": tr("minor second"),
+    "major second": tr("major second"),
+    "minor third": tr("minor third"),
+    "major third": tr("major third"),
+    "perfect fourth": tr("perfect fourth"),
+    "augmented fourth": tr("augmented fourth"),
+    "perfect fifth": tr("perfect fifth"),
+    "minor sixth": tr("minor sixth"),
+    "major sixth": tr("major sixth"),
+    "minor seventh": tr("minor seventh"),
+    "major seventh": tr("major seventh"),
+    octave: tr("octave"),
+  };
+  return names[name] ?? name;
+}
+
+/** The drum palette's names (score-model.js's DRUMS), in the page's language; those said alike, as they are. */
+function drumWord(drum) {
+  const names = {
+    bd: tr("Kick"),
+    sn: tr("Snare"),
+    ss: tr("Side stick"),
+    hh: tr("Hi-hat"),
+    hho: tr("Open hi-hat"),
+    hhp: tr("Pedal hi-hat"),
+    rb: tr("Ride bell"),
+    tomh: tr("High tom"),
+    tommh: tr("Mid tom"),
+    tomml: tr("Low-mid tom"),
+    toml: tr("Low tom"),
+    tomfh: tr("Floor tom"),
+    tomfl: tr("Low floor tom"),
+    hc: tr("Hand clap"),
+    tamb: tr("Tambourine"),
+  };
+  return names[drum.name] ?? drum.label;
+}
+
+/**
+ * An instrument's name (score-model.js's INSTRUMENTS, the templates' staves) as
+ * the page's language shows it; the score itself keeps the English one it writes.
+ */
+export function instrumentName(name) {
+  const names = {
+    "Piano": tr("Piano"),
+    "Electric piano": tr("Electric piano"),
+    "Harpsichord": tr("Harpsichord"),
+    "Organ": tr("Organ"),
+    "Accordion": tr("Accordion"),
+    "Celesta": tr("Celesta"),
+    "Violin": tr("Violin"),
+    "Viola": tr("Viola"),
+    "Cello": tr("Cello"),
+    "Double bass": tr("Double bass"),
+    "Strings": tr("Strings"),
+    "Harp": tr("Harp"),
+    "Piccolo": tr("Piccolo"),
+    "Flute": tr("Flute"),
+    "Recorder": tr("Recorder"),
+    "Oboe": tr("Oboe"),
+    "English horn": tr("English horn"),
+    "Clarinet in B♭": tr("Clarinet in B♭"),
+    "Clarinet in A": tr("Clarinet in A"),
+    "Bassoon": tr("Bassoon"),
+    "Soprano sax": tr("Soprano sax"),
+    "Alto sax": tr("Alto sax"),
+    "Tenor sax": tr("Tenor sax"),
+    "Baritone sax": tr("Baritone sax"),
+    "Trumpet in B♭": tr("Trumpet in B♭"),
+    "Trumpet in C": tr("Trumpet in C"),
+    "Horn in F": tr("Horn in F"),
+    "Trombone": tr("Trombone"),
+    "Tuba": tr("Tuba"),
+    "Guitar": tr("Guitar"),
+    "Steel-string guitar": tr("Steel-string guitar"),
+    "Electric guitar": tr("Electric guitar"),
+    "Bass guitar": tr("Bass guitar"),
+    "Banjo": tr("Banjo"),
+    "Voice": tr("Voice"),
+    "Soprano": tr("Soprano"),
+    "Alto": tr("Alto"),
+    "Tenor": tr("Tenor"),
+    "Bass": tr("Bass"),
+    "Timpani": tr("Timpani"),
+    "Glockenspiel": tr("Glockenspiel"),
+    "Xylophone": tr("Xylophone"),
+    "Marimba": tr("Marimba"),
+    "Vibraphone": tr("Vibraphone"),
+    "Tubular bells": tr("Tubular bells"),
+    "Drum kit": tr("Drum kit"),
+    "Melody": tr("Melody"),
+    "Violin I": tr("Violin I"),
+    "Violin II": tr("Violin II"),
+  };
+  return names[name] ?? name;
+}
+
+/** The instrument menus' families (score-model.js's INSTRUMENTS), in the page's language. */
+function familyWord(family) {
+  const names = {
+    Keyboards: tr("Keyboards"),
+    Strings: tr("Strings"),
+    Woodwinds: tr("Woodwinds"),
+    Brass: tr("Brass"),
+    Guitars: tr("Guitars"),
+    Voices: tr("Voices"),
+    Percussion: tr("Percussion"),
+  };
+  return names[family] ?? family;
+}
+
+/** A major key by its sharps (+) or flats (−), from C♭ (−7) to C♯ (7), in the page's language. */
+function keyWord(fifths) {
+  return [
+    tr("C♭ major"), tr("G♭ major"), tr("D♭ major"), tr("A♭ major"), tr("E♭ major"), tr("B♭ major"), tr("F major"),
+    tr("C major"), tr("G major"), tr("D major"), tr("A major"), tr("E major"), tr("B major"), tr("F♯ major"), tr("C♯ major"),
+  ][fifths + 7];
 }
 
 /** The toolbox and the menus set up; answers what shows the state in them, and what their fields change. */
@@ -108,7 +239,8 @@ export function install(ctx) {
   // The drum palette, for a drum staff: a button for each drum of the kit.
   const drumRow = root.querySelector("[data-drums]");
   for (const drum of M.DRUMS) {
-    const button = Object.assign(document.createElement("button"), { type: "button", className: "tool", textContent: drum.label, title: `${drum.label} (${drum.name})` });
+    const label = drumWord(drum);
+    const button = Object.assign(document.createElement("button"), { type: "button", className: "tool", textContent: label, title: `${label} (${drum.name})` });
     button.dataset.act = "drum";
     button.dataset.name = drum.name;
     drumRow?.append(button);
@@ -117,7 +249,7 @@ export function install(ctx) {
   // The intervals to transpose by; a major second by default.
   const intervalMenu = root.querySelector("[data-transpose-interval]");
   if (intervalMenu) {
-    M.INTERVALS.forEach((it, k) => intervalMenu.append(new Option(it.name, String(k))));
+    M.INTERVALS.forEach((it, k) => intervalMenu.append(new Option(intervalName(it.name), String(k))));
     intervalMenu.value = String(M.INTERVALS.findIndex((it) => it.name === "major second"));
   }
 
@@ -126,10 +258,11 @@ export function install(ctx) {
   for (const select of root.querySelectorAll("[data-instruments]")) {
     const families = new Map();
     M.INSTRUMENTS.forEach((it, k) => {
-      if (!families.has(it.family)) families.set(it.family, Object.assign(document.createElement("optgroup"), { label: it.family }));
+      if (!families.has(it.family)) families.set(it.family, Object.assign(document.createElement("optgroup"), { label: familyWord(it.family) }));
       const group = families.get(it.family);
-      group.append(new Option(it.name, String(k)));
-      if (select.dataset.instruments === "new" && it.name === "Piano") group.append(new Option("Piano, lower staff", `${k}|bass`));
+      // Shown in the page's language; the score writes the English (\instrumentName).
+      group.append(new Option(instrumentName(it.name), String(k)));
+      if (select.dataset.instruments === "new" && it.name === "Piano") group.append(new Option(tr("Piano, lower staff"), `${k}|bass`));
     });
     select.append(...families.values());
     // A second staff is most often a melody instrument: the violin, as before.
@@ -152,7 +285,7 @@ export function install(ctx) {
     if (paper) paper.textContent = M.paperLabel(st.text);
     notice.hidden = (Boolean(st.score) || !st.unsupported.length) && !(st.score && st.lostNotice);
     if (!st.score && st.unsupported.length) {
-      notice.textContent = `This piece uses ${st.unsupported.join(", ")}: the score editor does not edit those yet. It is engraved, and its text below can be edited.`;
+      notice.textContent = tr("This piece uses {what}: the score editor does not edit those yet. It is engraved, and its text below can be edited.", { what: st.unsupported.join(", ") });
     } else if (st.score && st.lostNotice) notice.textContent = st.lostNotice;
     for (const button of root.querySelectorAll('[data-act="duration"]')) button.classList.toggle("on", Number(button.dataset.base) === st.input.base);
     const dot = root.querySelector('.studio-toolbox [data-act="dot"]');
@@ -180,27 +313,31 @@ export function install(ctx) {
     for (const button of root.querySelectorAll('[data-act="undo"]')) button.disabled = !st.past.length;
     for (const button of root.querySelectorAll('[data-act="redo"]')) button.disabled = !st.future.length;
     const handle = st.playing?.handle;
-    root.querySelector(".studio-play").textContent = !st.playing ? "▶ Play" : !handle ? "■ Stop" : handle.paused ? "▶ Play" : "❚❚ Pause";
+    root.querySelector(".studio-play").textContent = !st.playing ? tr("▶ Play") : !handle ? tr("■ Stop") : handle.paused ? tr("▶ Play") : tr("❚❚ Pause");
     root.querySelector('.studio-menu[data-act="stop"]').hidden = !handle;
     renderMix();
     root.querySelector("[data-zoom-label]").textContent = `${Math.round(st.zoom * 100)} %`;
     for (const tool of root.querySelectorAll(".studio-toolbox .tool, .studio-toolbox input, .studio-toolbox select")) tool.disabled = !st.score;
     fillFields();
     // What is selected, in words.
-    const value = `${({ 1: "whole", 2: "half", 4: "quarter", 8: "eighth", 16: "16th", 32: "32nd" })[st.input.base]}${st.input.dots ? `,${M.dotsWord(st.input.dots)}` : ""}`;
+    const value = `${valueWord(st.input.base)}${st.input.dots ? `,${M.dotsWord(st.input.dots)}` : ""}`;
     if (st.playing) showProgress();
-    else if (st.input.on) state.textContent = `Note input${M.partOfLane(st.score, st.input.staff) ? ` · part ${"I".repeat(M.partOfLane(st.score, st.input.staff))}` : M.isLower(st.score, st.input.staff) ? ` · voice ${M.voiceOf(st.score, st.input.staff)}` : ""} · ${value} · A–G or a click write, 0 or R rest, Esc to stop`;
-    else {
+    else if (st.input.on) {
+      const inPart = M.partOfLane(st.score, st.input.staff);
+      const where = inPart ? tr("part {n}", { n: "I".repeat(inPart) }) : M.isLower(st.score, st.input.staff) ? tr("voice {n}", { n: M.voiceOf(st.score, st.input.staff) }) : "";
+      state.textContent = [tr("Note input"), where, value, tr("A–G or a click write, 0 or R rest, Esc to stop")].filter(Boolean).join(" · ");
+    } else {
       const r = range();
-      if (!r) state.textContent = st.score ? "Click a note to select it · N to write notes" : "Text only";
-      else if (r.a !== r.b) state.textContent = `${r.b - r.a + 1} selected`;
+      if (!r) state.textContent = st.score ? tr("Click a note to select it · N to write notes") : tr("Text only");
+      else if (r.a !== r.b) state.textContent = tr("{n} selected", { n: r.b - r.a + 1 });
       else {
         const ev = r.staff.events[r.a];
-        const len = ({ 1: "whole", 2: "half", 4: "quarter", 8: "eighth", 16: "16th", 32: "32nd" })[ev.base] + M.dotsWord(ev.dots) + (ev.tuplet ? ` (${ev.tuplet.n}-tuplet)` : "");
+        const len = valueWord(ev.base) + M.dotsWord(ev.dots) + (ev.tuplet ? ` ${tr("({n}-tuplet)", { n: ev.tuplet.n })}` : "");
         // On a \\partCombine staff, the part: Part I, Part II.
         const part = M.partOfLane(st.score, r.s);
-        const voice = part ? `Part ${"I".repeat(part)} · ` : M.isLower(st.score, r.s) ? `Voice ${M.voiceOf(st.score, r.s)} · ` : "";
-        state.textContent = voice + (ev.rest ? `Rest · ${len}` : `${ev.pitches.length > 1 ? "Chord" : "Note"} ${ev.pitches.map((p, k) => (k === st.sel.head ? `[${M.pitchName(p.d, p.alter)}]` : M.pitchName(p.d, p.alter))).join(" ")} · ${len}`);
+        const voice = part ? `${tr("Part {n}", { n: "I".repeat(part) })} · ` : M.isLower(st.score, r.s) ? `${tr("Voice {n}", { n: M.voiceOf(st.score, r.s) })} · ` : "";
+        const pitches = ev.pitches.map((p, k) => (k === st.sel.head ? `[${M.pitchName(p.d, p.alter)}]` : M.pitchName(p.d, p.alter))).join(" ");
+        state.textContent = voice + (ev.rest ? tr("Rest · {value}", { value: len }) : ev.pitches.length > 1 ? tr("Chord {pitches} · {value}", { pitches, value: len }) : tr("Note {pitches} · {value}", { pitches, value: len }));
       }
     }
   }
@@ -243,7 +380,7 @@ export function install(ctx) {
       const k = M.instrumentOf(st.score, staffOf());
       instrument.querySelector("[data-other]")?.remove();
       if (k < 0) {
-        const other = new Option(`Other: ${staff.instrument}`, "other");
+        const other = new Option(tr("Other: {instrument}", { instrument: staff.instrument }), "other");
         other.dataset.other = "";
         instrument.prepend(other);
       }
@@ -259,14 +396,12 @@ export function install(ctx) {
     const value = st.score.pickup > 0 ? M.pickupText(st.score.pickup) : "";
     field.querySelector("[data-other]")?.remove();
     if (![...field.options].some((o) => o.value === value)) {
-      const other = new Option(`Other: \\partial ${value}`, value);
+      const other = new Option(tr("Other: {pickup}", { pickup: `\\partial ${value}` }), value);
       other.dataset.other = "";
       field.append(other);
     }
     field.value = value;
   }
-
-  const KEY_NAMES = ["C♭", "G♭", "D♭", "A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯"];
 
   /** The changes section: the bar's own changes, and what is in force there otherwise. */
   function fillChanges(set) {
@@ -276,8 +411,12 @@ export function install(ctx) {
     const on = b != null && b > 0;
     section.querySelector("[data-change-bar]").textContent = b == null ? "—" : String(barNo(b));
     section.querySelector("[data-change-hint]").textContent = b == null
-      ? "Select a bar, or put the cursor in it: what changes here goes on to the next change."
-      : b === 0 ? `Bar ${barNo(0)} is the piece's start${st.score.pickup ? ", its pickup" : ""}: its key, metre and tempo are in File ▸ Score properties, its clef under This staff.` : "What changes here goes on to the next change.";
+      ? tr("Select a bar, or put the cursor in it: what changes here goes on to the next change.")
+      : b === 0
+        ? st.score.pickup
+          ? tr("Bar {n} is the piece's start, its pickup: its key, metre and tempo are in File ▸ Score properties, its clef under This staff.", { n: barNo(0) })
+          : tr("Bar {n} is the piece's start: its key, metre and tempo are in File ▸ Score properties, its clef under This staff.", { n: barNo(0) })
+        : tr("What changes here goes on to the next change.");
     for (const el of section.querySelectorAll("[data-field]")) el.disabled = !on;
     if (!on) return;
     const s = staffOf();
@@ -285,12 +424,14 @@ export function install(ctx) {
     const was = { key: M.keyOf(st.score, s, M.barStart(st.score, b - 1)), time: M.timeAt(st.score, b - 1), clef: M.clefAt(st.score, s, b - 1), tempo: M.tempoAt(st.score, b - 1) };
     const first = (field, text) => {
       const option = section.querySelector(`[data-field="${field}"] option[value=""]`);
-      if (option) option.textContent = `As before: ${text}`;
+      if (option) option.textContent = tr("As before: {was}", { was: text });
     };
-    first("change-key", `${KEY_NAMES[was.key + 7]} major`);
+    first("change-key", keyWord(was.key));
     first("change-time", was.time.join("/"));
-    first("change-clef", was.clef.replace("_8", " 8"));
-    section.querySelector('[data-field="change-bpm"]').placeholder = was.tempo?.bpm ? `as before: ${was.tempo.bpm}` : "as before";
+    // The clef as the menu names it where the page has words of its own; else as LilyPond does.
+    const clefOption = globalThis.EUI_WORDS ? section.querySelector(`[data-field="change-clef"] option[value="${CSS.escape(was.clef)}"]`) : null;
+    first("change-clef", clefOption?.textContent ?? was.clef.replace("_8", " 8"));
+    section.querySelector('[data-field="change-bpm"]').placeholder = was.tempo?.bpm ? tr("as before: {bpm}", { bpm: was.tempo.bpm }) : tr("as before");
     set("change-key", c?.key == null ? "" : String(c.key));
     set("change-time", c?.time ? c.time.join("/") : "");
     set("change-bpm", c?.tempo?.bpm || "");
@@ -348,5 +489,5 @@ export function install(ctx) {
     });
   }
 
-  return { mac, showState, onField };
+  return { mac, showState, onField, intervalName, instrumentName };
 }

@@ -1,6 +1,10 @@
 // The studio's velocities (studio.js, velocity.js): the strip under the MIDI
 // view's roll, and the automation lane under it (automation-ui.js).
 
+// The editor's words in the page's language (#508).
+const V = new URL(import.meta.url).search;
+const { tr } = await import(`./words.js${V}`);
+
 /** The velocity strip and the automation lane put under the roll. */
 export function install(ctx) {
   const { rollHost, rollScroll, st, R, Vel, automationLane } = ctx;
@@ -17,8 +21,8 @@ export function install(ctx) {
   st.velHeard = { text: null, map: {} };
   const velBar = (st.velBar = Object.assign(document.createElement("div"), { className: "studio-velocity-bar" }));
   velBar.setAttribute("role", "toolbar");
-  velBar.setAttribute("aria-label", "Velocity");
-  velBar.innerHTML = `<span class="studio-velocity-what" data-vel-what></span><span class="studio-velocity-fixed"><button type="button" class="studio-menu" data-vel-act="fixed">Fixed velocity</button><input type="number" min="1" max="127" value="96" data-vel-value aria-label="The fixed velocity, 1 to 127"></span><button type="button" class="studio-menu" data-vel-act="soften">Soften</button><button type="button" class="studio-menu" data-vel-act="accent">Accent the beats</button><button type="button" class="studio-menu" data-vel-act="clear">As the dynamics</button><span class="studio-roll-hint">Drag across the bars to draw; click one to choose it, Shift for more; drag a chosen one to move them all.</span>`;
+  velBar.setAttribute("aria-label", tr("Velocity"));
+  velBar.innerHTML = `<span class="studio-velocity-what" data-vel-what></span><span class="studio-velocity-fixed"><button type="button" class="studio-menu" data-vel-act="fixed">${tr("Fixed velocity")}</button><input type="number" min="1" max="127" value="96" data-vel-value aria-label="${tr("The fixed velocity, 1 to 127")}"></span><button type="button" class="studio-menu" data-vel-act="soften">${tr("Soften")}</button><button type="button" class="studio-menu" data-vel-act="accent">${tr("Accent the beats")}</button><button type="button" class="studio-menu" data-vel-act="clear">${tr("As the dynamics")}</button><span class="studio-roll-hint">${tr("Drag across the bars to draw; click one to choose it, Shift for more; drag a chosen one to move them all.")}</span>`;
   rollHost.append(velBar);
 
   // The automation lane (automation-ui.js), under the velocity strip.
@@ -48,7 +52,7 @@ export function install(ctx) {
     st.velGeo = R.rollLayout(st.score, { layout: st.rollLayout, zoom: st.zoom, only: st.rollLayout === "keys" ? st.rollOnly : null });
     const set = { ...Vel.velocitiesOf(st.score), ...(st.velDrag?.changes ?? {}) };
     const what = st.velBar.querySelector("[data-vel-what]");
-    what.textContent = st.velSel.size ? `${st.velSel.size} chosen` : "All the notes";
+    what.textContent = st.velSel.size ? tr("{n} chosen", { n: st.velSel.size }) : tr("All the notes");
     return `<div class="studio-velocity">${Vel.drawStrip(st.score, st.velGeo, { set, heard: heardVelocities(), selected: st.velSel })}</div>`;
   }
 
@@ -65,8 +69,9 @@ export function install(ctx) {
   /** Velocities changed: kept, one Undo away. */
   function velCommit(changes, words) {
     const n = Object.keys(changes).length;
-    if (!n) return say("No note there.");
-    if (edit((score) => Vel.setVelocities(score, changes))) say(`${words}: ${n === 1 ? "1 note" : `${n} notes`}. Ctrl+Z takes it back.`);
+    if (!n) return say(tr("No note there."));
+    const said = { words, n };
+    if (edit((score) => Vel.setVelocities(score, changes))) say(n === 1 ? tr("{words}: 1 note. Ctrl+Z takes it back.", said) : tr("{words}: {n} notes. Ctrl+Z takes it back.", said));
   }
 
   rollHost.addEventListener("pointerdown", (event) => {
@@ -132,7 +137,7 @@ export function install(ctx) {
       return drawRoll();
     }
     const changed = Object.entries(d.changes).filter(([id, v]) => v !== d.start?.[id]);
-    if (changed.length) velCommit(Object.fromEntries(changed), d.mode === "draw" ? "Velocity drawn" : "Velocity changed");
+    if (changed.length) velCommit(Object.fromEntries(changed), d.mode === "draw" ? tr("Velocity drawn") : tr("Velocity changed"));
     else drawRoll();
   };
   rollHost.addEventListener("pointerup", endVelDrag);
@@ -145,10 +150,10 @@ export function install(ctx) {
     const ids = st.velSel.size ? [...st.velSel] : st.velGeo.notes.map((n) => Vel.noteId(n.lane, n.t0, n.key));
     const set = Vel.velocitiesOf(st.score);
     const value = Number(velBar.querySelector("[data-vel-value]").value) || 96;
-    if (act === "fixed") return velCommit(Vel.fixed(ids, value), `Velocity ${Math.max(1, Math.min(127, Math.round(value)))}`);
-    if (act === "soften") return velCommit(Vel.soften(ids, set, st.velHeard.map), "Softer");
-    if (act === "accent") return velCommit(Vel.accentBeats(st.score, ids, set, st.velHeard.map), "The beats accented");
-    if (act === "clear") return velCommit(Object.fromEntries(ids.filter((id) => set[id] != null).map((id) => [id, null])), "As the dynamics again");
+    if (act === "fixed") return velCommit(Vel.fixed(ids, value), tr("Velocity {n}", { n: Math.max(1, Math.min(127, Math.round(value))) }));
+    if (act === "soften") return velCommit(Vel.soften(ids, set, st.velHeard.map), tr("Softer"));
+    if (act === "accent") return velCommit(Vel.accentBeats(st.score, ids, set, st.velHeard.map), tr("The beats accented"));
+    if (act === "clear") return velCommit(Object.fromEntries(ids.filter((id) => set[id] != null).map((id) => [id, null])), tr("As the dynamics again"));
   });
 
   return { velocityStrip };

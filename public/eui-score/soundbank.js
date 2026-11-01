@@ -24,6 +24,7 @@
 const V = new URL(import.meta.url).search;
 const F = await import(`./feel.js${V}`);
 const Ch = await import(`./channels.js${V}`);
+const { tr } = await import(`./words.js${V}`);
 
 /** The largest file kept: 100 MB. */
 export const MAX_BYTES = 100 * 1024 * 1024;
@@ -53,7 +54,7 @@ export function isSoundFont(bytes) {
  */
 export function presetsOf(bytes) {
   const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-  if (!isSoundFont(b)) throw new Error("not a SoundFont (SF2 or SF3) file");
+  if (!isSoundFont(b)) throw new Error(tr("not a SoundFont (SF2 or SF3) file"));
   const v = new DataView(b.buffer, b.byteOffset, b.byteLength);
   const end = Math.min(b.length, 8 + v.getUint32(4, true));
   for (let at = 12; at + 8 <= end; ) {
@@ -78,7 +79,7 @@ export function presetsOf(bytes) {
     }
     at += 8 + size + (size & 1);
   }
-  throw new Error("this SoundFont lists no preset");
+  throw new Error(tr("this SoundFont lists no preset"));
 }
 
 /** The digest a file is kept under: the first 16 hex digits of its SHA-256. */
@@ -90,9 +91,9 @@ export async function hashOf(bytes) {
 /** Why a file cannot be used, or null: too big, empty, or not a SoundFont. */
 export function refusal(name, bytes) {
   const size = bytes?.byteLength ?? 0;
-  if (!size) return `${name} is empty.`;
-  if (size > MAX_BYTES) return `${name} is ${(size / 1048576).toFixed(0)} MB: the most a SoundFont may be here is ${MAX_BYTES / 1048576} MB.`;
-  if (!isSoundFont(bytes)) return `${name} is not a SoundFont: an .sf2 or .sf3 file.`;
+  if (!size) return tr("{name} is empty.", { name });
+  if (size > MAX_BYTES) return tr("{name} is {size} MB: the most a SoundFont may be here is {max} MB.", { name, size: (size / 1048576).toFixed(0), max: MAX_BYTES / 1048576 });
+  if (!isSoundFont(bytes)) return tr("{name} is not a SoundFont: an .sf2 or .sf3 file.", { name });
   return null;
 }
 

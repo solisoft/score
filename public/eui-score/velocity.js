@@ -20,6 +20,8 @@
 const SEARCH = new URL(import.meta.url).search;
 const M = await import(`./score-model.js${SEARCH}`);
 const R = await import(`./piano-roll.js${SEARCH}`);
+// The strip's words in the page's language (#508).
+const { tr } = await import(`./words.js${SEARCH}`);
 
 /** A note's name: its lane, the tick it starts at, its key. */
 export function noteId(lane, t0, key) {
@@ -309,12 +311,12 @@ export function drawStrip(score, geo, { set = {}, heard = {}, selected = new Set
     const bx = geo.x(M.barStart(score, bar));
     parts.push(`<line class="vel-bar-line" x1="${bx}" x2="${bx}" y1="0" y2="${STRIP_H}"/>`);
   }
-  parts.push(`<text class="vel-label" x="8" y="16">Velocity</text>`);
+  parts.push(`<text class="vel-label" x="8" y="16">${tr("Velocity")}</text>`);
   parts.push(`<text class="vel-scale" x="${geo.left - 6}" y="${yOfVelocity(127) + 8}" text-anchor="end">127</text><text class="vel-scale" x="${geo.left - 6}" y="${STRIP_H - PAD}" text-anchor="end">1</text>`);
   for (const b of bars) {
     const y = yOfVelocity(b.v);
     const classes = ["vel-note", b.set ? "" : "vel-note-heard", selected.has(b.id) ? "vel-note-chosen" : ""].filter(Boolean).join(" ");
-    parts.push(`<g class="${classes}" data-vel="${b.id}"><line x1="${b.x}" x2="${b.x}" y1="${STRIP_H - PAD}" y2="${y}" stroke="${R.laneColour(score, b.lane)}"/><circle cx="${b.x}" cy="${y}" r="3" fill="${R.laneColour(score, b.lane)}"/><title>${b.v}${b.set ? "" : " (from the dynamics)"}</title></g>`);
+    parts.push(`<g class="${classes}" data-vel="${b.id}"><line x1="${b.x}" x2="${b.x}" y1="${STRIP_H - PAD}" y2="${y}" stroke="${R.laneColour(score, b.lane)}"/><circle cx="${b.x}" cy="${y}" r="3" fill="${R.laneColour(score, b.lane)}"/><title>${b.set ? b.v : tr("{velocity} (from the dynamics)", { velocity: b.v })}</title></g>`);
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" class="vel-strip" width="${geo.width}" height="${STRIP_H}" viewBox="0 0 ${geo.width} ${STRIP_H}" role="img" aria-label="Velocity of ${bars.length} notes">${parts.join("")}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" class="vel-strip" width="${geo.width}" height="${STRIP_H}" viewBox="0 0 ${geo.width} ${STRIP_H}" role="img" aria-label="${tr("Velocity of {count} notes", { count: bars.length })}">${parts.join("")}</svg>`;
 }

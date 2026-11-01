@@ -167,14 +167,14 @@ end
 # \partial writes it (score-model.js reads it with pickupOf), "" for none.
 def editor_pickups
   [
-    ["", "None"],
-    ["16", "A sixteenth"],
-    ["8", "An eighth"],
-    ["8.", "A dotted eighth"],
-    ["4", "A quarter"],
-    ["4.", "A dotted quarter"],
-    ["2", "A half"],
-    ["2.", "A dotted half"]
+    ["", _editor_t("app.editor.pickup_none")],
+    ["16", _editor_t("app.editor.pickup_sixteenth")],
+    ["8", _editor_t("app.editor.pickup_eighth")],
+    ["8.", _editor_t("app.editor.pickup_dotted_eighth")],
+    ["4", _editor_t("app.editor.pickup_quarter")],
+    ["4.", _editor_t("app.editor.pickup_dotted_quarter")],
+    ["2", _editor_t("app.editor.pickup_half")],
+    ["2.", _editor_t("app.editor.pickup_dotted_half")]
   ]
 end
 
@@ -185,12 +185,108 @@ def editor_metres
 end
 
 # The keys the menus offer, from seven flats to seven sharps: [fifths, its
-# name, major and minor], e.g. [-3, "E♭ major / C minor"]. The Start page and
-# the editor list the same keys.
+# name, major and minor], e.g. [-3, "E♭ major / C minor"], in the app's
+# language (#508): [-3, "Mi♭ majeur / do mineur"]. The Start page and the
+# editor list the same keys.
 def editor_keys
   majors = ["C♭", "G♭", "D♭", "A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯"]
   minors = ["A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯", "G♯", "D♯", "A♯"]
+  major_names = _editor_t("app.editor.major_note_names").split(" ")
+  minor_names = _editor_t("app.editor.minor_note_names").split(" ")
   range(-7, 8).map do |fifths|
-    [fifths, "#{majors[fifths + 7]} major / #{minors[fifths + 7]} minor"]
+    major = _editor_note_name(majors[fifths + 7], major_names)
+    minor = _editor_note_name(minors[fifths + 7], minor_names)
+    name = _editor_t(
+      "app.editor.key_name",
+      {"major": major, "minor": minor}
+    )
+    [fifths, name]
   end
+end
+
+# `key` in the request's language, its {name}s replaced by `vars`: t() as
+# the views have it, which a helper does not see. A spec run outside the
+# server has no locale files loaded: SiteText reads them (the server's views
+# do not see SiteText, but never need it).
+def _editor_t(key, vars = {})
+  text = I18n.translate(key)
+  text = SiteText.t(key) if text == key
+  for name in vars.keys
+    text = text.replace("{#{name}}", vars[name].to_s)
+  end
+  text
+end
+
+# "E♭" with its letter named from `names` (C D E F G A B, in that order).
+def _editor_note_name(note, names)
+  names["CDEFGAB".index_of(note.substring(0, 1))] + note.substring(1, note.length)
+end
+
+# What the editor's page script says (app/views/app/scores/show.html.slv),
+# in the app's language (#508): its name => the words.
+def editor_page_words
+  words = {"keep_version": _editor_t("app.layout.keep_version")}
+  # Its words' names, under app.editor.page.
+  names = [
+    "not_allowed",
+    "signed_out",
+    "sign_in_again",
+    "to_save",
+    "saved_note",
+    "saved",
+    "saved_by",
+    "saved_elsewhere",
+    "changed_by",
+    "changed_elsewhere",
+    "merged_note_by",
+    "merged_note_window",
+    "merged_by",
+    "merged_window",
+    "merged_mine",
+    "merged_theirs",
+    "loaded_theirs",
+    "saving_copy",
+    "saving",
+    "not_saved",
+    "unsaved",
+    "offline",
+    "greeting",
+    "opening_new",
+    "someone",
+    "someone_lower",
+    "with",
+    "reading",
+    "also_editing",
+    "you_elsewhere",
+    "changed_window",
+    "updated",
+    "bars_gone",
+    "back_offline",
+    "version_kept",
+    "not_kept",
+    "sending_photo",
+    "photo_not_read",
+    "see_plans",
+    "ai_working",
+    "ai_proposes",
+    "ai_timeout",
+    "ai_not_sent",
+    "ai_applied",
+    "chords_title",
+    "chords_about",
+    "chords_hint",
+    "harmonize_title",
+    "harmonize_about",
+    "harmonize_hint",
+    "improve_title",
+    "improve_about",
+    "improve_hint",
+    "ask_title",
+    "ask_about",
+    "ask_hint"
+  ]
+  for name in names
+    words[name] = _editor_t("app.editor.page.#{name}")
+  end
+  words
 end

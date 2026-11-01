@@ -12,6 +12,7 @@
 
 const V = new URL(import.meta.url).search;
 const M = await import(`./score-model.js${V}`);
+const { tr } = await import(`./words.js${V}`);
 
 // ---- Reading XML ----------------------------------------------------------------
 //
@@ -40,12 +41,12 @@ export function parseXml(text) {
     if (open > i) top.text += decode(text.slice(i, open));
     if (text.startsWith("<!--", open)) {
       i = text.indexOf("-->", open) + 3;
-      if (i < 3) throw new Error("an unclosed comment");
+      if (i < 3) throw new Error(tr("an unclosed comment"));
       continue;
     }
     if (text.startsWith("<![CDATA[", open)) {
       const end = text.indexOf("]]>", open);
-      if (end < 0) throw new Error("an unclosed CDATA section");
+      if (end < 0) throw new Error(tr("an unclosed CDATA section"));
       top.text += text.slice(open + 9, end);
       i = end + 3;
       continue;
@@ -55,33 +56,33 @@ export function parseXml(text) {
       let end = text.indexOf(">", open);
       const bracket = text.indexOf("[", open);
       if (text.startsWith("<!DOCTYPE", open) && bracket >= 0 && bracket < end) end = text.indexOf(">", text.indexOf("]", bracket));
-      if (end < 0) throw new Error("an unclosed tag");
+      if (end < 0) throw new Error(tr("an unclosed tag"));
       i = end + 1;
       continue;
     }
     const close = text.indexOf(">", open);
-    if (close < 0) throw new Error("an unclosed tag");
+    if (close < 0) throw new Error(tr("an unclosed tag"));
     const tag = text.slice(open + 1, close);
     i = close + 1;
     if (tag[0] === "/") {
       const name = tag.slice(1).trim();
-      if (stack.length < 2 || top.name !== name) throw new Error(`</${name}> closes nothing`);
+      if (stack.length < 2 || top.name !== name) throw new Error(tr("</{name}> closes nothing", { name }));
       stack.pop();
       continue;
     }
     const empty = tag.endsWith("/");
     const body = empty ? tag.slice(0, -1) : tag;
     const name = /^[^\s/>]+/.exec(body)?.[0];
-    if (!name) throw new Error("a tag with no name");
+    if (!name) throw new Error(tr("a tag with no name"));
     const attrs = {};
     for (const m of body.slice(name.length).matchAll(/([^\s=]+)\s*=\s*("([^"]*)"|'([^']*)')/g)) attrs[m[1]] = decode(m[3] ?? m[4]);
     const el = { name, attrs, children: [], text: "" };
     top.children.push(el);
     if (!empty) stack.push(el);
   }
-  if (stack.length > 1) throw new Error(`<${stack[stack.length - 1].name}> is never closed`);
+  if (stack.length > 1) throw new Error(tr("<{name}> is never closed", { name: stack[stack.length - 1].name }));
   const element = root.children[0];
-  if (!element) throw new Error("no element in the file");
+  if (!element) throw new Error(tr("no element in the file"));
   return element;
 }
 
@@ -162,10 +163,10 @@ export function fromMusicXML(text) {
   try {
     root = parseXml(text);
   } catch (error) {
-    throw new Error(`This is not a MusicXML file: ${error.message}.`);
+    throw new Error(tr("This is not a MusicXML file: {reason}.", { reason: error.message }));
   }
-  if (root.name === "score-timewise") throw new Error("This MusicXML file is written measure by measure (timewise); save it part by part (partwise) and open it again.");
-  if (root.name !== "score-partwise") throw new Error("This is not a MusicXML score: it holds no <score-partwise>.");
+  if (root.name === "score-timewise") throw new Error(tr("This MusicXML file is written measure by measure (timewise); save it part by part (partwise) and open it again."));
+  if (root.name !== "score-partwise") throw new Error(tr("This is not a MusicXML score: it holds no <score-partwise>."));
   const warnings = new Set();
   const header = [];
   const title = textIn(kid(root, "work"), "work-title") || textIn(root, "movement-title");
@@ -222,7 +223,7 @@ export function fromMusicXML(text) {
   }
 
   const parts = kids(root, "part");
-  if (!parts.length) throw new Error("This MusicXML score has no part.");
+  if (!parts.length) throw new Error(tr("This MusicXML score has no part."));
   // The staff names given so far (\\change Staff, \\lyricsto): each once in the score.
   const taken = new Set();
   // A file this editor wrote: its <stem> are the stems \\stemUp and \\stemDown turned (others write every note's).
@@ -403,8 +404,8 @@ function readPart(part, info, first, warnings) {
     for (const el of measure.children) {
       if (el.name === "attributes") {
         divisions = numberIn(el, "divisions") ?? divisions;
-        const tr = kid(el, "transpose");
-        if (tr) transpose = { diatonic: (numberIn(tr, "diatonic") ?? 0) + 7 * (numberIn(tr, "octave-change") ?? 0), chromatic: (numberIn(tr, "chromatic") ?? 0) + 12 * (numberIn(tr, "octave-change") ?? 0) };
+        const transposing = kid(el, "transpose");
+        if (transposing) transpose = { diatonic: (numberIn(transposing, "diatonic") ?? 0) + 7 * (numberIn(transposing, "octave-change") ?? 0), chromatic: (numberIn(transposing, "chromatic") ?? 0) + 12 * (numberIn(transposing, "octave-change") ?? 0) };
         const count = numberIn(el, "staves");
         if (count) {
           staves = count;
@@ -415,7 +416,7 @@ function readPart(part, info, first, warnings) {
           // A transposing staff's key is written: its sound's is the one kept.
           const fifths = transpose ? spellFifths(numberIn(key, "fifths") + 7 * transpose.chromatic) : numberIn(key, "fifths");
           const mode = (textIn(key, "mode") ?? "major").toLowerCase();
-          if (!(mode in MODES)) warnings.add(`the mode “${mode}”, read as major`);
+          if (!(mode in MODES)) warnings.add(tr("the mode “{mode}”, read as major", { mode }));
           const tonic = FIFTHS[fifths + (MODES[mode] ?? 0) + 15];
           const name = MODES[mode] != null && mode !== "ionian" && mode !== "aeolian" ? mode : mode === "aeolian" ? "minor" : "major";
           for (let s = 1; s <= staves; s++) if (!at(s).drums) put(at(s), 0, cursor, `\\key ${tonic} \\${name}`);
@@ -427,7 +428,7 @@ function readPart(part, info, first, warnings) {
           const total = beats.split("+").reduce((sum, x) => sum + Number(x), 0);
           time = [total, beatType];
           for (let s = 1; s <= staves; s++) put(at(s), 0, cursor, `\\time ${beats}/${beatType}`);
-        } else if (t && kid(t, "senza-misura")) warnings.add("a part without bar lines (senza misura)");
+        } else if (t && kid(t, "senza-misura")) warnings.add(tr("a part without bar lines (senza misura)"));
         for (const clef of kids(el, "clef")) {
           const s = Number(clef.attrs.number ?? 1);
           const sign = textIn(clef, "sign");
@@ -443,7 +444,7 @@ function readPart(part, info, first, warnings) {
             continue;
           } else name = CLEFS_IN[sign + line];
           if (!name) {
-            warnings.add(`the clef ${sign} on line ${line}, read as a treble clef`);
+            warnings.add(tr("the clef {sign} on line {line}, read as a treble clef", { sign, line }));
             name = "treble";
           }
           if (octave && name !== "percussion") name = `"${name}${octave < 0 ? "_" : "^"}${8 * Math.abs(octave) - (Math.abs(octave) - 1)}"`;
@@ -493,7 +494,7 @@ function readPart(part, info, first, warnings) {
             if (d.name === "dynamics") {
               const mark = d.children[0]?.name;
               if (DYNAMICS_IN.includes(mark)) later(at(s), `\\${mark === "fz" ? "sfz" : mark === "sfp" ? "fp" : mark}`);
-              else if (mark) warnings.add("some dynamics");
+              else if (mark) warnings.add(tr("some dynamics"));
             } else if (d.name === "wedge") {
               const type = d.attrs.type;
               later(at(s), type === "crescendo" ? "\\<" : type === "diminuendo" ? "\\>" : "\\!");
@@ -566,7 +567,7 @@ function readPart(part, info, first, warnings) {
       try {
         partial = M.pickupText(Math.round((length / divisions) * (M.WHOLE / 4)));
       } catch {
-        warnings.add("a pickup bar of an odd length");
+        warnings.add(tr("a pickup bar of an odd length"));
       }
       // Just before the first note, after the clef, key and metre.
       if (partial) {
@@ -675,7 +676,7 @@ function readPart(part, info, first, warnings) {
         const wanted = /^\d+$/.test(voiceId) ? (Number(voiceId) - 1) % 4 : -1;
         v = staff.voices.length === 0 ? 0 : wanted >= 1 && free.includes(wanted) ? wanted : free[0] ?? -1;
         if (v < 0) {
-          warnings.add("a fifth voice on a staff, left out");
+          warnings.add(tr("a fifth voice on a staff, left out"));
           if (!isChord && !isGrace) cursor += numberIn(note, "duration") ?? 0;
           return;
         }
@@ -692,7 +693,7 @@ function readPart(part, info, first, warnings) {
           const instrument = kid(note, "instrument")?.attrs.id;
           const midi = info.drums.get(instrument);
           const drum = midi != null ? M.drumByKey(midi) : null;
-          if (!drum) warnings.add("a drum this editor does not name, read as a snare");
+          if (!drum) warnings.add(tr("a drum this editor does not name, read as a snare"));
           pitch = drum ?? "sn";
           staff.drums = true;
         } else {
@@ -701,7 +702,7 @@ function readPart(part, info, first, warnings) {
           let alter = numberIn(p, "alter") ?? 0;
           let octave = numberIn(p, "octave") ?? 4;
           if (!Number.isInteger(alter)) {
-            warnings.add("quarter tones, rounded");
+            warnings.add(tr("quarter tones, rounded"));
             alter = Math.round(alter);
           }
           if (transpose) {
@@ -713,7 +714,7 @@ function readPart(part, info, first, warnings) {
             alter = key12 - (octave * 12 + NATURAL[step]);
           }
           if (Math.abs(alter) > 2) {
-            warnings.add("a pitch spelled with more than two sharps or flats");
+            warnings.add(tr("a pitch spelled with more than two sharps or flats"));
             alter = Math.sign(alter) * 2;
           }
           pitch = pitchText(STEPS[step], alter, octave);
@@ -727,7 +728,7 @@ function readPart(part, info, first, warnings) {
       let values;
       if (type && TYPES[type] >= 1 && TYPES[type] <= 128) values = [{ base: TYPES[type], dots }];
       else if (type && TYPES[type] < 1) {
-        warnings.add("a breve or longer note, cut into tied whole notes");
+        warnings.add(tr("a breve or longer note, cut into tied whole notes"));
         values = spell((4 / TYPES[type]) * (2 - 1 / 2 ** dots));
       } else values = spell((duration / divisions) * (ratio ? ratio.n / ratio.d : 1));
       if (isGrace) {
@@ -798,12 +799,12 @@ function readPart(part, info, first, warnings) {
       slurDepth.set(key, open);
       for (const art of notations.flatMap((n) => kids(n, "articulations")).flatMap((a) => a.children)) {
         if (ARTICULATIONS_IN[art.name]) suffix += placed(ARTICULATIONS_IN[art.name], art.attrs.placement);
-        else if (art.name !== "breath-mark") warnings.add("some articulations");
+        else if (art.name !== "breath-mark") warnings.add(tr("some articulations"));
       }
       for (const orn of notations.flatMap((n) => kids(n, "ornaments")).flatMap((a) => a.children)) {
         if (ORNAMENTS_IN[orn.name]) suffix += placed(ORNAMENTS_IN[orn.name], orn.attrs.placement);
         else if (orn.name === "tremolo" && orn.attrs.type !== "start" && orn.attrs.type !== "stop") suffix = `:${8 * 2 ** (Number(orn.text.trim() || 1) - 1)}${suffix}`;
-        else if (orn.name !== "accidental-mark") warnings.add("some ornaments");
+        else if (orn.name !== "accidental-mark") warnings.add(tr("some ornaments"));
       }
       // A fermata turned over is below the note; one said upright, above it.
       const fermata = each("fermata")[0];
@@ -912,7 +913,7 @@ function readPart(part, info, first, warnings) {
       if (words.length && staff.lyricLane == null) staff.lyricLane = v;
       // The voice's name the words were sung to, when the file says it (<lyric name>).
       if (words.length && staff.lyricLane === v && !staff.lyricName) staff.lyricName = words.find((w) => w.attrs.name)?.attrs.name ?? null;
-      if (words.length && staff.lyricLane !== v) warnings.add("words under two voices of one staff: the second voice's left out");
+      if (words.length && staff.lyricLane !== v) warnings.add(tr("words under two voices of one staff: the second voice's left out"));
       if ((staff.lyricLane ?? v) === v && !rest) {
         // Counted on every voice until one has words: they line up with its notes.
         const count = staff.counts[v];
@@ -937,7 +938,7 @@ function readPart(part, info, first, warnings) {
       }
     }
   }
-  if (lanes.some((st) => st.pending.length || st.timed.length)) warnings.add("words or marks after the last note");
+  if (lanes.some((st) => st.pending.length || st.timed.length)) warnings.add(tr("words or marks after the last note"));
   for (const st of lanes) {
     if (st.alternative === "between") st.lanes[0].push("}");
     else if (st.alternative === "in") st.lanes[0].push("} }");
@@ -1593,12 +1594,12 @@ function zipEntries(bytes) {
       break;
     }
   }
-  if (end < 0) throw new Error("This .mxl file is not a zip archive.");
+  if (end < 0) throw new Error(tr("This .mxl file is not a zip archive."));
   const count = view.getUint16(end + 10, true);
   let at = view.getUint32(end + 16, true);
   const entries = new Map();
   for (let k = 0; k < count; k++) {
-    if (view.getUint32(at, true) !== 0x02014b50) throw new Error("This .mxl file's directory is damaged.");
+    if (view.getUint32(at, true) !== 0x02014b50) throw new Error(tr("This .mxl file's directory is damaged."));
     const method = view.getUint16(at + 10, true);
     const size = view.getUint32(at + 20, true);
     const nameLength = view.getUint16(at + 28, true);
@@ -1618,10 +1619,10 @@ export async function unzipMxl(bytes) {
   const entries = zipEntries(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes));
   const read = async (name) => {
     const entry = entries.get(name);
-    if (!entry) throw new Error(`This .mxl file names ${name}, which it does not hold.`);
+    if (!entry) throw new Error(tr("This .mxl file names {name}, which it does not hold.", { name }));
     if (entry.method === 0) return new TextDecoder().decode(entry.data);
     if (entry.method === 8) return new TextDecoder().decode(await inflate(entry.data));
-    throw new Error("This .mxl file is compressed in a way this page does not read.");
+    throw new Error(tr("This .mxl file is compressed in a way this page does not read."));
   };
   let name = null;
   if (entries.has("META-INF/container.xml")) {
@@ -1629,7 +1630,7 @@ export async function unzipMxl(bytes) {
     name = kid(kid(container, "rootfiles"), "rootfile")?.attrs["full-path"] ?? null;
   }
   name ??= [...entries.keys()].find((n) => !n.startsWith("META-INF/") && /\.(xml|musicxml)$/i.test(n));
-  if (!name) throw new Error("This .mxl file holds no score.");
+  if (!name) throw new Error(tr("This .mxl file holds no score."));
   return read(name);
 }
 

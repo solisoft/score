@@ -4,6 +4,16 @@
 
 const wait = (ms) => new Promise((done) => setTimeout(done, ms));
 
+// `text` in the page's language (#508), as public/eui-score/words.js's tr: the
+// English is the key, looked up in `globalThis.EUI_WORDS` (the editor's page
+// sets it, from config/editor_words/<locale>/), its `{name}`s filled from `vars`.
+function tr(text, vars) {
+  const words = globalThis.EUI_WORDS;
+  let said = (words && Object.prototype.hasOwnProperty.call(words, text) && words[text]) || text;
+  for (const name of Object.keys(vars ?? {})) said = said.split(`{${name}}`).join(String(vars[name]));
+  return said;
+}
+
 // The photo as the models take it: a JPEG at most 2576 pixels on its long side, as base64.
 export async function shrunk(file) {
   const image = await createImageBitmap(file);
@@ -27,12 +37,13 @@ export function took(seconds) {
 // minutes), the AI writing the music.
 export function readingSays(news) {
   const time = took(news?.seconds);
-  if (news?.phase === "writing") return `The AI is writing the music… ${time}`;
+  if (news?.phase === "writing") return tr("The AI is writing the music… {time}", { time });
   // A reasoning model shows how far its thinking has gone (#463).
   const thought = Number(news?.thought) || 0;
-  if (news?.phase === "thinking" && thought > 0) return `The AI is thinking the photo over… ${time}, ${thought.toLocaleString("en")} characters of reasoning so far. It writes the music after, within 10 minutes.`;
-  if (news?.phase === "thinking") return `The AI is reading the photo… ${time}. It thinks before it writes, often for several minutes.`;
-  return `Waiting for the AI… ${time}`;
+  const chars = thought.toLocaleString(globalThis.EUI_WORDS_LOCALE || "en");
+  if (news?.phase === "thinking" && thought > 0) return tr("The AI is thinking the photo over… {time}, {chars} characters of reasoning so far. It writes the music after, within 10 minutes.", { time, chars });
+  if (news?.phase === "thinking") return tr("The AI is reading the photo… {time}. It thinks before it writes, often for several minutes.", { time });
+  return tr("Waiting for the AI… {time}", { time });
 }
 
 // Sends `file`, calls `started(id)` once the server took it (the reading's id, #465), tells `progress`
@@ -52,7 +63,7 @@ export async function readPhoto(file, { readings = "/app/readings", started = ()
       body: JSON.stringify({ picture: await shrunk(file) }),
     });
   } catch (problem) {
-    throw new Error("The photo could not be sent. Check your connection and try again.");
+    throw new Error(tr("The photo could not be sent. Check your connection and try again."));
   }
   const answer = await sent.json();
   if (sent.status !== 202) throw Object.assign(new Error(answer.error), { link: answer.link, linkText: answer.link_text });
@@ -79,7 +90,7 @@ export async function readPhoto(file, { readings = "/app/readings", started = ()
       if (reading.state === "failed") throw new Error(reading.error);
       progress(reading);
     }
-    throw new Error("No answer after an hour. Try again in a moment.");
+    throw new Error(tr("No answer after an hour. Try again in a moment."));
   } finally {
     events?.close();
   }

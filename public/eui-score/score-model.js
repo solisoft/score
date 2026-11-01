@@ -16,6 +16,9 @@
 // No DOM here: the page's editor calls these functions, and so do the
 // tests (tests/js/score_model.test.mjs).
 
+const V = new URL(import.meta.url).search;
+const { tr } = await import(`./words.js${V}`);
+
 /** Ticks in a whole note, as eui-score counts them: a dotted 128th, and any of them in a triplet, quintuplet, sextuplet or septuplet — or a triplet in a triplet — is a whole number. */
 export const WHOLE = 80640;
 
@@ -204,7 +207,7 @@ export function pickupOf(text) {
   const value = String(text ?? "").trim();
   if (!value) return 0;
   const match = /^(1|2|4|8|16|32|64|128)(\.*)(?:\*(\d+))?$/.exec(value);
-  if (!match) throw new Error("a pickup is a duration, like 4, 8. or 8*3");
+  if (!match) throw new Error(tr("a pickup is a duration, like 4, 8. or 8*3"));
   return notated(Number(match[1]), match[2].length) * Number(match[3] ?? 1);
 }
 
@@ -213,7 +216,7 @@ export function pickupText(ticks) {
   const one = VALUES.find((v) => v.ticks === ticks);
   if (one) return `${one.base}${".".repeat(one.dots)}`;
   const base = [1, 2, 4, 8, 16, 32, 64, 128].find((b) => ticks % (WHOLE / b) === 0);
-  if (!base) throw new Error("a pickup is a whole number of 128ths");
+  if (!base) throw new Error(tr("a pickup is a whole number of 128ths"));
   return `${base}*${ticks / (WHOLE / base)}`;
 }
 
@@ -225,10 +228,10 @@ export function pickupText(ticks) {
  */
 export function setPickup(score, ticks) {
   refuseRawBars(score);
-  if (score.staves.some((_, s) => isScaled(score, s))) throw new Error(SCALED_METRE);
+  if (score.staves.some((_, s) => isScaled(score, s))) throw new Error(SCALED_METRE());
   const full = (WHOLE * score.time[0]) / score.time[1];
-  if (!Number.isInteger(ticks) || ticks < 0 || ticks % (WHOLE / 128) !== 0) throw new Error("a pickup is a whole number of 128ths");
-  if (ticks >= full) throw new Error(`a pickup is shorter than a bar of ${score.time[0]}/${score.time[1]}`);
+  if (!Number.isInteger(ticks) || ticks < 0 || ticks % (WHOLE / 128) !== 0) throw new Error(tr("a pickup is a whole number of 128ths"));
+  if (ticks >= full) throw new Error(tr("a pickup is shorter than a bar of {metre}", { metre: `${score.time[0]}/${score.time[1]}` }));
   const was = barLength(score, 0);
   const now = ticks || full;
   if (now === was) return;
@@ -239,7 +242,7 @@ export function setPickup(score, ticks) {
     if (now < was) {
       const from = cut(score, staff, was - now);
       const at = starts(staff);
-      if (from !== was - now || staff.events.some((ev, k) => at[k] < from && (!ev.rest || ev.tuplet))) throw new Error("the first bar's start holds notes: a shorter pickup would lose them");
+      if (from !== was - now || staff.events.some((ev, k) => at[k] < from && (!ev.rest || ev.tuplet))) throw new Error(tr("the first bar's start holds notes: a shorter pickup would lose them"));
       staff.events = staff.events.filter((_, k) => at[k] >= from);
     } else {
       staff.events.unshift(...rests(work, 0, now - was));
@@ -638,12 +641,12 @@ export function isScaled(score, s) {
   return Boolean(score.staves[s]?.events.some((ev) => ev.scale));
 }
 
-const SCALED_METRE = "A staff's notes are scaled (\\scaleDurations, a metre beside another): change the metre or the pickup in the text below";
-const SCALED_REFUSAL = "The notes of this staff are scaled (\\scaleDurations, a metre beside another): change their lengths in the text below";
+const SCALED_METRE = () => tr("A staff's notes are scaled (\\scaleDurations, a metre beside another): change the metre or the pickup in the text below");
+const SCALED_REFUSAL = () => tr("The notes of this staff are scaled (\\scaleDurations, a metre beside another): change their lengths in the text below");
 
 /** An edit that would change the lengths of notes in a scaled lane: refused, said. */
 function refuseScaled(score, s) {
-  if (isScaled(score, s)) throw new Error(SCALED_REFUSAL);
+  if (isScaled(score, s)) throw new Error(SCALED_REFUSAL());
 }
 
 export function emptyStaff(score, fields = {}) {
@@ -683,14 +686,14 @@ export const TEMPLATES = [
  */
 export function fromTemplate(id, { title = "Untitled", composer = "", key = 0, time = [4, 4], bpm = 0, bars = 8, pickup = 0 } = {}) {
   const template = TEMPLATES.find((t) => t.id === id);
-  if (!template) throw new Error("no such template");
-  if (!Number.isInteger(bars) || bars < 1 || bars > 500) throw new Error("a score has 1 to 500 bars");
-  if (!Number.isInteger(key) || key < -7 || key > 7) throw new Error("no such key");
+  if (!template) throw new Error(tr("no such template"));
+  if (!Number.isInteger(bars) || bars < 1 || bars > 500) throw new Error(tr("a score has 1 to 500 bars"));
+  if (!Number.isInteger(key) || key < -7 || key > 7) throw new Error(tr("no such key"));
   // A drum kit alone has no key.
   const drumsOnly = template.staves.every((spec) => spec.instrument === "Drum kit");
   const score = { header: { title: title || "Untitled", composer }, key: drumsOnly ? 0 : key, time, tempo: bpm > 0 ? { text: "", base: 4, bpm } : null, group: template.group, groups: [], staves: [], repeats: [], changes: [] };
   if (pickup) {
-    if (!Number.isInteger(pickup) || pickup < 0 || pickup >= (WHOLE * time[0]) / time[1]) throw new Error(`a pickup is shorter than a bar of ${time[0]}/${time[1]}`);
+    if (!Number.isInteger(pickup) || pickup < 0 || pickup >= (WHOLE * time[0]) / time[1]) throw new Error(tr("a pickup is shorter than a bar of {metre}", { metre: `${time[0]}/${time[1]}` }));
     score.pickup = pickup;
   }
   const length = barStart(score, pickup ? bars + 1 : bars);
@@ -830,7 +833,7 @@ function pieces(score, ev, at, ticks, role) {
 /** Every staff made `ticks` long at least, in whole bars of rests. */
 export function ensureLength(score, ticks) {
   const want = ticks > 0 ? nextBarLine(score, ticks - 1) : 0;
-  if (score.staves.some((staff) => (staff.raw != null || staff.rawPart) && lengthOf(staff) < want)) throw new Error(RAW_BARS_REFUSAL);
+  if (score.staves.some((staff) => (staff.raw != null || staff.rawPart) && lengthOf(staff) < want)) throw new Error(RAW_BARS_REFUSAL());
   for (const staff of score.staves) {
     const have = lengthOf(staff);
     if (have < want) staff.events.push(...laneRests(score, staff, have, want - have));
@@ -845,11 +848,11 @@ export function ensureLength(score, ticks) {
  */
 export function write(score, s, t, ticks, content, { tidyUp = true } = {}) {
   const staff = score.staves[s];
-  if (!staff) throw new Error("no such staff");
+  if (!staff) throw new Error(tr("no such staff"));
   refuseRaw(score, s);
   refuseScaled(score, s);
-  if ((staff.chords || staff.figures) && content.rest === false) throw new Error(staff.chords ? CHORD_LINE_NOTES : FIGURE_LINE_NOTES);
-  if (!Number.isInteger(t) || t < 0 || !Number.isInteger(ticks) || ticks <= 0) throw new Error("nothing to write there");
+  if ((staff.chords || staff.figures) && content.rest === false) throw new Error(staff.chords ? CHORD_LINE_NOTES() : FIGURE_LINE_NOTES());
+  if (!Number.isInteger(t) || t < 0 || !Number.isInteger(ticks) || ticks <= 0) throw new Error(tr("nothing to write there"));
   ensureLength(score, t + ticks);
   const from = cut(score, staff, t);
   cut(score, staff, t + ticks);
@@ -927,7 +930,7 @@ export function tidy(score, staff) {
 function noteOf(score, s, i) {
   refuseRaw(score, s);
   const ev = score.staves[s]?.events[i];
-  if (!ev) throw new Error("no such note");
+  if (!ev) throw new Error(tr("no such note"));
   return ev;
 }
 
@@ -959,9 +962,9 @@ export function previousPitch(score, s, i) {
 export function move(score, s, i, how, by, head = -1) {
   refuseDrums(score, s);
   const ev = noteOf(score, s, i);
-  if (ev.rest) throw new Error("select a note");
+  if (ev.rest) throw new Error(tr("select a note"));
   const moved = ev.pitches.map((p, k) => (head < 0 || k === head ? movePitch(p, how, by, keyOf(score, s, starts(score.staves[s])[i])) : p));
-  if (!moved.every(reachable)) throw new Error("that is as far as it goes");
+  if (!moved.every(reachable)) throw new Error(tr("that is as far as it goes"));
   followHeads(ev, ev.pitches, moved);
   setPitches(score, s, i, sortPitches(moved));
 }
@@ -980,7 +983,7 @@ export function letter(score, s, i, step, add = false, head = -1) {
     let d = top - mod7(top) + step;
     if (d <= top) d += 7;
     const p = { d, alter: keyAlters(keyOf(score, s, starts(score.staves[s])[i]))[mod7(d)] };
-    if (!reachable(p)) throw new Error("that is as far as it goes");
+    if (!reachable(p)) throw new Error(tr("that is as far as it goes"));
     if (!ev.pitches.some((q) => q.d === p.d)) setPitches(score, s, i, sortPitches([...ev.pitches, p]));
     return;
   }
@@ -995,7 +998,7 @@ export function letter(score, s, i, step, add = false, head = -1) {
 export function setPitch(score, s, i, p, add = false, head = -1) {
   refuseDrums(score, s);
   const ev = noteOf(score, s, i);
-  if (!reachable(p)) throw new Error("that is as far as it goes");
+  if (!reachable(p)) throw new Error(tr("that is as far as it goes"));
   if (ev.rest) {
     Object.assign(ev, { rest: false, pitches: [{ ...p }] });
     return;
@@ -1013,7 +1016,7 @@ export function setPitch(score, s, i, p, add = false, head = -1) {
 export function setAlter(score, s, i, alter, head = -1) {
   refuseDrums(score, s);
   const ev = noteOf(score, s, i);
-  if (ev.rest) throw new Error("select a note");
+  if (ev.rest) throw new Error(tr("select a note"));
   setPitches(score, s, i, ev.pitches.map((p, k) => (head < 0 || k === head ? { d: p.d, alter: Math.max(-2, Math.min(2, alter)) } : p)));
 }
 
@@ -1055,7 +1058,7 @@ export function setDuration(score, s, i, base, dots) {
   refuseScaled(score, s);
   const staff = score.staves[s];
   const ev = noteOf(score, s, i);
-  if (ev.tuplet) throw new Error("the notes of a tuplet keep their value: remove the tuplet first");
+  if (ev.tuplet) throw new Error(tr("the notes of a tuplet keep their value: remove the tuplet first"));
   const t = starts(staff)[i];
   const { id, base: _b, dots: _d, ...content } = ev;
   return write(score, s, t, notated(base, dots), content);
@@ -1064,9 +1067,9 @@ export function setDuration(score, s, i, base, dots) {
 /** A tie from event `i` to the next note, or none. */
 export function toggleTie(score, s, i) {
   const ev = noteOf(score, s, i);
-  if (ev.rest) throw new Error("only a note is tied");
+  if (ev.rest) throw new Error(tr("only a note is tied"));
   const next = score.staves[s].events[i + 1];
-  if (!ev.tie && (!next || next.rest)) throw new Error("a tie goes to the next note");
+  if (!ev.tie && (!next || next.rest)) throw new Error(tr("a tie goes to the next note"));
   // A tie joins the same pitches: the next note takes this one's.
   if (!ev.tie) next.pitches = ev.pitches.map((p) => ({ ...p }));
   ev.tie = !ev.tie;
@@ -1092,12 +1095,12 @@ function toggleLine(events, a, b, start, end, name) {
     }
     // One note: slurred to the next one, as MuseScore does.
     const next = events.findIndex((e, k) => k > from && !e.rest);
-    if (ev.rest || next < 0) throw new Error(`a ${name} goes from a note to a later note`);
+    if (ev.rest || next < 0) throw new Error(name === "slur" ? tr("a slur goes from a note to a later note") : tr("a phrasing slur goes from a note to a later note"));
     ev[start] = true;
     events[next][end] = true;
     return;
   }
-  if (events[from].rest || events[to].rest) throw new Error(`a ${name} goes from a note to a note`);
+  if (events[from].rest || events[to].rest) throw new Error(name === "slur" ? tr("a slur goes from a note to a note") : tr("a phrasing slur goes from a note to a note"));
   events[from][start] = !events[from][start];
   events[to][end] = events[from][start];
 }
@@ -1183,9 +1186,9 @@ function tidyOttavas(staff) {
 
 /** Where an ottava may go: on the first voice of a staff of notes. */
 function ottavaLane(score, s) {
-  if (!score.staves[s]) throw new Error("no such staff");
+  if (!score.staves[s]) throw new Error(tr("no such staff"));
   refuseDrums(score, s);
-  if (isLower(score, s)) throw new Error("an ottava goes on the staff's first voice");
+  if (isLower(score, s)) throw new Error(tr("an ottava goes on the staff's first voice"));
   return score.staves[s];
 }
 
@@ -1194,10 +1197,10 @@ function ottavaLane(score, s) {
  * them as it was; when they are all under it already, taken out of it.
  */
 export function setOttava(score, s, a, b, value) {
-  if (!OTTAVAS.includes(value)) throw new Error("an ottava is 8va, 15ma, 8vb or 15mb");
+  if (!OTTAVAS.includes(value)) throw new Error(tr("an ottava is 8va, 15ma, 8vb or 15mb"));
   const staff = ottavaLane(score, s);
   const [from, to] = [Math.min(a, b), Math.max(a, b)];
-  if (!staff.events[from] || !staff.events[to]) throw new Error("no such note");
+  if (!staff.events[from] || !staff.events[to]) throw new Error(tr("no such note"));
   const after = ottavaAt(staff, to);
   const under = staff.events.slice(from, to + 1).every((_, k) => ottavaAt(staff, from + k) === value);
   for (let k = from; k <= to; k++) delete staff.events[k].ottava;
@@ -1210,8 +1213,8 @@ export function setOttava(score, s, a, b, value) {
 /** The ottava in force at event `i` ended there: the notes from it on drawn where they sound. */
 export function endOttava(score, s, i) {
   const staff = ottavaLane(score, s);
-  if (!staff.events[i]) throw new Error("no such note");
-  if (ottavaAt(staff, i) === 0) throw new Error("no ottava line here to end");
+  if (!staff.events[i]) throw new Error(tr("no such note"));
+  if (ottavaAt(staff, i) === 0) throw new Error(tr("no ottava line here to end"));
   staff.events[i].ottava = 0;
   tidyOttavas(staff);
 }
@@ -1221,10 +1224,10 @@ export function endOttava(score, s, i) {
 /** The lane of `s` whose events `a`…`b` a command changes: refused on a line of chord names; first and last index. */
 function laneRange(score, s, a, b) {
   const staff = score.staves[s];
-  if (!staff) throw new Error("no such staff");
-  if (staff.chords || staff.figures) throw new Error(staff.chords ? CHORD_LINE_NOTES : FIGURE_LINE_NOTES);
+  if (!staff) throw new Error(tr("no such staff"));
+  if (staff.chords || staff.figures) throw new Error(staff.chords ? CHORD_LINE_NOTES() : FIGURE_LINE_NOTES());
   const [from, to] = [Math.min(a, b), Math.max(a, b)];
-  if (!staff.events[from] || !staff.events[to]) throw new Error("no such note");
+  if (!staff.events[from] || !staff.events[to]) throw new Error(tr("no such note"));
   return [staff, from, to];
 }
 
@@ -1234,7 +1237,7 @@ function laneRange(score, s, a, b) {
  * stems it had.
  */
 export function setStem(score, s, a, b, dir) {
-  if (![-1, 0, 1].includes(dir)) throw new Error("a stem goes up, down, or as the voice wants");
+  if (![-1, 0, 1].includes(dir)) throw new Error(tr("a stem goes up, down, or as the voice wants"));
   const [staff, from, to] = laneRange(score, s, a, b);
   const after = markerAt(staff, to, "stemDir");
   for (let k = from; k <= to; k++) delete staff.events[k].stemDir;
@@ -1280,13 +1283,13 @@ export function toggleBeam(score, s, a, b) {
   // The hand beams it reaches into are joined into it.
   const from = Math.min(a0, handBeamAt(score, s, a0)?.[0] ?? a0);
   const to = Math.max(b0, handBeamAt(score, s, b0)?.[1] ?? b0);
-  if (from === to) throw new Error("a beam joins two notes or more: select them");
+  if (from === to) throw new Error(tr("a beam joins two notes or more: select them"));
   const events = staff.events.slice(from, to + 1);
   const at = starts(staff);
-  if (staff.events[from].rest || staff.events[to].rest) throw new Error("a beam starts and ends on a note");
-  if (events.some((ev) => !ev.rest && ev.base < 8)) throw new Error("only eighths and shorter notes are beamed");
-  if (barAt(score, at[from]) !== barAt(score, at[to])) throw new Error("a beam stays in its bar");
-  if (events.some((ev) => tupletGroup(ev) !== tupletGroup(events[0]))) throw new Error("a beam stays in its tuplet");
+  if (staff.events[from].rest || staff.events[to].rest) throw new Error(tr("a beam starts and ends on a note"));
+  if (events.some((ev) => !ev.rest && ev.base < 8)) throw new Error(tr("only eighths and shorter notes are beamed"));
+  if (barAt(score, at[from]) !== barAt(score, at[to])) throw new Error(tr("a beam stays in its bar"));
+  if (events.some((ev) => tupletGroup(ev) !== tupletGroup(events[0]))) throw new Error(tr("a beam stays in its tuplet"));
   for (const ev of events) {
     delete ev.beamStart;
     delete ev.beamEnd;
@@ -1302,8 +1305,8 @@ export function toggleBeam(score, s, a, b) {
 export function breakBeam(score, s, i) {
   const [staff] = laneRange(score, s, i, i);
   const beam = handBeamAt(score, s, i);
-  if (!beam) throw new Error("this note's beam is the engraver's own: select the notes and beam them by hand (Alt+B) to break it");
-  if (beam[0] === i) throw new Error("the beam starts on this note: select a note inside it");
+  if (!beam) throw new Error(tr("this note's beam is the engraver's own: select the notes and beam them by hand (Alt+B) to break it"));
+  if (beam[0] === i) throw new Error(tr("the beam starts on this note: select a note inside it"));
   const [first, last] = beam;
   delete staff.events[first].beamStart;
   delete staff.events[last].beamEnd;
@@ -1354,7 +1357,7 @@ export function enharmonic(score, s, a, b, head = -1) {
     setPitches(score, s, i, sortPitches(now));
     done++;
   }
-  if (!done) throw new Error("select the notes to spell the other way");
+  if (!done) throw new Error(tr("select the notes to spell the other way"));
 }
 
 // ---- Notes drawn on the other staff -----------------------------------------------
@@ -1399,15 +1402,15 @@ export function crossOf(score, s, ev) {
  */
 export function setCross(score, s, a, b, dir) {
   refuseDrums(score, s);
-  if (isAutoChange(score, s)) throw new Error(AUTO_CROSS);
-  if (isCombined(score, s)) throw new Error(COMBINE_CROSS);
+  if (isAutoChange(score, s)) throw new Error(AUTO_CROSS());
+  if (isCombined(score, s)) throw new Error(COMBINE_CROSS());
   const lanes = staffLanes(score);
   const other = lanes[staffNumber(score, s) + Math.sign(dir)];
-  if (other == null) throw new Error(dir < 0 ? "there is no staff above to draw the notes on" : "there is no staff below to draw the notes on");
-  if (score.staves[other].drums) throw new Error("notes are not drawn on a drum staff");
+  if (other == null) throw new Error(dir < 0 ? tr("there is no staff above to draw the notes on") : tr("there is no staff below to draw the notes on"));
+  if (score.staves[other].drums) throw new Error(tr("notes are not drawn on a drum staff"));
   const [from, to] = [Math.min(a, b), Math.max(a, b)];
   const notes = score.staves[s].events.slice(from, to + 1).filter((ev) => !ev.rest);
-  if (!notes.length) throw new Error("select the notes to draw on the other staff");
+  if (!notes.length) throw new Error(tr("select the notes to draw on the other staff"));
   const id = staffId(score, other);
   staffId(score, upperOf(score, s));
   const back = notes.every((ev) => crossOf(score, s, ev) === id);
@@ -1428,7 +1431,7 @@ export function setCross(score, s, a, b, dir) {
 export function setFingering(score, s, i, text, { head = -1, circled = false } = {}) {
   const ev = pitchedNote(score, s, i);
   const figure = String(text);
-  if (!(circled ? /^[1-6]$/ : /^[1-5]$/).test(figure)) throw new Error(circled ? "a string is 1 to 6" : "a finger is 1 to 5");
+  if (!(circled ? /^[1-6]$/ : /^[1-5]$/).test(figure)) throw new Error(circled ? tr("a string is 1 to 6") : tr("a finger is 1 to 5"));
   const d = head >= 0 && ev.pitches.length > 1 ? ev.pitches[head]?.d ?? null : null;
   const fingers = ev.fingers ?? [];
   const same = (f) => Boolean(f.circled) === circled && (f.head ?? null) === d;
@@ -1495,7 +1498,7 @@ export function setHairpin(score, s, a, b, kind) {
 
 export function toggleArticulation(score, s, i, name) {
   const ev = noteOf(score, s, i);
-  if (ev.rest && name !== "fermata") throw new Error("select a note");
+  if (ev.rest && name !== "fermata") throw new Error(tr("select a note"));
   ev.arts = ev.arts.includes(name) ? ev.arts.filter((a) => a !== name) : [...ev.arts, name];
   if (ev.artDirs?.[name] != null && !ev.arts.includes(name)) {
     delete ev.artDirs[name];
@@ -1510,7 +1513,7 @@ export function toggleArticulation(score, s, i, name) {
 
 /** A breath mark (`kind`: "breathe" or "caesura") after event `i`; the same again takes it away. */
 export function toggleBreath(score, s, i, kind = "breathe") {
-  if (!BREATHS.includes(kind)) throw new Error("a breath mark is breathe or caesura");
+  if (!BREATHS.includes(kind)) throw new Error(tr("a breath mark is breathe or caesura"));
   const ev = noteOf(score, s, i);
   if (ev.breath === kind) delete ev.breath;
   else ev.breath = kind;
@@ -1522,7 +1525,7 @@ export function toggleBreath(score, s, i, kind = "breathe") {
  * of a chord, or every head; again takes it away.
  */
 export function toggleReminder(score, s, i, kind, head = -1) {
-  if (!["forced", "cautionary"].includes(kind)) throw new Error("an accidental is forced or cautionary");
+  if (!["forced", "cautionary"].includes(kind)) throw new Error(tr("an accidental is forced or cautionary"));
   const ev = pitchedNote(score, s, i);
   const heads = (head >= 0 && ev.pitches[head] ? [ev.pitches[head]] : ev.pitches).map((p) => p.d);
   const other = kind === "forced" ? "cautionary" : "forced";
@@ -1538,14 +1541,14 @@ export function toggleReminder(score, s, i, kind, head = -1) {
 function pitchedNote(score, s, i) {
   refuseDrums(score, s);
   const ev = noteOf(score, s, i);
-  if (ev.rest) throw new Error("select a note");
+  if (ev.rest) throw new Error(tr("select a note"));
   return ev;
 }
 
 /** The pitch a step above `p` (`by` steps, down when negative), as the key at event `i` spells it. */
 function stepFrom(score, s, i, p, by) {
   const q = movePitch(p, "step", by, keyOf(score, s, starts(score.staves[s])[i]));
-  if (!reachable(q)) throw new Error("that is as far as it goes");
+  if (!reachable(q)) throw new Error(tr("that is as far as it goes"));
   return q;
 }
 
@@ -1555,9 +1558,9 @@ function stepFrom(score, s, i, p, by) {
  * loses them; of another kind, they change kind.
  */
 export function setGrace(score, s, i, kind) {
-  if (!GRACES.includes(kind)) throw new Error("no such grace note");
+  if (!GRACES.includes(kind)) throw new Error(tr("no such grace note"));
   const ev = pitchedNote(score, s, i);
-  if (ev.tuplet) throw new Error("a note in a tuplet takes no grace note");
+  if (ev.tuplet) throw new Error(tr("a note in a tuplet takes no grace note"));
   if (ev.graces.length && ev.grace === kind) {
     Object.assign(ev, { graces: [], grace: null });
     return;
@@ -1573,7 +1576,7 @@ export function setGrace(score, s, i, kind) {
 export function addGrace(score, s, i) {
   const ev = pitchedNote(score, s, i);
   if (!ev.graces.length) return setGrace(score, s, i, "acciaccatura");
-  if (ev.graces.length >= 8) throw new Error("eight grace notes at most");
+  if (ev.graces.length >= 8) throw new Error(tr("eight grace notes at most"));
   const last = ev.graces[ev.graces.length - 1];
   const p = stepFrom(score, s, i, last.pitches[last.pitches.length - 1], 1);
   ev.graces = [...ev.graces, { pitches: [p], base: 16, dots: 0 }].map((g) => ({ ...g, base: Math.max(g.base, 16) }));
@@ -1582,10 +1585,10 @@ export function addGrace(score, s, i) {
 /** The last grace note before note `i` moved by `by` steps (or semitones with `how` "semitone"). */
 export function moveGrace(score, s, i, how, by) {
   const ev = pitchedNote(score, s, i);
-  if (!ev.graces.length) throw new Error("this note has no grace note");
+  if (!ev.graces.length) throw new Error(tr("this note has no grace note"));
   const last = ev.graces[ev.graces.length - 1];
   const moved = last.pitches.map((p) => movePitch(p, how, by, keyOf(score, s, starts(score.staves[s])[i])));
-  if (!moved.every(reachable)) throw new Error("that is as far as it goes");
+  if (!moved.every(reachable)) throw new Error(tr("that is as far as it goes"));
   moveGraceTo(last, moved);
   last.pitches = sortPitches(last.pitches);
 }
@@ -1602,9 +1605,9 @@ function moveGraceTo(g, now) {
  */
 export function setGraceFingering(score, s, i, text) {
   const ev = pitchedNote(score, s, i);
-  if (!ev.graces.length) throw new Error("this note has no grace note");
+  if (!ev.graces.length) throw new Error(tr("this note has no grace note"));
   const figure = String(text);
-  if (!/^[1-5]$/.test(figure)) throw new Error("a finger is 1 to 5");
+  if (!/^[1-5]$/.test(figure)) throw new Error(tr("a finger is 1 to 5"));
   const g = ev.graces[ev.graces.length - 1];
   const head = g.pitches.length > 1 ? g.pitches[g.pitches.length - 1].d : null;
   const had = (g.fingers ?? []).find((f) => !f.circled && (f.head ?? null) === head);
@@ -1617,14 +1620,14 @@ export function setGraceFingering(score, s, i, text) {
 /** Note `i`'s grace notes taken away. */
 export function removeGraces(score, s, i) {
   const ev = noteOf(score, s, i);
-  if (!ev.graces.length) throw new Error("this note has no grace note");
+  if (!ev.graces.length) throw new Error(tr("this note has no grace note"));
   Object.assign(ev, { graces: [], grace: null });
 }
 
 /** A chord rolled — its notes played from the lowest up, a wavy line before it — or not. */
 export function toggleArpeggio(score, s, i) {
   const ev = pitchedNote(score, s, i);
-  if (ev.pitches.length < 2 && !ev.arpeggio) throw new Error("an arpeggio rolls a chord: add notes to it first");
+  if (ev.pitches.length < 2 && !ev.arpeggio) throw new Error(tr("an arpeggio rolls a chord: add notes to it first"));
   ev.arpeggio = !ev.arpeggio;
 }
 
@@ -1632,19 +1635,19 @@ export function toggleArpeggio(score, s, i) {
 export function toggleGlissando(score, s, i) {
   const ev = pitchedNote(score, s, i);
   const next = score.staves[s].events[i + 1];
-  if (!ev.gliss && (!next || next.rest)) throw new Error("a glissando goes to the next note");
+  if (!ev.gliss && (!next || next.rest)) throw new Error(tr("a glissando goes to the next note"));
   ev.gliss = !ev.gliss;
 }
 
 /** Note `i` repeated in strokes of `value` (8, 16, 32) — or not, given its own value again. */
 export function setTremolo(score, s, i, value) {
-  if (!TREMOLOS.includes(value)) throw new Error("a tremolo is in eighths, sixteenths or thirty-seconds");
+  if (!TREMOLOS.includes(value)) throw new Error(tr("a tremolo is in eighths, sixteenths or thirty-seconds"));
   const ev = pitchedNote(score, s, i);
   if (ev.tremolo === value) {
     ev.tremolo = 0;
     return;
   }
-  if (value <= ev.base) throw new Error(`a tremolo's strokes are shorter than the note: 1/${value} on a 1/${ev.base} is not one`);
+  if (value <= ev.base) throw new Error(tr("a tremolo's strokes are shorter than the note: 1/{value} on a 1/{base} is not one", { value, base: ev.base }));
   ev.tremolo = value;
 }
 
@@ -1699,15 +1702,15 @@ function lyricsBackToFirst(score, s) {
  * yet sings to the voice of the first syllable written, any of its four.
  */
 export function setLyric(score, s, i, text, hyphen = false, extend = false, verse = 1) {
-  if (!Number.isInteger(verse) || verse < 1 || verse > MAX_VERSES) throw new Error(`a verse is 1 to ${MAX_VERSES}`);
+  if (!Number.isInteger(verse) || verse < 1 || verse > MAX_VERSES) throw new Error(tr("a verse is 1 to {most}", { most: MAX_VERSES }));
   const ev = noteOf(score, s, i);
-  if (ev.rest) throw new Error("a syllable goes under a note");
-  if (isCombined(score, s) || isAutoChange(score, s)) throw new Error(COMBINE_WORDS);
+  if (ev.rest) throw new Error(tr("a syllable goes under a note"));
+  if (isCombined(score, s) || isAutoChange(score, s)) throw new Error(COMBINE_WORDS());
   const voice = voiceOf(score, s);
   const sung = lyricsVoiceOf(score, s);
   if (voice !== sung) {
     const lane = lyricsLane(score, s);
-    if (lane >= 0 && versesOf(score.staves[lane]) > 0) throw new Error(`this staff's words go with voice ${sung}: a staff sings all its verses to one voice`);
+    if (lane >= 0 && versesOf(score.staves[lane]) > 0) throw new Error(tr("this staff's words go with voice {voice}: a staff sings all its verses to one voice", { voice: sung }));
     if (!text.trim()) return;
     const staff = score.staves[upperOf(score, s)];
     delete staff.lyricsName;
@@ -1755,12 +1758,12 @@ export function makeTuplet(score, s, i, n) {
   refuseScaled(score, s);
   const staff = score.staves[s];
   const ev = noteOf(score, s, i);
-  if (ev.tuplet) throw new Error("already in a tuplet");
-  if (ev.dots) throw new Error("a dotted value cannot be split into a tuplet");
-  if (ev.graces.length) throw new Error("a tuplet's notes take no grace notes: take them away first");
+  if (ev.tuplet) throw new Error(tr("already in a tuplet"));
+  if (ev.dots) throw new Error(tr("a dotted value cannot be split into a tuplet"));
+  if (ev.graces.length) throw new Error(tr("a tuplet's notes take no grace notes: take them away first"));
   const d = n === 3 ? 2 : 4;
   const base = ev.base * d;
-  if (base > 32) throw new Error("too short to split");
+  if (base > 32) throw new Error(tr("too short to split"));
   const tuplet = { id: newId(), n, d };
   const group = Array.from({ length: n }, (_, k) =>
     k === 0 ? cloneEvent(ev, { base, dots: 0, tuplet, tie: false, tremolo: ev.tremolo > base ? ev.tremolo : 0 }) : makeEvent({ base, dots: 0, tuplet }),
@@ -1785,7 +1788,7 @@ export function removeTuplet(score, s, i) {
   refuseScaled(score, s);
   const staff = score.staves[s];
   const [a, b] = tupletBounds(staff, i);
-  if (!staff.events[i].tuplet) throw new Error("not in a tuplet");
+  if (!staff.events[i].tuplet) throw new Error(tr("not in a tuplet"));
   const t = starts(staff)[a];
   const ticks = staff.events.slice(a, b + 1).reduce((sum, ev) => sum + ticksOf(ev), 0);
   const first = staff.events[a];
@@ -1804,8 +1807,7 @@ export function plainRefusal(message) {
     .replace(/^\s*score:\s*/i, "")
     .replace(/\s*\(at character \d+\)\s*$/i, "")
     .trim();
-  const said = "That change would make a score the page cannot draw, so it was not made";
-  return reason ? `${said}: ${reason}.` : `${said}.`;
+  return reason ? tr("That change would make a score the page cannot draw, so it was not made: {reason}.", { reason }) : tr("That change would make a score the page cannot draw, so it was not made.");
 }
 
 // ---- Ranges ---------------------------------------------------------------------
@@ -1814,7 +1816,7 @@ export function plainRefusal(message) {
 export function copy(score, s, a, b) {
   const staff = score.staves[s];
   const events = staff.events.slice(Math.min(a, b), Math.max(a, b) + 1);
-  if (events.some((ev) => ev.tuplet)) throw new Error("Triplets and other tuplets cannot be copied yet: leave them out of the selection.");
+  if (events.some((ev) => ev.tuplet)) throw new Error(tr("Triplets and other tuplets cannot be copied yet: leave them out of the selection."));
   const clip = events.map((ev) => ({ content: { ...structuredClone(ev), id: undefined }, ticks: ticksOf(ev) }));
   // What holds where the copy starts (an ottava begun before it, the stems) goes with it.
   for (const field of Object.keys(MARKERS)) {
@@ -1839,11 +1841,11 @@ export function clipFromText(text, parse) {
   const source = text.includes("{") ? text : `{ ${text} }`;
   const parsed = JSON.parse(parse(source));
   const lane = parsed.staves[0];
-  if (!lane) throw new Error("the clipboard holds no notes");
-  if (lane.events.some((ev) => ev.tuplet)) throw new Error("The clipboard holds tuplets (triplets and the like), which cannot be pasted yet.");
+  if (!lane) throw new Error(tr("the clipboard holds no notes"));
+  if (lane.events.some((ev) => ev.tuplet)) throw new Error(tr("The clipboard holds tuplets (triplets and the like), which cannot be pasted yet."));
   const length = lane.events.reduce((sum, ev) => sum + (ev.ticks ?? 0), 0);
   const { score } = fromParsed(parsed);
-  if (!score || !length) throw new Error("the clipboard holds no notes");
+  if (!score || !length) throw new Error(tr("the clipboard holds no notes"));
   const staff = score.staves[0];
   const at = starts(staff);
   return staff.events
@@ -2047,25 +2049,25 @@ export function moveNote(score, s, i, { key = null, semitones = 0, shift = 0, le
   if (shift || length != null) refuseScaled(score, s);
   const staff = score.staves[s];
   const ev = staff?.events[i];
-  if (!ev || ev.rest) throw new Error("no note there");
+  if (!ev || ev.rest) throw new Error(tr("no note there"));
   const [a, b] = tiedNotes(staff, i);
-  if (staff.events.slice(a, b + 1).some((x) => x.tuplet)) throw new Error("a tuplet's notes cannot be moved yet");
+  if (staff.events.slice(a, b + 1).some((x) => x.tuplet)) throw new Error(tr("a tuplet's notes cannot be moved yet"));
   const at = starts(staff);
   const t0 = at[a];
   const was = at[b] + ticksOf(staff.events[b]) - t0;
   const t = t0 + shift;
   const ticks = length ?? was;
-  if (t < 0 || ticks <= 0) throw new Error("that is as far as it goes");
+  if (t < 0 || ticks <= 0) throw new Error(tr("that is as far as it goes"));
   const drums = isDrums(score, s);
   const fifths = keyOf(score, s, t);
   const keyOfPitch = (p) => (p.drum ? drumKey(p.drum) : midiKey(p.d, p.alter));
   const moved = ev.pitches.map((p) => {
     const k = keyOfPitch(p);
     if (!semitones || (key != null && k !== key)) return { ...p };
-    if (k + semitones < 21 || k + semitones > 108) throw new Error("that is as far as it goes");
+    if (k + semitones < 21 || k + semitones > 108) throw new Error(tr("that is as far as it goes"));
     if (!drums) return pitchOfKey(k + semitones, fifths);
     const name = drumByKey(k + semitones);
-    if (!name) throw new Error("no drum on that key");
+    if (!name) throw new Error(tr("no drum on that key"));
     return drumPitch(name);
   });
   // Two heads on one key are one.
@@ -2090,7 +2092,7 @@ export function moveNote(score, s, i, { key = null, semitones = 0, shift = 0, le
 /** Bars `a`…`b` of `lanes`, for a clipboard: `{ bars, parts: [{ offset, voice, pieces }] }`. */
 export function copySection(score, lanes, a, b) {
   const [from, to] = [Math.min(a, b), Math.max(a, b)];
-  if (!lanes.length) throw new Error("choose a staff to copy");
+  if (!lanes.length) throw new Error(tr("choose a staff to copy"));
   const t0 = barStart(score, from);
   const t1 = barStart(score, to + 1);
   const first = Math.min(...lanes.map((s) => staffNumber(score, s)));
@@ -2175,7 +2177,7 @@ export function setKey(score, fifths) {
 /** Staff `s` in a key of its own; the score's key takes it back to the score's. */
 export function setStaffKey(score, s, fifths) {
   const staff = score.staves[upperOf(score, s)];
-  if (!staff) throw new Error("no such staff");
+  if (!staff) throw new Error(tr("no such staff"));
   refuseRaw(score, s);
   const to = Math.max(-7, Math.min(7, fifths));
   if (to === score.key) delete staff.key;
@@ -2239,7 +2241,7 @@ export function laneOfVoice(score, s, voice) {
 export function swapVoices(score, s, a, b) {
   const one = laneOfVoice(score, s, 1);
   const two = laneOfVoice(score, s, 2);
-  if (two < 0) throw new Error("This staff has one voice: add a second voice to swap them");
+  if (two < 0) throw new Error(tr("This staff has one voice: add a second voice to swap them"));
   const t0 = barStart(score, Math.min(a, b));
   const t1 = barStart(score, Math.max(a, b) + 1);
   const span = (lane) => {
@@ -2249,7 +2251,7 @@ export function swapVoices(score, s, a, b) {
     let j = i;
     while (j >= 0 && j + 1 < staff.events.length && at[j + 1] < t1) j++;
     if (i < 0 || at[j] + ticksOf(staff.events[j]) !== t1) {
-      throw new Error("A note of a voice crosses the selection's first or last bar line: select whole bars of both voices");
+      throw new Error(tr("A note of a voice crosses the selection's first or last bar line: select whole bars of both voices"));
     }
     return [i, j];
   };
@@ -2351,11 +2353,11 @@ export function keyOf(score, s, t = 0) {
  */
 export function addVoice(score, s, voice = 2) {
   refuseRaw(score, s);
-  if (isCombined(score, s) && voice > 2) throw new Error(COMBINE_VOICES);
-  if (isAutoChange(score, s)) throw new Error(AUTO_VOICES);
+  if (isCombined(score, s) && voice > 2) throw new Error(COMBINE_VOICES());
+  if (isAutoChange(score, s)) throw new Error(AUTO_VOICES());
   const u = upperOf(score, s);
-  if (!score.staves[u]) throw new Error("no such staff");
-  if (!Number.isInteger(voice) || voice < 2 || voice > MAX_VOICES) throw new Error(`a staff holds ${MAX_VOICES} voices at most`);
+  if (!score.staves[u]) throw new Error(tr("no such staff"));
+  if (!Number.isInteger(voice) || voice < 2 || voice > MAX_VOICES) throw new Error(tr("a staff holds {most} voices at most", { most: MAX_VOICES }));
   for (let v = voiceLanes(score, u).length + 1; v <= voice; v++) {
     score.staves.splice(u + v - 1, 0, { voice: v, events: rests(score, 0, lengthOf(score.staves[u])) });
   }
@@ -2370,11 +2372,11 @@ export function addVoice(score, s, voice = 2) {
  */
 export function removeVoice(score, s, voice = null) {
   refuseRaw(score, s);
-  if (isCombined(score, s)) throw new Error(COMBINE_VOICES);
+  if (isCombined(score, s)) throw new Error(COMBINE_VOICES());
   const lanes = voiceLanes(score, s);
-  if (lanes.length < 2) throw new Error("this staff has one voice");
+  if (lanes.length < 2) throw new Error(tr("this staff has one voice"));
   const v = voice ?? (isLower(score, s) ? voiceOf(score, s) : lanes.length);
-  if (v < 2 || v > lanes.length) throw new Error(`this staff has no voice ${v}`);
+  if (v < 2 || v > lanes.length) throw new Error(tr("this staff has no voice {voice}", { voice: v }));
   const lane = lanes[v - 1];
   score.staves[lane].events = rests(score, 0, lengthOf(score.staves[lanes[0]]));
   // The words sung to it go with it.
@@ -2407,30 +2409,30 @@ export function setTimeAt(score, b, num, den) {
 
 function retime(score, b, num, den) {
   refuseRawBars(score);
-  if (score.staves.some((_, s) => isScaled(score, s))) throw new Error(SCALED_METRE);
+  if (score.staves.some((_, s) => isScaled(score, s))) throw new Error(SCALED_METRE());
   const bars = barsOf(score);
-  if (b < 0 || b >= bars) throw new Error("no such bar");
-  if (![1, 2, 4, 8, 16].includes(den) || !Number.isInteger(num) || num < 1 || num > 32) throw new Error("no such metre");
+  if (b < 0 || b >= bars) throw new Error(tr("no such bar"));
+  if (![1, 2, 4, 8, 16].includes(den) || !Number.isInteger(num) || num < 1 || num > 32) throw new Error(tr("no such metre"));
   const len = (WHOLE * num) / den;
-  if (score.staves.some((staff) => staff.times?.length)) throw new Error("a staff changes metre on its own: change its metres in the text");
-  if (score.staves.some((staff) => (staff.ossias ?? []).some((o) => o.bar + o.bars > b))) throw new Error("an ossia stands over those bars: change the metre in the text");
+  if (score.staves.some((staff) => staff.times?.length)) throw new Error(tr("a staff changes metre on its own: change its metres in the text"));
+  if (score.staves.some((staff) => (staff.ossias ?? []).some((o) => o.bar + o.bars > b))) throw new Error(tr("an ossia stands over those bars: change the metre in the text"));
   // A bar of its own length counts as itself, whatever the metre: those after it are not laid out again.
-  if ((score.changes ?? []).some((c) => c.len && c.bar >= b)) throw new Error("a cadenza or a bar cut short comes later: the metre changes from the bar after it");
+  if ((score.changes ?? []).some((c) => c.len && c.bar >= b)) throw new Error(tr("a cadenza or a bar cut short comes later: the metre changes from the bar after it"));
   const old = { time: score.time, changes: structuredClone(score.changes ?? []), pickup: score.pickup };
   // A pickup stays as long as it is, before the full bars of the first metre.
   const pickup = score.pickup > 0 ? score.pickup : 0;
-  if (b === 0 && pickup >= len) throw new Error(`the pickup is not shorter than a bar of ${num}/${den}: change it first`);
+  if (b === 0 && pickup >= len) throw new Error(tr("the pickup is not shorter than a bar of {metre}: change it first", { metre: `${num}/${den}` }));
   const from = barStart(old, b);
   const next = old.changes.find((c) => c.bar > b && c.time);
   const total = lengthOf(score.staves[0]);
   const to = next ? barStart(old, next.bar) : total;
   // What is laid out in full bars: after the pickup, when the first metre changes.
   const inBars = to - from - (b === 0 ? pickup : 0);
-  if (next && inBars % len !== 0) throw new Error(`the bars up to the next change of metre would not make whole bars of ${num}/${den}`);
+  if (next && inBars % len !== 0) throw new Error(tr("the bars up to the next change of metre would not make whole bars of {metre}", { metre: `${num}/${den}` }));
   const grown = (next ? inBars : Math.ceil(inBars / len) * len) - inBars;
   for (const staff of score.staves) {
     const at = starts(staff);
-    if (staff.events.some((ev, k) => ev.tuplet && at[k] >= from && at[k] < to)) throw new Error("move or remove the tuplets in those bars before changing the metre");
+    if (staff.events.some((ev, k) => ev.tuplet && at[k] >= from && at[k] < to)) throw new Error(tr("move or remove the tuplets in those bars before changing the metre"));
   }
   // Everything counted in bars, as times.
   const tick = (bar) => barStart(old, bar);
@@ -2454,7 +2456,7 @@ function retime(score, b, num, den) {
   for (const m of marks) {
     const at = shift(m.at);
     const rel = (at - seg.at) / seg.len;
-    if (at > 0 && !Number.isInteger(rel)) throw new Error("the changes of key, tempo or clef there would fall inside bars: move them first");
+    if (at > 0 && !Number.isInteger(rel)) throw new Error(tr("the changes of key, tempo or clef there would fall inside bars: move them first"));
     const bar = at === 0 ? 0 : seg.bar + rel;
     const { at: _, ...change } = m;
     change.bar = bar;
@@ -2477,7 +2479,7 @@ function retime(score, b, num, den) {
   score.changes = changes;
   const barOf = (t) => {
     const at = shift(t);
-    if (!isBarLine(score, at)) throw new Error("the repeats would fall inside bars: remove them before changing the metre");
+    if (!isBarLine(score, at)) throw new Error(tr("the repeats would fall inside bars: remove them before changing the metre"));
     return barAt(score, at);
   };
   const moved = repeats.map((r) => {
@@ -2496,7 +2498,7 @@ function retime(score, b, num, den) {
     if (!list.length) return;
     score.staves[k].clefs = list.map((c) => {
       const at = shift(c.at);
-      if (!isBarLine(score, at)) throw new Error("the changes of key, tempo or clef there would fall inside bars: move them first");
+      if (!isBarLine(score, at)) throw new Error(tr("the changes of key, tempo or clef there would fall inside bars: move them first"));
       return { bar: barAt(score, at), clef: c.clef };
     });
   });
@@ -2550,7 +2552,7 @@ export function setKeyAt(score, b, fifths) {
 
 /** A double bar line before bar `b`, or none. */
 export function setDoubleBar(score, b, on) {
-  if (b <= 0 || b >= barsOf(score)) throw new Error("a double bar goes between two bars");
+  if (b <= 0 || b >= barsOf(score)) throw new Error(tr("a double bar goes between two bars"));
   setChange(score, b, "line", on ? "||" : null);
 }
 
@@ -2564,11 +2566,11 @@ export function setTempoAt(score, b, tempo) {
 /** Lane `s`'s staff in clef `clef` from bar `b` on; the clef in force already takes the change away. */
 export function setClefAt(score, s, b, clef) {
   const staff = score.staves[upperOf(score, s)];
-  if (!staff) throw new Error("no such staff");
-  if (staff.tab) throw new Error("a tablature has no clef: its lines are the strings");
+  if (!staff) throw new Error(tr("no such staff"));
+  if (staff.tab) throw new Error(tr("a tablature has no clef: its lines are the strings"));
   refuseRaw(score, s);
-  if (staff.autoChange) throw new Error(AUTO_CLEFS);
-  if (clef != null && !CLEFS.includes(clef)) throw new Error("no such clef");
+  if (staff.autoChange) throw new Error(AUTO_CLEFS());
+  if (clef != null && !CLEFS.includes(clef)) throw new Error(tr("no such clef"));
   if (b <= 0) {
     if (clef) staff.clef = clef;
     return;
@@ -2586,7 +2588,7 @@ export function addStaff(score, fields = {}) {
 
 /** The staff of lane `s` taken away, all its voices; the groups around it close up. */
 export function removeStaff(score, s) {
-  if (staffLanes(score).length < 2) throw new Error("a score keeps one staff at least");
+  if (staffLanes(score).length < 2) throw new Error(tr("a score keeps one staff at least"));
   const u = upperOf(score, s);
   const n = staffNumber(score, u);
   // The notes drawn on it go back to their own staves.
@@ -2616,13 +2618,13 @@ export function addBars(score, count = 1) {
 export function removeLastBar(score) {
   refuseRawBars(score);
   const bars = barsOf(score);
-  if (bars < 2) throw new Error("a score keeps one bar at least");
+  if (bars < 2) throw new Error(tr("a score keeps one bar at least"));
   const from = barStart(score, bars - 1);
   for (const staff of score.staves) {
     const at = starts(staff);
-    if (staff.events.some((ev, k) => at[k] >= from && !ev.rest)) throw new Error("the last bar is not empty");
+    if (staff.events.some((ev, k) => at[k] >= from && !ev.rest)) throw new Error(tr("the last bar is not empty"));
   }
-  if (repeatAt(score, bars - 1)) throw new Error("the last bar is in a repeat: remove the repeat first");
+  if (repeatAt(score, bars - 1)) throw new Error(tr("the last bar is in a repeat: remove the repeat first"));
   for (const staff of score.staves) {
     const at = starts(staff);
     staff.events = staff.events.filter((_, k) => at[k] < from);
@@ -2642,10 +2644,10 @@ export function deleteBars(score, a, b) {
   refuseRawBars(score);
   const bars = barsOf(score);
   [a, b] = [Math.min(a, b), Math.max(a, b)];
-  if (a < 0 || b >= bars) throw new Error("no such bar");
+  if (a < 0 || b >= bars) throw new Error(tr("no such bar"));
   const count = b - a + 1;
-  if (count >= bars) throw new Error("a score keeps one bar at least");
-  if ((score.repeats ?? []).some((r) => r.from <= b && repeatEnd(r) >= a)) throw new Error("these bars are in a repeat: remove the repeat first");
+  if (count >= bars) throw new Error(tr("a score keeps one bar at least"));
+  if ((score.repeats ?? []).some((r) => r.from <= b && repeatEnd(r) >= a)) throw new Error(tr("these bars are in a repeat: remove the repeat first"));
   // What is in force after the bars, before they go.
   const after = { key: scoreKeyAt(score, b, Infinity), time: timeAt(score, b), tempo: tempoAt(score, b, Infinity) };
   const before = a > 0 ? { key: scoreKeyAt(score, a - 1, Infinity), time: timeAt(score, a - 1), tempo: tempoAt(score, a - 1, Infinity) } : { key: score.key, time: score.time, tempo: score.tempo };
@@ -3186,16 +3188,16 @@ function jumpText(score, b) {
 
 /** Bar `b`'s mark: "letter", "segno", "coda", or null to take it away. */
 export function setMark(score, b, mark) {
-  if (b < 0 || b >= barsOf(score)) throw new Error("no such bar");
-  if (mark != null && !MARKS.includes(mark)) throw new Error("no such mark");
+  if (b < 0 || b >= barsOf(score)) throw new Error(tr("no such bar"));
+  if (mark != null && !MARKS.includes(mark)) throw new Error(tr("no such mark"));
   setChange(score, b, "mark", changeAt(score, b)?.mark === mark ? null : mark);
 }
 
 /** The jump at the end of bar `b` (a key of JUMPS), or null to take it away. */
 export function setJump(score, b, jump) {
-  if (b < 0 || b >= barsOf(score)) throw new Error("no such bar");
-  if (jump != null && !JUMPS[jump]) throw new Error("no such jump");
-  if (jump?.startsWith("ds") && !(score.changes ?? []).some((c) => c.mark === "segno" && c.bar <= b)) throw new Error("a D.S. goes back to a segno: put one on an earlier bar first");
+  if (b < 0 || b >= barsOf(score)) throw new Error(tr("no such bar"));
+  if (jump != null && !JUMPS[jump]) throw new Error(tr("no such jump"));
+  if (jump?.startsWith("ds") && !(score.changes ?? []).some((c) => c.mark === "segno" && c.bar <= b)) throw new Error(tr("a D.S. goes back to a segno: put one on an earlier bar first"));
   setChange(score, b, "jump", changeAt(score, b)?.jump === jump ? null : jump);
 }
 
@@ -3514,9 +3516,9 @@ export function toggleRepeat(score, a, b) {
     return;
   }
   if (score.repeats.some((r) => from <= r.to + r.endings.reduce((x, y) => x + y, 0) && to >= r.from)) {
-    throw new Error("those bars are already in a repeat: remove it first");
+    throw new Error(tr("those bars are already in a repeat: remove it first"));
   }
-  if (to >= barsOf(score)) throw new Error("no such bars");
+  if (to >= barsOf(score)) throw new Error(tr("no such bars"));
   score.repeats.push({ from, to, endings: [] });
   score.repeats.sort((x, y) => x.from - y.from);
 }
@@ -3524,7 +3526,7 @@ export function toggleRepeat(score, a, b) {
 /** The repeat around bar `b` taken away; its bars and notes stay. */
 export function removeRepeat(score, b) {
   const r = repeatAt(score, b);
-  if (!r) throw new Error("there is no repeat there");
+  if (!r) throw new Error(tr("there is no repeat there"));
   score.repeats.splice(score.repeats.indexOf(r), 1);
 }
 
@@ -3536,7 +3538,7 @@ export function removeRepeat(score, b) {
 export function addEndings(score, a, b) {
   const [from, to] = [Math.min(a, b), Math.max(a, b)];
   const r = repeatAt(score, from);
-  if (!r) throw new Error("select the bars of a repeat — its last ones become its first ending");
+  if (!r) throw new Error(tr("select the bars of a repeat — its last ones become its first ending"));
   if (r.endings.length) {
     const last = r.endings[r.endings.length - 1];
     const at = r.to + r.endings.reduce((x, y) => x + y, 0) + 1;
@@ -3544,8 +3546,8 @@ export function addEndings(score, a, b) {
     r.endings.push(last);
     return;
   }
-  if (to !== r.to) throw new Error("the first ending is the repeat's last bars: select up to its end");
-  if (from <= r.from) throw new Error("leave a bar before the first ending");
+  if (to !== r.to) throw new Error(tr("the first ending is the repeat's last bars: select up to its end"));
+  if (from <= r.from) throw new Error(tr("leave a bar before the first ending"));
   const len = to - from + 1;
   r.to = from - 1;
   insertBars(score, to + 1, len);
@@ -3564,14 +3566,14 @@ export function repeatEnd(r) {
  */
 export function setRepeat(score, i, next) {
   const r = score.repeats?.[i];
-  if (!r) throw new Error("there is no such repeat");
+  if (!r) throw new Error(tr("there is no such repeat"));
   const candidate = { from: next.from ?? r.from, to: next.to ?? r.to, endings: [...(next.endings ?? r.endings)], ...(r.times ? { times: r.times } : {}) };
-  if (candidate.from < 0 || candidate.to < candidate.from) throw new Error("a repeat keeps one bar at least");
-  if (candidate.endings.some((n) => !Number.isInteger(n) || n < 1)) throw new Error("an ending keeps one bar at least");
-  if (candidate.endings.length === 1) throw new Error("a repeat has two endings at least, or none");
-  if (repeatEnd(candidate) >= barsOf(score)) throw new Error("the repeat would run past the last bar");
+  if (candidate.from < 0 || candidate.to < candidate.from) throw new Error(tr("a repeat keeps one bar at least"));
+  if (candidate.endings.some((n) => !Number.isInteger(n) || n < 1)) throw new Error(tr("an ending keeps one bar at least"));
+  if (candidate.endings.length === 1) throw new Error(tr("a repeat has two endings at least, or none"));
+  if (repeatEnd(candidate) >= barsOf(score)) throw new Error(tr("the repeat would run past the last bar"));
   const others = score.repeats.filter((_, k) => k !== i);
-  if (others.some((o) => candidate.from <= repeatEnd(o) && repeatEnd(candidate) >= o.from)) throw new Error("the repeat would run into another one");
+  if (others.some((o) => candidate.from <= repeatEnd(o) && repeatEnd(candidate) >= o.from)) throw new Error(tr("the repeat would run into another one"));
   score.repeats[i] = candidate;
 }
 
@@ -3594,7 +3596,7 @@ export function endingFromBars(score, a, b) {
   // Otherwise the bars become the first ending, and as many bars after them the
   // second: one ending alone would be the last time through, with no repeat sign.
   const plain = repeats.findIndex((r) => !r.endings.length && (repeatEnd(r) + 1 === from || (from > r.from && to === r.to)));
-  if (plain < 0) throw new Error("select the bars right after a repeat, or its last bars: they become its first ending");
+  if (plain < 0) throw new Error(tr("select the bars right after a repeat, or its last bars: they become its first ending"));
   const r = repeats[plain];
   const body = from > r.to ? r.to : from - 1;
   const taken = repeats.some((o) => o !== r && o.from <= to + len && repeatEnd(o) > to);
@@ -3606,9 +3608,9 @@ export function endingFromBars(score, a, b) {
 /** `count` bars of rests put in every staff before bar `at`; the repeats after it move along. */
 export function insertBars(score, at, count) {
   refuseRawBars(score);
-  if (at === 0 && score.pickup > 0) throw new Error("the pickup starts the piece: bars go after it");
+  if (at === 0 && score.pickup > 0) throw new Error(tr("the pickup starts the piece: bars go after it"));
   const t = barStart(score, at);
-  if (score.staves.some((staff) => t > lengthOf(staff))) throw new Error("no such bar");
+  if (score.staves.some((staff) => t > lengthOf(staff))) throw new Error(tr("no such bar"));
   // What changes from bar `at` moves along: the new bars keep the metre before them.
   for (const c of score.changes ?? []) if (c.bar >= at) c.bar += count;
   for (const [holder, name] of barLists(score)) for (const m of holder[name]) if (m.bar >= at) m.bar += count;
@@ -3627,7 +3629,7 @@ export function insertBars(score, at, count) {
   }
   for (const staff of score.staves) {
     const i = t === lengthOf(staff) ? staff.events.length : eventAt(staff, t);
-    if (i < 0) throw new Error("bars must start at a bar line");
+    if (i < 0) throw new Error(tr("bars must start at a bar line"));
     staff.events.splice(i, 0, ...laneRests(score, staff, t, ticks));
   }
   for (const r of score.repeats ?? []) {
@@ -3679,7 +3681,7 @@ export function refusalPlace(message, text) {
   if (at == null) return null;
   const line = text.slice(0, at).split("\n").length;
   const plain = message.replace(/\s*\(at character \d+\)/, "").replace(/^score:\s*/, "").replace(/^./, (c) => c.toUpperCase());
-  return { at, line, message: `${plain}, line ${line}` };
+  return { at, line, message: tr("{message}, line {line}", { message: plain, line }) };
 }
 
 /**
@@ -3827,7 +3829,7 @@ const MORE_DRUMS = [
 /** Drum `name` as a head: where it is drawn, and its name. */
 export function drumPitch(name) {
   const drum = DRUMS.find((x) => x.name === name) ?? MORE_DRUMS.find((x) => x.name === name);
-  if (!drum) throw new Error(`no drum called ${name}`);
+  if (!drum) throw new Error(tr("no drum called {name}", { name }));
   return { d: drum.d, alter: 0, drum: drum.name };
 }
 
@@ -3852,9 +3854,9 @@ export function isDrums(score, s) {
 }
 
 function refuseDrums(score, s) {
-  if (isDrums(score, s)) throw new Error("A drum staff has drums, not pitches: the drum buttons write and change them");
-  if (isChords(score, s)) throw new Error(CHORD_LINE_NOTES);
-  if (isFigures(score, s)) throw new Error(FIGURE_LINE_NOTES);
+  if (isDrums(score, s)) throw new Error(tr("A drum staff has drums, not pitches: the drum buttons write and change them"));
+  if (isChords(score, s)) throw new Error(CHORD_LINE_NOTES());
+  if (isFigures(score, s)) throw new Error(FIGURE_LINE_NOTES());
 }
 
 // ---- Lines of chord names ---------------------------------------------------------
@@ -3866,7 +3868,7 @@ function refuseDrums(score, s) {
 // until the chord is changed. The music's metre, pickup and repeats are the
 // other staves': the line follows them.
 
-const CHORD_LINE_NOTES = "A line of chord names holds chord symbols, not notes: select a beat and type one (K)";
+const CHORD_LINE_NOTES = () => tr("A line of chord names holds chord symbols, not notes: select a beat and type one (K)");
 
 /** Whether lane `s` is a line of chord names. */
 export function isChords(score, s) {
@@ -3901,7 +3903,7 @@ function chordRoot(letter, sign) {
 export function chordmodeOf(symbol) {
   const text = String(symbol ?? "").trim();
   const m = /^([A-G])([#b♯♭]?)(.*?)(?:\/([A-G])([#b♯♭]?))?$/.exec(text);
-  const refuse = () => new Error(`“${text}” is not a chord the line of chord names can write: try C, Am7, F7, Bbmaj7, G7/B, Dm7b5, Csus4`);
+  const refuse = () => new Error(tr("“{text}” is not a chord the line of chord names can write: try C, Am7, F7, Bbmaj7, G7/B, Dm7b5, Csus4", { text }));
   if (!m) throw refuse();
   const rest = m[3];
   // The quality, then any altered fifths, ninths, elevenths, thirteenths: C7b9#11.
@@ -3991,11 +3993,11 @@ export function chordLineOver(score, s) {
  */
 export function setChordAt(score, s, t, text) {
   const staff = score.staves[s];
-  if (!staff?.chords) throw new Error("not a line of chord names");
-  if (t < 0 || t >= lengthOf(staff)) throw new Error("no beat there");
+  if (!staff?.chords) throw new Error(tr("not a line of chord names"));
+  if (t < 0 || t >= lengthOf(staff)) throw new Error(tr("no beat there"));
   const symbol = String(text ?? "").trim();
   if (symbol && !/^n\.?c\.?$/i.test(symbol)) chordmodeOf(symbol);
-  if (cut(score, staff, t) !== t) throw new Error("a chord does not start inside a tuplet");
+  if (cut(score, staff, t) !== t) throw new Error(tr("a chord does not start inside a tuplet"));
   setChordSymbol(score, s, eventAt(staff, t), symbol);
   tidy(score, staff);
 }
@@ -4006,7 +4008,7 @@ export function setChordAt(score, s, t, text) {
 // a lane of its own (`staff.figures`) whose events are rests as long as a
 // figure holds, each its figures as written between < > (`ev.figure`, "6 4").
 
-const FIGURE_LINE_NOTES = "A figured bass holds figures, not notes: select a beat and type them";
+const FIGURE_LINE_NOTES = () => tr("A figured bass holds figures, not notes: select a beat and type them");
 
 /** Whether lane `s` is a figured bass. */
 export function isFigures(score, s) {
@@ -4017,7 +4019,7 @@ export function isFigures(score, s) {
 function figuresOf(text) {
   const figures = String(text ?? "").trim().replace(/^<|>$/g, "").trim().split(/\s+/).filter(Boolean);
   if (!figures.length || figures.length > 4 || !figures.every((f) => /^(_|\[?(\d{1,2})?[-+!]?[\\/]?\]?)$/.test(f) && f !== "[]" && f !== "")) {
-    throw new Error(`“${String(text ?? "").trim()}” is not figures a figured bass can write: try 6, 6 4, 7, 4 2, 7+, 5-, _ 6`);
+    throw new Error(tr("“{text}” is not figures a figured bass can write: try 6, 6 4, 7, 4 2, 7+, 5-, _ 6", { text: String(text ?? "").trim() }));
   }
   return figures.join(" ");
 }
@@ -4039,10 +4041,10 @@ export function figureLineUnder(score, s) {
 /** The figures from `t` on lane `s`, a figured bass, the line cut there; empty text takes them away. */
 export function setFigureAt(score, s, t, text) {
   const staff = score.staves[s];
-  if (!staff?.figures) throw new Error("not a figured bass");
-  if (t < 0 || t >= lengthOf(staff)) throw new Error("no beat there");
+  if (!staff?.figures) throw new Error(tr("not a figured bass"));
+  if (t < 0 || t >= lengthOf(staff)) throw new Error(tr("no beat there"));
   const figure = String(text ?? "").trim() ? figuresOf(text) : "";
-  if (cut(score, staff, t) !== t) throw new Error("figures do not start inside a tuplet");
+  if (cut(score, staff, t) !== t) throw new Error(tr("figures do not start inside a tuplet"));
   const ev = staff.events[eventAt(staff, t)];
   delete ev.figureRaw;
   if (figure) ev.figure = figure;
@@ -4053,9 +4055,9 @@ export function setFigureAt(score, s, t, text) {
 /** A figured bass under the staff of lane `s`, empty: answers its lane. */
 export function addFigureStaff(score, s = 0) {
   const u = upperOf(score, s);
-  if (!score.staves[u]) throw new Error("no such staff");
-  if (score.staves[u].figures || score.staves[u].chords) throw new Error("a figured bass goes under a staff of music");
-  if (figureLineUnder(score, u) >= 0) throw new Error("this staff has a figured bass already");
+  if (!score.staves[u]) throw new Error(tr("no such staff"));
+  if (score.staves[u].figures || score.staves[u].chords) throw new Error(tr("a figured bass goes under a staff of music"));
+  if (figureLineUnder(score, u) >= 0) throw new Error(tr("this staff has a figured bass already"));
   const at = u + voiceLanes(score, u).length;
   const n = staffNumber(score, u) + 1;
   score.staves.splice(at, 0, { name: "", short: "", instrument: "", clef: "bass", figures: true, events: rests(score, 0, lengthOf(score.staves[u])) });
@@ -4128,12 +4130,12 @@ export function fretSpec(text) {
   // A barre after a bar: "x;3;2;o;1;o;|6-1-1", or as fretText writes it, "133211 | barre 6-1-1".
   const [shapePart, barrePart] = String(text ?? "").split("|");
   const barre = /^\s*(?:barre\s*)?([1-6])-([1-6])-(\d{1,2})\s*$/i.exec(barrePart ?? "");
-  if (barrePart != null && !barre) throw new Error(`“${barrePart.trim()}” is not a barre: from string, to string, fret, as 6-1-1`);
+  if (barrePart != null && !barre) throw new Error(tr("“{text}” is not a barre: from string, to string, fret, as 6-1-1", { text: barrePart.trim() }));
   if (barre) return `${fretSpec(shapePart)}|${barre[1]}-${barre[2]}-${barre[3]}`;
   const typed = String(text ?? "").trim().toLowerCase();
   const items = /^[xo0-9]{6}$/.test(typed) ? [...typed] : typed.split(/[;\s,]+/).filter(Boolean);
   const ok = items.length === 6 && items.every((f) => /^(x|o|\d{1,2})$/.test(f) && (!/^\d+$/.test(f) || Number(f) <= 24));
-  if (!ok) throw new Error(`“${String(text ?? "").trim()}” is not a guitar chord: six strings from the low E, x not played, 0 open, as x32010 for C`);
+  if (!ok) throw new Error(tr("“{text}” is not a guitar chord: six strings from the low E, x not played, 0 open, as x32010 for C", { text: String(text ?? "").trim() }));
   return items.map((f) => (f === "0" ? "o" : f)).join(";") + ";";
 }
 
@@ -4177,8 +4179,8 @@ function shiftMetaLanes(meta, at, by) {
 /** A line of chord names over the staff of lane `s`, empty: answers its lane. */
 export function addChordStaff(score, s = 0) {
   const u = upperOf(score, s);
-  if (!score.staves[u]) throw new Error("no such staff");
-  if (score.staves[u].chords) throw new Error("this is a line of chord names already");
+  if (!score.staves[u]) throw new Error(tr("no such staff"));
+  if (score.staves[u].chords) throw new Error(tr("this is a line of chord names already"));
   const n = staffNumber(score, u);
   score.staves.splice(u, 0, { name: "", short: "", instrument: "", clef: "treble", chords: true, events: rests(score, 0, lengthOf(score.staves[u])) });
   score.groups = (score.groups ?? []).map((g) => ({ ...g, first: g.first >= n ? g.first + 1 : g.first, last: g.last >= n ? g.last + 1 : g.last }));
@@ -4188,7 +4190,7 @@ export function addChordStaff(score, s = 0) {
 
 /** Lane `s`'s event `i` struck on drum `name` — instead of what it was, or `add`ed to it. */
 export function drumHit(score, s, i, name, add = false) {
-  if (!isDrums(score, s)) throw new Error("Drums go on a drum staff: add one with + Staff, Drum kit");
+  if (!isDrums(score, s)) throw new Error(tr("Drums go on a drum staff: add one with + Staff, Drum kit"));
   const ev = noteOf(score, s, i);
   const p = drumPitch(name);
   if (ev.rest || !add) {
@@ -4245,10 +4247,10 @@ export function instrumentOf(score, s) {
  */
 export function setInstrument(score, s, k) {
   const it = INSTRUMENTS[k];
-  if (!it) throw new Error("no such instrument");
+  if (!it) throw new Error(tr("no such instrument"));
   const staff = score.staves[upperOf(score, s)];
   if (Boolean(it.drums) !== Boolean(staff.drums)) {
-    throw new Error(it.drums ? "A staff of notes does not become a drum kit: add a drum staff with + Staff" : "A drum staff stays a drum staff: add a staff for this instrument with + Staff");
+    throw new Error(it.drums ? tr("A staff of notes does not become a drum kit: add a drum staff with + Staff") : tr("A drum staff stays a drum staff: add a staff for this instrument with + Staff"));
   }
   if (!staff.name || INSTRUMENTS.some((x) => x.name === staff.name)) {
     staff.name = it.name;
@@ -4300,7 +4302,7 @@ const MAX_SYSTEMS_PER_PAGE = 20;
 /** At most `count` systems on a page of the PDF; null, "" or 0 for as many as fit. */
 export function setSystemsPerPage(score, count) {
   const n = count == null || count === "" ? 0 : Number(count);
-  if (!Number.isInteger(n) || n < 0 || n > MAX_SYSTEMS_PER_PAGE) throw new Error(`systems a page: 1 to ${MAX_SYSTEMS_PER_PAGE}, or as many as fit`);
+  if (!Number.isInteger(n) || n < 0 || n > MAX_SYSTEMS_PER_PAGE) throw new Error(tr("systems a page: 1 to {most}, or as many as fit", { most: MAX_SYSTEMS_PER_PAGE }));
   score.paper = { ...(score.paper ?? paperFrom(null)), systemsPerPage: n || null };
 }
 
@@ -4312,17 +4314,17 @@ export function setSystemsPerPage(score, count) {
  * as it is written.
  */
 export function setPageLine(score, which, text) {
-  if (!PAGE_LINES.some(([key]) => key === which)) throw new Error(`no such header or footer: ${which}`);
+  if (!PAGE_LINES.some(([key]) => key === which)) throw new Error(tr("no such header or footer: {which}", { which }));
   const said = String(text ?? "").trim();
-  if (said.length > 300) throw new Error("a header or a footer is at most 300 characters");
+  if (said.length > 300) throw new Error(tr("a header or a footer is at most 300 characters"));
   let line = null;
   if (said.startsWith("\\markup")) line = { raw: said };
   else if (said) {
     const cells = said.split("|").map((cell) => cell.trim());
-    if (cells.length > 3) throw new Error("a header or a footer has three places at most: left | centre | right");
+    if (cells.length > 3) throw new Error(tr("a header or a footer has three places at most: left | centre | right"));
     for (const cell of cells) {
       for (const [, name] of cell.matchAll(/\{([^{}]*)\}/g)) {
-        if (!PAGE_FIELDS.includes(name)) throw new Error(`{${name}} is not a field a page prints: ${PAGE_FIELDS.map((f) => `{${f}}`).join(", ")}`);
+        if (!PAGE_FIELDS.includes(name)) throw new Error(tr("{field} is not a field a page prints: {fields}", { field: `{${name}}`, fields: PAGE_FIELDS.map((f) => `{${f}}`).join(", ") }));
       }
     }
     line = { cells };
@@ -4497,9 +4499,9 @@ export function afterFraction(at) {
 /** The paper (A4 by default, "letter", "a3landscape"…) and the staff size, in points (20 by default). */
 export function setPaper(score, { size, staffSize }) {
   const name = String(size ?? "a4").toLowerCase();
-  if (!PAPER_SIZES.includes(name.replace(/landscape$/, ""))) throw new Error(`no such paper: ${size}`);
+  if (!PAPER_SIZES.includes(name.replace(/landscape$/, ""))) throw new Error(tr("no such paper: {size}", { size }));
   const pt = staffSize == null || staffSize === "" ? 20 : Number(staffSize);
-  if (!(pt >= 11 && pt <= 26)) throw new Error("a staff size is 11 to 26 points");
+  if (!(pt >= 11 && pt <= 26)) throw new Error(tr("a staff size is 11 to 26 points"));
   score.paper = { ...(score.paper ?? paperFrom(null)), size: name === "a4" ? null : name, staffSize: pt === 20 ? null : pt };
 }
 
@@ -4551,8 +4553,8 @@ export function setEvenPages(score, even) {
 
 /** The break after bar `bar`: "line", "page", or none (null) — the line goes on. */
 export function setBreak(score, bar, kind) {
-  if (!Number.isInteger(bar) || bar < 0 || bar >= barsOf(score) - 1) throw new Error("a break goes after a bar, before the last one ends");
-  if (kind != null && kind !== "line" && kind !== "page") throw new Error("a break is a line's or a page's");
+  if (!Number.isInteger(bar) || bar < 0 || bar >= barsOf(score) - 1) throw new Error(tr("a break goes after a bar, before the last one ends"));
+  if (kind != null && kind !== "line" && kind !== "page") throw new Error(tr("a break is a line's or a page's"));
   score.breaks = { ...(score.breaks ?? {}) };
   if (kind == null) delete score.breaks[bar];
   else score.breaks[bar] = kind;
@@ -4592,7 +4594,7 @@ export function timeText(score, time = score.time) {
 /** A metre written "3/4" or "2+3/8": its [num, den], and its parts when added up (else null). */
 export function metreOf(text) {
   const match = /^(\d+(?:\+\d+)*)\/(\d+)$/.exec(String(text).trim());
-  if (!match) throw new Error("a metre is like 3/4, or 2+3/8");
+  if (!match) throw new Error(tr("a metre is like 3/4, or 2+3/8"));
   const parts = match[1].split("+").map(Number);
   return { time: [parts.reduce((a, b) => a + b, 0), Number(match[2])], parts: parts.length > 1 ? parts : null };
 }
@@ -5800,17 +5802,16 @@ export function isRaw(score, s) {
 
 /** An edit on a staff kept as written: refused, said. */
 function refuseRaw(score, s) {
-  if (isRaw(score, s)) throw new Error(RAW_REFUSAL);
+  if (isRaw(score, s)) throw new Error(RAW_REFUSAL());
 }
 
 /** An edit that would change every staff's bars, with a staff kept as written: refused, said. */
 function refuseRawBars(score) {
-  if (score.staves.some((staff) => staff.raw != null || staff.rawPart)) throw new Error(RAW_BARS_REFUSAL);
+  if (score.staves.some((staff) => staff.raw != null || staff.rawPart)) throw new Error(RAW_BARS_REFUSAL());
 }
 
-const RAW_WHY = "a \\partCombine or \\autoChange the score editor cannot take apart: \\partCombineUp, \\partCombineApart and the like, music beside it on its staff";
-const RAW_REFUSAL = `This staff is kept as LilyPond wrote it (${RAW_WHY}): edit its notes in the text below`;
-const RAW_BARS_REFUSAL = `A staff is kept as LilyPond wrote it (${RAW_WHY}): put bars in or take them away in the text below`;
+const RAW_REFUSAL = () => tr("This staff is kept as LilyPond wrote it (a \\partCombine or \\autoChange the score editor cannot take apart: \\partCombineUp, \\partCombineApart and the like, music beside it on its staff): edit its notes in the text below");
+const RAW_BARS_REFUSAL = () => tr("A staff is kept as LilyPond wrote it (a \\partCombine or \\autoChange the score editor cannot take apart: \\partCombineUp, \\partCombineApart and the like, music beside it on its staff): put bars in or take them away in the text below");
 
 // ---- Two parts on one staff (\partCombine), one voice over two (\autoChange) ----------------
 //
@@ -6006,12 +6007,12 @@ export function partOfLane(score, s) {
   return isCombined(score, s) ? voiceOf(score, s) : 0;
 }
 
-const COMBINE_VOICES = "A \\partCombine staff holds its two parts, part I and part II: no other voice";
-const AUTO_VOICES = "\\autoChange spreads one voice over the piano's two staves: it holds no other voice";
-const AUTO_CLEFS = "\\autoChange keeps its staves' clefs, treble over bass";
-const AUTO_CROSS = "\\autoChange sends its notes from one staff to the other itself";
-const COMBINE_CROSS = "The parts of \\partCombine stay on their staff";
-const COMBINE_WORDS = "Words go under a staff of one part: not under \\partCombine or \\autoChange";
+const COMBINE_VOICES = () => tr("A \\partCombine staff holds its two parts, part I and part II: no other voice");
+const AUTO_VOICES = () => tr("\\autoChange spreads one voice over the piano's two staves: it holds no other voice");
+const AUTO_CLEFS = () => tr("\\autoChange keeps its staves' clefs, treble over bass");
+const AUTO_CROSS = () => tr("\\autoChange sends its notes from one staff to the other itself");
+const COMBINE_CROSS = () => tr("The parts of \\partCombine stay on their staff");
+const COMBINE_WORDS = () => tr("Words go under a staff of one part: not under \\partCombine or \\autoChange");
 
 /** Starts of a lane's events, and where it ends. */
 function eventTimes(events) {
@@ -7036,8 +7037,8 @@ const FINE = WHOLE / 64;
 export function quantizeLane(score, s, from, to, { grid, strength = 1, ends = false } = {}) {
   refuseScaled(score, s);
   const staff = score.staves[s];
-  if (!staff) throw new Error("no such staff");
-  if (!(grid > 0)) throw new Error("choose a grid");
+  if (!staff) throw new Error(tr("no such staff"));
+  if (!(grid > 0)) throw new Error(tr("choose a grid"));
   const amount = Math.max(0, Math.min(1, Number(strength)));
   const at = starts(staff);
   const near = (t, step) => {
@@ -7124,8 +7125,8 @@ function notesOf(score, s, from, to) {
 export function writeSwing(score, s, from, to, { unit = 8, feel = "triplet" } = {}) {
   refuseScaled(score, s);
   const staff = score.staves[s];
-  if (!staff) throw new Error("no such staff");
-  if (unit !== 8 && unit !== 16) throw new Error("swing is of eighths or sixteenths");
+  if (!staff) throw new Error(tr("no such staff"));
+  if (unit !== 8 && unit !== 16) throw new Error(tr("swing is of eighths or sixteenths"));
   const step = WHOLE / unit;
   const at = starts(staff);
   let count = 0;

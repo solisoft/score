@@ -71,6 +71,7 @@ class AppScoresController < AppBaseController
     @examples = ScoreLibrary.examples
     @eui_version = ScoreAssets.version
     @studio_preloads = ScoreAssets.studio_preloads
+    @editor_words = EditorWords.of(I18n.locale())
     @editing_score = @score
     @_ai_entry(current_user())
     @ai_request_limit = SCORE_SUGGESTION_REQUEST_LIMIT
@@ -346,7 +347,11 @@ class AppScoresController < AppBaseController
       return nil
     end
 
-    @ai_with = "Answered by #{AiClient.provider_name(user.ai_provider)}, #{user.ai_model}, with your key."
+    provider = AiClient.provider_name(user.ai_provider)
+    @ai_with = SiteText.t(
+      "app.editor.ai_with",
+      {"provider": provider, "model": user.ai_model}
+    )
     @ai_left = ScoreSuggestion.left_today(user)
     @ai_link = nil
   end

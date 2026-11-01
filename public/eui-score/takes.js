@@ -11,6 +11,9 @@
 //
 // No DOM, no Web Audio: tests/js/takes.test.mjs runs it.
 
+const V = new URL(import.meta.url).search;
+const { tr } = await import(`./words.js${V}`);
+
 /** The rate takes are kept at: enough for a voice and most instruments, half a CD's bytes. */
 export const TAKE_RATE = 24000;
 /** The audio tracks a score has (SCORE_TAKE_TRACKS on the server). */
@@ -195,7 +198,7 @@ export const laneOf = (track) => `audio-${track}`;
 
 /** A size in words: "1.2 MB", "640 kB". */
 export function sizeText(bytes) {
-  return bytes >= 1e6 ? `${(bytes / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1e3))} kB`;
+  return bytes >= 1e6 ? tr("{size} MB", { size: (bytes / 1e6).toFixed(1) }) : tr("{size} kB", { size: Math.max(1, Math.round(bytes / 1e3)) });
 }
 
 /** A length in words: "0:07", "2:46". */

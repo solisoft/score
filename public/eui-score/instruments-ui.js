@@ -12,6 +12,8 @@
 // the synthesizer, into the staves' mixer strips.
 
 const SEARCH = new URL(import.meta.url).search;
+const V = SEARCH;
+const { tr } = await import(`./words.js${V}`);
 const Sy = await import(`./synth.js${SEARCH}`);
 const Sb = await import(`./soundbank.js${SEARCH}`);
 const { MpeInput } = await import(`./mpe.js${SEARCH}`);
@@ -46,15 +48,15 @@ export function synthHtml(lane, s) {
     return `<label class="mixer-field"><span>${label}</span><input type="range" data-inst="${field}" data-inst-lane="${lane}" min="${min}" max="${max}" step="${step}" value="${value}" aria-label="${label}"><output>${knobText(field, value)}</output></label>`;
   };
   const waves = (k) =>
-    `<label class="mixer-field"><span>Wave</span><select data-inst="${k}.wave" data-inst-lane="${lane}" aria-label="Oscillator ${k.at(-1)} wave">${Sy.WAVES.map((w) => `<option value="${w}"${s[k].wave === w ? " selected" : ""}>${Sy.WAVE_NAMES[w]}</option>`).join("")}</select></label>`;
+    `<label class="mixer-field"><span>${tr("Wave")}</span><select data-inst="${k}.wave" data-inst-lane="${lane}" aria-label="${tr("Oscillator {n} wave", { n: k.at(-1) })}">${Sy.WAVES.map((w) => `<option value="${w}"${s[k].wave === w ? " selected" : ""}>${Sy.WAVE_NAMES[w]}</option>`).join("")}</select></label>`;
   const presets = Object.entries(Sy.PRESETS)
     .map(([id, p]) => `<option value="${id}"${s.preset === id ? " selected" : ""}>${p.name}</option>`)
     .join("");
-  const osc = (k, n) => `<div class="mixer-fx-group"><b>Oscillator ${n}</b>${waves(k)}${range(`${k}.detune`, -100, 100, 1, "Detune")}${range(`${k}.octave`, -2, 2, 1, "Octave")}${range(`${k}.level`, 0, 1, 0.01, "Level")}</div>`;
-  return `<label class="mixer-field"><span>Preset</span><select data-inst="preset" data-inst-lane="${lane}" aria-label="Synthesizer preset">${presets}</select></label>
+  const osc = (k, n) => `<div class="mixer-fx-group"><b>${tr("Oscillator {n}", { n })}</b>${waves(k)}${range(`${k}.detune`, -100, 100, 1, tr("Detune"))}${range(`${k}.octave`, -2, 2, 1, tr("Octave"))}${range(`${k}.level`, 0, 1, 0.01, tr("Level"))}</div>`;
+  return `<label class="mixer-field"><span>${tr("Preset")}</span><select data-inst="preset" data-inst-lane="${lane}" aria-label="${tr("Synthesizer preset")}">${presets}</select></label>
     ${osc("osc1", 1)}${osc("osc2", 2)}
-    <div class="mixer-fx-group"><b>Low-pass filter</b>${range("filter.cutoff", 0, 1, 0.01, "Cutoff")}${range("filter.resonance", 0, 1, 0.01, "Resonance")}${range("filter.env", -1, 1, 0.01, "Envelope")}</div>
-    <div class="mixer-fx-group"><b>Envelope</b>${range("amp.attack", 0.001, 5, 0.001, "Attack")}${range("amp.decay", 0.001, 5, 0.001, "Decay")}${range("amp.sustain", 0, 1, 0.01, "Sustain")}${range("amp.release", 0.005, 8, 0.005, "Release")}</div>`;
+    <div class="mixer-fx-group"><b>${tr("Low-pass filter")}</b>${range("filter.cutoff", 0, 1, 0.01, tr("Cutoff"))}${range("filter.resonance", 0, 1, 0.01, tr("Resonance"))}${range("filter.env", -1, 1, 0.01, tr("Envelope"))}</div>
+    <div class="mixer-fx-group"><b>${tr("Envelope")}</b>${range("amp.attack", 0.001, 5, 0.001, tr("Attack"))}${range("amp.decay", 0.001, 5, 0.001, tr("Decay"))}${range("amp.sustain", 0, 1, 0.01, tr("Sustain"))}${range("amp.release", 0.005, 8, 0.005, tr("Release"))}</div>`;
 }
 
 export function installInstruments({ root, st, M, P, edit, say }) {
@@ -100,25 +102,25 @@ export function installInstruments({ root, st, M, P, edit, say }) {
     const synth = Sy.synthOf(score, lane);
     const font = Sb.soundfontOf(score, lane);
     const kind = synth ? "synth" : font ? "sf" : "gm";
-    const choose = `<label class="mixer-field"><span>Sound</span><select data-inst="kind" data-inst-lane="${lane}" aria-label="What this staff plays">
+    const choose = `<label class="mixer-field"><span>${tr("Sound")}</span><select data-inst="kind" data-inst-lane="${lane}" aria-label="${tr("What this staff plays")}">
       <option value="gm"${kind === "gm" ? " selected" : ""}>General MIDI</option>
-      <option value="synth"${kind === "synth" ? " selected" : ""}>Synthesizer</option>
-      <option value="sf"${kind === "sf" ? " selected" : ""}>Own SoundFont</option></select></label>`;
+      <option value="synth"${kind === "synth" ? " selected" : ""}>${tr("Synthesizer")}</option>
+      <option value="sf"${kind === "sf" ? " selected" : ""}>${tr("Own SoundFont")}</option></select></label>`;
     let body = "";
     if (synth) body = synthHtml(lane, synth);
     else if (font) {
       const info = fontInfo(font.hash);
       const fonts = fontsKnown();
       if (!fonts.some((f) => f.hash === font.hash)) fonts.unshift({ hash: font.hash, name: font.name });
-      const files = fonts.map((f) => `<option value="${f.hash}"${f.hash === font.hash ? " selected" : ""}>${escape(f.name)}</option>`).join("") + '<option value="load">Load an SF2 or SF3 file…</option>';
-      const presets = (info?.presets ?? [{ name: font.preset || `Preset ${font.program}`, bank: font.bank, program: font.program }])
+      const files = fonts.map((f) => `<option value="${f.hash}"${f.hash === font.hash ? " selected" : ""}>${escape(f.name)}</option>`).join("") + `<option value="load">${tr("Load an SF2 or SF3 file…")}</option>`;
+      const presets = (info?.presets ?? [{ name: font.preset || tr("Preset {n}", { n: font.program }), bank: font.bank, program: font.program }])
         .map((p) => `<option value="${p.bank}:${p.program}"${p.bank === font.bank && p.program === font.program ? " selected" : ""}>${String(p.bank).padStart(3, "0")}:${String(p.program).padStart(3, "0")} ${escape(p.name)}</option>`)
         .join("");
-      body = `<label class="mixer-field"><span>File</span><select data-inst="font" data-inst-lane="${lane}" aria-label="SoundFont file">${files}</select></label>
-        <label class="mixer-field"><span>Preset</span><select data-inst="sf-preset" data-inst-lane="${lane}" aria-label="SoundFont preset">${presets}</select></label>
-        ${info ? "" : `<p class="mixer-inst-missing" role="note">${escape(font.name)} is not in this browser: the default sounds play this staff. Load the file to hear it.</p>`}`;
+      body = `<label class="mixer-field"><span>${tr("File")}</span><select data-inst="font" data-inst-lane="${lane}" aria-label="${tr("SoundFont file")}">${files}</select></label>
+        <label class="mixer-field"><span>${tr("Preset")}</span><select data-inst="sf-preset" data-inst-lane="${lane}" aria-label="${tr("SoundFont preset")}">${presets}</select></label>
+        ${info ? "" : `<p class="mixer-inst-missing" role="note">${tr("{name} is not in this browser: the default sounds play this staff. Load the file to hear it.", { name: escape(font.name) })}</p>`}`;
     }
-    return `<details class="mixer-fx mixer-inst" data-inst-part="${lane}"${kind !== "gm" ? " open" : ""}><summary>Instrument${kind === "synth" ? " · Synthesizer" : kind === "sf" ? " · SoundFont" : ""}</summary>${choose}${body}</details>`;
+    return `<details class="mixer-fx mixer-inst" data-inst-part="${lane}"${kind !== "gm" ? " open" : ""}><summary>${kind === "synth" ? tr("Instrument · Synthesizer") : kind === "sf" ? tr("Instrument · SoundFont") : tr("Instrument")}</summary>${choose}${body}</details>`;
   }
 
   // ---- Choosing ------------------------------------------------------------------------
@@ -138,14 +140,14 @@ export function installInstruments({ root, st, M, P, edit, say }) {
       Sb.setSoundfont(score, lane, null);
       Sy.setSynth(score, lane, kind === "synth" ? { preset: Sy.DEFAULT_PRESET } : null);
     });
-    say(kind === "synth" ? "This staff plays the synthesizer: its preset and knobs are in the mixer, kept with the score." : "This staff plays its General MIDI instrument again.");
+    say(kind === "synth" ? tr("This staff plays the synthesizer: its preset and knobs are in the mixer, kept with the score.") : tr("This staff plays its General MIDI instrument again."));
     st.mixer?.refresh();
   }
 
   function useFont(lane, hash, choice = null) {
     const info = fontInfo(hash);
     const preset = choice ?? info?.presets?.[0];
-    if (!info || !preset) return say("That SoundFont is not in this browser: load the file again.", true);
+    if (!info || !preset) return say(tr("That SoundFont is not in this browser: load the file again."), true);
     edit((score) => {
       Sy.setSynth(score, lane, null);
       Sb.setSoundfont(score, lane, { name: info.name, hash, bank: preset.bank, program: preset.program, preset: preset.name });
@@ -170,19 +172,23 @@ export function installInstruments({ root, st, M, P, edit, say }) {
     } catch (error) {
       return say(`${file.name}: ${error.message}`, true);
     }
-    if (!presets.length) return say(`${file.name} has no melodic preset to play.`, true);
+    if (!presets.length) return say(tr("{name} has no melodic preset to play.", { name: file.name }), true);
     const hash = await Sb.hashOf(bytes);
     loaded.set(hash, { name: file.name, presets, bytes });
     const keptHere = await Sb.keep({ hash, name: file.name, bytes, presets });
     await refreshKept();
-    say(`${file.name}: ${presets.length} presets${keptHere ? ", kept in this browser" : ", for this visit only (this browser keeps no files)"}. The score keeps its name and the preset chosen.`);
+    say(
+      keptHere
+        ? tr("{name}: {count} presets, kept in this browser. The score keeps its name and the preset chosen.", { name: file.name, count: presets.length })
+        : tr("{name}: {count} presets, for this visit only (this browser keeps no files). The score keeps its name and the preset chosen.", { name: file.name, count: presets.length })
+    );
     if (lane != null && st.score) useFont(lane, hash);
     return hash;
   }
 
   picker.addEventListener("change", () => {
     const file = picker.files?.[0];
-    if (file) loadFile(file, pickFor).catch((error) => say(`The SoundFont could not be read: ${error.message ?? error}`, true));
+    if (file) loadFile(file, pickFor).catch((error) => say(tr("The SoundFont could not be read: {reason}", { reason: error.message ?? error }), true));
   });
 
   /** The mixer's panel: its Instrument controls listened to. */
@@ -226,8 +232,12 @@ export function installInstruments({ root, st, M, P, edit, say }) {
     if (!fresh.length) return;
     for (const m of fresh) told.add(m.name);
     const names = [...new Set(fresh.map((m) => m.name))].join(", ");
-    const staves = fresh.map((m) => st.score?.staves?.[m.lane]?.name || `staff ${m.lane + 1}`).join(", ");
-    say(`${names} is not in this browser: ${staves} play${fresh.length === 1 ? "s" : ""} the default sounds. Load the file in the mixer to hear it.`);
+    const staves = fresh.map((m) => st.score?.staves?.[m.lane]?.name || tr("staff {n}", { n: m.lane + 1 })).join(", ");
+    say(
+      fresh.length === 1
+        ? tr("{names} is not in this browser: {staves} plays the default sounds. Load the file in the mixer to hear it.", { names, staves })
+        : tr("{names} is not in this browser: {staves} play the default sounds. Load the file in the mixer to hear it.", { names, staves })
+    );
   }
 
   /** On each draw: a score just opened whose SoundFont this browser does not have is told of. */
@@ -298,7 +308,7 @@ export function installInstruments({ root, st, M, P, edit, say }) {
     try {
       localStorage.setItem(MPE_KEPT, manual ? "1" : "0");
     } catch (error) {}
-    say(manual ? "MPE keyboard: each note's bend and pressure heard on its own; recorded, they go to the staff's Pitch bend and Pressure curves." : "MPE keyboard off: the keyboard's bend moves every note.");
+    say(manual ? tr("MPE keyboard: each note's bend and pressure heard on its own; recorded, they go to the staff's Pitch bend and Pressure curves.") : tr("MPE keyboard off: the keyboard's bend moves every note."));
   });
 
   // Each message of the keyboard, read for MPE first: a note's own bend and
@@ -309,7 +319,11 @@ export function installInstruments({ root, st, M, P, edit, say }) {
     for (const e of events) {
       if (e.type === "zone") {
         if (mpeBox) mpeBox.checked = e.members > 0 || manual;
-        say(e.members ? `MPE keyboard found: ${e.members} member channels (${e.zone} zone). Each note's bend and pressure are heard on its own.` : "The MPE keyboard's zone is off.");
+        const found =
+          e.zone === "upper"
+            ? tr("MPE keyboard found: {count} member channels (upper zone). Each note's bend and pressure are heard on its own.", { count: e.members })
+            : tr("MPE keyboard found: {count} member channels (lower zone). Each note's bend and pressure are heard on its own.", { count: e.members });
+        say(e.members ? found : tr("The MPE keyboard's zone is off."));
       } else if (e.type === "bend") {
         for (const key of e.key == null ? live.held : [e.key]) live.expression(key, { bend: e.semitones });
       } else if (e.type === "pressure") live.expression(e.key, { pressure: e.value });

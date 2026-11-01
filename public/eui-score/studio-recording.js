@@ -1,6 +1,10 @@
 // The studio's MIDI devices (studio.js): a MIDI keyboard writing notes, or
 // recorded into the score; the sound sent to a MIDI device.
 
+// The editor's words in the page's language (#508).
+const V = new URL(import.meta.url).search;
+const { tr } = await import(`./words.js${V}`);
+
 /** The MIDI keyboard and the Sound to menu wired; answers recording. */
 export function install(ctx) {
   const { root, st, quantizeBox, M, P, S, Vel, A } = ctx;
@@ -47,9 +51,9 @@ export function install(ctx) {
 
   async function record() {
     if (st.recording) return stopPlay();
-    if (!st.score) return say("Recording needs the score tools: this piece is edited in its text.", true);
+    if (!st.score) return say(tr("Recording needs the score tools: this piece is edited in its text."), true);
     const port = keyboardChosen();
-    if (!port) return say("Choose a MIDI keyboard first (Playback › MIDI keyboard), then record.", true);
+    if (!port) return say(tr("Choose a MIDI keyboard first (Playback › MIDI keyboard), then record."), true);
     const lane = st.input.on ? st.input.staff : (st.sel?.staff ?? 0);
     if (st.playing) stopPlay();
     if (st.input.on) setInput(false);
@@ -59,15 +63,15 @@ export function install(ctx) {
     st.recording = { lane, bar: changeBar() ?? 0, program: M.programOf(sound), drums: M.isDrums(st.score, lane), channel: laneChannel(lane), down: new Map(), played: [], mutedByRecording };
     P.listen(port, recordKey, releaseKey);
     for (const button of recordButtons()) {
-      button.textContent = "■ Stop rec";
+      button.textContent = tr("■ Stop rec");
       button.setAttribute("aria-pressed", "true");
     }
     await togglePlay();
     if (st.recording && st.playing) {
       const loop = st.recording.loop;
       say(loop
-        ? `Recording into ${laneName(lane)}, bars ${barNo(loop[0])}–${barNo(loop[1])} in a loop: each pass adds its notes; R stops.`
-        : `Recording into ${laneName(lane)} from bar ${barNo(st.recording.bar)}: play after the count-in; R stops.`);
+        ? tr("Recording into {staff}, bars {a}–{b} in a loop: each pass adds its notes; R stops.", { staff: laneName(lane), a: barNo(loop[0]), b: barNo(loop[1]) })
+        : tr("Recording into {staff} from bar {n}: play after the count-in; R stops.", { staff: laneName(lane), n: barNo(st.recording.bar) }));
     }
   }
 
@@ -78,7 +82,7 @@ export function install(ctx) {
 
   function laneName(s) {
     const staff = st.score.staves[M.upperOf(st.score, s)];
-    return staff?.name || `staff ${M.staffNumber(st.score, s) + 1}`;
+    return staff?.name || tr("staff {n}", { n: M.staffNumber(st.score, s) + 1 });
   }
 
   /**
@@ -121,7 +125,7 @@ export function install(ctx) {
     if (rec.mutedByRecording) st.mix.mute.delete(rec.lane);
     renderMix();
     for (const button of recordButtons()) {
-      button.textContent = "● Rec";
+      button.textContent = tr("● Rec");
       button.setAttribute("aria-pressed", "false");
     }
     for (const [key, { t: t0, velocity }] of rec.down) {
@@ -129,7 +133,7 @@ export function install(ctx) {
       rec.played.push({ key, t0, t1: Math.max(reached ?? t0, t0 + 1), velocity });
     }
     if (!rec.played.length) {
-      say("Nothing was played: the score is as it was.");
+      say(tr("Nothing was played: the score is as it was."));
       return draw();
     }
     const grid = M.RECORDING_GRIDS[quantizeBox?.value] ?? M.RECORDING_GRIDS.sixteenth;
@@ -145,68 +149,75 @@ export function install(ctx) {
       // The knobs, the pedal and the bend played meanwhile (automation-ui.js), as curves.
       A.writeRecorded(score, M.upperOf(score, rec.lane), rec.cc, from, M.barStart(score, lastBar + 1));
     });
-    const bars = lastBar === first ? `bar ${barNo(first)}` : `bars ${barNo(first)}–${barNo(lastBar)}`;
-    say(`Recorded ${written === 1 ? "1 note" : `${written} notes`} into ${laneName(rec.lane)}, ${bars}, fitted to ${quantizeBox?.selectedOptions[0]?.textContent ?? "sixteenths"}. Ctrl+Z takes it back.`);
+    const said = {
+      staff: laneName(rec.lane),
+      bars: lastBar === first ? tr("bar {n}", { n: barNo(first) }) : tr("bars {a}–{b}", { a: barNo(first), b: barNo(lastBar) }),
+      grid: quantizeBox?.selectedOptions[0]?.textContent ?? tr("sixteenths"),
+      n: written,
+    };
+    say(written === 1
+      ? tr("Recorded 1 note into {staff}, {bars}, fitted to {grid}. Ctrl+Z takes it back.", said)
+      : tr("Recorded {n} notes into {staff}, {bars}, fitted to {grid}. Ctrl+Z takes it back.", said));
   }
 
   /** The "MIDI keyboard" menu: none, or a keyboard, found when asked for. */
   async function chooseInput(select) {
     if (select.value === "") {
       P.listen(null);
-      return say("No MIDI keyboard: the letters write the notes.");
+      return say(tr("No MIDI keyboard: the letters write the notes."));
     }
     if (select.value !== "find") {
       P.listen(select.value, playKey);
-      return say(`Play on ${select.selectedOptions[0].textContent}: each key writes its note at the cursor.`);
+      return say(tr("Play on {device}: each key writes its note at the cursor.", { device: select.selectedOptions[0].textContent }));
     }
     let ports = [];
     try {
       ports = await P.midiInputs();
     } catch (error) {
       select.value = "";
-      return say(error.message ?? "The browser gave no access to MIDI keyboards.", true);
+      return say(error.message ?? tr("The browser gave no access to MIDI keyboards."), true);
     }
     select.innerHTML = "";
-    select.append(new Option("none", ""));
+    select.append(new Option(tr("none"), ""));
     for (const port of ports) select.append(new Option(port.name, port.id));
-    select.append(new Option("look again…", "find"));
+    select.append(new Option(tr("look again…"), "find"));
     if (!ports.length) {
       select.value = "";
-      return say("No MIDI keyboard found: plug one in (USB or Bluetooth), then look again.", true);
+      return say(tr("No MIDI keyboard found: plug one in (USB or Bluetooth), then look again."), true);
     }
     select.value = ports[0].id;
     P.listen(ports[0].id, playKey);
-    say(`Play on ${ports[0].name}: each key writes its note at the cursor, in the duration chosen; keys held together make a chord.`);
+    say(tr("Play on {device}: each key writes its note at the cursor, in the duration chosen; keys held together make a chord.", { device: ports[0].name }));
   }
 
   /** The "Sound to" menu: this browser, or a MIDI device, found when asked for. */
   async function chooseOutput(select) {
     if (select.value === "") {
       P.setOutput(null);
-      return say("The sound plays in this browser.");
+      return say(tr("The sound plays in this browser."));
     }
     if (select.value !== "find") {
       P.setOutput(select.value);
-      return say(`From the next Play on, the music goes to ${select.selectedOptions[0].textContent}.`);
+      return say(tr("From the next Play on, the music goes to {device}.", { device: select.selectedOptions[0].textContent }));
     }
     let ports = [];
     try {
       ports = await P.midiOutputs();
     } catch (error) {
       select.value = "";
-      return say(error.message ?? "The browser gave no access to MIDI devices.", true);
+      return say(error.message ?? tr("The browser gave no access to MIDI devices."), true);
     }
     select.innerHTML = "";
-    select.append(new Option("this browser", ""));
+    select.append(new Option(tr("this browser"), ""));
     for (const port of ports) select.append(new Option(port.name, port.id));
-    select.append(new Option("look again…", "find"));
+    select.append(new Option(tr("look again…"), "find"));
     if (!ports.length) {
       select.value = "";
-      return say("No MIDI device found. On a Mac, open Audio MIDI Setup → MIDI Studio, and set the IAC Driver online; then look again.", true);
+      return say(tr("No MIDI device found. On a Mac, open Audio MIDI Setup → MIDI Studio, and set the IAC Driver online; then look again."), true);
     }
     select.value = ports[0].id;
     P.setOutput(ports[0].id);
-    say(`From the next Play on, the music goes to ${ports[0].name}. Open GarageBand (or Logic) on an instrument track to hear it.`);
+    say(tr("From the next Play on, the music goes to {device}. Open GarageBand (or Logic) on an instrument track to hear it.", { device: ports[0].name }));
   }
 
   return { record, laneChannel, laneName, recordingNow, finishRecording, chooseOutput };

@@ -2,6 +2,10 @@
 // the model and written back from it, every edit one Undo away, the draft
 // kept, and a text opened in place of the score.
 
+// The editor's words in the page's language (#508).
+const V = new URL(import.meta.url).search;
+const { tr } = await import(`./words.js${V}`);
+
 /** Answers the score's model and text: reading, writing, the undoable edit, opening. */
 export function install(ctx) {
   const { options, draftKey, sourceBox, status, st, M, Vel, editor_view_lit, score_json, source_spans } = ctx;
@@ -66,8 +70,10 @@ export function install(ctx) {
     if (!st.score) return;
     // The first rewrite of a text holding what the model does not keep: said, once.
     if (st.lost.length) {
-      const what = st.lost.length > 1 || st.lost[0].startsWith("the settings") ? "those" : "that";
-      st.lostNotice = `The score editor rewrote this piece's text without ${st.lost.join(", ")}: it does not keep ${what}.${undo ? " Undo puts the text back as it was." : ""}`;
+      const many = st.lost.length > 1 || st.lost[0].startsWith("the settings");
+      const lost = { what: st.lost.join(", ") };
+      const notice = many ? tr("The score editor rewrote this piece's text without {what}: it does not keep those.", lost) : tr("The score editor rewrote this piece's text without {what}: it does not keep that.", lost);
+      st.lostNotice = undo ? `${notice} ${tr("Undo puts the text back as it was.")}` : notice;
       st.lost = [];
     }
     const { source, items } = M.toLilyPond(st.score);
@@ -103,8 +109,8 @@ export function install(ctx) {
 
   /** Runs `fn` on the model as one undoable edit; a refusal leaves everything as it was. */
   function edit(fn, { keepFuture = false } = {}) {
-    if (!st.score) return say("The score tools wait: this piece is edited in its text below.", true);
-    if (st.written) return say("Written pitch is for reading: View ▸ Written pitch again to write, at concert pitch.", true);
+    if (!st.score) return say(tr("The score tools wait: this piece is edited in its text below."), true);
+    if (st.written) return say(tr("Written pitch is for reading: View ▸ Written pitch again to write, at concert pitch."), true);
     const before = snapshot();
     try {
       fn(st.score);
@@ -202,7 +208,7 @@ export function install(ctx) {
 
   /** The settings the engraver passed over in the text read, briefly: " Passed over: \\override …", or "". */
   function passedText() {
-    return st.passed.length ? ` Passed over, not drawn: ${st.passed.join(", ")}.` : "";
+    return st.passed.length ? ` ${tr("Passed over, not drawn: {what}.", { what: st.passed.join(", ") })}` : "";
   }
 
   return {

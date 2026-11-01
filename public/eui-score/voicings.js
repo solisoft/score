@@ -7,7 +7,9 @@
 // No DOM here: tests/js/voicings.test.mjs calls these directly.
 
 // The model at the same version as the page's.
-const M = await import(`./score-model.js${new URL(import.meta.url).search}`);
+const V = new URL(import.meta.url).search;
+const M = await import(`./score-model.js${V}`);
+const { tr } = await import(`./words.js${V}`);
 
 const LETTERS = "CDEFGAB";
 const SIGNS = { "#": 1, "♯": 1, b: -1, "♭": -1 };
@@ -446,8 +448,8 @@ export function chordAt(score, t) {
  */
 export function diagramsFromSymbols(score, s, { a = 0, b = null } = {}) {
   const staff = score.staves[s];
-  if (!staff) throw new Error("no such staff");
-  if (M.isDrums(score, s)) throw new Error("A drum staff takes no chord diagrams: choose a staff of notes");
+  if (!staff) throw new Error(tr("no such staff"));
+  if (M.isDrums(score, s)) throw new Error(tr("A drum staff takes no chord diagrams: choose a staff of notes"));
   const t0 = M.barStart(score, a);
   const t1 = M.barStart(score, (b ?? M.barsOf(score) - 1) + 1);
   const at = M.starts(staff);
@@ -463,6 +465,6 @@ export function diagramsFromSymbols(score, s, { a = 0, b = null } = {}) {
     ev.fret = fretSpecOf(shape);
     count++;
   }
-  if (!count) throw new Error("No chord symbol there has a note under it on that staff: add chord symbols with Insert ▸ Chord symbol (Ctrl+K)");
+  if (!count) throw new Error(tr("No chord symbol there has a note under it on that staff: add chord symbols with Insert ▸ Chord symbol (Ctrl+K)"));
   return count;
 }

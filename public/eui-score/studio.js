@@ -14,6 +14,8 @@
 
 // Served immutable: this module's version goes to the ones it loads.
 const V = new URL(import.meta.url).search;
+// The editor's words in the page's language (#508).
+const { tr } = await import(`./words.js${V}`);
 const { loaded, toMidi, toPdf, download, engine } = await import(`./eui-score.js${V}`);
 const M = await import(`./score-model.js${V}`);
 const P = await import(`./player.js${V}`);
@@ -97,18 +99,19 @@ const [
 ]);
 
 const DRAFT = "eui-score-studio-draft";
-// The palette over the selected note: the changes made to a note most.
-const PALETTE = [
-  ["move", { how: "step", by: "1" }, "↑", "A step up (↑)"],
-  ["move", { how: "step", by: "-1" }, "↓", "A step down (↓)"],
-  ["alter", { alter: "-1" }, "♭", "Flat (−)"],
-  ["alter", { alter: "0" }, "♮", "Natural (=)"],
-  ["alter", { alter: "1" }, "♯", "Sharp (+)"],
-  ["dot", {}, "•", "Dotted (.)"],
-  ["tie", {}, "⁀", "Tie to the next note (T)"],
-  ["art", { name: "staccato" }, "·", "Staccato"],
-  ["art", { name: "accent" }, ">", "Accent"],
-  ["rest", {}, "𝄽", "A rest instead (0)"],
+// The palette over the selected note: the changes made to a note most, its
+// title (the key in brackets) and its name for a screen reader.
+const PALETTE = () => [
+  ["move", { how: "step", by: "1" }, "↑", tr("A step up (↑)"), tr("A step up")],
+  ["move", { how: "step", by: "-1" }, "↓", tr("A step down (↓)"), tr("A step down")],
+  ["alter", { alter: "-1" }, "♭", tr("Flat (−)"), tr("Flat")],
+  ["alter", { alter: "0" }, "♮", tr("Natural (=)"), tr("Natural")],
+  ["alter", { alter: "1" }, "♯", tr("Sharp (+)"), tr("Sharp")],
+  ["dot", {}, "•", tr("Dotted (.)"), tr("Dotted")],
+  ["tie", {}, "⁀", tr("Tie to the next note (T)"), tr("Tie to the next note")],
+  ["art", { name: "staccato" }, "·", tr("Staccato"), tr("Staccato")],
+  ["art", { name: "accent" }, ">", tr("Accent"), tr("Accent")],
+  ["rest", {}, "𝄽", tr("A rest instead (0)"), tr("A rest instead")],
 ];
 
 /**
@@ -177,17 +180,17 @@ export function startStudio(root, options = {}) {
   // Over the selected note, a palette of what is done to a note most.
   const palette = Object.assign(document.createElement("div"), { className: "studio-palette", hidden: true });
   palette.setAttribute("role", "toolbar");
-  palette.setAttribute("aria-label", "The selected note");
-  for (const [act, data, sign, title] of PALETTE) {
+  palette.setAttribute("aria-label", tr("The selected note"));
+  for (const [act, data, sign, title, name] of PALETTE()) {
     const button = Object.assign(document.createElement("button"), { type: "button", textContent: sign, title });
-    button.setAttribute("aria-label", title.replace(/\s*\(.*\)\s*$/, ""));
+    button.setAttribute("aria-label", name);
     Object.assign(button.dataset, { act, ...data });
     palette.appendChild(button);
   }
   // Comments (the app's): the selected note's bars commented on from here too.
   if (options.onComment) {
-    const button = Object.assign(document.createElement("button"), { type: "button", textContent: "💬", title: "Comment on the selection (Ctrl+Alt+M)" });
-    button.setAttribute("aria-label", "Comment on the selection");
+    const button = Object.assign(document.createElement("button"), { type: "button", textContent: "💬", title: tr("Comment on the selection (Ctrl+Alt+M)") });
+    button.setAttribute("aria-label", tr("Comment on the selection"));
     button.dataset.act = "comment";
     palette.appendChild(button);
   }
@@ -198,7 +201,7 @@ export function startStudio(root, options = {}) {
   // The MIDI view, in place of the engraving when it is on: its layout's
   // switch, and the roll, which scrolls sideways.
   const rollHost = Object.assign(document.createElement("div"), { className: "studio-roll", hidden: true, tabIndex: 0 });
-  rollHost.innerHTML = `<div class="studio-roll-bar"><span class="studio-roll-layouts" role="group" aria-label="MIDI view layout"><button type="button" class="studio-menu" data-act="roll-layout" data-layout="tracks" aria-pressed="true">Tracks</button><button type="button" class="studio-menu" data-act="roll-layout" data-layout="keys" aria-pressed="false">Keyboard</button></span><span class="studio-roll-only" data-roll-only hidden></span><span class="studio-roll-hint">Drag across bars and tracks to select a section; a click elsewhere lets it go. Drag on the bar numbers to set a loop; a click on it takes it away. On the keyboard, drag a note to move it, its right edge to change its length.</span></div><div class="studio-roll-scroll" data-roll-scroll></div>`;
+  rollHost.innerHTML = `<div class="studio-roll-bar"><span class="studio-roll-layouts" role="group" aria-label="${tr("MIDI view layout")}"><button type="button" class="studio-menu" data-act="roll-layout" data-layout="tracks" aria-pressed="true">${tr("Tracks")}</button><button type="button" class="studio-menu" data-act="roll-layout" data-layout="keys" aria-pressed="false">${tr("Keyboard")}</button></span><span class="studio-roll-only" data-roll-only hidden></span><span class="studio-roll-hint">${tr("Drag across bars and tracks to select a section; a click elsewhere lets it go. Drag on the bar numbers to set a loop; a click on it takes it away. On the keyboard, drag a note to move it, its right edge to change its length.")}</span></div><div class="studio-roll-scroll" data-roll-scroll></div>`;
   sheet.after(rollHost);
   const rollScroll = rollHost.querySelector("[data-roll-scroll]");
 
@@ -270,7 +273,7 @@ export function startStudio(root, options = {}) {
     const place = M.refusalPlace(message, text);
     say(place ? place.message : message, true);
     if (!place || text !== sourceBox.value) return false;
-    const show = Object.assign(document.createElement("button"), { type: "button", className: "studio-show", textContent: "Show" });
+    const show = Object.assign(document.createElement("button"), { type: "button", className: "studio-show", textContent: tr("Show") });
     show.addEventListener("click", () => {
       sourceBox.focus();
       sourceBox.setSelectionRange(place.at, place.at + 1);
@@ -367,11 +370,11 @@ export function startStudio(root, options = {}) {
     draw();
     return sharedText;
   }).then((sharedText) => {
-    if (st.passed.length) say(`${options.greeting ?? "Opened."}${passedText()}`);
+    if (st.passed.length) say(`${options.greeting ?? tr("Opened.")}${passedText()}`);
     else if (options.greeting) say(options.greeting);
-    else if (shared && sharedText == null) say(`That link holds no score: here is ${draft ? "your last one" : "the starting one"}.`, true);
-    else if (sharedText != null) say("A shared score. Your changes stay in this browser; Share makes a new link.");
-    else if (!fromExample && start !== sourceBox.defaultValue) say("Your last score, kept in this browser. New starts afresh.");
+    else if (shared && sharedText == null) say(draft ? tr("That link holds no score: here is your last one.") : tr("That link holds no score: here is the starting one."), true);
+    else if (sharedText != null) say(tr("A shared score. Your changes stay in this browser; Share makes a new link."));
+    else if (!fromExample && start !== sourceBox.defaultValue) say(tr("Your last score, kept in this browser. New starts afresh."));
     // Otherwise nothing: the bar beside it already says how to start (#419).
     // After what was said on opening, not in its place.
     if (keptHistoryNote()) say(`${status.textContent} ${keptHistoryNote()}`.trim(), status.classList.contains("studio-error"));
@@ -388,12 +391,12 @@ export function startStudio(root, options = {}) {
     history.replaceState(null, "", here.pathname + here.search + here.hash);
     try {
       const response = await fetch(url, { headers: { Accept: "application/json" } });
-      if (!response.ok) return say("That section is no longer in the library.", true);
+      if (!response.ok) return say(tr("That section is no longer in the library."), true);
       const data = await response.json();
       const { addToScore } = await import(`./section-library.js${new URL(import.meta.url).search}`);
       addToScore({ barsEdit: ctx.barsEdit, say, parse: score_json }, data);
     } catch (error) {
-      say("That section could not be added: try again.", true);
+      say(tr("That section could not be added: try again."), true);
     }
   }
   // `parse`: the engraver's reading of a text (score_json), for the app's merge.

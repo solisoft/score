@@ -1,6 +1,10 @@
 // The studio's MIDI view (studio.js, piano-roll.js): the roll drawn, its
 // sections selected, its loop set on the ruler, its notes dragged.
 
+// The editor's words in the page's language (#508).
+const V = new URL(import.meta.url).search;
+const { tr } = await import(`./words.js${V}`);
+
 /** The MIDI view's pointer wired; answers its drawing and its sections. */
 export function install(ctx) {
   const { sheet, rollHost, rollScroll, st, quantizeBox, M, R, Vel } = ctx;
@@ -34,7 +38,7 @@ export function install(ctx) {
     rollScroll.innerHTML = (end >= 0 && peers ? roll.slice(0, end) + peers + roll.slice(end) : roll) + (st.audio?.html() ?? "") + velocityStrip() + (st.automation?.html() ?? "");
     const only = rollHost.querySelector("[data-roll-only]");
     only.hidden = !(st.rollLayout === "keys" && st.rollOnly != null);
-    if (!only.hidden) only.textContent = `${R.laneNames(st.score)[st.rollOnly] ?? ""} only`;
+    if (!only.hidden) only.textContent = tr("{track} only", { track: R.laneNames(st.score)[st.rollOnly] ?? "" });
     rollScroll.scrollLeft = left;
     for (const button of rollHost.querySelectorAll("[data-layout]")) button.setAttribute("aria-pressed", String(button.dataset.layout === st.rollLayout));
   }
@@ -68,7 +72,8 @@ export function install(ctx) {
     if (!st.sel?.bars) return;
     const [a, b] = st.sel.bars;
     const n = st.sel.lanes?.length ?? 1;
-    say(`${a === b ? `Bar ${barNo(a)}` : `Bars ${barNo(a)}–${barNo(b)}`}, ${n === 1 ? "one track" : `${n} tracks`}: Ctrl+C copies them.`);
+    const bars = a === b ? tr("Bar {n}", { n: barNo(a) }) : tr("Bars {a}–{b}", { a: barNo(a), b: barNo(b) });
+    say(n === 1 ? tr("{bars}, one track: Ctrl+C copies them.", { bars }) : tr("{bars}, {n} tracks: Ctrl+C copies them.", { bars, n }));
   }
 
   rollHost.addEventListener("pointerdown", (event) => {
@@ -152,7 +157,7 @@ export function install(ctx) {
     st.rollLayout = "keys";
     st.rollOnly = p.lane;
     if (st.sel?.lanes) st.sel = null;
-    say(`${R.laneNames(st.score)[p.lane]} on the keyboard: Tracks or Keyboard shows them all again.`);
+    say(tr("{track} on the keyboard: Tracks or Keyboard shows them all again.", { track: R.laneNames(st.score)[p.lane] }));
     draw();
   });
 
@@ -199,8 +204,7 @@ export function install(ctx) {
     saveDraft();
     draw();
     hear();
-    const what = d.resize ? "made longer or shorter" : "moved";
-    say(`Note ${what} — Ctrl+Z puts it back.`);
+    say(d.resize ? tr("Note made longer or shorter — Ctrl+Z puts it back.") : tr("Note moved — Ctrl+Z puts it back."));
   }
 
   const endRollDrag = () => {

@@ -9,7 +9,9 @@
 // place of the engraving and reads clicks back with `rollHit`.
 
 // Served immutable: this module's version goes to the model it loads.
-const M = await import(`./score-model.js${new URL(import.meta.url).search}`);
+const V = new URL(import.meta.url).search;
+const M = await import(`./score-model.js${V}`);
+const { tr } = await import(`./words.js${V}`);
 
 /** The lanes' colours, told apart without colour too: each track is named. */
 export const ROLL_COLOURS = ["#2f6db5", "#d07a1f", "#3f8f5a", "#9b4fb0", "#c2434b", "#2b9aa0", "#8a6d1f", "#5b6475"];
@@ -61,8 +63,8 @@ export function rollNotes(score) {
 export function laneNames(score) {
   return score.staves.map((_, s) => {
     const upper = score.staves[M.upperOf(score, s)];
-    const name = upper.name || upper.instrument || `Staff ${M.staffNumber(score, s) + 1}`;
-    return M.isLower(score, s) ? `${name}, voice ${M.voiceOf(score, s)}` : name;
+    const name = upper.name || upper.instrument || tr("Staff {n}", { n: M.staffNumber(score, s) + 1 });
+    return M.isLower(score, s) ? tr("{name}, voice {n}", { name, n: M.voiceOf(score, s) }) : name;
   });
 }
 
@@ -113,7 +115,7 @@ export function rollLayout(score, { layout = "tracks", zoom = 1, only = null } =
 export function rollHit(score, geo, px, py, target = null) {
   const t = Math.max(0, (px - geo.left) / geo.perTick);
   const bar = px < geo.left ? null : Math.min(geo.bars - 1, M.barAt(score, Math.floor(t)));
-  const track = geo.tracks.find((tr) => py >= tr.y && py < tr.y + tr.h);
+  const track = geo.tracks.find((row) => py >= row.y && py < row.y + row.h);
   const lane = geo.layout === "tracks" ? (track?.lane ?? null) : null;
   const note = target?.dataset?.lane != null ? { lane: Number(target.dataset.lane), index: Number(target.dataset.index), key: Number(target.dataset.key) } : null;
   return { bar, lane, note, ruler: py < RULER_H };
@@ -143,7 +145,7 @@ export function drawRoll(score, { layout = "tracks", zoom = 1, sel = null, lit =
       parts.push(`<rect class="roll-track${odd ? " roll-track-odd" : ""}" x="0" y="${track.y}" width="${width}" height="${track.h}"/>`);
       parts.push(`<rect class="roll-swatch" x="8" y="${track.y + 8}" width="10" height="10" rx="3" fill="${laneColour(score, track.lane)}"/>`);
       // A voice's track sits under its staff's: "Voice 3" says it, the staff's name above.
-      const label = M.isLower(score, track.lane) ? `Voice ${M.voiceOf(score, track.lane)}` : trim(names[track.lane], 15);
+      const label = M.isLower(score, track.lane) ? tr("Voice {n}", { n: M.voiceOf(score, track.lane) }) : trim(names[track.lane], 15);
       parts.push(`<text class="roll-track-name" x="24" y="${track.y + 17}">${escape(label)}<title>${escape(names[track.lane])}</title></text>`);
       parts.push(`<text class="roll-track-range" x="24" y="${track.y + 30}">${keyName(track.low + 2)}–${keyName(track.high - 2)}</text>`);
       parts.push(`<line class="roll-track-edge" x1="0" x2="${width}" y1="${track.y + track.h}" y2="${track.y + track.h}"/>`);
@@ -152,9 +154,9 @@ export function drawRoll(score, { layout = "tracks", zoom = 1, sel = null, lit =
   // The selected section: bars, and in "tracks" the tracks it covers.
   if (sel?.bars) {
     const [a, b] = sel.bars;
-    const covered = layout === "tracks" && sel.lanes ? geo.tracks.filter((tr) => sel.lanes.includes(tr.lane)) : geo.tracks;
-    const y0 = Math.min(...covered.map((tr) => tr.y));
-    const y1 = Math.max(...covered.map((tr) => tr.y + tr.h));
+    const covered = layout === "tracks" && sel.lanes ? geo.tracks.filter((row) => sel.lanes.includes(row.lane)) : geo.tracks;
+    const y0 = Math.min(...covered.map((row) => row.y));
+    const y1 = Math.max(...covered.map((row) => row.y + row.h));
     parts.push(`<rect class="roll-band" x="${x(M.barStart(score, a))}" y="${y0}" width="${x(M.barStart(score, b + 1)) - x(M.barStart(score, a))}" height="${y1 - y0}"/>`);
   }
   // Bars: a line, the beats fainter, a number on the ruler.
@@ -192,10 +194,10 @@ export function drawRoll(score, { layout = "tracks", zoom = 1, sel = null, lit =
     const ny = track.y + (track.high - n.key) * track.row;
     const h = Math.max(2, track.row - (layout === "keys" ? 2 : 1));
     const classes = ["roll-note", chosen(n) ? "roll-note-chosen" : "", lit.has(`${n.lane}:${n.index}`) ? "roll-note-lit" : ""].filter(Boolean).join(" ");
-    parts.push(`<rect class="${classes}" data-lane="${n.lane}" data-index="${n.index}" data-key="${n.key}" x="${x(n.t0) + 1}" y="${ny + 0.5}" width="${Math.max(3, x(n.t1) - x(n.t0) - 2)}" height="${h}" rx="${Math.min(3, h / 2)}" fill="${laneColour(score, n.lane)}"><title>${keyName(n.key)}, bar ${M.barNumber(score, M.barAt(score, n.t0))}</title></rect>`);
+    parts.push(`<rect class="${classes}" data-lane="${n.lane}" data-index="${n.index}" data-key="${n.key}" x="${x(n.t0) + 1}" y="${ny + 0.5}" width="${Math.max(3, x(n.t1) - x(n.t0) - 2)}" height="${h}" rx="${Math.min(3, h / 2)}" fill="${laneColour(score, n.lane)}"><title>${tr("{note}, bar {bar}", { note: keyName(n.key), bar: M.barNumber(score, M.barAt(score, n.t0)) })}</title></rect>`);
   }
   if (cursor != null) parts.push(`<line class="roll-cursor" x1="${x(cursor)}" x2="${x(cursor)}" y1="0" y2="${height}"/>`);
-  const label = `MIDI view: ${geo.bars} bars, ${geo.notes.length} notes`;
+  const label = tr("MIDI view: {bars} bars, {notes} notes", { bars: geo.bars, notes: geo.notes.length });
   return `<svg xmlns="http://www.w3.org/2000/svg" class="roll roll-${layout}" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${label}">${parts.join("")}</svg>`;
 }
 

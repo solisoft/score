@@ -17,6 +17,7 @@
 
 const V = new URL(import.meta.url).search;
 const M = await import(`./score-model.js${V}`);
+const { tr } = await import(`./words.js${V}`);
 const A = await import(`./automation.js${V}`);
 
 /** The most staves an imported score is given; the tracks after them are left out, and named. */
@@ -30,7 +31,7 @@ const DRUM_CHANNEL = 9;
 
 /** Refuses a file that is not what it says, with a sentence a person can read. */
 function refuse(reason) {
-  throw new Error(`This is not a MIDI file that can be read: ${reason}.`);
+  throw new Error(tr("This is not a MIDI file that can be read: {reason}.", { reason }));
 }
 
 /**
@@ -45,16 +46,16 @@ export function parseMidi(input) {
   const text = (at, n) => String.fromCharCode(...bytes.subarray(at, at + n));
   const u32 = (at) => ((bytes[at] << 24) >>> 0) + (bytes[at + 1] << 16) + (bytes[at + 2] << 8) + bytes[at + 3];
   const u16 = (at) => (bytes[at] << 8) | bytes[at + 1];
-  if (bytes.length < 14 || text(0, 4) !== "MThd") refuse("it does not start as one (MThd)");
+  if (bytes.length < 14 || text(0, 4) !== "MThd") refuse(tr("it does not start as one (MThd)"));
   const headerLength = u32(4);
-  if (headerLength < 6 || 8 + headerLength > bytes.length) refuse("its header is cut short");
+  if (headerLength < 6 || 8 + headerLength > bytes.length) refuse(tr("its header is cut short"));
   const format = u16(8);
   const count = u16(10);
   const division = u16(12);
-  if (format > 2) refuse(`format ${format} is not a MIDI format`);
-  if (format === 2) refuse("it is format 2, a set of separate patterns, which no score is written from");
-  if (division & 0x8000) refuse("its times are in SMPTE frames, not in beats");
-  if (division === 0) refuse("it counts no ticks to a beat");
+  if (format > 2) refuse(tr("format {format} is not a MIDI format", { format }));
+  if (format === 2) refuse(tr("it is format 2, a set of separate patterns, which no score is written from"));
+  if (division & 0x8000) refuse(tr("its times are in SMPTE frames, not in beats"));
+  if (division === 0) refuse(tr("it counts no ticks to a beat"));
   const tracks = [];
   let at = 8 + headerLength;
   while (tracks.length < count && at + 8 <= bytes.length) {
@@ -62,12 +63,12 @@ export function parseMidi(input) {
     const length = u32(at + 4);
     const start = at + 8;
     const end = start + length;
-    if (end > bytes.length) refuse(`track ${tracks.length + 1} is cut short`);
+    if (end > bytes.length) refuse(tr("track {number} is cut short", { number: tracks.length + 1 }));
     // Chunks of other kinds are passed over, as the standard says.
     if (id === "MTrk") tracks.push({ events: readTrack(bytes, start, end, tracks.length + 1) });
     at = end;
   }
-  if (!tracks.length) refuse("it holds no track");
+  if (!tracks.length) refuse(tr("it holds no track"));
   return { format, division, tracks };
 }
 
@@ -78,7 +79,7 @@ function readTrack(bytes, start, end, number) {
   let tick = 0;
   let running = 0;
   const byte = () => {
-    if (at >= end) refuse(`track ${number} ends inside an event`);
+    if (at >= end) refuse(tr("track {number} ends inside an event", { number }));
     return bytes[at++];
   };
   const varLength = () => {
@@ -88,18 +89,18 @@ function readTrack(bytes, start, end, number) {
       value = value * 128 + (b & 127);
       if (!(b & 128)) return value;
     }
-    refuse(`track ${number} holds a number longer than MIDI allows`);
+    refuse(tr("track {number} holds a number longer than MIDI allows", { number }));
   };
   while (at < end) {
     tick += varLength();
     let status = bytes[at];
     if (status & 0x80) at++;
     else if (running) status = running;
-    else refuse(`track ${number} holds data where an event should start`);
+    else refuse(tr("track {number} holds data where an event should start", { number }));
     if (status === 0xff) {
       const type = byte();
       const length = varLength();
-      if (at + length > end) refuse(`track ${number} ends inside an event`);
+      if (at + length > end) refuse(tr("track {number} ends inside an event", { number }));
       events.push({ tick, kind: "meta", type, data: bytes.subarray(at, at + length) });
       at += length;
       if (type === 0x2f) break;
@@ -108,11 +109,11 @@ function readTrack(bytes, start, end, number) {
     if (status === 0xf0 || status === 0xf7) {
       const length = varLength();
       at += length;
-      if (at > end) refuse(`track ${number} ends inside an event`);
+      if (at > end) refuse(tr("track {number} ends inside an event", { number }));
       events.push({ tick, kind: "sysex" });
       continue;
     }
-    if (status >= 0xf0) refuse(`track ${number} holds an event no file may hold (${status.toString(16)})`);
+    if (status >= 0xf0) refuse(tr("track {number} holds an event no file may hold ({status})", { number, status: status.toString(16) }));
     running = status;
     const channel = status & 15;
     const a = byte();
@@ -175,7 +176,7 @@ function partsOf(midi, warnings) {
     for (const [channel, notes] of [...byChannel].sort((x, y) => x[0] - y[0])) {
       // Program changes across the music: the first one keeps its sound.
       const changes = new Set(track.events.filter((e) => e.kind === "program" && e.channel === channel).map((e) => e.program));
-      if (changes.size > 1) warnings.add("instrument changes in a track, its first instrument kept");
+      if (changes.size > 1) warnings.add(tr("instrument changes in a track, its first instrument kept"));
       parts.push({ track: t, channel, name, program: programs.get(channel)?.program ?? 0, notes: notes.sort((x, y) => x.t0 - y.t0 || x.key - y.key), curves: curvesOf(track, channel, warnings) });
     }
   });
@@ -197,7 +198,7 @@ function curvesOf(track, channel, warnings) {
       const id = A.idOfNumber(e.controller);
       if (id) (out[id] ??= []).push([e.tick, e.value]);
       // Bank select and the data entry around a program are not music played.
-      else if (![0, 32, 6, 38, 98, 99, 100, 101, 121].includes(e.controller)) warnings.add("controllers other than modulation, expression, volume, pan and the sustain pedal");
+      else if (![0, 32, 6, 38, 98, 99, 100, 101, 121].includes(e.controller)) warnings.add(tr("controllers other than modulation, expression, volume, pan and the sustain pedal"));
     }
   }
   for (const id of Object.keys(out)) {
@@ -237,21 +238,21 @@ export function fromMidi(bytes, { title = "", grid = "sixteenth" } = {}) {
   const tempo = firstMeta(midi, 0x51);
   // A file that sets no tempo plays at 120 a quarter, as MIDI says.
   const bpm = tempo.first && tempo.first.data.length >= 3 ? Math.round(60e6 / ((tempo.first.data[0] << 16) | (tempo.first.data[1] << 8) | tempo.first.data[2])) : 120;
-  if (tempo.later) warnings.add("tempo changes, the first tempo kept");
+  if (tempo.later) warnings.add(tr("tempo changes, the first tempo kept"));
   const metre = firstMeta(midi, 0x58);
   let time = [4, 4];
   if (metre.first && metre.first.data.length >= 2) {
     const [n, power] = metre.first.data;
     if (n >= 1 && n <= 32 && power <= 6) time = [n, 2 ** power];
-    else warnings.add("a metre this editor does not write, read as 4/4");
+    else warnings.add(tr("a metre this editor does not write, read as 4/4"));
   }
-  if (metre.later) warnings.add("metre changes, the first metre kept");
+  if (metre.later) warnings.add(tr("metre changes, the first metre kept"));
   const signature = firstMeta(midi, 0x59);
   const fifths = signature.first ? ((signature.first.data[0] << 24) >> 24) : 0;
-  if (signature.later) warnings.add("key changes, the first key kept");
+  if (signature.later) warnings.add(tr("key changes, the first key kept"));
 
   let parts = partsOf(midi, warnings);
-  if (!parts.length) throw new Error("This MIDI file holds no note to write.");
+  if (!parts.length) throw new Error(tr("This MIDI file holds no note to write."));
   // The first track's name is the piece's, when the track holds no note itself (format 1's tempo track).
   const named = midi.format === 1 && !parts.some((p) => p.track === 0) ? textOf(midi.tracks[0].events.find((e) => e.kind === "meta" && e.type === 0x03)?.data ?? new Uint8Array()) : "";
 
@@ -271,7 +272,7 @@ export function fromMidi(bytes, { title = "", grid = "sixteenth" } = {}) {
   // Where the music ends once fitted to the grid: a note let go a little late does not add a bar.
   const end = Math.max(...M.quantize(parts.flatMap((p) => p.notes.map((n) => ({ t0: n.t0 * scale, t1: n.t1 * scale }))), step).map((n) => n.t1));
   const limit = M.barStart(score, MAX_BARS);
-  if (end > limit) warnings.add(`the music after bar ${MAX_BARS}`);
+  if (end > limit) warnings.add(tr("the music after bar {bar}", { bar: MAX_BARS }));
   const total = Math.max(M.barStart(score, 1), Math.min(limit, end));
 
   // Each part a staff, or two in a brace for a keyboard whose notes go far both sides of middle C.
@@ -279,7 +280,7 @@ export function fromMidi(bytes, { title = "", grid = "sixteenth" } = {}) {
   for (const part of parts) {
     const notes = part.notes.map((n) => ({ key: n.key, t0: n.t0 * scale, t1: n.t1 * scale, velocity: n.velocity })).filter((n) => n.t0 < limit);
     if (part.channel === DRUM_CHANNEL) {
-      if (notes.some((n) => !M.drumByKey(n.key))) warnings.add("drums this editor does not name, left out");
+      if (notes.some((n) => !M.drumByKey(n.key))) warnings.add(tr("drums this editor does not name, left out"));
       lanes.push({ staff: { name: part.name || "Drum kit", short: "Dr.", instrument: "", clef: "percussion", drums: true, events: [] }, notes, curves: part.curves });
       continue;
     }
@@ -301,7 +302,8 @@ export function fromMidi(bytes, { title = "", grid = "sixteenth" } = {}) {
   let kept = lanes.length;
   if (kept > MAX_STAVES) {
     kept = MAX_STAVES - (lanes[MAX_STAVES - 1].brace ? 1 : 0);
-    warnings.add(`${lanes.length - kept} ${lanes.length - kept === 1 ? "staff" : "staves"} after the first ${kept}`);
+    const over = lanes.length - kept;
+    warnings.add(over === 1 ? tr("1 staff after the first {kept}", { kept }) : tr("{count} staves after the first {kept}", { count: over, kept }));
   }
   lanes.slice(0, kept).forEach((lane) => score.staves.push(lane.staff));
   // One staff alone is not named; a brace is named only among other staves.

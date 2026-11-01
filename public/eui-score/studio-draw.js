@@ -2,6 +2,10 @@
 // selection and the cursor lit; over it, the palette, the selected bars, the
 // repeats' grips and the playhead; and the copy printed.
 
+// The editor's words in the page's language (#508).
+const V = new URL(import.meta.url).search;
+const { tr } = await import(`./words.js${V}`);
+
 const COLOURS = { selection: "#b4373a", head: "#e0662a", cursor: "#2563c9", playing: "#0f9d47" };
 
 /** Answers the drawing: the score engraved, and what goes over it. */
@@ -147,7 +151,7 @@ export function install(ctx) {
       const box = boxOf(st.sel.bars[1]);
       if (box && options.onComment && !st.playing) {
         const here = add("studio-comment-here", box[2] - 4 / g.scale, box[1], box[2] + 3, box[1] + 1 / g.scale);
-        here.innerHTML = `<button type="button" data-act="comment" title="Comment on the selection (Ctrl+Alt+M)">💬 Comment</button>`;
+        here.innerHTML = `<button type="button" data-act="comment" title="${tr("Comment on the selection (Ctrl+Alt+M)")}">💬 ${tr("Comment")}</button>`;
       }
     }
     (st.score.repeats ?? []).forEach((r, i) => {
@@ -155,7 +159,7 @@ export function install(ctx) {
         const box = boxOf(bar);
         if (!box) return;
         const x = side === "start" ? box[0] : box[2] + 2;
-        const el = add("studio-grip", x - 5 / g.scale, box[1], x + 5 / g.scale, box[3], { title: `${label} — drag to another bar line` });
+        const el = add("studio-grip", x - 5 / g.scale, box[1], x + 5 / g.scale, box[3], { title: tr("{grip} — drag to another bar line", { grip: label }) });
         el.dataset.repeat = String(i);
         el.dataset.edge = edge;
         el.innerHTML = `<span>${label}</span>`;

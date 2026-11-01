@@ -1,6 +1,10 @@
 // The studio in the app's room (studio.js): where this person works, told;
 // where the others do, drawn; the comments' bubbles over the score.
 
+// The editor's words in the page's language (#508).
+const V = new URL(import.meta.url).search;
+const { tr } = await import(`./words.js${V}`);
+
 /** Answers where this person works and the others do, and the comments' bubbles. */
 export function install(ctx) {
   const { options, overlay, st, M, R } = ctx;
@@ -100,7 +104,9 @@ export function install(ctx) {
       const x = box.box[0] + space * (0.5 + 3.4 * nth);
       const el = add("studio-note-marker", x, top - 3.2 * space, x + 3 * space, top - 0.6 * space);
       el.innerHTML = `<button type="button" title="">💬${marker.count > 1 ? `<span>${Number(marker.count)}</span>` : ""}</button>`;
-      el.firstChild.title = `${marker.label ?? placeLabel(marker)}: ${marker.count} message${marker.count === 1 ? "" : "s"}`;
+      // The thread's place as it was named when it was started (saved with it).
+      const where = marker.label ?? placeLabel(marker);
+      el.firstChild.title = marker.count === 1 ? tr("{where}: 1 message", { where }) : tr("{where}: {n} messages", { where, n: marker.count });
       el.dataset.thread = marker.id;
     }
   }
@@ -115,7 +121,7 @@ export function install(ctx) {
     if (st.score) placeOverlay();
   }
 
-  /** A place said: "Bars 3–5, Piano". */
+  /** A place said: "Bars 3–5, Piano" — in English, as the thread started there keeps it (comments.js). */
   function placeLabel(where) {
     if (!where?.bars) return "";
     const [a, b] = where.bars;

@@ -11,16 +11,17 @@
 
 const V = new URL(import.meta.url).search;
 const Pi = await import(`./pitch.js${V}`);
+const { tr } = await import(`./words.js${V}`);
 
 /** What to tell the person when the browser gives no microphone: `error` as getUserMedia threw it. */
 export function refusal(error) {
   const name = error?.name ?? "";
   if (name === "NotAllowedError" || name === "SecurityError" || name === "PermissionDeniedError") {
-    return "The microphone was refused. Allow it for this site in the browser (the icon at the left of the address), then try again.";
+    return tr("The microphone was refused. Allow it for this site in the browser (the icon at the left of the address), then try again.");
   }
-  if (name === "NotFoundError" || name === "DevicesNotFoundError" || name === "OverconstrainedError") return "No microphone was found: plug one in, or choose one in the system's sound settings.";
-  if (name === "NotReadableError" || name === "TrackStartError" || name === "AbortError") return "The microphone is busy: another program or tab is using it.";
-  return `The microphone could not be opened${error?.message ? `: ${error.message}` : "."}`;
+  if (name === "NotFoundError" || name === "DevicesNotFoundError" || name === "OverconstrainedError") return tr("No microphone was found: plug one in, or choose one in the system's sound settings.");
+  if (name === "NotReadableError" || name === "TrackStartError" || name === "AbortError") return tr("The microphone is busy: another program or tab is using it.");
+  return error?.message ? tr("The microphone could not be opened: {why}", { why: error.message }) : tr("The microphone could not be opened.");
 }
 
 /**
@@ -31,7 +32,7 @@ export function refusal(error) {
  */
 export async function openMic() {
   if (!globalThis.navigator?.mediaDevices?.getUserMedia) {
-    throw new Error("This browser gives no microphone here: it needs a secure page (https) and a recent browser.");
+    throw new Error(tr("This browser gives no microphone here: it needs a secure page (https) and a recent browser."));
   }
   try {
     return await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });

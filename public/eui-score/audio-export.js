@@ -16,6 +16,9 @@
 // headers, a central directory, CRC-32. No DOM in the zip and the encoder:
 // tests/js/audio_export.test.mjs.
 
+const V = new URL(import.meta.url).search;
+const { tr } = await import(`./words.js${V}`);
+
 export const LAME_URL = "https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js";
 export const LAME_SRI = "sha384-xuasJXVcyv3hZq0eYpelEkBC8l4yufatZXDsKuyCU2rqfhDCb+ftuE/mSfZAteiK";
 
@@ -114,7 +117,7 @@ export function fileSafe(name, fallback = "staff") {
 /** Each stem's file name, numbered so they sort as the staves do: "01 Piano.wav". */
 export function stemNames(names) {
   const width = String(names.length).length < 2 ? 2 : String(names.length).length;
-  return names.map((name, k) => `${String(k + 1).padStart(width, "0")} ${fileSafe(name, `Staff ${k + 1}`)}.wav`);
+  return names.map((name, k) => `${String(k + 1).padStart(width, "0")} ${fileSafe(name, tr("Staff {n}", { n: k + 1 }))}.wav`);
 }
 
 // ---- MP3 -----------------------------------------------------------------------------------
@@ -165,8 +168,8 @@ export function loadLame(doc = globalThis.document) {
     script.src = LAME_URL;
     script.integrity = LAME_SRI;
     script.crossOrigin = "anonymous";
-    script.onload = () => (globalThis.lamejs?.Mp3Encoder ? resolve(globalThis.lamejs) : reject(new Error("the MP3 encoder did not start")));
-    script.onerror = () => reject(new Error("the MP3 encoder could not be loaded: it needs the network the first time"));
+    script.onload = () => (globalThis.lamejs?.Mp3Encoder ? resolve(globalThis.lamejs) : reject(new Error(tr("the MP3 encoder did not start"))));
+    script.onerror = () => reject(new Error(tr("the MP3 encoder could not be loaded: it needs the network the first time")));
     doc.head.append(script);
   });
   lameLoading.catch(() => {
@@ -182,16 +185,16 @@ export function loadLame(doc = globalThis.document) {
  * left out), rendered through the mixer and encoded. `P` is player.js.
  */
 export async function saveMp3({ P, midi, muted, name, say, download }) {
-  say("Making the MP3 file…");
+  say(tr("Making the MP3 file…"));
   try {
-    const [lame, buffer] = await Promise.all([loadLame(), P.renderAudio(midi, { muted, onProgress: (f) => say(`Loading the sounds… ${Math.round(100 * f)} % (38 MB, once)`) })]);
-    const parts = await encodeMp3(buffer, lame, { onProgress: (f) => say(`Making the MP3 file… ${Math.round(100 * f)} %`) });
+    const [lame, buffer] = await Promise.all([loadLame(), P.renderAudio(midi, { muted, onProgress: (f) => say(tr("Loading the sounds… {percent} % (38 MB, once)", { percent: Math.round(100 * f) })) })]);
+    const parts = await encodeMp3(buffer, lame, { onProgress: (f) => say(tr("Making the MP3 file… {percent} %", { percent: Math.round(100 * f) })) });
     const blob = new Blob(parts, { type: "audio/mpeg" });
     download(blob, `${name}.mp3`, "audio/mpeg");
-    say(`${name}.mp3 saved — ${(blob.size / 1048576).toFixed(1)} MB`);
+    say(tr("{file} saved — {size} MB", { file: `${name}.mp3`, size: (blob.size / 1048576).toFixed(1) }));
     return blob;
   } catch (error) {
-    say(`The MP3 file could not be made: ${error.message ?? error}`, true);
+    say(tr("The MP3 file could not be made: {why}", { why: error.message ?? error }), true);
     return null;
   }
 }
@@ -202,25 +205,25 @@ export async function saveMp3({ P, midi, muted, name, say, download }) {
  * heard to that staff alone, `alone(null)` back), each a WAV, in one zip.
  */
 export async function saveStems({ P, midi, tracks, alone, name, say, download }) {
-  if (!tracks.length) return say("No staff to save.", true);
+  if (!tracks.length) return say(tr("No staff to save."), true);
   const names = stemNames(tracks.map((t) => t.name));
   const files = [];
   try {
     for (const [k, track] of tracks.entries()) {
-      say(`Making the stems… ${k + 1} of ${tracks.length}: ${track.name}`);
+      say(tr("Making the stems… {k} of {n}: {name}", { k: k + 1, n: tracks.length, name: track.name }));
       alone(track.lane);
       const muted = tracks.filter((t) => t.channel !== track.channel).map((t) => t.channel);
-      const wav = await P.renderWav(midi, { muted, onProgress: (f) => say(`Loading the sounds… ${Math.round(100 * f)} % (38 MB, once)`) });
+      const wav = await P.renderWav(midi, { muted, onProgress: (f) => say(tr("Loading the sounds… {percent} % (38 MB, once)", { percent: Math.round(100 * f) })) });
       files.push({ name: names[k], bytes: new Uint8Array(await wav.arrayBuffer()) });
     }
   } catch (error) {
-    say(`The stems could not be made: ${error.message ?? error}`, true);
+    say(tr("The stems could not be made: {why}", { why: error.message ?? error }), true);
     return null;
   } finally {
     alone(null);
   }
   const bytes = zip(files);
   download(new Blob([bytes], { type: "application/zip" }), `${name} - stems.zip`, "application/zip");
-  say(`${name} - stems.zip saved — ${files.length} WAV files, ${(bytes.length / 1048576).toFixed(1)} MB`);
+  say(tr("{file} saved — {n} WAV files, {size} MB", { file: `${name} - stems.zip`, n: files.length, size: (bytes.length / 1048576).toFixed(1) }));
   return bytes;
 }

@@ -11,13 +11,16 @@ const G = await import(`./patterns.js${V}`);
 const D = await import(`./drums.js${V}`);
 const A = await import(`./accompaniments.js${V}`);
 const R = await import(`./riffs.js${V}`);
+// The dialogs' words, and the catalogues' names, in the page's language (#508).
+const { tr } = await import(`./words.js${V}`);
 
 const LABELS = {
-  cymc: "Crash", cymr: "Ride", hho: "Open hi-hat", hh: "Hi-hat", tomh: "High tom", tommh: "Mid tom", tomfh: "Floor tom", sn: "Snare", bd: "Kick",
+  cymc: tr("Crash"), cymr: tr("Ride"), hho: tr("Open hi-hat"), hh: tr("Hi-hat"), tomh: tr("High tom"), tommh: tr("Mid tom"), tomfh: tr("Floor tom"), sn: tr("Snare"), bd: tr("Kick"),
 };
-const ARP_NAMES = { up: "Up", down: "Down", "up-down": "Up and down", random: "Random" };
-const STEP_NAMES = { 8: "Eighths", 16: "Sixteenths", "8t": "Triplet eighths" };
-const STYLE_NAMES = { block: "Block chords", arpeggio: "Arpeggiated", "bass-chord": "Bass, then the chord" };
+const CELL_STATES = [tr("silent"), tr("struck"), tr("accented")];
+const ARP_NAMES = { up: tr("Up"), down: tr("Down"), "up-down": tr("Up and down"), random: tr("Random") };
+const STEP_NAMES = { 8: tr("Eighths"), 16: tr("Sixteenths"), "8t": tr("Triplet eighths") };
+const STYLE_NAMES = { block: tr("Block chords"), arpeggio: tr("Arpeggiated"), "bass-chord": tr("Bass, then the chord") };
 
 const el = (tag, props = {}, ...children) => {
   const node = Object.assign(document.createElement(tag), props);
@@ -28,8 +31,8 @@ const el = (tag, props = {}, ...children) => {
 function dialog(root, kind, title) {
   const box = el("dialog", { className: `studio-keys studio-pattern studio-${kind}` });
   box.dataset[kind.replace(/-(\w)/g, (_, c) => c.toUpperCase())] = "";
-  const close = el("button", { type: "button", className: "studio-menu", textContent: "×", title: "Close" });
-  close.setAttribute("aria-label", "Close");
+  const close = el("button", { type: "button", className: "studio-menu", textContent: "×", title: tr("Close") });
+  close.setAttribute("aria-label", tr("Close"));
   close.addEventListener("click", () => box.close());
   box.append(el("div", { className: "studio-keys-head" }, el("h2", { textContent: title }), close));
   box.addEventListener("click", (event) => {
@@ -45,8 +48,8 @@ const grouped = (field, items, value) => {
   menu.dataset[field] = "";
   const groups = new Map();
   for (const item of items) {
-    if (!groups.has(item.group)) groups.set(item.group, el("optgroup", { label: item.group }));
-    groups.get(item.group).append(new Option(`${item.name} · ${item.time}`, item.id));
+    if (!groups.has(item.group)) groups.set(item.group, el("optgroup", { label: tr(item.group) }));
+    groups.get(item.group).append(new Option(`${tr(item.name)} · ${item.time}`, item.id));
   }
   menu.append(...groups.values());
   menu.value = value;
@@ -68,7 +71,7 @@ export function install(studio) {
 
   const grid = { lane: 0, bar: 0, data: null, loopBefore: null, bars: null };
   const grooveMenu = grouped("groove", D.GROOVES, "rock");
-  const gridBox = dialog(root, "drum-grid", "Drum grid");
+  const gridBox = dialog(root, "drum-grid", tr("Drum grid"));
   const gridHead = el("p", { className: "muted studio-pattern-note" });
   const gridTable = el("div", { className: "studio-grid" });
   gridTable.dataset.grid = "";
@@ -77,18 +80,18 @@ export function install(studio) {
     b.dataset.gridAct = act;
     return b;
   };
-  const grooveSpread = button("Every selected bar", "groove-spread", "The groove in each selected bar, its break in the last of each four");
+  const grooveSpread = button(tr("Every selected bar"), "groove-spread", tr("The groove in each selected bar, its break in the last of each four"));
   gridBox.append(
     gridHead,
     gridTable,
-    el("div", { className: "tool-row studio-grid-actions" }, button("◀ Bar", "previous", "The bar before"), button("Play ▶", "play", "Play the bar over and over"), button("Bar ▶", "next", "The bar after"), button("Clear", "clear", "Every cell silent")),
+    el("div", { className: "tool-row studio-grid-actions" }, button(tr("◀ Bar"), "previous", tr("The bar before")), button(tr("Play ▶"), "play", tr("Play the bar over and over")), button(tr("Bar ▶"), "next", tr("The bar after")), button(tr("Clear"), "clear", tr("Every cell silent"))),
     el("div", { className: "tool-row studio-grid-groove" },
-      el("label", { className: "tool-field" }, "Groove ", grooveMenu),
-      button("Basic bar", "groove-main", "The groove's basic bar in this bar"),
-      button("Break", "groove-break", "The groove's break in this bar"),
+      el("label", { className: "tool-field" }, `${tr("Groove")} `, grooveMenu),
+      button(tr("Basic bar"), "groove-main", tr("The groove's basic bar in this bar")),
+      button(tr("Break"), "groove-break", tr("The groove's break in this bar")),
       grooveSpread,
     ),
-    el("p", { className: "muted studio-pattern-note", textContent: "A click strikes a step, a second accents it, a third silences it; the wheel over a cell does the same up and down. An accent is the stroke's: every drum of the step. Each change is written into the staff, and Undo takes it back." }),
+    el("p", { className: "muted studio-pattern-note", textContent: tr("A click strikes a step, a second accents it, a third silences it; the wheel over a cell does the same up and down. An accent is the stroke's: every drum of the step. Each change is written into the staff, and Undo takes it back.") }),
   );
 
   function laneAndBar() {
@@ -109,8 +112,11 @@ export function install(studio) {
     const beat = G.beatTicks(st.score, grid.bar) / G.GRID_STEP;
     // The drums struck that have no row, a groove's cowbell or ride bell: kept, and named.
     const others = [...new Set(data.others.flat())].map((name) => M.DRUMS.find((d) => d.name === name)?.label ?? name);
-    const also = others.length ? ` Also struck, kept as they are: ${others.join(", ").toLowerCase()}.` : "";
-    gridHead.textContent = `Bar ${studio.barNo(grid.bar)}, ${data.steps} steps of a sixteenth.${data.fits ? "" : " Some strokes here fall between the steps: a change writes them on the steps."}${also}`;
+    gridHead.textContent = [
+      tr("Bar {n}, {steps} steps of a sixteenth.", { n: studio.barNo(grid.bar), steps: data.steps }),
+      ...(data.fits ? [] : [tr("Some strokes here fall between the steps: a change writes them on the steps.")]),
+      ...(others.length ? [tr("Also struck, kept as they are: {drums}.", { drums: others.join(", ").toLowerCase() })] : []),
+    ].join(" ");
     gridTable.style.setProperty("--steps", data.steps);
     gridTable.replaceChildren(
       ...G.GRID_DRUMS.flatMap((name) => [
@@ -119,7 +125,7 @@ export function install(studio) {
           const cell = el("button", { type: "button", className: `studio-grid-cell${k % beat === 0 ? " beat" : ""}` });
           cell.dataset.cell = `${name}:${k}`;
           cell.dataset.value = String(value);
-          cell.setAttribute("aria-label", `${LABELS[name]}, step ${k + 1}: ${["silent", "struck", "accented"][value]}`);
+          cell.setAttribute("aria-label", tr("{drum}, step {n}: {state}", { drum: LABELS[name], n: k + 1, state: CELL_STATES[value] }));
           cell.setAttribute("aria-pressed", String(value > 0));
           return cell;
         }),
@@ -128,13 +134,13 @@ export function install(studio) {
   }
 
   function openGrid() {
-    if (!st.score) return studio.say("The drum grid needs the score tools: this piece is edited in its text.", true);
+    if (!st.score) return studio.say(tr("The drum grid needs the score tools: this piece is edited in its text."), true);
     const where = laneAndBar();
-    if (!where) return studio.say("Select a bar of a drum staff first: the grid writes its strokes. Add one with + Staff, Drum kit.", true);
+    if (!where) return studio.say(tr("Select a bar of a drum staff first: the grid writes its strokes. Add one with + Staff, Drum kit."), true);
     const bars = st.sel ? studio.selectedBarsOrNull() : null;
     Object.assign(grid, where, { loopBefore: st.loopBars, bars: bars && bars[1] > bars[0] ? bars : null });
     grooveSpread.hidden = !grid.bars;
-    if (grid.bars) grooveSpread.textContent = `Bars ${studio.barNo(grid.bars[0])}–${studio.barNo(grid.bars[1])}`;
+    if (grid.bars) grooveSpread.textContent = tr("Bars {a}–{b}", { a: studio.barNo(grid.bars[0]), b: studio.barNo(grid.bars[1]) });
     // A groove in the bar's metre, first.
     const time = M.timeAt(st.score, grid.bar).join("/");
     if (D.grooveOf(grooveMenu.value)?.time !== time) grooveMenu.value = D.GROOVES.find((g) => g.time === time)?.id ?? grooveMenu.value;
@@ -203,7 +209,7 @@ export function install(studio) {
       const groove = D.grooveOf(grooveMenu.value);
       if (act === "groove-spread") {
         const [a, b] = grid.bars;
-        if (studio.edit((score) => G.writeGroove(score, grid.lane, a, b, groove))) studio.say(`${groove.name} in bars ${studio.barNo(a)}–${studio.barNo(b)}, a break every four. Undo takes it back.`);
+        if (studio.edit((score) => G.writeGroove(score, grid.lane, a, b, groove))) studio.say(tr("{groove} in bars {a}–{b}, a break every four. Undo takes it back.", { groove: tr(groove.name), a: studio.barNo(a), b: studio.barNo(b) }));
         return drawGrid();
       }
       try {
@@ -211,7 +217,10 @@ export function install(studio) {
       } catch (error) {
         return studio.say(error.message, true);
       }
-      if (groove.bpm && !st.playing) studio.say(`${groove.name}: about ${groove.bpm} to the beat${groove.swing ? ", swung" : ""}.`);
+      if (groove.bpm && !st.playing) {
+        const words = { groove: tr(groove.name), bpm: groove.bpm };
+        studio.say(groove.swing ? tr("{groove}: about {bpm} to the beat, swung.", words) : tr("{groove}: about {bpm} to the beat.", words));
+      }
       return writeGrid();
     }
     const bar = grid.bar + (act === "next" ? 1 : -1);
@@ -225,57 +234,58 @@ export function install(studio) {
 
   // ---- The arpeggiator ---------------------------------------------------------------
 
-  const arpBox = dialog(root, "arpeggiator", "Arpeggiate");
+  const arpBox = dialog(root, "arpeggiator", tr("Arpeggiate"));
   arpBox.append(
-    el("p", { className: "muted studio-pattern-note", textContent: "The selected chords broken into runs of their notes, each over the time it held." }),
-    select("Pattern", "arpPattern", ARP_NAMES, "up"),
-    select("Step", "arpStep", STEP_NAMES, "16"),
-    select("Range", "arpOctaves", { 1: "One octave", 2: "Two octaves", 3: "Three octaves" }, 1),
-    el("div", { className: "tool-row studio-new-actions" }, el("button", { type: "button", className: "tool tool-wide tool-primary", textContent: "Arpeggiate" })),
+    el("p", { className: "muted studio-pattern-note", textContent: tr("The selected chords broken into runs of their notes, each over the time it held.") }),
+    select(tr("Pattern"), "arpPattern", ARP_NAMES, "up"),
+    select(tr("Step"), "arpStep", STEP_NAMES, "16"),
+    select(tr("Range"), "arpOctaves", { 1: tr("One octave"), 2: tr("Two octaves"), 3: tr("Three octaves") }, 1),
+    el("div", { className: "tool-row studio-new-actions" }, el("button", { type: "button", className: "tool tool-wide tool-primary", textContent: tr("Arpeggiate") })),
   );
   arpBox.querySelector(".tool-primary").dataset.arpApply = "";
   arpBox.querySelector("[data-arp-apply]").addEventListener("click", () => {
     const r = studio.range();
-    if (!r) return studio.say("Select the chords to break first.", true);
+    if (!r) return studio.say(tr("Select the chords to break first."), true);
     const value = (field) => arpBox.querySelector(`[data-${field}]`).value;
     const options = { pattern: value("arp-pattern"), step: value("arp-step"), octaves: Number(value("arp-octaves")) };
     let count = 0;
     if (studio.edit((score) => (count = G.arpeggiate(score, r.s, r.a, r.b, options)))) {
       arpBox.close();
-      studio.say(`${count} chord${count === 1 ? "" : "s"} broken, ${ARP_NAMES[options.pattern].toLowerCase()}, in ${STEP_NAMES[options.step].toLowerCase()}. Undo takes it back.`);
+      const words = { count, pattern: ARP_NAMES[options.pattern].toLowerCase(), step: STEP_NAMES[options.step].toLowerCase() };
+      studio.say(count === 1 ? tr("1 chord broken, {pattern}, in {step}. Undo takes it back.", words) : tr("{count} chords broken, {pattern}, in {step}. Undo takes it back.", words));
     }
   });
 
   function openArpeggiator() {
-    if (!st.score) return studio.say("The arpeggiator needs the score tools: this piece is edited in its text.", true);
-    if (!studio.range()) return studio.say("Select the chords to break first: click the first, Shift+click the last.", true);
+    if (!st.score) return studio.say(tr("The arpeggiator needs the score tools: this piece is edited in its text."), true);
+    if (!studio.range()) return studio.say(tr("Select the chords to break first: click the first, Shift+click the last."), true);
     arpBox.showModal();
   }
 
   // ---- The chord track ---------------------------------------------------------------
 
-  const chordBox = dialog(root, "chord-track", "Chord track");
+  const chordBox = dialog(root, "chord-track", tr("Chord track"));
   const staffMenu = el("select");
   staffMenu.dataset.chordStaff = "";
   const scopeNote = el("p", { className: "muted studio-pattern-note" });
   chordBox.append(
-    el("p", { className: "muted studio-pattern-note", textContent: "An accompaniment from the chord symbols, each chord held until the next and struck again each bar. What the staff held there is written over." }),
-    el("label", { className: "tool-field" }, "Staff ", staffMenu),
-    select("Style", "chordStyle", STYLE_NAMES, "block"),
+    el("p", { className: "muted studio-pattern-note", textContent: tr("An accompaniment from the chord symbols, each chord held until the next and struck again each bar. What the staff held there is written over.") }),
+    el("label", { className: "tool-field" }, `${tr("Staff")} `, staffMenu),
+    select(tr("Style"), "chordStyle", STYLE_NAMES, "block"),
     scopeNote,
-    el("div", { className: "tool-row studio-new-actions" }, el("button", { type: "button", className: "tool tool-wide tool-primary", textContent: "Write the chords" })),
+    el("div", { className: "tool-row studio-new-actions" }, el("button", { type: "button", className: "tool tool-wide tool-primary", textContent: tr("Write the chords") })),
   );
   chordBox.querySelector(".tool-primary").dataset.chordApply = "";
   let chordBars = null;
 
   function openChordTrack() {
-    if (!st.score) return studio.say("The chord track needs the score tools: this piece is edited in its text.", true);
-    if (!G.chordSymbols(st.score).length) return studio.say("No chord symbols yet: add some with Insert ▸ Chord symbol (Ctrl+K), or ask the AI to suggest chords.", true);
+    if (!st.score) return studio.say(tr("The chord track needs the score tools: this piece is edited in its text."), true);
+    if (!G.chordSymbols(st.score).length) return studio.say(tr("No chord symbols yet: add some with Insert ▸ Chord symbol (Ctrl+K), or ask the AI to suggest chords."), true);
     const lanes = M.staffLanes(st.score).filter((s) => !M.isDrums(st.score, s));
-    if (!lanes.length) return studio.say("The chord track writes on a staff of notes: add one with + Staff.", true);
+    if (!lanes.length) return studio.say(tr("The chord track writes on a staff of notes: add one with + Staff."), true);
     staffMenu.replaceChildren(...lanes.map((s, n) => {
       const staff = st.score.staves[s];
-      return new Option(staff.name || M.INSTRUMENTS[M.instrumentOf(st.score, s)]?.name || `Staff ${n + 1}`, String(s));
+      return new Option(staff.name || M.INSTRUMENTS[M.instrumentOf(st.score, s)]?.name || tr("Staff {n}", { n: n + 1 }), String(s));
     }));
     // The selected staff, unless it holds the chord symbols (the melody, most often); else the
     // lowest staff without them: where an accompaniment usually goes.
@@ -285,7 +295,7 @@ export function install(studio) {
     staffMenu.value = String(chosen);
     chordBars = st.sel ? studio.selectedBarsOrNull() : null;
     if (chordBars && chordBars[0] === chordBars[1] && !st.sel.bars) chordBars = null;
-    scopeNote.textContent = chordBars ? `Bars ${studio.barNo(chordBars[0])}–${studio.barNo(chordBars[1])}, the selection.` : "The whole score.";
+    scopeNote.textContent = chordBars ? tr("Bars {a}–{b}, the selection.", { a: studio.barNo(chordBars[0]), b: studio.barNo(chordBars[1]) }) : tr("The whole score.");
     chordBox.showModal();
   }
 
@@ -296,22 +306,23 @@ export function install(studio) {
     let count = 0;
     if (studio.edit((score) => (count = G.chordTrack(score, s, { style, ...scope })))) {
       chordBox.close();
-      studio.say(`${count} chord${count === 1 ? "" : "s"} written, ${STYLE_NAMES[style].toLowerCase()}. Undo takes it back.`);
+      const words = { count, style: STYLE_NAMES[style].toLowerCase() };
+      studio.say(count === 1 ? tr("1 chord written, {style}. Undo takes it back.", words) : tr("{count} chords written, {style}. Undo takes it back.", words));
     }
   });
 
   // ---- The accompaniment (#441) ---------------------------------------------------
 
-  const bandBox = dialog(root, "accompaniment", "Accompaniment");
+  const bandBox = dialog(root, "accompaniment", tr("Accompaniment"));
   const bandStyle = grouped("bandStyle", A.STYLES, "pop");
   const bandAbout = el("p", { className: "muted studio-pattern-note" });
   // The guitar's part: the style's strumming, or a riff (#458).
   const bandRiff = grouped("bandRiff", R.RIFFS, "");
-  bandRiff.prepend(new Option("Its strumming, as the style has it", ""));
+  bandRiff.prepend(new Option(tr("Its strumming, as the style has it"), ""));
   bandRiff.value = "";
   // The piano's part: the style's, or a pattern (#459).
   const bandPiano = grouped("bandPiano", R.PIANO_RIFFS, "");
-  bandPiano.prepend(new Option("Its part, as the style has it", ""));
+  bandPiano.prepend(new Option(tr("Its part, as the style has it"), ""));
   bandPiano.value = "";
   const bandScope = el("p", { className: "muted studio-pattern-note" });
   const check = (field, text, checked = true) => {
@@ -319,9 +330,9 @@ export function install(studio) {
     box.dataset[field] = "";
     return el("label", { className: "studio-band-check" }, box, ` ${text}`);
   };
-  const bandParts = el("fieldset", { className: "studio-band-parts" }, el("legend", { textContent: "Instruments" }),
+  const bandParts = el("fieldset", { className: "studio-band-parts" }, el("legend", { textContent: tr("Instruments") }),
     ...A.PARTS.map((part) => {
-      const label = check("bandPart", A.PART_NAMES[part]);
+      const label = check("bandPart", tr(A.PART_NAMES[part]));
       label.querySelector("input").value = part;
       return label;
     }));
@@ -331,15 +342,15 @@ export function install(studio) {
     return b;
   };
   bandBox.append(
-    el("p", { className: "muted studio-pattern-note", textContent: "Guitar, piano, bass and drums played from the chord symbols, each on a staff of its own, added when the score has none. Written again in another style, on the same staves." }),
-    el("label", { className: "tool-field" }, "Style ", bandStyle),
+    el("p", { className: "muted studio-pattern-note", textContent: tr("Guitar, piano, bass and drums played from the chord symbols, each on a staff of its own, added when the score has none. Written again in another style, on the same staves.") }),
+    el("label", { className: "tool-field" }, `${tr("Style")} `, bandStyle),
     bandAbout,
-    el("label", { className: "tool-field" }, "Guitar plays ", bandRiff),
-    el("label", { className: "tool-field" }, "Piano plays ", bandPiano),
+    el("label", { className: "tool-field" }, `${tr("Guitar plays")} `, bandRiff),
+    el("label", { className: "tool-field" }, `${tr("Piano plays")} `, bandPiano),
     bandParts,
-    el("div", { className: "studio-band-options" }, check("bandDiagrams", "Guitar diagrams over the chords"), check("bandBreaks", "A drum break every four bars"), check("bandFeel", "The style's swing")),
+    el("div", { className: "studio-band-options" }, check("bandDiagrams", tr("Guitar diagrams over the chords")), check("bandBreaks", tr("A drum break every four bars")), check("bandFeel", tr("The style's swing"))),
     bandScope,
-    el("div", { className: "tool-row studio-new-actions" }, bandButton("Listen ▶", "listen", "Write it and play four bars: Write keeps it, closing takes it back"), bandButton("Write", "write", "Write the accompaniment")),
+    el("div", { className: "tool-row studio-new-actions" }, bandButton(tr("Listen ▶"), "listen", tr("Write it and play four bars: Write keeps it, closing takes it back")), bandButton(tr("Write"), "write", tr("Write the accompaniment"))),
   );
   // What Listen wrote: taken back when the dialog closes without Write, or before Listen again.
   let trial = null;
@@ -348,7 +359,8 @@ export function install(studio) {
   function aboutStyle() {
     const style = A.styleOf(bandStyle.value);
     const groove = D.grooveOf(style.groove);
-    bandAbout.textContent = `${style.time}, about ${style.bpm} to the beat${style.swing ? ", swung" : ""}. Drums: ${groove?.name ?? "—"}.`;
+    const words = { time: style.time, bpm: style.bpm, drums: groove ? tr(groove.name) : "—" };
+    bandAbout.textContent = style.swing ? tr("{time}, about {bpm} to the beat, swung. Drums: {drums}.", words) : tr("{time}, about {bpm} to the beat. Drums: {drums}.", words);
   }
   bandStyle.addEventListener("change", aboutStyle);
 
@@ -381,16 +393,24 @@ export function install(studio) {
     let done = null;
     const loop = st.loopBars;
     if (!studio.edit((score) => (done = A.arrange(score, style.id, options)))) return;
-    const added = done.added.length ? ` Staves added: ${done.added.join(", ")}.` : "";
     if (!listen) {
       bandBox.close();
-      return studio.say(`${style.name}: ${done.bars} bar${done.bars === 1 ? "" : "s"} written over ${done.chords} chord${done.chords === 1 ? "" : "s"}.${added} Undo takes it back.`);
+      const words = { style: tr(style.name), bars: done.bars, chords: done.chords };
+      const written = done.bars === 1
+        ? (done.chords === 1 ? tr("{style}: 1 bar written over 1 chord.", words) : tr("{style}: 1 bar written over {chords} chords.", words))
+        : (done.chords === 1 ? tr("{style}: {bars} bars written over 1 chord.", words) : tr("{style}: {bars} bars written over {chords} chords.", words));
+      return studio.say([
+        written,
+        // The staves are named in English, as the score keeps them (accompaniments.js PART_NAMES).
+        ...(done.added.length ? [tr("Staves added: {staves}.", { staves: done.added.map((name) => tr(name)).join(", ") })] : []),
+        tr("Undo takes it back."),
+      ].join(" "));
     }
     trial = { depth: st.past.length, loop };
     const a = options.a ?? 0;
     studio.setLoop([a, Math.min(a + 3, (options.b ?? M.barsOf(st.score) - 1))]);
     // Said once the loop has started: its own message would cover this one.
-    Promise.resolve(st.playing ? null : studio.togglePlay()).then(() => studio.say(`${style.name}, heard over four bars. Write keeps it; closing takes it back.`));
+    Promise.resolve(st.playing ? null : studio.togglePlay()).then(() => studio.say(tr("{style}, heard over four bars. Write keeps it; closing takes it back.", { style: tr(style.name) })));
   }
 
   bandBox.addEventListener("click", (event) => {
@@ -403,7 +423,7 @@ export function install(studio) {
         studio.setLoop(trial.loop);
         trial = null;
         bandBox.close();
-        return studio.say(`${A.styleOf(bandStyle.value).name} written. Undo takes it back.`);
+        return studio.say(tr("{style} written. Undo takes it back.", { style: tr(A.styleOf(bandStyle.value).name) }));
       }
       return writeBand(false);
     }
@@ -415,11 +435,11 @@ export function install(studio) {
   bandBox.addEventListener("close", takeBack);
 
   function openAccompaniment() {
-    if (!st.score) return studio.say("The accompaniment needs the score tools: this piece is edited in its text.", true);
-    if (!G.chordSymbols(st.score).length) return studio.say("No chord symbols yet: add some with Insert ▸ Chord symbol (Ctrl+K), or ask the AI to suggest chords.", true);
+    if (!st.score) return studio.say(tr("The accompaniment needs the score tools: this piece is edited in its text."), true);
+    if (!G.chordSymbols(st.score).length) return studio.say(tr("No chord symbols yet: add some with Insert ▸ Chord symbol (Ctrl+K), or ask the AI to suggest chords."), true);
     bandBars = st.sel ? studio.selectedBarsOrNull() : null;
     if (bandBars && bandBars[0] === bandBars[1] && !st.sel.bars) bandBars = null;
-    bandScope.textContent = bandBars ? `Bars ${studio.barNo(bandBars[0])}–${studio.barNo(bandBars[1])}, the selection.` : "The whole score.";
+    bandScope.textContent = bandBars ? tr("Bars {a}–{b}, the selection.", { a: studio.barNo(bandBars[0]), b: studio.barNo(bandBars[1]) }) : tr("The whole score.");
     // A style in the score's metre, first.
     const time = M.timeAt(st.score, bandBars?.[0] ?? 0).join("/");
     if (A.styleOf(bandStyle.value)?.time !== time) bandStyle.value = A.STYLES.find((style) => style.time === time)?.id ?? bandStyle.value;

@@ -34,17 +34,24 @@
 const SEARCH = new URL(import.meta.url).search;
 const M = await import(`./score-model.js${SEARCH}`);
 const F = await import(`./feel.js${SEARCH}`);
+// The lane's words in the page's language (#508).
+const { tr } = await import(`./words.js${SEARCH}`);
+
+// A catalogue's names are data, and stay English: `english.tr` hands one back
+// as it is, and marks it for the editor's words (#508) — where it is shown,
+// words.js's `tr` says it in the page's language (config/editor_words/fr/).
+const english = { tr: (text) => text };
 
 /** The controllers a lane can follow. */
 export const CONTROLLERS = [
-  { id: "1", name: "Modulation", number: 1, min: 0, max: 127 },
-  { id: "11", name: "Expression", number: 11, min: 0, max: 127 },
-  { id: "7", name: "Volume", number: 7, min: 0, max: 127 },
-  { id: "10", name: "Pan", number: 10, min: 0, max: 127 },
-  { id: "64", name: "Sustain pedal", number: 64, min: 0, max: 127, step: true },
-  { id: "bend", name: "Pitch bend", number: null, min: -8192, max: 8191 },
+  { id: "1", name: english.tr("Modulation"), number: 1, min: 0, max: 127 },
+  { id: "11", name: english.tr("Expression"), number: 11, min: 0, max: 127 },
+  { id: "7", name: english.tr("Volume"), number: 7, min: 0, max: 127 },
+  { id: "10", name: english.tr("Pan"), number: 10, min: 0, max: 127 },
+  { id: "64", name: english.tr("Sustain pedal"), number: 64, min: 0, max: 127, step: true },
+  { id: "bend", name: english.tr("Pitch bend"), number: null, min: -8192, max: 8191 },
   // Channel pressure (aftertouch): an MPE keyboard's, the hardest of its notes (mpe.js, #391).
-  { id: "pressure", name: "Pressure", number: null, min: 0, max: 127 },
+  { id: "pressure", name: english.tr("Pressure"), number: null, min: 0, max: 127 },
 ];
 
 /** A controller by its id ("1", "bend"…); null for one not followed. */
@@ -417,7 +424,7 @@ export function drawLane(score, geo, id, points, { label = "", colour = "#2563c9
     const bx = geo.x(M.barStart(score, bar));
     parts.push(`<line class="cc-bar-line" x1="${bx}" x2="${bx}" y1="0" y2="${LANE_H}"/>`);
   }
-  parts.push(`<text class="cc-label" x="8" y="16">${c.name}</text>`);
+  parts.push(`<text class="cc-label" x="8" y="16">${tr(c.name)}</text>`);
   if (label) parts.push(`<text class="cc-scale" x="8" y="30">${label.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch])}</text>`);
   parts.push(`<text class="cc-scale" x="${geo.left - 6}" y="${yOfValue(id, c.max) + 8}" text-anchor="end">${valueText(id, c.max)}</text><text class="cc-scale" x="${geo.left - 6}" y="${LANE_H - PAD}" text-anchor="end">${valueText(id, c.min)}</text>`);
   if (points.length) {
@@ -433,7 +440,7 @@ export function drawLane(score, geo, id, points, { label = "", colour = "#2563c9
     points.forEach(([t, v], k) => {
       parts.push(`<circle class="cc-point${k === chosen ? " cc-point-chosen" : ""}" data-cc-point="${k}" cx="${geo.x(t)}" cy="${yOfValue(id, v)}" r="4" fill="${colour}"><title>${valueText(id, v)}</title></circle>`);
     });
-  } else parts.push(`<text class="cc-empty" x="${geo.left + 12}" y="${LANE_H / 2 + 4}">Click to add a point</text>`);
+  } else parts.push(`<text class="cc-empty" x="${geo.left + 12}" y="${LANE_H / 2 + 4}">${tr("Click to add a point")}</text>`);
   if (muted) parts.push(`<text class="cc-muted" x="${geo.left + 12}" y="${LANE_H - 12}">${muted}</text>`);
-  return `<svg xmlns="http://www.w3.org/2000/svg" class="cc-strip" width="${geo.width}" height="${LANE_H}" viewBox="0 0 ${geo.width} ${LANE_H}" role="img" aria-label="${c.name}: ${points.length} points">${parts.join("")}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" class="cc-strip" width="${geo.width}" height="${LANE_H}" viewBox="0 0 ${geo.width} ${LANE_H}" role="img" aria-label="${tr("{name}: {count} points", { name: tr(c.name), count: points.length })}">${parts.join("")}</svg>`;
 }

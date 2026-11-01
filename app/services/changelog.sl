@@ -12,6 +12,14 @@ class Changelog
     [
       {"date": "2026-11-01", "entries": [
         {
+          "area": "editor",
+          "title": "The editor in French",
+          "text": "With the app in French, the score editor is too: its menus, tools, dialogs, the mixer, recording, "
+          + "the drum grid, riffs and accompaniments, and every message it gives. Instrument names are shown in "
+          + "French; the score itself keeps what it prints. Key names read Do majeur / la mineur.",
+          "app": true
+        },
+        {
           "area": "site",
           "title": "The app in the language just chosen",
           "text": "Switched to French on the site, Open the app could still show it in English until a reload: the "

@@ -14,6 +14,8 @@ const V = await import(`./voicings.js${new URL(import.meta.url).search}`);
 export const { chordTones, chordVoicing, chordSymbols } = V;
 // The grooves of the drum grid's Groove menu (#442).
 const D = await import(`./drums.js${new URL(import.meta.url).search}`);
+// The refusals in the page's language (#508).
+const { tr } = await import(`./words.js${new URL(import.meta.url).search}`);
 
 // ---- The drum grid -----------------------------------------------------------------
 
@@ -38,7 +40,7 @@ export function beatTicks(score, b) {
  * triplet, a 32nd), which writing the grid moves onto them.
  */
 export function drumGrid(score, s, b) {
-  if (!M.isDrums(score, s)) throw new Error("The drum grid is a drum staff's: select a bar of one");
+  if (!M.isDrums(score, s)) throw new Error(tr("The drum grid is a drum staff's: select a bar of one"));
   const staff = score.staves[s];
   const t0 = M.barStart(score, b);
   const len = M.barLength(score, b);
@@ -71,13 +73,13 @@ export function drumGrid(score, s, b) {
  */
 export function grooveGrid(score, b, lines, time) {
   const bar = M.timeAt(score, b).join("/");
-  if (bar !== time) throw new Error(`This groove is in ${time} and bar ${b + 1} in ${bar}: choose a groove in ${bar}`);
+  if (bar !== time) throw new Error(tr("This groove is in {time} and bar {n} in {bar}: choose a groove in {bar}", { time, n: b + 1, bar }));
   const steps = Math.max(1, Math.round(M.barLength(score, b) / GRID_STEP));
   const rows = Object.fromEntries(GRID_DRUMS.map((name) => [name, Array(steps).fill(0)]));
   const others = Array.from({ length: steps }, () => []);
   for (const [name, line] of Object.entries(lines)) {
     const per = steps / line.length;
-    if (!Number.isInteger(per)) throw new Error(`The ${name} line has ${line.length} steps: a bar of ${time} takes ${steps}, or a divisor of it`);
+    if (!Number.isInteger(per)) throw new Error(tr("The {name} line has {count} steps: a bar of {time} takes {steps}, or a divisor of it", { name, count: line.length, time, steps }));
     [...line].forEach((c, k) => {
       if (c !== "x" && c !== "X" && c !== "g") return;
       const value = c === "X" ? 2 : 1;
@@ -94,7 +96,7 @@ export function grooveGrid(score, b, lines, time) {
  * `breaks`. Answers the number of bars written.
  */
 export function writeGroove(score, s, a, b, groove, { breaks = true, feel = false } = {}) {
-  if (!M.isDrums(score, s)) throw new Error("A groove is a drum staff's: select bars of one");
+  if (!M.isDrums(score, s)) throw new Error(tr("A groove is a drum staff's: select bars of one"));
   for (let bar = a; bar <= b; bar++) {
     const breaking = breaks && ((bar - a) % 4 === 3 || (bar === b && bar > a));
     const n = (bar - a) % 4;
@@ -145,7 +147,7 @@ export function nextCell(value) {
  * the end of its beat, whichever comes first; rests between.
  */
 export function writeDrumGrid(score, s, grid) {
-  if (!M.isDrums(score, s)) throw new Error("The drum grid is a drum staff's: select a bar of one");
+  if (!M.isDrums(score, s)) throw new Error(tr("The drum grid is a drum staff's: select a bar of one"));
   const t0 = M.barStart(score, grid.bar);
   const len = M.barLength(score, grid.bar);
   const beat = beatTicks(score, grid.bar);
@@ -238,7 +240,7 @@ const KEPT = (ev) => ({ chord: ev.chord, dynamic: ev.dynamic, texts: ev.texts })
  * and left alone with one. Answers how many chords were broken.
  */
 export function arpeggiate(score, s, a, b, { pattern = "up", step = "16", octaves = 1, random = Math.random } = {}) {
-  if (M.isDrums(score, s)) throw new Error("A drum staff has no chords to break: the arpeggiator is for pitched staves");
+  if (M.isDrums(score, s)) throw new Error(tr("A drum staff has no chords to break: the arpeggiator is for pitched staves"));
   if (!ARP_PATTERNS.includes(pattern)) throw new Error(`no arpeggio pattern called ${pattern}`);
   const stepTicks = ARP_STEPS[step];
   if (!stepTicks) throw new Error("an arpeggio's step is an eighth, a sixteenth or a triplet");
@@ -254,7 +256,7 @@ export function arpeggiate(score, s, a, b, { pattern = "up", step = "16", octave
     if (!ev.rest && !tuplet && (ev.pitches.length > 1 || octaves > 1)) spans.push(span);
     i = j;
   }
-  if (!spans.length) throw new Error("Select chords to break: the arpeggiator turns a chord's notes into a run");
+  if (!spans.length) throw new Error(tr("Select chords to break: the arpeggiator turns a chord's notes into a run"));
   for (const span of spans) {
     const pool = arpeggioPool(span.pitches, octaves);
     let last = null;
@@ -279,7 +281,7 @@ export const ACCOMPANIMENTS = ["block", "arpeggio", "bass-chord"];
  */
 export function chordTrack(score, s, { style = "block", a = 0, b = null } = {}) {
   if (!score.staves[s]) throw new Error("no such staff");
-  if (M.isDrums(score, s)) throw new Error("A drum staff takes no chords: choose a staff of notes for the chord track");
+  if (M.isDrums(score, s)) throw new Error(tr("A drum staff takes no chords: choose a staff of notes for the chord track"));
   if (!ACCOMPANIMENTS.includes(style)) throw new Error(`no accompaniment called ${style}`);
   const last = b ?? M.barsOf(score) - 1;
   const t0 = M.barStart(score, a);
@@ -289,7 +291,7 @@ export function chordTrack(score, s, { style = "block", a = 0, b = null } = {}) 
   // The chord sounding as the bars start, set before them.
   const before = all.filter((c) => c.t < t0).at(-1);
   const symbols = before && !inside.some((c) => c.t === t0) ? [{ ...before, t: t0 }, ...inside] : inside;
-  if (!symbols.length) throw new Error("No chord symbols there: add some with Insert ▸ Chord symbol (Ctrl+K), or ask the AI to suggest chords");
+  if (!symbols.length) throw new Error(tr("No chord symbols there: add some with Insert ▸ Chord symbol (Ctrl+K), or ask the AI to suggest chords"));
   const low = ["bass", "bass_8"].includes(M.clefAt(score, s, a));
   const from = low ? 0 : 7;
   const kept = chordSymbols({ staves: [score.staves[s]] }).filter((c) => c.t >= t0 && c.t < t1);

@@ -32,6 +32,13 @@ const D = await import(`./drums.js${V}`);
 const Pt = await import(`./patterns.js${V}`);
 // A riff for the guitar, in place of the style's strumming (#458).
 const Rf = await import(`./riffs.js${V}`);
+// The refusals in the page's language (#508).
+const { tr } = await import(`./words.js${V}`);
+
+// A catalogue's names are data, and stay English: `english.tr` hands one back
+// as it is, and marks it for the editor's words (#508) — where it is shown,
+// words.js's `tr` says it in the page's language (config/editor_words/fr/).
+const english = { tr: (text) => text };
 
 /** The instruments a style writes for, in the order their staves are added. */
 export const PARTS = ["guitar", "piano", "bass", "drums"];
@@ -47,77 +54,77 @@ export const PART_NAMES = { guitar: "Guitar", piano: "Piano", bass: "Bass", drum
  */
 export const STYLES = [
   {
-    id: "pop", name: "Pop", group: "Pop and rock", time: "4/4", bpm: 100,
+    id: "pop", name: english.tr("Pop"), group: english.tr("Pop and rock"), time: "4/4", bpm: 100,
     guitar: "D---D-U---U-D-U-", piano: { lh: "R-------R-------", rh: "C---C---C---C---" },
     bass: "R-----R-R---F---", groove: "pop",
   },
   {
-    id: "rock", name: "Rock", group: "Pop and rock", time: "4/4", bpm: 120, sounds: { guitar: "electric guitar (clean)" },
+    id: "rock", name: english.tr("Rock"), group: english.tr("Pop and rock"), time: "4/4", bpm: 120, sounds: { guitar: "electric guitar (clean)" },
     guitar: "D-D-D-D-D-D-D-D-", piano: { lh: "O-------O-------", rh: "C-C-C-C-C-C-C-C-" },
     bass: "R-R-R-R-R-R-R-R-", groove: "rock-push",
   },
   {
-    id: "pop-ballad", name: "Pop ballad", group: "Pop and rock", time: "4/4", bpm: 72,
+    id: "pop-ballad", name: english.tr("Pop ballad"), group: english.tr("Pop and rock"), time: "4/4", bpm: 72,
     guitar: "D-------D---U---", piano: { lh: "L---------------", rh: "1-2-3-2-1-2-3-2-" },
     bass: "R-------R-----F-", groove: "power-ballad",
   },
   {
-    id: "arpeggio-ballad", name: "Arpeggio ballad", group: "Pop and rock", time: "4/4", bpm: 66, sounds: { guitar: "acoustic guitar (nylon)" },
+    id: "arpeggio-ballad", name: english.tr("Arpeggio ballad"), group: english.tr("Pop and rock"), time: "4/4", bpm: 66, sounds: { guitar: "acoustic guitar (nylon)" },
     guitar: "1-3-4-5-6-5-4-3-", piano: { lh: "R---------------", rh: "1-2-3-4-3-2-1-2-" },
     bass: "R---------------", groove: "brushes",
   },
   {
-    id: "folk", name: "Folk", group: "Pop and rock", time: "4/4", bpm: 100,
+    id: "folk", name: english.tr("Folk"), group: english.tr("Pop and rock"), time: "4/4", bpm: 100,
     guitar: "B---D-U-A---D-U-", piano: { lh: "R-------F-------", rh: "----C-C-----C-C-" },
     bass: "R---F---R---F---", groove: "rock",
   },
   {
-    id: "country", name: "Country", group: "Pop and rock", time: "4/4", bpm: 112,
+    id: "country", name: english.tr("Country"), group: english.tr("Pop and rock"), time: "4/4", bpm: 112,
     guitar: "B---b---A---b---", piano: { lh: "R-------F-------", rh: "----C-------C---" },
     bass: "R-------F-----A-", groove: "train",
   },
   {
-    id: "bossa", name: "Bossa nova", group: "Latin", time: "4/4", bpm: 130, sounds: { guitar: "acoustic guitar (nylon)", bass: "acoustic bass" },
+    id: "bossa", name: english.tr("Bossa nova"), group: english.tr("Latin"), time: "4/4", bpm: 130, sounds: { guitar: "acoustic guitar (nylon)", bass: "acoustic bass" },
     guitar: "B--b--b-A-b--b--", piano: { lh: "R-------F-------", rh: "C--C--C---C--C--" },
     bass: "R-----F-R-----F-", groove: "bossa",
   },
   {
-    id: "samba", name: "Samba", group: "Latin", time: "4/4", bpm: 100, sounds: { guitar: "acoustic guitar (nylon)" },
+    id: "samba", name: english.tr("Samba"), group: english.tr("Latin"), time: "4/4", bpm: 100, sounds: { guitar: "acoustic guitar (nylon)" },
     guitar: "D-b-bD-b-D-b-bD-", piano: { lh: "R---F---R---F---", rh: "-C-C-C--C-C-C-C-" },
     bass: "R--FR---R--FR---", groove: "samba",
   },
   {
-    id: "reggae", name: "Reggae", group: "Latin", time: "4/4", bpm: 76, sounds: { guitar: "electric guitar (clean)" },
+    id: "reggae", name: english.tr("Reggae"), group: english.tr("Latin"), time: "4/4", bpm: 76, sounds: { guitar: "electric guitar (clean)" },
     guitar: "----U-------U---", piano: { lh: "................", rh: "--C---C---C---C-" },
     bass: "R-----R-F---R---", groove: "one-drop",
   },
   {
-    id: "swing", name: "Swing", group: "Jazz", time: "4/4", bpm: 140, swing: 66, piano: "shell", sounds: { guitar: "electric guitar (jazz)", bass: "acoustic bass" },
+    id: "swing", name: english.tr("Swing"), group: english.tr("Jazz"), time: "4/4", bpm: 140, swing: 66, piano: "shell", sounds: { guitar: "electric guitar (jazz)", bass: "acoustic bass" },
     guitar: "D---D---D---D---", piano: { lh: "L---------------", rh: "----C-----C-----" },
     bass: "R---T---F---A---", groove: "swing",
   },
   {
-    id: "jazz-ballad", name: "Jazz ballad", group: "Jazz", time: "4/4", bpm: 64, swing: 66, piano: "shell", sounds: { guitar: "electric guitar (jazz)", bass: "acoustic bass" },
+    id: "jazz-ballad", name: english.tr("Jazz ballad"), group: english.tr("Jazz"), time: "4/4", bpm: 64, swing: 66, piano: "shell", sounds: { guitar: "electric guitar (jazz)", bass: "acoustic bass" },
     guitar: "D---------------", piano: { lh: "L---------------", rh: "C-------C-------" },
     bass: "R-------F---A---", groove: "brushes",
   },
   {
-    id: "shuffle", name: "Shuffle blues", group: "Jazz", time: "4/4", bpm: 100, swing: 67, sounds: { guitar: "electric guitar (clean)" },
+    id: "shuffle", name: english.tr("Shuffle blues"), group: english.tr("Jazz"), time: "4/4", bpm: 100, swing: 67, sounds: { guitar: "electric guitar (clean)" },
     guitar: "B-b-B-b-B-b-B-b-", piano: { lh: "O-O-O-O-O-O-O-O-", rh: "--C---C---C---C-" },
     bass: "R-T-F-T-R-T-F-T-", groove: "shuffle",
   },
   {
-    id: "funk", name: "Funk", group: "Groove", time: "4/4", bpm: 100, sounds: { guitar: "electric guitar (clean)", bass: "slap bass 1" },
+    id: "funk", name: english.tr("Funk"), group: english.tr("Groove"), time: "4/4", bpm: 100, sounds: { guitar: "electric guitar (clean)", bass: "slap bass 1" },
     guitar: "D-U-DUD-U-UDU-D-", piano: { lh: "R--R---R-R--R---", rh: "C--C--C-C--C--C-" },
     bass: "R--RR-O-R--F-R-O", groove: "funk",
   },
   {
-    id: "waltz", name: "Waltz", group: "In three", time: "3/4", bpm: 140,
+    id: "waltz", name: english.tr("Waltz"), group: english.tr("In three"), time: "3/4", bpm: 140,
     guitar: "B---b---b---", piano: { lh: "R-----------", rh: "----C---C---" },
     bass: "R-----------", groove: "waltz",
   },
   {
-    id: "six-eight", name: "6/8 ballad", group: "In three", time: "6/8", bpm: 60, sounds: { guitar: "acoustic guitar (nylon)" },
+    id: "six-eight", name: english.tr("6/8 ballad"), group: english.tr("In three"), time: "6/8", bpm: 60, sounds: { guitar: "acoustic guitar (nylon)" },
     guitar: "1-3-4-5-4-3-", piano: { lh: "R-----F-----", rh: "--1-2-3-2-1-" },
     bass: "R-----F-----", groove: "ballad-68",
   },
@@ -299,9 +306,9 @@ export function arrange(score, styleId, { a = 0, b = null, parts = PARTS, diagra
   const before = all.filter((c) => c.t < t0).at(-1);
   const inside = all.filter((c) => c.t >= t0 && c.t < t1);
   const chords = before && !inside.some((c) => c.t === t0) ? [{ ...before, t: t0 }, ...inside] : inside;
-  if (!chords.length) throw new Error("No chord symbols there: add some with Insert ▸ Chord symbol (Ctrl+K), or ask the AI to suggest chords");
+  if (!chords.length) throw new Error(tr("No chord symbols there: add some with Insert ▸ Chord symbol (Ctrl+K), or ask the AI to suggest chords"));
   const wanted = PARTS.filter((p) => parts.includes(p));
-  if (!wanted.length) throw new Error("Choose an instrument to write for");
+  if (!wanted.length) throw new Error(tr("Choose an instrument to write for"));
   const added = [];
   const lanesOf = Object.fromEntries(wanted.map((p) => [p, lanesFor(score, p, style, added)]));
   for (const lanes of Object.values(lanesOf)) for (const s of lanes) M.write(score, s, t0, t1 - t0, { rest: true });

@@ -22,14 +22,15 @@
 const V = new URL(import.meta.url).search;
 const F = await import(`./feel.js${V}`);
 const Ch = await import(`./channels.js${V}`);
+const { tr } = await import(`./words.js${V}`);
 
 export const WAVES = ["sine", "square", "sawtooth", "triangle"];
-export const WAVE_NAMES = { sine: "Sine", square: "Square", sawtooth: "Saw", triangle: "Triangle" };
+export const WAVE_NAMES = { sine: tr("Sine"), square: tr("Square"), sawtooth: tr("Saw"), triangle: "Triangle" };
 
 /** The presets, every field there. */
 export const PRESETS = {
   pad: {
-    name: "Pad",
+    name: tr("Pad"),
     osc1: { wave: "sawtooth", detune: -7, octave: 0, level: 0.7 },
     osc2: { wave: "sawtooth", detune: 7, octave: 0, level: 0.7 },
     filter: { cutoff: 0.45, resonance: 0.15, env: 0.2 },
@@ -43,14 +44,14 @@ export const PRESETS = {
     amp: { attack: 0.01, decay: 0.2, sustain: 0.7, release: 0.25 },
   },
   bass: {
-    name: "Bass",
+    name: tr("Bass"),
     osc1: { wave: "sawtooth", detune: 0, octave: 0, level: 0.8 },
     osc2: { wave: "square", detune: 0, octave: -1, level: 0.6 },
     filter: { cutoff: 0.35, resonance: 0.3, env: 0.5 },
     amp: { attack: 0.005, decay: 0.25, sustain: 0.5, release: 0.1 },
   },
   pluck: {
-    name: "Pluck",
+    name: tr("Pluck"),
     osc1: { wave: "triangle", detune: 0, octave: 0, level: 0.8 },
     osc2: { wave: "sawtooth", detune: 3, octave: 1, level: 0.3 },
     filter: { cutoff: 0.3, resonance: 0.25, env: 0.7 },

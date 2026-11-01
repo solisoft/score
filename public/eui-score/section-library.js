@@ -17,16 +17,28 @@ const M = await import(`./score-model.js${new URL(import.meta.url).search}`);
 const F = await import(`./feel.js${new URL(import.meta.url).search}`);
 // Each note's force, heard when a section is listened to (#455).
 const Vel = await import(`./velocity.js${new URL(import.meta.url).search}`);
+// The dialogs' words in the page's language (#508).
+const V = new URL(import.meta.url).search;
+const { tr } = await import(`./words.js${V}`);
 
 const KEY_NAMES = ["C♭", "G♭", "D♭", "A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯"];
 
+// The names are data, and stay English: `english.tr` hands one back as it is,
+// and marks it for the editor's words (#508) — where it is shown, words.js's
+// `tr` says it in the page's language (config/editor_words/fr/).
+const english = { tr: (text) => text };
+
 /** The library's instruments, as SharedSection names them. */
-export const INSTRUMENTS = { guitar: "Guitar", piano: "Piano", bass: "Bass", drums: "Drums", voice: "Voice", strings: "Strings", winds: "Winds", brass: "Brass", band: "Band", other: "Other" };
+export const INSTRUMENTS = {
+  guitar: english.tr("Guitar"), piano: english.tr("Piano"), bass: english.tr("Bass"), drums: english.tr("Drums"), voice: english.tr("Voice"),
+  strings: english.tr("Strings"), winds: english.tr("Winds"), brass: english.tr("Brass"), band: english.tr("Band"), other: english.tr("Other"),
+};
 /** Its styles. */
 export const STYLES = {
-  pop: "Pop", rock: "Rock", ballad: "Ballad", folk: "Folk", country: "Country", blues: "Blues", jazz: "Jazz", swing: "Swing", bossa: "Bossa nova",
-  latin: "Latin", reggae: "Reggae", funk: "Funk", soul: "Soul", gospel: "Gospel", waltz: "Waltz", classical: "Classical", metal: "Metal",
-  electronic: "Electronic", other: "Other",
+  pop: english.tr("Pop"), rock: english.tr("Rock"), ballad: english.tr("Ballad"), folk: english.tr("Folk"), country: english.tr("Country"),
+  blues: english.tr("Blues"), jazz: english.tr("Jazz"), swing: english.tr("Swing"), bossa: english.tr("Bossa nova"), latin: english.tr("Latin"),
+  reggae: english.tr("Reggae"), funk: english.tr("Funk"), soul: english.tr("Soul"), gospel: english.tr("Gospel"), waltz: english.tr("Waltz"),
+  classical: english.tr("Classical"), metal: english.tr("Metal"), electronic: english.tr("Electronic"), other: english.tr("Other"),
 };
 
 /** The library's instrument for lane `s`, from its staff's instrument. */
@@ -108,7 +120,7 @@ export function shareable(score, lanes, a, b, title = "") {
  */
 export function importSection(score, data, parse) {
   const section = data.section;
-  if (!section?.parts?.length || !section.bars) throw new Error("That section holds no bars");
+  if (!section?.parts?.length || !section.bars) throw new Error(tr("That section holds no bars"));
   const mini = M.fromParsed(JSON.parse(parse(data.source))).score;
   const empty = score.staves.every((staff) => staff.events.every((ev) => ev.rest));
   const at = empty ? 0 : M.barsOf(score);
@@ -165,7 +177,7 @@ export function importSection(score, data, parse) {
       return;
     }
     targets[k] = addStaffLike(wanted, drums);
-    added.push(wanted.name || M.INSTRUMENTS[wanted.instrument]?.name || "a staff");
+    added.push(wanted.name || M.INSTRUMENTS[wanted.instrument]?.name || tr("a staff"));
   });
   for (const part of section.parts) {
     const staff = targets[part.offset];
@@ -211,11 +223,14 @@ export function addToScore({ barsEdit, say, parse }, data) {
     return { at: before, removed: 0, added: M.barsOf(score) - before };
   });
   if (!went) return false;
-  const n = done.bars;
-  const bars = `bar${n === 1 ? "" : "s"} ${done.at + 1}${n === 1 ? "" : `–${done.at + n}`}`;
-  const staves = done.added.length ? `, on ${done.added.length === 1 ? "a new staff" : "new staves"}: ${done.added.join(", ")}` : "";
-  const swing = done.swung ? " The score swings now, as the section does (Play ▸ Swing and humanize)." : "";
-  say(`“${data.title}” added as ${bars}${staves}.${swing} Undo takes it back.`);
+  const one = done.bars === 1;
+  const words = { title: data.title, n: done.at + 1, a: done.at + 1, b: done.at + done.bars, staves: done.added.join(", ") };
+  let added;
+  if (!done.added.length) added = one ? tr("“{title}” added as bar {n}.", words) : tr("“{title}” added as bars {a}–{b}.", words);
+  else if (done.added.length === 1) added = one ? tr("“{title}” added as bar {n}, on a new staff: {staves}.", words) : tr("“{title}” added as bars {a}–{b}, on a new staff: {staves}.", words);
+  else added = one ? tr("“{title}” added as bar {n}, on new staves: {staves}.", words) : tr("“{title}” added as bars {a}–{b}, on new staves: {staves}.", words);
+  const swing = done.swung ? [tr("The score swings now, as the section does (Play ▸ Swing and humanize).")] : [];
+  say([added, ...swing, tr("Undo takes it back.")].join(" "));
   return true;
 }
 
@@ -230,8 +245,8 @@ const el = (tag, props = {}, ...children) => {
 function dialog(root, kind, title) {
   const box = el("dialog", { className: `studio-keys studio-pattern studio-${kind}` });
   box.dataset[kind.replace(/-(\w)/g, (_, c) => c.toUpperCase())] = "";
-  const close = el("button", { type: "button", className: "studio-menu", textContent: "×", title: "Close" });
-  close.setAttribute("aria-label", "Close");
+  const close = el("button", { type: "button", className: "studio-menu", textContent: "×", title: tr("Close") });
+  close.setAttribute("aria-label", tr("Close"));
   close.addEventListener("click", () => box.close());
   box.append(el("div", { className: "studio-keys-head" }, el("h2", { textContent: title }), close));
   box.addEventListener("click", (event) => {
@@ -241,10 +256,14 @@ function dialog(root, kind, title) {
   return box;
 }
 
+/** "4 bars in 3/4", in the page's language. */
+const barsIn = (count, time) => (count === 1 ? tr("1 bar in {time}", { time }) : tr("{count} bars in {time}", { count, time }));
+
+/** A menu of `choices` ({ value: its English name }), shown in the page's language. */
 function menu(name, choices, first = null) {
   const node = el("select", { name });
   if (first) node.append(new Option(first, ""));
-  for (const [value, label] of Object.entries(choices)) node.append(new Option(label, value));
+  for (const [value, label] of Object.entries(choices)) node.append(new Option(tr(label), value));
   return node;
 }
 
@@ -254,25 +273,25 @@ export function install(studio) {
 
   // ---- Share the selected bars --------------------------------------------------------
 
-  const share = dialog(root, "share-section", "Share the selected bars");
+  const share = dialog(root, "share-section", tr("Share the selected bars"));
   const shareForm = el("form", { className: "studio-share-section-form" });
-  const titleField = el("input", { type: "text", name: "title", maxLength: 80, required: true, placeholder: "Folk strumming in G" });
+  const titleField = el("input", { type: "text", name: "title", maxLength: 80, required: true, placeholder: tr("Folk strumming in G") });
   const instrumentMenu = menu("instrument", INSTRUMENTS);
   const styleMenu = menu("style", STYLES);
-  const about = el("textarea", { name: "description", rows: 3, maxLength: 1000, placeholder: "How it is played, what it goes with…" });
-  const authorField = el("input", { type: "text", name: "author_name", maxLength: 60, placeholder: "Shown with what you share", autocomplete: "name", value: options.authorName ?? "" });
+  const about = el("textarea", { name: "description", rows: 3, maxLength: 1000, placeholder: tr("How it is played, what it goes with…") });
+  const authorField = el("input", { type: "text", name: "author_name", maxLength: 60, placeholder: tr("Shown with what you share"), autocomplete: "name", value: options.authorName ?? "" });
   const what = el("p", { className: "muted studio-pattern-note" });
   const problem = el("p", { className: "studio-share-error", hidden: true });
   problem.setAttribute("role", "alert");
-  const send = el("button", { type: "submit", className: "tool tool-wide tool-primary", textContent: "Share" });
+  const send = el("button", { type: "submit", className: "tool tool-wide tool-primary", textContent: tr("Share") });
   shareForm.append(
-    el("p", { className: "muted studio-pattern-note", textContent: "Everyone may hear these bars in the library of sections, rate them, comment on them and put them in their scores." }),
+    el("p", { className: "muted studio-pattern-note", textContent: tr("Everyone may hear these bars in the library of sections, rate them, comment on them and put them in their scores.") }),
     what,
-    el("label", { className: "tool-field" }, "Name ", titleField),
-    el("label", { className: "tool-field" }, "Instrument ", instrumentMenu),
-    el("label", { className: "tool-field" }, "Style ", styleMenu),
-    el("label", { className: "tool-field" }, "About it ", about),
-    el("label", { className: "tool-field" }, "Your name ", authorField),
+    el("label", { className: "tool-field" }, `${tr("Name")} `, titleField),
+    el("label", { className: "tool-field" }, `${tr("Instrument")} `, instrumentMenu),
+    el("label", { className: "tool-field" }, `${tr("Style")} `, styleMenu),
+    el("label", { className: "tool-field" }, `${tr("About it")} `, about),
+    el("label", { className: "tool-field" }, `${tr("Your name")} `, authorField),
     problem,
     el("div", { className: "tool-row studio-new-actions" }, send),
   );
@@ -280,10 +299,10 @@ export function install(studio) {
   let shared = null;
 
   function openShare() {
-    if (!options.sectionsUrl) return say("Sharing bars needs an account: open the score in the app.", true);
-    if (!st.score) return say("Sharing bars needs the score tools: this piece is edited in its text.", true);
+    if (!options.sectionsUrl) return say(tr("Sharing bars needs an account: open the score in the app."), true);
+    if (!st.score) return say(tr("Sharing bars needs the score tools: this piece is edited in its text."), true);
     const bars = st.sel?.bars ?? (st.sel ? studio.selectedBarsOrNull() : null);
-    if (!bars) return say("Select the bars to share first: drag across them, on one track or several", true);
+    if (!bars) return say(tr("Select the bars to share first: drag across them, on one track or several"), true);
     const lanes = st.sel.lanes ?? [st.sel.staff];
     try {
       shared = shareable(st.score, lanes, bars[0], bars[1]);
@@ -291,7 +310,8 @@ export function install(studio) {
       return say(error.message ?? String(error), true);
     }
     instrumentMenu.value = shared.instrument;
-    what.textContent = `${shared.bars} bar${shared.bars === 1 ? "" : "s"} in ${shared.time}${shared.key ? `, ${shared.key}` : ""}, ${shared.tracks} track${shared.tracks === 1 ? "" : "s"}.`;
+    const tracks = shared.tracks === 1 ? tr("1 track") : tr("{count} tracks", { count: shared.tracks });
+    what.textContent = `${barsIn(shared.bars, shared.time)}${shared.key ? `, ${shared.key}` : ""}, ${tracks}.`;
     problem.hidden = true;
     share.showModal();
     titleField.focus();
@@ -313,16 +333,16 @@ export function install(studio) {
       });
       const answer = await response.json().catch(() => ({}));
       if (!response.ok) {
-        problem.textContent = answer.error ?? "The bars could not be shared: try again.";
+        problem.textContent = answer.error ?? tr("The bars could not be shared: try again.");
         problem.hidden = false;
         return;
       }
       share.close();
       titleField.value = "";
       about.value = "";
-      say(`Shared in the library of sections: ${location.origin}${answer.url}`);
+      say(tr("Shared in the library of sections: {url}", { url: `${location.origin}${answer.url}` }));
     } catch (error) {
-      problem.textContent = "No connection: the bars are not shared yet.";
+      problem.textContent = tr("No connection: the bars are not shared yet.");
       problem.hidden = false;
     } finally {
       send.disabled = false;
@@ -331,14 +351,14 @@ export function install(studio) {
 
   // ---- The library of sections ----------------------------------------------------------
 
-  const library = dialog(root, "section-library", "Library of sections");
+  const library = dialog(root, "section-library", tr("Library of sections"));
   const search = el("form", { className: "studio-section-search", role: "search" });
-  const query = el("input", { type: "search", name: "q", placeholder: "A name, a word" });
-  query.setAttribute("aria-label", "Search the sections");
-  const instrumentFilter = menu("instrument", INSTRUMENTS, "Every instrument");
-  const styleFilter = menu("style", STYLES, "Every style");
-  const order = menu("sort", { recent: "Newest first", top: "Best rated first" });
-  search.append(query, instrumentFilter, styleFilter, order, el("button", { type: "submit", className: "tool", textContent: "Search" }));
+  const query = el("input", { type: "search", name: "q", placeholder: tr("A name, a word") });
+  query.setAttribute("aria-label", tr("Search the sections"));
+  const instrumentFilter = menu("instrument", INSTRUMENTS, tr("Every instrument"));
+  const styleFilter = menu("style", STYLES, tr("Every style"));
+  const order = menu("sort", { recent: english.tr("Newest first"), top: english.tr("Best rated first") });
+  search.append(query, instrumentFilter, styleFilter, order, el("button", { type: "submit", className: "tool", textContent: tr("Search") }));
   const list = el("ul", { className: "studio-section-list" });
   list.dataset.sectionList = "";
   const note = el("p", { className: "muted studio-pattern-note" });
@@ -348,16 +368,16 @@ export function install(studio) {
     search,
     note,
     list,
-    el("p", { className: "muted studio-pattern-note" }, el("a", { href: options.sectionsPage ?? "/sections", target: "_blank", textContent: "Open the library in a page" }), " to read the comments and rate."),
+    el("p", { className: "muted studio-pattern-note" }, el("a", { href: options.sectionsPage ?? "/sections", target: "_blank", textContent: tr("Open the library in a page") }), ` ${tr("to read the comments and rate.")}`),
   );
 
-  const stars = (row) => (row.rating_count ? `★ ${row.rating} (${row.rating_count})` : "not rated");
+  const stars = (row) => (row.rating_count ? `★ ${row.rating} (${row.rating_count})` : tr("not rated"));
   /** A section's bars and source, fetched once. */
   const fetched = new Map();
   async function full(row) {
     if (!fetched.has(row.id)) {
       fetched.set(row.id, fetch(`/sections/${encodeURIComponent(row.id)}/data.json`, { headers: { Accept: "application/json" } }).then((r) => {
-        if (!r.ok) throw new Error("That section is no longer in the library.");
+        if (!r.ok) throw new Error(tr("That section is no longer in the library."));
         return r.json();
       }));
     }
@@ -385,10 +405,10 @@ export function install(studio) {
       }
       bytes = F.feel(bytes, F.feelOf(meta));
       button.dataset.playing = "1";
-      button.textContent = "■ Stop";
+      button.textContent = tr("■ Stop");
       const done = () => {
         delete button.dataset.playing;
-        button.textContent = "▶ Listen";
+        button.textContent = tr("▶ Listen");
       };
       const playing = await P.play(bytes, { onStop: done });
       if (!playing) done();
@@ -414,17 +434,17 @@ export function install(studio) {
 
   function show(rows, more) {
     list.replaceChildren(...rows.map((row) => {
-      const play = el("button", { type: "button", className: "tool", textContent: "▶ Listen" });
+      const play = el("button", { type: "button", className: "tool", textContent: tr("▶ Listen") });
       play.addEventListener("click", () => listen(row, play));
-      const add = el("button", { type: "button", className: "tool tool-primary", textContent: "Add", title: "After the last bar, each instrument on its own staff" });
+      const add = el("button", { type: "button", className: "tool tool-primary", textContent: tr("Add"), title: tr("After the last bar, each instrument on its own staff") });
       add.dataset.sectionAdd = "";
       add.addEventListener("click", () => put(row, "end"));
       const buttons = [play, add];
       // With a bar chosen: before it, or over it, as Edit ▸ Paste does.
       if (placeBar != null) {
-        const insert = el("button", { type: "button", className: "tool", textContent: `Before bar ${placeBar}` });
+        const insert = el("button", { type: "button", className: "tool", textContent: tr("Before bar {n}", { n: placeBar }) });
         insert.addEventListener("click", () => put(row, "insert"));
-        const over = el("button", { type: "button", className: "tool", textContent: `Over bar ${placeBar}` });
+        const over = el("button", { type: "button", className: "tool", textContent: tr("Over bar {n}", { n: placeBar }) });
         over.addEventListener("click", () => put(row, "over"));
         buttons.push(insert, over);
       }
@@ -436,18 +456,18 @@ export function install(studio) {
         preview,
         el("div", { className: "studio-section-what" },
           el("a", { href: row.url, target: "_blank", textContent: row.title }),
-          el("small", { className: "muted", textContent: `${INSTRUMENTS[row.instrument] ?? "Other"} · ${STYLES[row.style] ?? "Other"} · ${row.bars} bar${row.bars === 1 ? "" : "s"} in ${row.time} · by ${row.author} · ${stars(row)}` })),
+          el("small", { className: "muted", textContent: `${tr(INSTRUMENTS[row.instrument] ?? "Other")} · ${tr(STYLES[row.style] ?? "Other")} · ${barsIn(row.bars, row.time)} · ${tr("by {author}", { author: row.author })} · ${stars(row)}` })),
         el("div", { className: "tool-row" }, ...buttons),
       );
       item.dataset.section = row.id;
       return item;
     }));
-    note.textContent = rows.length ? (more ? "The first ones: search to narrow them down." : "") : "No section matches.";
+    note.textContent = rows.length ? (more ? tr("The first ones: search to narrow them down.") : "") : tr("No section matches.");
   }
 
   async function find() {
     const params = new URLSearchParams({ q: query.value, instrument: instrumentFilter.value, style: styleFilter.value, sort: order.value });
-    note.textContent = "Looking…";
+    note.textContent = tr("Looking…");
     try {
       const response = await fetch(`/sections/search.json?${params}`, { headers: { Accept: "application/json" } });
       if (!response.ok) throw new Error(String(response.status));
@@ -455,7 +475,7 @@ export function install(studio) {
       show(answer.sections ?? [], answer.more);
     } catch (error) {
       list.replaceChildren();
-      note.textContent = "The library cannot be reached: are you online?";
+      note.textContent = tr("The library cannot be reached: are you online?");
     }
   }
 
@@ -467,13 +487,13 @@ export function install(studio) {
   library.addEventListener("close", () => P.stop());
 
   function openLibrary() {
-    if (!st.score) return say("Adding bars needs the score tools: this piece is edited in its text.", true);
+    if (!st.score) return say(tr("Adding bars needs the score tools: this piece is edited in its text."), true);
     const chosen = st.input.on ? M.barAt(st.score, st.input.t) : st.sel ? selectedBarsOrNull()?.[0] : null;
     placeBar = chosen == null ? null : studio.barNo(chosen);
     how.replaceChildren(
-      "Bars others shared: ", el("b", { textContent: "▶ Listen" }), " to hear them in a loop, ", el("b", { textContent: "Add" }),
-      " puts them after the last bar, each instrument on its own staff.",
-      ...(placeBar == null ? [" Select a bar first to put them before it or over it."] : [` Or before bar ${placeBar}, or over it.`]),
+      `${tr("Bars others shared:")} `, el("b", { textContent: tr("▶ Listen") }), ` ${tr("to hear them in a loop,")} `, el("b", { textContent: tr("Add") }),
+      ` ${tr("puts them after the last bar, each instrument on its own staff.")}`,
+      ` ${placeBar == null ? tr("Select a bar first to put them before it or over it.") : tr("Or before bar {n}, or over it.", { n: placeBar })}`,
     );
     library.showModal();
     query.focus();

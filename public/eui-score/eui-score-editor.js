@@ -27,6 +27,8 @@
 // `refuse` when an edit or the source is refused (detail.message).
 
 const V = new URL(import.meta.url).search;
+// Its words in the page's language (#508): English where the page has none.
+const { tr } = await import(`./words.js${V}`);
 const { loaded, engine } = await import(`./eui-score.js${V}`);
 const { editor_view, editor_apply } = engine;
 
@@ -77,24 +79,24 @@ class EuiScoreEditor extends HTMLElement {
     }
     this.tabIndex = 0;
     this.innerHTML = `
-      <div class="ese-toolbar" role="toolbar" aria-label="Edit the score">
-        <button type="button" data-do="up" title="A step up (↑)">↑</button>
-        <button type="button" data-do="down" title="A step down (↓)">↓</button>
-        <button type="button" data-do="sharp" title="Sharp (+)">♯</button>
-        <button type="button" data-do="flat" title="Flat (−)">♭</button>
-        <button type="button" data-do="natural" title="Natural (=)">♮</button>
+      <div class="ese-toolbar" role="toolbar" aria-label="${tr("Edit the score")}">
+        <button type="button" data-do="up" title="${tr("A step up (↑)")}">↑</button>
+        <button type="button" data-do="down" title="${tr("A step down (↓)")}">↓</button>
+        <button type="button" data-do="sharp" title="${tr("Sharp (+)")}">♯</button>
+        <button type="button" data-do="flat" title="${tr("Flat (−)")}">♭</button>
+        <button type="button" data-do="natural" title="${tr("Natural (=)")}">♮</button>
         <span class="ese-gap"></span>
         ${["C", "D", "E", "F", "G", "A", "B"].map((l) => `<button type="button" data-letter="${l.toLowerCase()}" title="${l} (${l})">${l}</button>`).join("")}
         <span class="ese-gap"></span>
-        <button type="button" data-do="rest" title="Make it a rest (R)">Rest</button>
-        <button type="button" data-do="bar" title="Add a bar of rests at the end">+ Bar</button>
+        <button type="button" data-do="rest" title="${tr("Make it a rest (R)")}">${tr("Rest")}</button>
+        <button type="button" data-do="bar" title="${tr("Add a bar of rests at the end")}">${tr("+ Bar")}</button>
         <span class="ese-gap"></span>
-        <button type="button" data-do="undo" title="Undo (Ctrl+Z)">Undo</button>
-        <button type="button" data-do="redo" title="Redo (Ctrl+Y)">Redo</button>
+        <button type="button" data-do="undo" title="${tr("Undo (Ctrl+Z)")}">${tr("Undo")}</button>
+        <button type="button" data-do="redo" title="${tr("Redo (Ctrl+Y)")}">${tr("Redo")}</button>
       </div>
       <div class="ese-sheet"></div>
       <div class="ese-status" aria-live="polite"></div>
-      <div class="ese-hint">Click a note · ↑↓ move (Shift semitone, Ctrl octave) · drag · A–G write · Shift+A–G add to chord · R rest · + − = accidentals · Ctrl+Z undo</div>`;
+      <div class="ese-hint">${tr("Click a note · ↑↓ move (Shift semitone, Ctrl octave) · drag · A–G write · Shift+A–G add to chord · R rest · + − = accidentals · Ctrl+Z undo")}</div>`;
     this.sheet = this.querySelector(".ese-sheet");
     this.status = this.querySelector(".ese-status");
 
@@ -196,10 +198,15 @@ class EuiScoreEditor extends HTMLElement {
     this.head = head;
     const it = this._item();
     if (it) {
-      const what = it.kind === "note"
-        ? (it.heads.length > 1 ? `chord of ${it.heads.length}` + (head >= 0 ? `, note ${head + 1} selected` : "") : "note")
-        : "rest";
-      this._say(`Item ${item + 1}: ${what}`);
+      const n = item + 1;
+      const said = it.kind !== "note"
+        ? tr("Item {n}: rest", { n })
+        : it.heads.length < 2
+          ? tr("Item {n}: note", { n })
+          : head >= 0
+            ? tr("Item {n}: chord of {heads}, note {head} selected", { n, heads: it.heads.length, head: head + 1 })
+            : tr("Item {n}: chord of {heads}", { n, heads: it.heads.length });
+      this._say(said);
     } else {
       this._say("");
     }
@@ -379,12 +386,12 @@ class EuiScoreEditor extends HTMLElement {
       source = editor_apply(source, JSON.stringify(op));
     } catch (error) {
       const message = error.message ?? String(error);
-      this._say(message === "relative" ? "This source cannot be edited." : message, true);
+      this._say(message === "relative" ? tr("This source cannot be edited.") : message, true);
       this.dispatchEvent(new CustomEvent("refuse", { detail: { message } }));
       return false;
     }
     this._commit(source);
-    if (converted) this._say("Written out in absolute pitches so that its notes can be edited.");
+    if (converted) this._say(tr("Written out in absolute pitches so that its notes can be edited."));
     return true;
   }
 

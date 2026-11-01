@@ -2,6 +2,10 @@
 // mixer-ui.js), the instruments (instruments-ui.js), the audio tracks
 // (audio-ui.js).
 
+// The editor's words in the page's language (#508).
+const V = new URL(import.meta.url).search;
+const { tr } = await import(`./words.js${V}`);
+
 /** The mixer, the instruments and the audio tracks set up; answers the mix as heard. */
 export function install(ctx) {
   const { root, options, st, quantizeBox, M, P, R, X, mixerPanel, Sy, installInstruments, audioTracks } = ctx;
@@ -104,7 +108,7 @@ export function install(ctx) {
       laneName,
       barNo,
       grid: () => M.RECORDING_GRIDS[quantizeBox?.value] ?? M.RECORDING_GRIDS.sixteenth,
-      gridName: () => quantizeBox?.selectedOptions[0]?.textContent ?? "sixteenths",
+      gridName: () => quantizeBox?.selectedOptions[0]?.textContent ?? tr("sixteenths"),
       mixHeard,
     },
   });
@@ -124,13 +128,14 @@ export function install(ctx) {
     for (const { lane, name } of rows) {
       const row = Object.assign(document.createElement("div"), { className: "tool-staff" });
       row.append(Object.assign(document.createElement("span"), { textContent: name, title: name }));
-      for (const [act, letter, words] of [["mute", "M", "Mute"], ["solo", "S", "Solo"]]) {
+      // M and S, as the mixer's own strips write them.
+      for (const [act, letter, words] of [["mute", "M", tr("Mute {track}", { track: name })], ["solo", "S", tr("Solo {track}", { track: name })]]) {
         const on = st.mix[act].has(lane);
-        const button = Object.assign(document.createElement("button"), { type: "button", className: `tool${on ? " on" : ""}`, textContent: letter, title: `${words} ${name}` });
+        const button = Object.assign(document.createElement("button"), { type: "button", className: `tool${on ? " on" : ""}`, textContent: letter, title: words });
         button.dataset.act = act;
         button.dataset.lane = String(lane);
         button.setAttribute("aria-pressed", String(on));
-        button.setAttribute("aria-label", `${words} ${name}`);
+        button.setAttribute("aria-label", words);
         row.append(button);
       }
       box.append(row);

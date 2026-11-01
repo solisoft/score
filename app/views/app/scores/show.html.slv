@@ -1,13 +1,14 @@
 <%- partial("shared/studio", {
-  "examples": examples, "figure": figure, "source": source, "app": true, "owner": owner, "ai_link": ai_link
+  "examples": examples, "figure": figure, "source": source, "app": true, "owner": owner, "ai_link": ai_link,
+  "editor_words": editor_words
 }) %>
 
 <%# Comments on the score's bars (#385): the panel the editor's script
     fills (public/eui-score/comments.js), beside the score. %>
-<aside class="studio-comments" data-comments-panel hidden aria-label="Comments">
+<aside class="studio-comments" data-comments-panel hidden aria-label="<%= t("app.editor.comments") %>">
   <div class="studio-comments-head">
-    <h2>Comments</h2>
-    <button type="button" class="studio-menu" data-comments-close aria-label="Close the comments">×</button>
+    <h2><%= t("app.editor.comments") %></h2>
+    <button type="button" class="studio-menu" data-comments-close aria-label="<%= t("app.editor.close_the_comments") %>">×</button>
   </div>
   <div class="studio-comments-body" data-comments></div>
 </aside>
@@ -29,12 +30,12 @@
 <dialog class="studio-keys studio-parts studio-ai" data-ai aria-labelledby="studio-ai-title"<%= ai_link ? " data-ai-refused" : "" %>>
   <form method="dialog" data-ai-form>
     <div class="studio-keys-head">
-      <h2 id="studio-ai-title" data-ai-title>AI</h2>
-      <button type="button" class="studio-menu" data-ai-close aria-label="Close">×</button>
+      <h2 id="studio-ai-title" data-ai-title><%= t("app.editor.ai") %></h2>
+      <button type="button" class="studio-menu" data-ai-close aria-label="<%= t("app.editor.close") %>">×</button>
     </div>
     <p class="muted studio-parts-note" data-ai-about></p>
     <textarea class="studio-ai-request" data-ai-request rows="3" maxlength="<%= ai_request_limit %>"></textarea>
-    <p class="muted studio-parts-note" data-ai-with><%= ai_with %><% unless ai_left.nil? %> <span data-ai-left><%= ai_left %></span> questions left today.<% end %><% if ai_link %> <a href="<%= ai_link["href"] %>"><%= ai_link["text"] %></a><% end %></p>
+    <p class="muted studio-parts-note" data-ai-with><%= ai_with %><% unless ai_left.nil? %> <span data-ai-left><%= ai_left %></span> <%= t("app.editor.questions_left_today") %><% end %><% if ai_link %> <a href="<%= ai_link["href"] %>"><%= ai_link["text"] %></a><% end %></p>
     <p class="studio-parts-note" data-ai-status hidden></p>
     <p class="form-error" data-ai-error hidden></p>
     <div class="studio-ai-result" data-ai-result hidden>
@@ -42,9 +43,9 @@
       <div class="studio-parts-preview" data-ai-preview></div>
     </div>
     <div class="studio-ai-actions">
-      <button type="submit" class="btn btn-primary" data-ai-send>Ask</button>
-      <button type="button" class="btn btn-primary" data-ai-apply hidden>Apply to the score</button>
-      <button type="button" class="btn btn-ghost" data-ai-again hidden>Ask again</button>
+      <button type="submit" class="btn btn-primary" data-ai-send><%= t("app.editor.ask") %></button>
+      <button type="button" class="btn btn-primary" data-ai-apply hidden><%= t("app.editor.apply_to_the_score") %></button>
+      <button type="button" class="btn btn-ghost" data-ai-again hidden><%= t("app.editor.ask_again") %></button>
     </div>
   </form>
 </dialog>
@@ -54,25 +55,25 @@
     stays kept in this browser and leaving the page asks first. %>
 <dialog class="studio-keys studio-conflict" data-conflict aria-labelledby="studio-conflict-title">
   <div class="studio-keys-head">
-    <h2 id="studio-conflict-title">Changed elsewhere</h2>
-    <button type="button" class="studio-menu" data-conflict-close aria-label="Close">×</button>
+    <h2 id="studio-conflict-title"><%= t("app.editor.changed_elsewhere") %></h2>
+    <button type="button" class="studio-menu" data-conflict-close aria-label="<%= t("app.editor.close") %>">×</button>
   </div>
   <%# Who saved it: the 409 names them ("saved_by"), or nobody when it was
       this person, from another window. %>
-  <p class="studio-parts-note"><span data-conflict-who>This score was saved from another window</span> since you opened it. Your changes are not lost: they are kept here and in the score's history.</p>
+  <p class="studio-parts-note"><span data-conflict-who><%= t("app.editor.page.saved_elsewhere") %></span> <%- t("app.editor.since_you_opened_it") %></p>
   <%# The bars changed both here and there (#384): everything else is merged,
       and these are taken from one side or the other. Hidden when the score
       could not be merged by bar: then it is all mine or all theirs. %>
   <div data-conflict-merge hidden>
-    <p class="studio-parts-note">Everything else is merged. These were changed both here and there:</p>
+    <p class="studio-parts-note"><%= t("app.editor.everything_else_is_merged") %></p>
     <ul class="studio-conflict-bars" data-conflict-bars></ul>
   </div>
   <div class="studio-conflict-actions">
-    <button type="button" class="tool tool-wide tool-primary" data-conflict-bars-mine hidden>Keep mine for these <small>their other changes merged in</small></button>
-    <button type="button" class="tool tool-wide" data-conflict-bars-theirs hidden>Take theirs for these <small>my other changes kept</small></button>
-    <button type="button" class="tool tool-wide tool-primary" data-conflict-mine>Keep mine <small>replace what was saved elsewhere</small></button>
-    <button type="button" class="tool tool-wide" data-conflict-theirs>Load theirs <small>drop my changes here</small></button>
-    <button type="button" class="tool tool-wide" data-conflict-copy>Save mine as a copy <small>a new score, this one left as saved elsewhere</small></button>
+    <button type="button" class="tool tool-wide tool-primary" data-conflict-bars-mine hidden><%= t("app.editor.keep_mine_for_these") %> <small><%= t("app.editor.their_other_changes_merged_in") %></small></button>
+    <button type="button" class="tool tool-wide" data-conflict-bars-theirs hidden><%= t("app.editor.take_theirs_for_these") %> <small><%= t("app.editor.my_other_changes_kept") %></small></button>
+    <button type="button" class="tool tool-wide tool-primary" data-conflict-mine><%= t("app.editor.keep_mine") %> <small><%= t("app.editor.replace_what_was_saved_elsewhere") %></small></button>
+    <button type="button" class="tool tool-wide" data-conflict-theirs><%= t("app.editor.load_theirs") %> <small><%= t("app.editor.drop_my_changes_here") %></small></button>
+    <button type="button" class="tool tool-wide" data-conflict-copy><%= t("app.editor.save_mine_as_a_copy") %> <small><%= t("app.editor.a_new_score_this_one_left_as_saved") %></small></button>
   </div>
 </dialog>
 
@@ -98,6 +99,9 @@
   const { mergeScores, conflictLines, anchorMap } = await import("/eui-score/merge.js?v=<%= eui_version %>");
   const { startComments, markersOf } = await import("/eui-score/comments.js?v=<%= eui_version %>");
   const root = document.getElementById("studio");
+  // What this page says, in the app's language (#508): `say("saved_by", { name })`.
+  const words = <%- editor_page_words().to_json %>;
+  const say = (key, vars = {}) => Object.keys(vars).reduce((text, name) => text.split(`{${name}}`).join(String(vars[name])), words[key]);
   const url = "<%= app_score_path(score) %>";
   const saveState = document.querySelector("[data-save-state]");
   const titleBox = document.querySelector("[data-doc-title]");
@@ -142,17 +146,17 @@
     stopped = true;
     clearTimeout(timer);
     if (forbidden) {
-      show("Not saved: you may no longer change this score (your changes are kept here)", "conflict");
+      show(say("not_allowed"), "conflict");
       return;
     }
-    saveState.textContent = "Signed out: ";
+    saveState.textContent = say("signed_out");
     const signIn = document.createElement("a");
     signIn.href = `/login?return_to=${encodeURIComponent(location.pathname)}`;
-    signIn.textContent = "sign in again";
+    signIn.textContent = say("sign_in_again");
     signIn.dataset.signIn = "";
     // The text is kept here: leaving for the sign-in page loses nothing.
     signIn.addEventListener("click", () => (stopped = "leaving"));
-    saveState.append(signIn, " to save (your changes are kept here)");
+    saveState.append(signIn, say("to_save"));
     saveState.dataset.kind = "signed-out";
   };
 
@@ -191,7 +195,7 @@
     if (text === answer.source) {
       pending = null;
       forgetLocally();
-      show(mergeNote ? `Saved, ${mergeNote}` : "Saved", "ok");
+      show(mergeNote ? say("saved_note", { note: mergeNote }) : say("saved"), "ok");
       mergeNote = null;
       return;
     }
@@ -202,8 +206,8 @@
 
   const openConflict = () => {
     const by = theirs?.saved_by ? shortName(theirs.saved_by) : null;
-    conflictWho.textContent = by ? `${by} saved this score` : "This score was saved from another window";
-    show(by ? `Changed by ${by}: choose what to keep` : "Changed elsewhere: choose what to keep", "conflict");
+    conflictWho.textContent = by ? say("saved_by", { name: by }) : say("saved_elsewhere");
+    show(by ? say("changed_by", { name: by }) : say("changed_elsewhere"), "conflict");
     // What the merge leaves to choose: some bars, or (not mergeable by bar) the whole score.
     const merged = mergeWith(theirs);
     const byBar = !merged.whole && merged.conflicts.length > 0;
@@ -225,8 +229,8 @@
   const meet = (answer, by) => {
     const merged = mergeWith(answer);
     if (merged.text == null) return false;
-    const note = by ? `merged with ${shortName(by)}'s changes` : "merged with your other window";
-    applyMerged(merged.text, answer, by ? `Merged with ${shortName(by)}'s changes.` : "Merged with the changes from your other window.", note);
+    const note = by ? say("merged_note_by", { name: shortName(by) }) : say("merged_note_window");
+    applyMerged(merged.text, answer, by ? say("merged_by", { name: shortName(by) }) : say("merged_window"), note);
     return true;
   };
   conflictBox.querySelector("[data-conflict-close]").addEventListener("click", () => conflictBox.close());
@@ -237,7 +241,7 @@
       const merged = mergeWith(answer, prefer);
       if (merged.text == null) return openConflict();
       resolve();
-      applyMerged(merged.text, answer, prefer === "mine" ? "Merged: your version of those bars kept." : "Merged: their version of those bars taken.");
+      applyMerged(merged.text, answer, prefer === "mine" ? say("merged_mine") : say("merged_theirs"));
     });
   }
   conflictBox.querySelector("[data-conflict-mine]").addEventListener("click", () => {
@@ -257,14 +261,14 @@
     base = answer.source;
     applyingRemote = true;
     try {
-      studio.load(answer.source, "The score as it was saved elsewhere. Your changes are in its history.");
+      studio.load(answer.source, say("loaded_theirs"));
     } finally {
       applyingRemote = false;
     }
     pending = null;
     forgetLocally();
     titleBox.textContent = answer.title;
-    show("Saved", "ok");
+    show(say("saved"), "ok");
   });
   conflictBox.querySelector("[data-conflict-copy]").addEventListener("click", () => {
     const form = document.querySelector("[data-open-form]");
@@ -273,7 +277,7 @@
     pending = null;
     stopped = "leaving";
     forgetLocally();
-    show("Saving a copy…", "busy");
+    show(say("saving_copy"), "busy");
     form.submit();
   });
 
@@ -282,7 +286,7 @@
     const text = pending;
     pending = null;
     saving = true;
-    show("Saving…", "busy");
+    show(say("saving"), "busy");
     const sentOps = barOps;
     barOps = [];
     let anchors = null;
@@ -314,7 +318,7 @@
         keepLocally(studio.source());
         openConflict();
       } else if (!response.ok) {
-        show(answer.error ?? "Not saved", "conflict");
+        show(answer.error ?? say("not_saved"), "conflict");
       } else {
         saved = true;
         revision = answer.revision;
@@ -325,12 +329,12 @@
         else keepLocally(pending);
         titleBox.textContent = answer.title;
         document.title = `${answer.title} · Score`;
-        show(pending == null ? (mergeNote ? `Saved, ${mergeNote}` : "Saved") : "Unsaved changes", pending == null ? "ok" : "dirty");
+        show(pending == null ? (mergeNote ? say("saved_note", { note: mergeNote }) : say("saved")) : say("unsaved"), pending == null ? "ok" : "dirty");
         if (pending == null) mergeNote = null;
       }
     } catch (error) {
       pending ??= text;
-      show("Offline — saving when back", "offline");
+      show(say("offline"), "offline");
       setTimeout(save, 5000);
     } finally {
       saving = false;
@@ -357,14 +361,14 @@
     // Read from an attribute, escaped by the template: a name is never written into the script.
     authorName: document.querySelector("[data-author-name]")?.dataset.authorName ?? "",
     source: root.querySelector("[data-source]").value,
-    greeting: "Your changes save themselves.",
+    greeting: say("greeting"),
     onChange(text) {
       if (applyingRemote) return;
       // Whatever happens to the saves, what is typed is kept here.
       keepLocally(text);
       pending = text;
       if (conflict || stopped) return;
-      show("Unsaved changes", "dirty");
+      show(say("unsaved"), "dirty");
       schedule();
     },
     onOpen: openAsNew,
@@ -388,7 +392,7 @@
     await save();
     const form = document.querySelector("[data-open-form]");
     form.querySelector("[data-open-source]").value = text;
-    show("Opening as a new score…", "busy");
+    show(say("opening_new"), "busy");
     form.submit();
   }
 
@@ -413,30 +417,30 @@
     const k = at >= 0 ? at : [...id].reduce((sum, c) => sum + c.charCodeAt(0), 0);
     return COLOURS[k % COLOURS.length];
   };
-  const shortName = (name) => String(name ?? "").replace(/@.*$/, "") || "Someone";
+  const shortName = (name) => String(name ?? "").replace(/@.*$/, "") || say("someone");
   const nameOf = (id) => people[id]?.metas?.[0]?.name;
   const showPeople = () => {
     const others = Object.entries(people).filter(([id]) => id !== me);
     roomBox.hidden = others.length === 0;
     roomBox.replaceChildren();
     if (others.length) {
-      roomBox.append("With");
+      roomBox.append(say("with"));
       others.forEach(([id, p], k) => {
         // Someone on the read page (#392) listens: said as reading.
         const reading = p.metas.every((meta) => meta.role === "listen");
-        const chip = Object.assign(document.createElement("span"), { className: "app-room-person", textContent: shortName(p.metas[0].name) + (reading ? " (reading)" : "") + (k < others.length - 1 ? "," : "") });
+        const chip = Object.assign(document.createElement("span"), { className: "app-room-person", textContent: shortName(p.metas[0].name) + (reading ? say("reading") : "") + (k < others.length - 1 ? "," : "") });
         chip.style.setProperty("--peer", colourOf(id));
         chip.dataset.person = id;
         roomBox.append(chip);
       });
     }
-    roomBox.title = others.length ? `Also editing: ${others.map(([, p]) => p.metas[0].name).join(", ")}` : "";
+    roomBox.title = others.length ? say("also_editing", { names: others.map(([, p]) => p.metas[0].name).join(", ") }) : "";
     showCursors();
   };
   const showCursors = () => {
     studio.peers(Object.entries(cursors).map(([id, c]) => ({
       id,
-      name: c.user_id === me ? "You, in another window" : shortName(c.name),
+      name: c.user_id === me ? say("you_elsewhere") : shortName(c.name),
       colour: colourOf(c.user_id),
       lane: c.lane,
       bars: c.bars,
@@ -518,11 +522,11 @@
       } else if (data.event === "saved" && data.origin !== origin && data.revision > revision) {
         // This editor's own save on its way, or a choice open: that save meets the 409, which merges.
         if (saving || conflict) {
-          show("Changed in another window", "conflict");
+          show(say("changed_window"), "conflict");
           return;
         }
         if (pending != null) {
-          const by = data.saved_by === me ? null : shortName(nameOf(data.saved_by) ?? "someone");
+          const by = data.saved_by === me ? null : shortName(nameOf(data.saved_by) ?? say("someone_lower"));
           clearTimeout(timer);
           // Bars changed both ways: sent now, the save meets the 409, which keeps
           // this text in the score's history and opens the choice.
@@ -534,13 +538,13 @@
         applyingRemote = true;
         try {
           // Theirs, not a step of this person's: Undo takes back only this person's own, around it.
-          studio.load(data.source, "Updated: someone else saved this score.", { remote: true });
+          studio.load(data.source, say("updated"), { remote: true });
         } finally {
           applyingRemote = false;
         }
         forgetLocally();
         titleBox.textContent = data.title;
-        show("Saved", "ok");
+        show(say("saved"), "ok");
       } else if (data.event === "comments" && data.origin !== origin) {
         // A comment of someone else's (#385): in the panel and on the score; the bell may have news.
         comments.take(data);
@@ -569,7 +573,7 @@
   };
   const selectThread = (thread) => {
     if (!thread || studio.selectPlace(thread)) return;
-    root.querySelector("[data-status]").textContent = `${thread.label}: those bars are no longer in the score.`;
+    root.querySelector("[data-status]").textContent = say("bars_gone", { label: thread.label });
   };
   const comments = startComments(commentsPanel.querySelector("[data-comments]"), {
     url: "<%= app_score_comments_path(score) %>",
@@ -614,7 +618,7 @@
       // Typed over another revision than this page's: what both had in common is not known here.
       if (kept.revision !== revision) base = null;
       revision = kept.revision;
-      studio.load(kept.text, "Your changes made without a network are back, and being saved.");
+      studio.load(kept.text, say("back_offline"));
     });
   }
   window.addEventListener("beforeunload", (event) => {
@@ -624,8 +628,8 @@
   document.querySelector("[data-keep-version]").addEventListener("click", async (event) => {
     await save();
     const response = await fetch(`${url}/versions`, { method: "POST", headers: { Accept: "application/json" } });
-    event.target.textContent = response.ok ? "Version kept" : "Not kept";
-    setTimeout(() => (event.target.textContent = "Keep a version"), 2500);
+    event.target.textContent = response.ok ? say("version_kept") : say("not_kept");
+    setTimeout(() => (event.target.textContent = say("keep_version")), 2500);
   });
 
   // File › Open a photo…: read on the person's own AI key; what was read
@@ -636,7 +640,7 @@
     event.target.closest("details")?.removeAttribute("open");
     if (!file) return;
     const { readPhoto, readingSays } = await import("/js/score-photo.js?v=<%= eui_version %>");
-    show("Sending the photo…", "busy");
+    show(say("sending_photo"), "busy");
     try {
       // How it goes (#435): the time, and whether the AI is still reading or writing.
       const answer = await readPhoto(file, {
@@ -645,7 +649,7 @@
       });
       await openAsNew(answer.source);
     } catch (problem) {
-      show("Photo not read", "conflict");
+      show(say("photo_not_read"), "conflict");
       // The key or the plan (#396): the page that lifts it, if they want it.
       if (problem.link && confirm(`${problem.message}
 
@@ -662,10 +666,10 @@ ${problem.linkText}?`)) location.href = problem.link;
   const ai = document.querySelector("[data-ai]");
   const aiPart = (name) => ai.querySelector(`[data-ai-${name}]`);
   const AI_ASKS = {
-    chords: ["Chord progression", "Chord symbols for the melody, above it. Say a style if you like: jazz, pop, baroque, modal…", "Optional: a style, an era, how rich the chords should be"],
-    harmonize: ["Harmonize the melody", "An accompaniment under the melody, for piano unless you name other voices or instruments.", "Optional: for SATB choir, for string quartet, simple chords on the beat…"],
-    improve: ["Suggest improvements", "What the AI would change (voice leading, rhythm, dynamics, phrasing…), with the score revised.", "Optional: what to look at first"],
-    ask: ["Ask the AI", "Anything to do with this score.", "Make the bass line more mobile; transpose it for clarinet in B♭; add a coda…"],
+    chords: [say("chords_title"), say("chords_about"), say("chords_hint")],
+    harmonize: [say("harmonize_title"), say("harmonize_about"), say("harmonize_hint")],
+    improve: [say("improve_title"), say("improve_about"), say("improve_hint")],
+    ask: [say("ask_title"), say("ask_about"), say("ask_hint")],
   };
   let aiAction = "chords";
   let aiAnswer = null;
@@ -699,7 +703,7 @@ ${problem.linkText}?`)) location.href = problem.link;
     const fail = (message, link, linkText) => {
       aiPart("status").hidden = true;
       aiPart("error").textContent = message;
-      if (link) aiPart("error").append(" ", Object.assign(document.createElement("a"), { href: link, textContent: linkText || "See the plans" }));
+      if (link) aiPart("error").append(" ", Object.assign(document.createElement("a"), { href: link, textContent: linkText || say("see_plans") }));
       aiPart("error").hidden = false;
       aiPart("send").disabled = false;
       aiPart("request").disabled = false;
@@ -707,7 +711,7 @@ ${problem.linkText}?`)) location.href = problem.link;
     aiPart("error").hidden = true;
     aiPart("send").disabled = true;
     aiPart("request").disabled = true;
-    aiPart("status").textContent = "The AI is working on it… a minute or two.";
+    aiPart("status").textContent = say("ai_working");
     aiPart("status").hidden = false;
     try {
       const sent = await fetch("<%= app_score_suggestions_path(score) %>", {
@@ -728,23 +732,23 @@ ${problem.linkText}?`)) location.href = problem.link;
         if (answer.state === "failed") return fail(answer.error);
         aiAnswer = answer;
         aiPart("status").hidden = true;
-        aiPart("explanation").textContent = answer.explanation || "Here is the score the AI proposes.";
+        aiPart("explanation").textContent = answer.explanation || say("ai_proposes");
         aiPart("preview").innerHTML = answer.svg;
         aiPart("result").hidden = false;
         aiPart("send").hidden = true;
         aiPart("apply").hidden = aiPart("again").hidden = false;
         return;
       }
-      fail("No answer after five minutes. Try again in a moment.");
+      fail(say("ai_timeout"));
     } catch (problem) {
-      fail("The request could not be sent. Check your connection and try again.");
+      fail(say("ai_not_sent"));
     }
   });
   aiPart("apply").addEventListener("click", async () => {
     if (!aiAnswer) return;
     await save();
     await fetch(`${url}/versions`, { method: "POST", headers: { Accept: "application/json" } });
-    studio.load(aiAnswer.source, `${AI_ASKS[aiAction][0]}: applied. Undo, or the History, takes it back.`);
+    studio.load(aiAnswer.source, say("ai_applied", { title: AI_ASKS[aiAction][0] }));
     ai.close();
   });
 </script>

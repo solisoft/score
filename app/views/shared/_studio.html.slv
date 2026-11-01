@@ -10,341 +10,349 @@
 <link rel="modulepreload" href="<%= module_href %>">
 <% end %>
 <link rel="modulepreload" href="<%= studio_preloads["engine"] %>">
+<%# The editor's words in the app's language (#508): public/eui-score/words.js
+    looks its modules' English sentences up in them; none in English. %>
+<% studio_words = locals["editor_words"] ?? {} %>
+<% if studio_words.length > 0 %>
+<script>window.EUI_WORDS = <%- studio_words.to_json %>; window.EUI_WORDS_LOCALE = "<%= I18n.locale() %>";</script>
+<% else %>
+<script>window.EUI_WORDS = null; window.EUI_WORDS_LOCALE = "en";</script>
+<% end %>
 <link rel="preload" href="<%= studio_preloads["wasm"] %>" as="fetch" type="application/wasm" crossorigin>
 <div class="studio" id="studio" data-no-nav>
   <%# The menu bar: menus as an application has them (File, Edit, View,
       Insert, Play — each item its shortcut), and the few commands used all
       the time beside them. Items are the toolbox's own buttons, data-act,
       so studio.js handles them alike. %>
-  <div class="studio-menubar" aria-label="Score">
-    <button type="button" class="studio-menu studio-tools-toggle" data-act="tools" aria-expanded="false" aria-controls="studio-toolbox">Tools</button>
+  <div class="studio-menubar" aria-label="<%= t("app.editor.score") %>">
+    <button type="button" class="studio-menu studio-tools-toggle" data-act="tools" aria-expanded="false" aria-controls="studio-toolbox"><%= t("app.editor.tools") %></button>
     <div class="studio-menu-scroll">
       <nav class="studio-menus" aria-label="Menus" data-menus>
         <details class="studio-dropdown">
-          <summary class="studio-menu">File</summary>
+          <summary class="studio-menu"><%= t("app.editor.file") %></summary>
           <div class="studio-dropdown-items" role="menu">
-            <button type="button" role="menuitem" data-act="new">New… <kbd>from a template</kbd></button>
-            <label role="menuitem" class="studio-dropdown-file">Open a file… <kbd>.ly, MusicXML, MIDI</kbd><input type="file" accept=".ly,.ily,.txt,.musicxml,.mxl,.xml,.mid,.midi,text/plain,audio/midi" data-act="open" hidden></label>
+            <button type="button" role="menuitem" data-act="new"><%= t("app.editor.new") %> <kbd><%- t("app.editor.from_a_template") %></kbd></button>
+            <label role="menuitem" class="studio-dropdown-file"><%= t("app.editor.open_a_file") %> <kbd>.ly, MusicXML, MIDI</kbd><input type="file" accept=".ly,.ily,.txt,.musicxml,.mxl,.xml,.mid,.midi,text/plain,audio/midi" data-act="open" hidden></label>
             <% if locals["app"] && locals["ai_link"] %>
               <%# No usable AI key (#396): the way to one, before any photo is chosen. %>
-              <a role="menuitem" class="studio-dropdown-file" href="<%= locals["ai_link"]["href"] %>" data-photo-refused>Open a photo… <kbd><%= locals["ai_link"]["text"] %></kbd></a>
+              <a role="menuitem" class="studio-dropdown-file" href="<%= locals["ai_link"]["href"] %>" data-photo-refused><%= t("app.editor.open_a_photo") %> <kbd><%= locals["ai_link"]["text"] %></kbd></a>
             <% elsif locals["app"] %>
-              <label role="menuitem" class="studio-dropdown-file">Open a photo… <kbd>read by AI</kbd><input type="file" accept="image/*" data-photo-open hidden></label>
+              <label role="menuitem" class="studio-dropdown-file"><%= t("app.editor.open_a_photo") %> <kbd><%- t("app.editor.read_by_ai") %></kbd><input type="file" accept="image/*" data-photo-open hidden></label>
             <% end %>
-            <label class="studio-dropdown-select">Open an example
-              <select data-act="example" aria-label="Open an example">
-                <option value="">Examples…</option>
+            <label class="studio-dropdown-select"><%= t("app.editor.open_an_example") %>
+              <select data-act="example" aria-label="<%= t("app.editor.open_an_example") %>">
+                <option value=""><%= t("app.editor.examples") %></option>
                 <% for example in examples %>
                   <option value="<%= example["category"] %>/<%= example["slug"] %>"><%= example["title"] %> — <%= example["instrument"] %></option>
                 <% end %>
               </select>
             </label>
-            <button type="button" role="menuitem" data-act="properties">Score properties… <kbd>title, tempo, staves</kbd></button>
+            <button type="button" role="menuitem" data-act="properties"><%= t("app.editor.score_properties_menu") %> <kbd><%= t("app.editor.title_tempo_staves") %></kbd></button>
             <hr>
-            <button type="button" role="menuitem" data-act="save-ly">Save the LilyPond source <kbd>.ly</kbd></button>
-            <button type="button" role="menuitem" data-act="save-pdf">Print as PDF <kbd data-pdf-paper><%= paper_label(source) %></kbd></button>
-            <button type="button" role="menuitem" data-act="save-midi">Save as MIDI <kbd>.mid, as played</kbd></button>
-            <button type="button" role="menuitem" data-act="save-musicxml">Save as MusicXML <kbd>.musicxml</kbd></button>
-            <button type="button" role="menuitem" data-act="save-wav">Save the sound <kbd>.wav</kbd></button>
-            <button type="button" role="menuitem" data-act="save-mp3">Save the sound as MP3 <kbd>.mp3</kbd></button>
-            <button type="button" role="menuitem" data-act="save-stems">Save the stems <kbd>.zip, a WAV a staff</kbd></button>
-            <button type="button" role="menuitem" data-act="save-png">Save a picture <kbd>.png</kbd></button>
-            <button type="button" role="menuitem" data-act="save-svg">Save a drawing <kbd>.svg</kbd></button>
-            <button type="button" role="menuitem" data-act="parts">Print a part… <kbd>one instrument</kbd></button>
+            <button type="button" role="menuitem" data-act="save-ly"><%= t("app.editor.save_the_lilypond_source") %> <kbd>.ly</kbd></button>
+            <button type="button" role="menuitem" data-act="save-pdf"><%= t("app.editor.print_as_pdf") %> <kbd data-pdf-paper><%= paper_label(source) %></kbd></button>
+            <button type="button" role="menuitem" data-act="save-midi"><%= t("app.editor.save_as_midi") %> <kbd><%= t("app.editor.mid_as_played") %></kbd></button>
+            <button type="button" role="menuitem" data-act="save-musicxml"><%= t("app.editor.save_as_musicxml") %> <kbd>.musicxml</kbd></button>
+            <button type="button" role="menuitem" data-act="save-wav"><%= t("app.editor.save_the_sound") %> <kbd>.wav</kbd></button>
+            <button type="button" role="menuitem" data-act="save-mp3"><%= t("app.editor.save_the_sound_as_mp3") %> <kbd>.mp3</kbd></button>
+            <button type="button" role="menuitem" data-act="save-stems"><%= t("app.editor.save_the_stems") %> <kbd><%= t("app.editor.zip_a_wav_a_staff") %></kbd></button>
+            <button type="button" role="menuitem" data-act="save-png"><%= t("app.editor.save_a_picture") %> <kbd>.png</kbd></button>
+            <button type="button" role="menuitem" data-act="save-svg"><%= t("app.editor.save_a_drawing") %> <kbd>.svg</kbd></button>
+            <button type="button" role="menuitem" data-act="parts"><%= t("app.editor.print_a_part") %> <kbd><%= t("app.editor.one_instrument") %></kbd></button>
             <hr>
             <%# The owner shares from the score's sharing page; someone it is
                 shared with copies its address in the app; the playground
                 copies a link that holds the score. %>
             <% if locals["owner"] %>
-              <button type="button" role="menuitem" data-act="share">Share… <kbd>who may open it</kbd></button>
+              <button type="button" role="menuitem" data-act="share"><%= t("app.editor.share") %> <kbd><%- t("app.editor.who_may_open_it") %></kbd></button>
             <% elsif locals["app"] %>
-              <button type="button" role="menuitem" data-act="share">Copy a link to this score <kbd>for those it is shared with</kbd></button>
+              <button type="button" role="menuitem" data-act="share"><%= t("app.editor.copy_a_link_to_this_score") %> <kbd><%= t("app.editor.for_those_it_is_shared_with") %></kbd></button>
             <% else %>
-              <button type="button" role="menuitem" data-act="share">Copy a link to this score <kbd>the score inside</kbd></button>
+              <button type="button" role="menuitem" data-act="share"><%= t("app.editor.copy_a_link_to_this_score") %> <kbd><%= t("app.editor.the_score_inside") %></kbd></button>
             <% end %>
           </div>
         </details>
         <details class="studio-dropdown">
-          <summary class="studio-menu">Edit</summary>
+          <summary class="studio-menu"><%= t("app.editor.edit") %></summary>
           <div class="studio-dropdown-items" role="menu">
-            <button type="button" role="menuitem" data-act="undo">Undo <kbd>Ctrl+Z</kbd></button>
-            <button type="button" role="menuitem" data-act="redo">Redo <kbd>Ctrl+Y</kbd></button>
+            <button type="button" role="menuitem" data-act="undo"><%= t("app.editor.undo") %> <kbd>Ctrl+Z</kbd></button>
+            <button type="button" role="menuitem" data-act="redo"><%= t("app.editor.redo") %> <kbd>Ctrl+Y</kbd></button>
             <hr>
-            <button type="button" role="menuitem" data-act="mode-select">Select notes <kbd>Esc</kbd></button>
-            <button type="button" role="menuitem" data-act="mode-input"><svg class="pen-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M15.5 3.5l5 5L9 20l-6.5 1.5L4 15z"/><path d="M13 6l5 5"/><path d="M4 15l5 5"/></svg> Write notes <kbd>N or I</kbd></button>
+            <button type="button" role="menuitem" data-act="mode-select"><%= t("app.editor.select_notes") %> <kbd>Esc</kbd></button>
+            <button type="button" role="menuitem" data-act="mode-input"><svg class="pen-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M15.5 3.5l5 5L9 20l-6.5 1.5L4 15z"/><path d="M13 6l5 5"/><path d="M4 15l5 5"/></svg> <%= t("app.editor.write_notes") %> <kbd>N or I</kbd></button>
             <hr>
-            <button type="button" role="menuitem" data-act="copy">Copy <kbd>Ctrl+C</kbd></button>
-            <button type="button" role="menuitem" data-act="cut">Cut <kbd>Ctrl+X</kbd></button>
-            <button type="button" role="menuitem" data-act="paste">Paste over the selection <kbd>Ctrl+V</kbd></button>
-            <button type="button" role="menuitem" data-act="insert-copied">Insert the copied bars before the selection <kbd>Ctrl+Shift+V</kbd></button>
-            <button type="button" role="menuitem" data-act="section-library">Library of sections… <kbd>bars others shared</kbd></button>
+            <button type="button" role="menuitem" data-act="copy"><%= t("app.editor.copy") %> <kbd>Ctrl+C</kbd></button>
+            <button type="button" role="menuitem" data-act="cut"><%= t("app.editor.cut") %> <kbd>Ctrl+X</kbd></button>
+            <button type="button" role="menuitem" data-act="paste"><%= t("app.editor.paste_over_the_selection") %> <kbd>Ctrl+V</kbd></button>
+            <button type="button" role="menuitem" data-act="insert-copied"><%= t("app.editor.insert_the_copied_bars_before_the") %> <kbd>Ctrl+Shift+V</kbd></button>
+            <button type="button" role="menuitem" data-act="section-library"><%= t("app.editor.library_of_sections") %> <kbd><%- t("app.editor.bars_others_shared") %></kbd></button>
             <% if locals["app"] %>
-              <button type="button" role="menuitem" data-act="share-section">Share the selected bars… <kbd>in the library</kbd></button>
+              <button type="button" role="menuitem" data-act="share-section"><%= t("app.editor.share_the_selected_bars") %> <kbd><%= t("app.editor.in_the_library") %></kbd></button>
             <% end %>
             <hr>
-            <button type="button" role="menuitem" data-act="insert-bar">Insert a bar before the selection <kbd>Insert</kbd></button>
-            <button type="button" role="menuitem" data-act="add-bar">Add a bar at the end <kbd>]</kbd></button>
-            <button type="button" role="menuitem" data-act="delete-bars">Delete the selected bars <kbd>Ctrl+Del</kbd></button>
+            <button type="button" role="menuitem" data-act="insert-bar"><%= t("app.editor.insert_a_bar_before_the_selection") %> <kbd>Insert</kbd></button>
+            <button type="button" role="menuitem" data-act="add-bar"><%= t("app.editor.add_a_bar_at_the_end") %> <kbd>]</kbd></button>
+            <button type="button" role="menuitem" data-act="delete-bars"><%= t("app.editor.delete_the_selected_bars") %> <kbd>Ctrl+Del</kbd></button>
             <hr>
-            <button type="button" role="menuitem" data-act="break" data-kind="line">A new line after this bar <kbd>again to remove</kbd></button>
-            <button type="button" role="menuitem" data-act="break" data-kind="page">A new page after this bar <kbd>again to remove</kbd></button>
+            <button type="button" role="menuitem" data-act="break" data-kind="line"><%= t("app.editor.a_new_line_after_this_bar") %> <kbd><%= t("app.editor.again_to_remove") %></kbd></button>
+            <button type="button" role="menuitem" data-act="break" data-kind="page"><%= t("app.editor.a_new_page_after_this_bar") %> <kbd><%= t("app.editor.again_to_remove") %></kbd></button>
             <hr>
-            <button type="button" role="menuitem" data-act="transpose" data-scope="selection">Transpose the selection</button>
-            <button type="button" role="menuitem" data-act="transpose" data-scope="score">Transpose the score</button>
-            <button type="button" role="menuitem" data-act="enharmonic">Spell the other way (C♯ ↔ D♭) <kbd>J</kbd></button>
-            <button type="button" role="menuitem" data-act="swap-voices">Swap voices 1 and 2 <kbd>the selected bars</kbd></button>
+            <button type="button" role="menuitem" data-act="transpose" data-scope="selection"><%= t("app.editor.transpose_the_selection") %></button>
+            <button type="button" role="menuitem" data-act="transpose" data-scope="score"><%= t("app.editor.transpose_the_score") %></button>
+            <button type="button" role="menuitem" data-act="enharmonic"><%= t("app.editor.spell_the_other_way_c_sharp_d_flat") %> <kbd>J</kbd></button>
+            <button type="button" role="menuitem" data-act="swap-voices"><%= t("app.editor.swap_voices_1_and_2") %> <kbd><%= t("app.editor.the_selected_bars") %></kbd></button>
             <hr>
-            <button type="button" role="menuitem" data-act="drum-grid">Drum grid… <kbd>a drum staff's bar</kbd></button>
-            <button type="button" role="menuitem" data-act="arpeggiate">Arpeggiate the selected chords…</button>
-            <button type="button" role="menuitem" data-act="accompaniment">Accompaniment: guitar, piano, bass, drums…</button>
-            <button type="button" role="menuitem" data-act="chord-track">Chord track from the chord symbols…</button>
-            <button type="button" role="menuitem" data-act="quantize">Quantize… <kbd>the selection, or the score</kbd></button>
+            <button type="button" role="menuitem" data-act="drum-grid"><%= t("app.editor.drum_grid") %> <kbd><%- t("app.editor.a_drum_staff_s_bar") %></kbd></button>
+            <button type="button" role="menuitem" data-act="arpeggiate"><%= t("app.editor.arpeggiate_the_selected_chords") %></button>
+            <button type="button" role="menuitem" data-act="accompaniment"><%= t("app.editor.accompaniment_guitar_piano_bass_drums") %></button>
+            <button type="button" role="menuitem" data-act="chord-track"><%- t("app.editor.chord_track_from_the_chord_symbols") %></button>
+            <button type="button" role="menuitem" data-act="quantize"><%= t("app.editor.quantize_dialog") %> <kbd><%= t("app.editor.the_selection_or_the_score") %></kbd></button>
             <%# Comments (#385): a thread on the selected bars of a staff, in the app only. %>
             <% if locals["app"] %>
               <hr>
-              <button type="button" role="menuitem" data-act="comment">Comment on the selection <kbd>Ctrl+Alt+M</kbd></button>
+              <button type="button" role="menuitem" data-act="comment"><%= t("app.editor.comment_on_the_selection") %> <kbd>Ctrl+Alt+M</kbd></button>
             <% end %>
           </div>
         </details>
         <details class="studio-dropdown">
-          <summary class="studio-menu">View</summary>
+          <summary class="studio-menu"><%= t("app.editor.view") %></summary>
           <div class="studio-dropdown-items" role="menu">
-            <button type="button" role="menuitem" data-act="zoom-in">Larger <kbd>Ctrl++</kbd></button>
-            <button type="button" role="menuitem" data-act="zoom-out">Smaller <kbd>Ctrl+−</kbd></button>
-            <button type="button" role="menuitem" data-act="tools">Show or hide the tools</button>
+            <button type="button" role="menuitem" data-act="zoom-in"><%= t("app.editor.larger") %> <kbd>Ctrl++</kbd></button>
+            <button type="button" role="menuitem" data-act="zoom-out"><%= t("app.editor.smaller") %> <kbd>Ctrl+−</kbd></button>
+            <button type="button" role="menuitem" data-act="tools"><%= t("app.editor.show_or_hide_the_tools") %></button>
             <% if locals["app"] %>
-              <button type="button" role="menuitem" data-act="midi-view" data-midi-label>MIDI view <kbd>tracks, piano roll</kbd></button>
+              <button type="button" role="menuitem" data-act="midi-view" data-midi-label><%= t("app.editor.midi_view") %> <kbd><%= t("app.editor.tracks_piano_roll") %></kbd></button>
             <% end %>
             <%# The source beside the score, on a wide screen (#420); kept in this browser. %>
-            <button type="button" role="menuitem" data-act="source-side" data-source-side-label>Source beside the score <kbd>wide screens</kbd></button>
-            <button type="button" role="menuitem" data-act="written" data-written-label>Written pitch <kbd>clarinets, horns, saxes</kbd></button>
-            <button type="button" role="menuitem" data-act="keys">Keyboard shortcuts <kbd>?</kbd></button>
+            <button type="button" role="menuitem" data-act="source-side" data-source-side-label><%= t("app.editor.source_beside_the_score") %> <kbd><%= t("app.editor.wide_screens") %></kbd></button>
+            <button type="button" role="menuitem" data-act="written" data-written-label><%= t("app.editor.written_pitch") %> <kbd><%= t("app.editor.clarinets_horns_saxes") %></kbd></button>
+            <button type="button" role="menuitem" data-act="keys"><%= t("app.editor.keyboard_shortcuts") %> <kbd>?</kbd></button>
           </div>
         </details>
         <details class="studio-dropdown">
-          <summary class="studio-menu">Insert</summary>
+          <summary class="studio-menu"><%= t("app.editor.insert") %></summary>
           <div class="studio-dropdown-items" role="menu">
-            <button type="button" role="menuitem" data-act="tie">Tie <kbd>T</kbd></button>
-            <button type="button" role="menuitem" data-act="slur">Slur <kbd>S</kbd></button>
-            <button type="button" role="menuitem" data-act="slur-up">Slur above</button>
-            <button type="button" role="menuitem" data-act="slur-down">Slur below</button>
-            <button type="button" role="menuitem" data-act="phrase">Phrasing slur <kbd>Shift+S</kbd></button>
-            <button type="button" role="menuitem" data-act="ottava" data-value="1">8va above the selection</button>
-            <button type="button" role="menuitem" data-act="ottava" data-value="-1">8vb below the selection</button>
-            <button type="button" role="menuitem" data-act="ottava-end">End the ottava line here</button>
+            <button type="button" role="menuitem" data-act="tie"><%= t("app.editor.tie") %> <kbd>T</kbd></button>
+            <button type="button" role="menuitem" data-act="slur"><%= t("app.editor.slur") %> <kbd>S</kbd></button>
+            <button type="button" role="menuitem" data-act="slur-up"><%= t("app.editor.slur_above") %></button>
+            <button type="button" role="menuitem" data-act="slur-down"><%= t("app.editor.slur_below") %></button>
+            <button type="button" role="menuitem" data-act="phrase"><%= t("app.editor.phrasing_slur") %> <kbd>Shift+S</kbd></button>
+            <button type="button" role="menuitem" data-act="ottava" data-value="1"><%= t("app.editor.n_8va_above_the_selection") %></button>
+            <button type="button" role="menuitem" data-act="ottava" data-value="-1"><%= t("app.editor.n_8vb_below_the_selection") %></button>
+            <button type="button" role="menuitem" data-act="ottava-end"><%- t("app.editor.end_the_ottava_line_here") %></button>
             <hr>
-            <button type="button" role="menuitem" data-act="stem" data-dir="1">Stems up</button>
-            <button type="button" role="menuitem" data-act="stem" data-dir="-1">Stems down</button>
-            <button type="button" role="menuitem" data-act="stem" data-dir="0">Stems as the voice wants</button>
-            <button type="button" role="menuitem" data-act="stem-flip">Flip the stems <kbd>X</kbd></button>
-            <button type="button" role="menuitem" data-act="beam">Beam the selected notes <kbd>Alt+B</kbd></button>
-            <button type="button" role="menuitem" data-act="beam-break">Break the beam before the note <kbd>Alt+Shift+B</kbd></button>
-            <button type="button" role="menuitem" data-act="cross" data-dir="-1">Notes on the staff above <kbd>Ctrl+Shift+↑</kbd></button>
-            <button type="button" role="menuitem" data-act="cross" data-dir="1">Notes on the staff below <kbd>Ctrl+Shift+↓</kbd></button>
+            <button type="button" role="menuitem" data-act="stem" data-dir="1"><%= t("app.editor.stems_up") %></button>
+            <button type="button" role="menuitem" data-act="stem" data-dir="-1"><%= t("app.editor.stems_down") %></button>
+            <button type="button" role="menuitem" data-act="stem" data-dir="0"><%= t("app.editor.stems_as_the_voice_wants") %></button>
+            <button type="button" role="menuitem" data-act="stem-flip"><%= t("app.editor.flip_the_stems") %> <kbd>X</kbd></button>
+            <button type="button" role="menuitem" data-act="beam"><%= t("app.editor.beam_the_selected_notes") %> <kbd>Alt+B</kbd></button>
+            <button type="button" role="menuitem" data-act="beam-break"><%= t("app.editor.break_the_beam_before_the_note") %> <kbd>Alt+Shift+B</kbd></button>
+            <button type="button" role="menuitem" data-act="cross" data-dir="-1"><%= t("app.editor.notes_on_the_staff_above") %> <kbd>Ctrl+Shift+↑</kbd></button>
+            <button type="button" role="menuitem" data-act="cross" data-dir="1"><%= t("app.editor.notes_on_the_staff_below") %> <kbd>Ctrl+Shift+↓</kbd></button>
             <hr>
-            <button type="button" role="menuitem" data-act="lyrics">Lyrics <kbd>Ctrl+L</kbd></button>
-            <button type="button" role="menuitem" data-act="chord">Chord symbol <kbd>Ctrl+K</kbd></button>
-            <button type="button" role="menuitem" data-act="figures">Figures (figured bass)</button>
-            <button type="button" role="menuitem" data-act="fret">Guitar chord diagram</button>
-            <button type="button" role="menuitem" data-act="fret-all">Guitar diagrams for the chord symbols</button>
-            <button type="button" role="menuitem" data-act="text">Staff text</button>
+            <button type="button" role="menuitem" data-act="lyrics"><%= t("app.editor.lyrics") %> <kbd>Ctrl+L</kbd></button>
+            <button type="button" role="menuitem" data-act="chord"><%= t("app.editor.chord_symbol") %> <kbd>Ctrl+K</kbd></button>
+            <button type="button" role="menuitem" data-act="figures"><%= t("app.editor.figures_figured_bass") %></button>
+            <button type="button" role="menuitem" data-act="fret"><%- t("app.editor.guitar_chord_diagram") %></button>
+            <button type="button" role="menuitem" data-act="fret-all"><%= t("app.editor.guitar_diagrams_for_the_chord_symbols") %></button>
+            <button type="button" role="menuitem" data-act="text"><%= t("app.editor.staff_text") %></button>
             <button type="button" role="menuitem" data-act="expression">Expression</button>
             <hr>
-            <button type="button" role="menuitem" data-act="mark" data-mark="letter">Rehearsal letter</button>
-            <button type="button" role="menuitem" data-act="repeat">Repeat the selected bars</button>
-            <button type="button" role="menuitem" data-act="ending">Ending 1. 2.</button>
-            <button type="button" role="menuitem" data-act="pedal" data-how="on">Sustain pedal</button>
+            <button type="button" role="menuitem" data-act="mark" data-mark="letter"><%= t("app.editor.rehearsal_letter") %></button>
+            <button type="button" role="menuitem" data-act="repeat"><%= t("app.editor.repeat_the_selected_bars") %></button>
+            <button type="button" role="menuitem" data-act="ending"><%= t("app.editor.ending_1_2") %></button>
+            <button type="button" role="menuitem" data-act="pedal" data-how="on"><%= t("app.editor.sustain_pedal") %></button>
             <hr>
-            <button type="button" role="menuitem" data-act="add-staff">A staff</button>
-            <button type="button" role="menuitem" data-act="chord-line">A line of chord names over the staff</button>
-            <button type="button" role="menuitem" data-act="figure-line">A figured bass under the staff</button>
-            <button type="button" role="menuitem" data-act="voice" data-voice="2">A second voice <kbd>Ctrl+Alt+2</kbd></button>
-            <button type="button" role="menuitem" data-act="voice" data-voice="3">A third voice <kbd>Ctrl+Alt+3</kbd></button>
-            <button type="button" role="menuitem" data-act="voice" data-voice="4">A fourth voice <kbd>Ctrl+Alt+4</kbd></button>
+            <button type="button" role="menuitem" data-act="add-staff"><%= t("app.editor.a_staff") %></button>
+            <button type="button" role="menuitem" data-act="chord-line"><%- t("app.editor.a_line_of_chord_names_over_the_staff") %></button>
+            <button type="button" role="menuitem" data-act="figure-line"><%= t("app.editor.a_figured_bass_under_the_staff") %></button>
+            <button type="button" role="menuitem" data-act="voice" data-voice="2"><%= t("app.editor.a_second_voice") %> <kbd>Ctrl+Alt+2</kbd></button>
+            <button type="button" role="menuitem" data-act="voice" data-voice="3"><%= t("app.editor.a_third_voice") %> <kbd>Ctrl+Alt+3</kbd></button>
+            <button type="button" role="menuitem" data-act="voice" data-voice="4"><%= t("app.editor.a_fourth_voice") %> <kbd>Ctrl+Alt+4</kbd></button>
           </div>
         </details>
         <details class="studio-dropdown">
-          <summary class="studio-menu">Play</summary>
+          <summary class="studio-menu"><%= t("app.editor.play") %></summary>
           <div class="studio-dropdown-items" role="menu">
-            <button type="button" role="menuitem" data-act="play">Play or pause <kbd>Space</kbd></button>
-            <button type="button" role="menuitem" data-act="stop">Stop, back to the start</button>
-            <button type="button" role="menuitem" data-act="record">Record from the MIDI keyboard <kbd>R</kbd></button>
+            <button type="button" role="menuitem" data-act="play"><%= t("app.editor.play_or_pause") %> <kbd>Space</kbd></button>
+            <button type="button" role="menuitem" data-act="stop"><%= t("app.editor.stop_back_to_the_start") %></button>
+            <button type="button" role="menuitem" data-act="record"><%= t("app.editor.record_from_the_midi_keyboard") %> <kbd>R</kbd></button>
             <%# The microphone (#390): public/eui-score/audio-ui.js. %>
-            <button type="button" role="menuitem" data-act="mic-record">Record from the microphone <kbd>audio track</kbd></button>
-            <button type="button" role="menuitem" data-act="audio-tracks">Audio tracks… <kbd>takes, notes from a take</kbd></button>
-            <button type="button" role="menuitem" data-act="tuner">Tuner…</button>
-            <button type="button" role="menuitem" data-act="practice">Practice with the microphone… <kbd>the score follows you</kbd></button>
+            <button type="button" role="menuitem" data-act="mic-record"><%= t("app.editor.record_from_the_microphone") %> <kbd><%= t("app.editor.audio_track") %></kbd></button>
+            <button type="button" role="menuitem" data-act="audio-tracks"><%= t("app.editor.audio_tracks") %> <kbd><%- t("app.editor.takes_notes_from_a_take") %></kbd></button>
+            <button type="button" role="menuitem" data-act="tuner"><%= t("app.editor.tuner") %></button>
+            <button type="button" role="menuitem" data-act="practice"><%= t("app.editor.practice_with_the_microphone") %> <kbd><%= t("app.editor.the_score_follows_you") %></kbd></button>
             <hr>
-            <button type="button" role="menuitem" data-act="set-loop">Loop the selected bars <kbd>played and recorded</kbd></button>
-            <button type="button" role="menuitem" data-act="clear-loop">No loop</button>
+            <button type="button" role="menuitem" data-act="set-loop"><%= t("app.editor.loop_the_selected_bars") %> <kbd><%= t("app.editor.played_and_recorded") %></kbd></button>
+            <button type="button" role="menuitem" data-act="clear-loop"><%= t("app.editor.no_loop") %></button>
             <hr>
-            <button type="button" role="menuitem" data-act="swing">Swing and humanize…</button>
-            <button type="button" role="menuitem" data-act="mixer">Mixer… <kbd>volume, pan, effects</kbd></button>
+            <button type="button" role="menuitem" data-act="swing"><%= t("app.editor.swing_and_humanize") %></button>
+            <button type="button" role="menuitem" data-act="mixer"><%= t("app.editor.mixer") %> <kbd><%= t("app.editor.volume_pan_effects") %></kbd></button>
             <hr>
-            <button type="button" role="menuitem" data-act="midi-learn">MIDI learn and clock…</button>
+            <button type="button" role="menuitem" data-act="midi-learn"><%= t("app.editor.midi_learn_and_clock") %></button>
           </div>
         </details>
         <% if locals["app"] %>
           <details class="studio-dropdown">
-            <summary class="studio-menu">AI</summary>
+            <summary class="studio-menu"><%= t("app.editor.ai") %></summary>
             <div class="studio-dropdown-items" role="menu">
-              <button type="button" role="menuitem" data-ai-ask="chords">Chord progression… <kbd>chord symbols</kbd></button>
-              <button type="button" role="menuitem" data-ai-ask="harmonize">Harmonize the melody… <kbd>accompaniment</kbd></button>
-              <button type="button" role="menuitem" data-ai-ask="improve">Suggest improvements…</button>
-              <button type="button" role="menuitem" data-ai-ask="ask">Ask the AI… <kbd>anything</kbd></button>
+              <button type="button" role="menuitem" data-ai-ask="chords"><%- t("app.editor.chord_progression") %> <kbd><%= t("app.editor.chord_symbols") %></kbd></button>
+              <button type="button" role="menuitem" data-ai-ask="harmonize"><%= t("app.editor.harmonize_the_melody") %> <kbd><%= t("app.editor.accompaniment") %></kbd></button>
+              <button type="button" role="menuitem" data-ai-ask="improve"><%= t("app.editor.suggest_improvements") %></button>
+              <button type="button" role="menuitem" data-ai-ask="ask"><%- t("app.editor.ask_the_ai") %> <kbd><%- t("app.editor.anything") %></kbd></button>
             </div>
           </details>
         <% end %>
       </nav>
       <div class="studio-menu-group">
-        <button type="button" class="studio-menu" data-act="undo" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
-        <button type="button" class="studio-menu" data-act="redo" title="Redo (Ctrl+Y)" aria-label="Redo">↷</button>
+        <button type="button" class="studio-menu" data-act="undo" title="<%= t("app.editor.undo_ctrl_plus_z") %>" aria-label="<%= t("app.editor.undo") %>">↶</button>
+        <button type="button" class="studio-menu" data-act="redo" title="<%= t("app.editor.redo_ctrl_plus_y") %>" aria-label="<%= t("app.editor.redo") %>">↷</button>
         <%# The library of sections, a click away (#452): listen, then add. %>
-        <button type="button" class="studio-menu" data-act="section-library" data-sections-button title="Bars others shared: listen, then add them to the score">Sections</button>
+        <button type="button" class="studio-menu" data-act="section-library" data-sections-button title="<%- t("app.editor.bars_others_shared_listen_then_add_them") %>"><%= t("app.editor.sections") %></button>
         <% if locals["app"] %>
-          <button type="button" class="studio-menu" data-act="midi-view" data-midi-button title="Switch between the score and the MIDI view" aria-pressed="false">MIDI</button>
+          <button type="button" class="studio-menu" data-act="midi-view" data-midi-button title="<%= t("app.editor.switch_between_the_score_and_the_midi") %>" aria-pressed="false">MIDI</button>
         <% end %>
         <%# Play, and beside it the arrow to the Playback panel (#419). %>
         <span class="studio-split">
-          <button type="button" class="studio-menu studio-play" data-act="play" title="Play from the selection, or from the start; pause (Space)">▶ Play</button>
-          <button type="button" class="studio-menu studio-play studio-split-more" popovertarget="studio-playback" aria-label="Playback settings" title="Speed, loop, metronome, MIDI">▾</button>
+          <button type="button" class="studio-menu studio-play" data-act="play" title="<%= t("app.editor.play_from_the_selection_or_from_the") %>"><%= t("app.editor.play_button") %></button>
+          <button type="button" class="studio-menu studio-play studio-split-more" popovertarget="studio-playback" aria-label="<%= t("app.editor.playback_settings") %>" title="<%= t("app.editor.speed_loop_metronome_midi") %>">▾</button>
         </span>
-        <button type="button" class="studio-menu" data-act="stop" title="Stop, back to the start" hidden>■ Stop</button>
+        <button type="button" class="studio-menu" data-act="stop" title="<%= t("app.editor.stop_back_to_the_start") %>" hidden><%= t("app.editor.stop") %></button>
         <%# Recording from the MIDI keyboard chosen under Playback ▸ MIDI; the
             arrow beside it, the grid it is fitted to, and its dynamics. %>
-        <span class="studio-split studio-record-group" role="group" aria-label="Recording">
-          <button type="button" class="studio-menu studio-record" data-act="record" data-record aria-pressed="false" title="Play live on the MIDI keyboard: from the selected bar of the selected staff, after a bar of count-in (R)">● Rec</button>
-          <button type="button" class="studio-menu studio-split-more" popovertarget="studio-recording" aria-label="Recording settings" title="How a recording is written">▾</button>
+        <span class="studio-split studio-record-group" role="group" aria-label="<%= t("app.editor.recording") %>">
+          <button type="button" class="studio-menu studio-record" data-act="record" data-record aria-pressed="false" title="<%= t("app.editor.play_live_on_the_midi_keyboard_from_the") %>"><%= t("app.editor.rec") %></button>
+          <button type="button" class="studio-menu studio-split-more" popovertarget="studio-recording" aria-label="<%- t("app.editor.recording_settings") %>" title="<%= t("app.editor.how_a_recording_is_written") %>">▾</button>
         </span>
-        <div class="studio-panel studio-recording" id="studio-recording" popover aria-label="Recording">
-          <label class="tool-field" title="The finest step a recording keeps; each note's start and end move to it">Fit notes to
-            <select data-quantize aria-label="Quantize">
-              <option value="quarter">quarters</option>
-              <option value="eighth">eighths</option>
-              <option value="eighth-triplet">eighth triplets</option>
-              <option value="sixteenth" selected>sixteenths</option>
-              <option value="sixteenth-triplet">sixteenth triplets</option>
-              <option value="thirty-second">32nds</option>
+        <div class="studio-panel studio-recording" id="studio-recording" popover aria-label="<%= t("app.editor.recording") %>">
+          <label class="tool-field" title="<%- t("app.editor.the_finest_step_a_recording_keeps_each") %>"><%= t("app.editor.fit_notes_to") %>
+            <select data-quantize aria-label="<%= t("app.editor.quantize") %>">
+              <option value="quarter"><%= t("app.editor.quarters") %></option>
+              <option value="eighth"><%= t("app.editor.eighths") %></option>
+              <option value="eighth-triplet"><%= t("app.editor.eighth_triplets") %></option>
+              <option value="sixteenth" selected><%= t("app.editor.sixteenths") %></option>
+              <option value="sixteenth-triplet"><%= t("app.editor.sixteenth_triplets") %></option>
+              <option value="thirty-second"><%= t("app.editor.n_32nds") %></option>
             </select>
           </label>
-          <label class="tool-check" title="Write the dynamics of how hard the keys are struck, where they change"><input type="checkbox" data-record-dynamics checked> Write the dynamics played</label>
+          <label class="tool-check" title="<%= t("app.editor.write_the_dynamics_of_how_hard_the_keys") %>"><input type="checkbox" data-record-dynamics checked> <%= t("app.editor.write_the_dynamics_played") %></label>
         </div>
         <span class="studio-zoom">
-          <button type="button" class="studio-menu" data-act="zoom-out" title="Smaller (Ctrl+−)" aria-label="Zoom out">−</button>
+          <button type="button" class="studio-menu" data-act="zoom-out" title="<%= t("app.editor.smaller_ctrl_plus_minus") %>" aria-label="<%= t("app.editor.zoom_out") %>">−</button>
           <span data-zoom-label>100 %</span>
-          <button type="button" class="studio-menu" data-act="zoom-in" title="Larger (Ctrl++)" aria-label="Zoom in">+</button>
+          <button type="button" class="studio-menu" data-act="zoom-in" title="<%= t("app.editor.larger_ctrl_plus_plus") %>" aria-label="<%= t("app.editor.zoom_in") %>">+</button>
         </span>
       </div>
     </div>
   </div>
   <%# Playback (#419): opened from the arrow beside Play. Its fields keep
       their data-* names, so the parts that read them find them as before. %>
-  <div class="studio-panel studio-playback" id="studio-playback" popover aria-label="Playback">
+  <div class="studio-panel studio-playback" id="studio-playback" popover aria-label="<%= t("app.editor.playback") %>">
     <section class="studio-panel-group">
-      <h3>Speed and key</h3>
-      <label class="tool-field">Speed
-        <select data-play="rate" title="Slower or faster, at the same pitch">
+      <h3><%= t("app.editor.speed_and_key") %></h3>
+      <label class="tool-field"><%= t("app.editor.speed") %>
+        <select data-play="rate" title="<%= t("app.editor.slower_or_faster_at_the_same_pitch") %>">
           <option value="0.25">25 %</option><option value="0.5">50 %</option><option value="0.75">75 %</option><option value="0.9">90 %</option>
           <option value="1" selected>100 %</option><option value="1.1">110 %</option><option value="1.25">125 %</option>
           <option value="1.5">150 %</option><option value="1.75">175 %</option><option value="2">200 %</option>
         </select>
       </label>
       <%# Practice (public/eui-score/practice.js, #391), kept in this browser. %>
-      <label class="tool-field" title="The keys moved as they are played, not in the score: the same speed, another key">Play transposed
+      <label class="tool-field" title="<%= t("app.editor.the_keys_moved_as_they_are_played_not_in") %>"><%= t("app.editor.play_transposed") %>
         <select data-practice="transpose">
-          <option value="-12">−12 semitones</option><option value="-11">−11 semitones</option><option value="-10">−10 semitones</option>
-          <option value="-9">−9 semitones</option><option value="-8">−8 semitones</option><option value="-7">−7 semitones</option>
-          <option value="-6">−6 semitones</option><option value="-5">−5 semitones</option><option value="-4">−4 semitones</option>
-          <option value="-3">−3 semitones</option><option value="-2">−2 semitones</option><option value="-1">−1 semitone</option>
-          <option value="0" selected>as written</option><option value="1">+1 semitone</option><option value="2">+2 semitones</option>
-          <option value="3">+3 semitones</option><option value="4">+4 semitones</option><option value="5">+5 semitones</option>
-          <option value="6">+6 semitones</option><option value="7">+7 semitones</option><option value="8">+8 semitones</option>
-          <option value="9">+9 semitones</option><option value="10">+10 semitones</option><option value="11">+11 semitones</option>
-          <option value="12">+12 semitones</option>
+          <option value="-12"><%= t("app.editor.minus_12_semitones") %></option><option value="-11"><%= t("app.editor.minus_11_semitones") %></option><option value="-10"><%= t("app.editor.minus_10_semitones") %></option>
+          <option value="-9"><%= t("app.editor.minus_9_semitones") %></option><option value="-8"><%= t("app.editor.minus_8_semitones") %></option><option value="-7"><%= t("app.editor.minus_7_semitones") %></option>
+          <option value="-6"><%= t("app.editor.minus_6_semitones") %></option><option value="-5"><%= t("app.editor.minus_5_semitones") %></option><option value="-4"><%= t("app.editor.minus_4_semitones") %></option>
+          <option value="-3"><%= t("app.editor.minus_3_semitones") %></option><option value="-2"><%= t("app.editor.minus_2_semitones") %></option><option value="-1"><%= t("app.editor.minus_1_semitone") %></option>
+          <option value="0" selected><%= t("app.editor.as_written") %></option><option value="1"><%= t("app.editor.plus_1_semitone") %></option><option value="2"><%= t("app.editor.plus_2_semitones") %></option>
+          <option value="3"><%= t("app.editor.plus_3_semitones") %></option><option value="4"><%= t("app.editor.plus_4_semitones") %></option><option value="5"><%= t("app.editor.plus_5_semitones") %></option>
+          <option value="6"><%= t("app.editor.plus_6_semitones") %></option><option value="7"><%= t("app.editor.plus_7_semitones") %></option><option value="8"><%= t("app.editor.plus_8_semitones") %></option>
+          <option value="9"><%= t("app.editor.plus_9_semitones") %></option><option value="10"><%= t("app.editor.plus_10_semitones") %></option><option value="11"><%= t("app.editor.plus_11_semitones") %></option>
+          <option value="12"><%= t("app.editor.plus_12_semitones") %></option>
         </select>
       </label>
-      <label class="tool-check" title="Save the sound and Save as MIDI at the speed and in the key chosen here, not as written"><input type="checkbox" data-practice="exports"> Saved files too</label>
+      <label class="tool-check" title="<%- t("app.editor.save_the_sound_and_save_as_midi_at_the") %>"><input type="checkbox" data-practice="exports"> <%= t("app.editor.saved_files_too") %></label>
     </section>
     <section class="studio-panel-group">
-      <h3>Practice</h3>
-      <label class="tool-check"><input type="checkbox" data-play="loop"> Loop the selected bars</label>
-      <label class="tool-check"><input type="checkbox" data-play="metronome"> Metronome</label>
-      <label class="tool-field">Clicks
-        <select data-play="subdivide" title="The metronome's clicks: the beats, or the eighths or sixteenths between them, softer">
-          <option value="0">beats</option><option value="8">eighths</option><option value="16">sixteenths</option>
+      <h3><%= t("app.editor.practice") %></h3>
+      <label class="tool-check"><input type="checkbox" data-play="loop"> <%= t("app.editor.loop_the_selected_bars") %></label>
+      <label class="tool-check"><input type="checkbox" data-play="metronome"> <%= t("app.editor.metronome") %></label>
+      <label class="tool-field"><%= t("app.editor.clicks") %>
+        <select data-play="subdivide" title="<%- t("app.editor.the_metronome_s_clicks_the_beats_or_the") %>">
+          <option value="0"><%= t("app.editor.beats") %></option><option value="8"><%= t("app.editor.eighths") %></option><option value="16"><%= t("app.editor.sixteenths") %></option>
         </select>
       </label>
-      <label class="tool-check"><input type="checkbox" data-play="accent" checked> Accent the first beat</label>
-      <label class="tool-check"><input type="checkbox" data-play="count-in"> Count in one bar</label>
+      <label class="tool-check"><input type="checkbox" data-play="accent" checked> <%= t("app.editor.accent_the_first_beat") %></label>
+      <label class="tool-check"><input type="checkbox" data-play="count-in"> <%= t("app.editor.count_in_one_bar") %></label>
       <details class="tool-practice" data-practice-box>
-        <summary>Practice loop</summary>
-        <label class="tool-check" title="The loop played slow first, faster each time round"><input type="checkbox" data-practice="ramp"> Faster each pass</label>
+        <summary><%= t("app.editor.practice_loop") %></summary>
+        <label class="tool-check" title="<%- t("app.editor.the_loop_played_slow_first_faster_each") %>"><input type="checkbox" data-practice="ramp"> <%= t("app.editor.faster_each_pass") %></label>
         <div class="tool-practice-row">
-          <label>From <input type="number" data-practice="from" min="25" max="200" step="1" value="70"> %</label>
-          <label>add <input type="number" data-practice="step" min="1" max="100" step="1" value="5"> %</label>
-          <label>to <input type="number" data-practice="to" min="25" max="200" step="1" value="100"> %</label>
+          <label><%= t("app.editor.from") %> <input type="number" data-practice="from" min="25" max="200" step="1" value="70"> %</label>
+          <label><%= t("app.editor.add") %> <input type="number" data-practice="step" min="1" max="100" step="1" value="5"> %</label>
+          <label><%- t("app.editor.to") %> <input type="number" data-practice="to" min="25" max="200" step="1" value="100"> %</label>
         </div>
-        <label class="tool-field">At the target
-          <select data-practice="at"><option value="stop">stop</option><option value="loop">keep looping</option></select>
+        <label class="tool-field"><%= t("app.editor.at_the_target") %>
+          <select data-practice="at"><option value="stop"><%= t("app.editor.at_target_stop") %></option><option value="loop"><%= t("app.editor.keep_looping") %></option></select>
         </label>
-        <output class="tool-practice-now" data-practice-now aria-live="polite">Set a loop (Play ▸ Loop, or the MIDI view's ruler), then Play.</output>
+        <output class="tool-practice-now" data-practice-now aria-live="polite"><%- t("app.editor.set_a_loop_play_loop_or_the_midi_view_s") %></output>
       </details>
     </section>
     <section class="studio-panel-group">
       <h3>MIDI</h3>
-      <label class="tool-field">MIDI keyboard
-        <select data-midi-in title="Play a key to write its note; keys held together make a chord">
-          <option value="">none</option><option value="find">find keyboards…</option>
+      <label class="tool-field"><%= t("app.editor.midi_keyboard") %>
+        <select data-midi-in title="<%= t("app.editor.play_a_key_to_write_its_note_keys_held") %>">
+          <option value=""><%= t("app.editor.none") %></option><option value="find"><%= t("app.editor.find_keyboards") %></option>
         </select>
       </label>
-      <label class="tool-check" title="A keyboard that gives each note its own bend and pressure (MPE). Found by itself when the keyboard says so; tick it for one that does not"><input type="checkbox" data-mpe> MPE keyboard</label>
-      <label class="tool-field">Sound to
-        <select data-play="output" title="This browser's sounds, or a MIDI device: GarageBand, Logic…">
-          <option value="">this browser</option><option value="find">MIDI devices…</option>
+      <label class="tool-check" title="<%= t("app.editor.a_keyboard_that_gives_each_note_its_own") %>"><input type="checkbox" data-mpe> <%= t("app.editor.mpe_keyboard") %></label>
+      <label class="tool-field"><%= t("app.editor.sound_to") %>
+        <select data-play="output" title="<%- t("app.editor.this_browser_s_sounds_or_a_midi_device") %>">
+          <option value=""><%= t("app.editor.this_browser") %></option><option value="find"><%= t("app.editor.midi_devices") %></option>
         </select>
       </label>
       <%# MIDI clock and latency (public/eui-score/midi-sync.js), kept in this browser. %>
-      <label class="tool-check" title="24 pulses a quarter, Start, Stop and Song Position, to the device in Sound to: GarageBand, Logic or a drum machine play in time"><input type="checkbox" data-sync="clock-out"> Send MIDI clock</label>
-      <label class="tool-check" title="Start, Stop and the tempo of a clock coming in on the MIDI keyboard chosen in Mode"><input type="checkbox" data-sync="clock-in"> Follow a MIDI clock</label>
-      <label class="tool-field" title="How late the device in Sound to sounds what it is sent: recordings are moved back by it">MIDI device latency, ms
+      <label class="tool-check" title="<%- t("app.editor.n_24_pulses_a_quarter_start_stop_and_song") %>"><input type="checkbox" data-sync="clock-out"> <%- t("app.editor.send_midi_clock") %></label>
+      <label class="tool-check" title="<%- t("app.editor.start_stop_and_the_tempo_of_a_clock") %>"><input type="checkbox" data-sync="clock-in"> <%= t("app.editor.follow_a_midi_clock") %></label>
+      <label class="tool-field" title="<%- t("app.editor.how_late_the_device_in_sound_to_sounds") %>"><%- t("app.editor.midi_device_latency_ms") %>
         <input type="number" min="-500" max="500" step="1" value="0" data-sync="delay">
       </label>
-      <button type="button" class="tool tool-wide" data-act="midi-learn">MIDI learn…</button>
+      <button type="button" class="tool tool-wide" data-act="midi-learn"><%= t("app.editor.midi_learn") %></button>
     </section>
     <section class="studio-panel-group">
-      <h3>Staves</h3>
-      <div class="tool-staves" data-play="staves" aria-label="Mute or solo a staff"></div>
-      <button type="button" class="tool tool-mixer" data-act="mixer" title="Each staff's volume, pan and effects, and the master">Mixer…</button>
+      <h3><%= t("app.editor.staves") %></h3>
+      <div class="tool-staves" data-play="staves" aria-label="<%= t("app.editor.mute_or_solo_a_staff") %>"></div>
+      <button type="button" class="tool tool-mixer" data-act="mixer" title="<%- t("app.editor.each_staff_s_volume_pan_and_effects_and") %>"><%= t("app.editor.mixer") %></button>
     </section>
   </div>
 
 
   <div class="studio-body">
-    <aside class="studio-toolbox" id="studio-toolbox" aria-label="Tools">
+    <aside class="studio-toolbox" id="studio-toolbox" aria-label="<%= t("app.editor.tools") %>">
       <%# Mode and Duration stay in sight as the rest scrolls. %>
       <div class="tool-sticky">
         <details class="tool-section" data-section="mode" open>
           <summary><h3>Mode</h3></summary>
           <div class="tool-row">
-            <button type="button" class="tool tool-wide" data-act="mode-select" title="Select and change notes (Esc)" aria-pressed="true">Select</button>
-            <button type="button" class="tool tool-wide" data-act="mode-input" title="Write notes at the cursor (N or I)" aria-pressed="false"><svg class="pen-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M15.5 3.5l5 5L9 20l-6.5 1.5L4 15z"/><path d="M13 6l5 5"/><path d="M4 15l5 5"/></svg> Note input</button>
+            <button type="button" class="tool tool-wide" data-act="mode-select" title="<%= t("app.editor.select_and_change_notes_esc") %>" aria-pressed="true"><%= t("app.editor.select") %></button>
+            <button type="button" class="tool tool-wide" data-act="mode-input" title="<%= t("app.editor.write_notes_at_the_cursor_n_or_i") %>" aria-pressed="false"><svg class="pen-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M15.5 3.5l5 5L9 20l-6.5 1.5L4 15z"/><path d="M13 6l5 5"/><path d="M4 15l5 5"/></svg> <%= t("app.editor.note_input") %></button>
           </div>
         </details>
 
         <details class="tool-section" data-section="duration" open>
-          <summary><h3>Duration</h3></summary>
+          <summary><h3><%= t("app.editor.duration") %></h3></summary>
           <div class="tool-row tool-row-7">
-            <button type="button" class="tool tool-glyph" data-act="duration" data-base="1" title="Whole note (7)">𝅝</button>
-            <button type="button" class="tool tool-glyph" data-act="duration" data-base="2" title="Half note (6)">𝅗𝅥</button>
-            <button type="button" class="tool tool-glyph" data-act="duration" data-base="4" title="Quarter note (5)">𝅘𝅥</button>
-            <button type="button" class="tool tool-glyph" data-act="duration" data-base="8" title="Eighth note (4)">𝅘𝅥𝅮</button>
-            <button type="button" class="tool tool-glyph" data-act="duration" data-base="16" title="Sixteenth note (3)">𝅘𝅥𝅯</button>
-            <button type="button" class="tool tool-glyph" data-act="duration" data-base="32" title="Thirty-second note (2)">𝅘𝅥𝅰</button>
-            <button type="button" class="tool" data-act="dot" title="Dotted (.): again for two dots, once more for none">•</button>
+            <button type="button" class="tool tool-glyph" data-act="duration" data-base="1" title="<%= t("app.editor.whole_note_7") %>">𝅝</button>
+            <button type="button" class="tool tool-glyph" data-act="duration" data-base="2" title="<%= t("app.editor.half_note_6") %>">𝅗𝅥</button>
+            <button type="button" class="tool tool-glyph" data-act="duration" data-base="4" title="<%= t("app.editor.quarter_note_5") %>">𝅘𝅥</button>
+            <button type="button" class="tool tool-glyph" data-act="duration" data-base="8" title="<%= t("app.editor.eighth_note_4") %>">𝅘𝅥𝅮</button>
+            <button type="button" class="tool tool-glyph" data-act="duration" data-base="16" title="<%= t("app.editor.sixteenth_note_3") %>">𝅘𝅥𝅯</button>
+            <button type="button" class="tool tool-glyph" data-act="duration" data-base="32" title="<%= t("app.editor.thirty_second_note_2") %>">𝅘𝅥𝅰</button>
+            <button type="button" class="tool" data-act="dot" title="<%= t("app.editor.dotted_again_for_two_dots_once_more_for") %>">•</button>
           </div>
           <div class="tool-row tool-row-rare">
-            <button type="button" class="tool" data-act="duration" data-base="64" title="Sixty-fourth note">64</button>
-            <button type="button" class="tool" data-act="duration" data-base="128" title="Hundred twenty-eighth note">128</button>
+            <button type="button" class="tool" data-act="duration" data-base="64" title="<%= t("app.editor.sixty_fourth_note") %>">64</button>
+            <button type="button" class="tool" data-act="duration" data-base="128" title="<%= t("app.editor.hundred_twenty_eighth_note") %>">128</button>
           </div>
         </details>
       </div>
@@ -359,48 +367,48 @@
           <button type="button" class="tool" data-act="letter" data-step="4" title="G">G</button>
           <button type="button" class="tool" data-act="letter" data-step="5" title="A">A</button>
           <button type="button" class="tool" data-act="letter" data-step="6" title="B">B</button>
-          <button type="button" class="tool" data-act="rest" title="Rest (0, or R in note input)">𝄽</button>
+          <button type="button" class="tool" data-act="rest" title="<%= t("app.editor.rest_0_or_r_in_note_input") %>">𝄽</button>
         </div>
-        <div class="tool-row tool-drums" data-drums hidden aria-label="Drums"></div>
-        <label class="tool-check" title="Ticked, a letter adds to the note just written (the first one writes the chord's first note), and a click on the staff adds to the note there"><input type="checkbox" data-chord-mode> Add to the chord <span class="muted">(Shift+letter, Alt+click)</span></label>
-        <label class="tool-check"><input type="checkbox" data-hear checked> Hear the notes</label>
+        <div class="tool-row tool-drums" data-drums hidden aria-label="<%= t("app.editor.drums") %>"></div>
+        <label class="tool-check" title="<%- t("app.editor.ticked_a_letter_adds_to_the_note_just") %>"><input type="checkbox" data-chord-mode> <%- t("app.editor.add_to_the_chord") %> <span class="muted"><%= t("app.editor.shift_plus_letter_alt_plus_click") %></span></label>
+        <label class="tool-check"><input type="checkbox" data-hear checked> <%= t("app.editor.hear_the_notes") %></label>
       </details>
 
       <details class="tool-section" data-section="pitch" open>
-        <summary><h3>Pitch</h3></summary>
-        <p class="tool-sub">Move</p>
-        <div class="tool-row" aria-label="Move">
-          <button type="button" class="tool" data-act="move" data-how="step" data-by="1" title="A step up (↑)">↑</button>
-          <button type="button" class="tool" data-act="move" data-how="step" data-by="-1" title="A step down (↓)">↓</button>
-          <button type="button" class="tool" data-act="move" data-how="semitone" data-by="1" title="A semitone up (Shift+↑)">½↑</button>
-          <button type="button" class="tool" data-act="move" data-how="semitone" data-by="-1" title="A semitone down (Shift+↓)">½↓</button>
-          <button type="button" class="tool" data-act="move" data-how="octave" data-by="1" title="An octave up (Ctrl+↑)">8↑</button>
-          <button type="button" class="tool" data-act="move" data-how="octave" data-by="-1" title="An octave down (Ctrl+↓)">8↓</button>
+        <summary><h3><%= t("app.editor.pitch") %></h3></summary>
+        <p class="tool-sub"><%= t("app.editor.move") %></p>
+        <div class="tool-row" aria-label="<%= t("app.editor.move") %>">
+          <button type="button" class="tool" data-act="move" data-how="step" data-by="1" title="<%= t("app.editor.a_step_up") %>">↑</button>
+          <button type="button" class="tool" data-act="move" data-how="step" data-by="-1" title="<%= t("app.editor.a_step_down") %>">↓</button>
+          <button type="button" class="tool" data-act="move" data-how="semitone" data-by="1" title="<%= t("app.editor.a_semitone_up_shift_plus") %>">½↑</button>
+          <button type="button" class="tool" data-act="move" data-how="semitone" data-by="-1" title="<%= t("app.editor.a_semitone_down_shift_plus") %>">½↓</button>
+          <button type="button" class="tool" data-act="move" data-how="octave" data-by="1" title="<%= t("app.editor.an_octave_up_ctrl_plus") %>">8↑</button>
+          <button type="button" class="tool" data-act="move" data-how="octave" data-by="-1" title="<%= t("app.editor.an_octave_down_ctrl_plus") %>">8↓</button>
         </div>
-        <p class="tool-sub">Accidentals</p>
-        <div class="tool-row" aria-label="Accidentals">
-          <button type="button" class="tool" data-act="alter" data-alter="-2" title="Double flat">𝄫</button>
-          <button type="button" class="tool" data-act="alter" data-alter="-1" title="Flat (−)">♭</button>
-          <button type="button" class="tool" data-act="alter" data-alter="0" title="Natural (=)">♮</button>
-          <button type="button" class="tool" data-act="alter" data-alter="1" title="Sharp (+)">♯</button>
-          <button type="button" class="tool" data-act="alter" data-alter="2" title="Double sharp">𝄪</button>
-          <button type="button" class="tool" data-act="enharmonic" title="Spell the selected notes the other way: C♯ ↔ D♭ (J)">♯↔♭</button>
+        <p class="tool-sub"><%= t("app.editor.accidentals") %></p>
+        <div class="tool-row" aria-label="<%= t("app.editor.accidentals") %>">
+          <button type="button" class="tool" data-act="alter" data-alter="-2" title="<%= t("app.editor.double_flat") %>">𝄫</button>
+          <button type="button" class="tool" data-act="alter" data-alter="-1" title="<%= t("app.editor.flat_minus") %>">♭</button>
+          <button type="button" class="tool" data-act="alter" data-alter="0" title="<%= t("app.editor.natural") %>">♮</button>
+          <button type="button" class="tool" data-act="alter" data-alter="1" title="<%= t("app.editor.sharp_plus") %>">♯</button>
+          <button type="button" class="tool" data-act="alter" data-alter="2" title="<%= t("app.editor.double_sharp") %>">𝄪</button>
+          <button type="button" class="tool" data-act="enharmonic" title="<%= t("app.editor.spell_the_selected_notes_the_other_way_c") %>">♯↔♭</button>
         </div>
-        <p class="tool-sub">Accidental shown</p>
-        <div class="tool-row" aria-label="Accidental shown">
-          <button type="button" class="tool tool-wide" data-act="reminder" data-kind="forced" title="Print the accidental whatever the key and the bar say (cis!); again to take it away">Show ♯♭♮</button>
-          <button type="button" class="tool tool-wide" data-act="reminder" data-kind="cautionary" title="A cautionary accidental, in parentheses (cis?); again to take it away">(♯♭♮)</button>
+        <p class="tool-sub"><%= t("app.editor.accidental_shown") %></p>
+        <div class="tool-row" aria-label="<%= t("app.editor.accidental_shown") %>">
+          <button type="button" class="tool tool-wide" data-act="reminder" data-kind="forced" title="<%- t("app.editor.print_the_accidental_whatever_the_key") %>"><%= t("app.editor.show_sharp_flat") %></button>
+          <button type="button" class="tool tool-wide" data-act="reminder" data-kind="cautionary" title="<%= t("app.editor.a_cautionary_accidental_in_parentheses") %>">(♯♭♮)</button>
         </div>
-        <p class="tool-sub">Transpose</p>
+        <p class="tool-sub"><%= t("app.editor.transpose") %></p>
         <div class="tool-row tool-transpose">
-          <select class="tool-select" data-transpose-interval aria-label="Interval to transpose by"></select>
-          <select class="tool-select" data-transpose-way aria-label="Up or down">
-            <option value="1">up</option><option value="-1">down</option>
+          <select class="tool-select" data-transpose-interval aria-label="<%= t("app.editor.interval_to_transpose_by") %>"></select>
+          <select class="tool-select" data-transpose-way aria-label="<%= t("app.editor.up_or_down") %>">
+            <option value="1"><%= t("app.editor.up") %></option><option value="-1"><%= t("app.editor.down") %></option>
           </select>
         </div>
         <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="transpose" data-scope="selection" title="Transpose the selected notes">Transpose notes</button>
-          <button type="button" class="tool tool-wide" data-act="transpose" data-scope="score" title="Transpose the whole score, its key and chord symbols">Transpose score</button>
+          <button type="button" class="tool tool-wide" data-act="transpose" data-scope="selection" title="<%= t("app.editor.transpose_the_selected_notes") %>"><%= t("app.editor.transpose_notes") %></button>
+          <button type="button" class="tool tool-wide" data-act="transpose" data-scope="score" title="<%= t("app.editor.transpose_the_whole_score_its_key_and") %>"><%= t("app.editor.transpose_score") %></button>
         </div>
       </details>
 
@@ -412,17 +420,17 @@
           <button type="button" class="tool" data-act="art" data-name="tenuto" title="Tenuto">–</button>
           <button type="button" class="tool" data-act="art" data-name="marcato" title="Marcato">^</button>
           <button type="button" class="tool" data-act="art" data-name="staccatissimo" title="Staccatissimo">▾</button>
-          <button type="button" class="tool" data-act="art" data-name="fermata" title="Fermata">𝄐</button>
+          <button type="button" class="tool" data-act="art" data-name="fermata" title="<%- t("app.editor.fermata") %>">𝄐</button>
         </div>
-        <p class="tool-sub">Breaths</p>
-        <div class="tool-row" aria-label="Breaths">
-          <button type="button" class="tool" data-act="breath" data-kind="breathe" title="Breath mark after the note (\breathe); again to take it away">,</button>
-          <button type="button" class="tool" data-act="breath" data-kind="caesura" title="Caesura after the note (\caesura); again to take it away">//</button>
+        <p class="tool-sub"><%= t("app.editor.breaths") %></p>
+        <div class="tool-row" aria-label="<%= t("app.editor.breaths") %>">
+          <button type="button" class="tool" data-act="breath" data-kind="breathe" title="<%= t("app.editor.breath_mark_after_the_note_breathe_again") %>">,</button>
+          <button type="button" class="tool" data-act="breath" data-kind="caesura" title="<%= t("app.editor.caesura_after_the_note_caesura_again_to") %>">//</button>
         </div>
       </details>
 
       <details class="tool-section" data-section="dynamics">
-        <summary><h3>Dynamics</h3></summary>
+        <summary><h3><%= t("app.editor.dynamics") %></h3></summary>
         <div class="tool-row tool-dynamics">
           <% dynamics = {"ppp": "pianississimo", "pp": "pianissimo", "p": "piano", "mp": "mezzo-piano"} %>
           <% dynamics = dynamics.merge({"mf": "mezzo-forte", "f": "forte", "ff": "fortissimo", "fff": "fortississimo"}) %>
@@ -433,237 +441,235 @@
               title="<%= word %>" aria-label="<%= word %>"><%= dynamic %></button>
           <% end %>
         </div>
-        <p class="tool-sub">Hairpins</p>
-        <div class="tool-row" aria-label="Hairpins">
-          <button type="button" class="tool tool-wide" data-act="hairpin" data-kind="&lt;" title="Crescendo over the selection">𝆒 cresc.</button>
-          <button type="button" class="tool tool-wide" data-act="hairpin" data-kind="&gt;" title="Diminuendo over the selection">𝆓 dim.</button>
+        <p class="tool-sub"><%= t("app.editor.hairpins") %></p>
+        <div class="tool-row" aria-label="<%= t("app.editor.hairpins") %>">
+          <button type="button" class="tool tool-wide" data-act="hairpin" data-kind="&lt;" title="<%= t("app.editor.crescendo_over_the_selection") %>">𝆒 cresc.</button>
+          <button type="button" class="tool tool-wide" data-act="hairpin" data-kind="&gt;" title="<%= t("app.editor.diminuendo_over_the_selection") %>">𝆓 dim.</button>
         </div>
       </details>
 
       <details class="tool-section" data-section="ties-and-lines">
-        <summary><h3>Ties, slurs &amp; 8va</h3></summary>
+        <summary><h3><%= t("app.editor.ties_slurs_8va") %></h3></summary>
         <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="tie" title="Tie to the next note (T)">⁀ Tie</button>
-          <button type="button" class="tool tool-wide" data-act="slur" title="Slur the selected notes (S)">⌒ Slur</button>
-          <button type="button" class="tool tool-wide" data-act="phrase" title="Phrasing slur over the selected notes (Shift+S)">⌒ Phrase</button>
+          <button type="button" class="tool tool-wide" data-act="tie" title="<%= t("app.editor.tie_to_the_next_note_t") %>"><%= t("app.editor.tie_button") %></button>
+          <button type="button" class="tool tool-wide" data-act="slur" title="<%= t("app.editor.slur_the_selected_notes_s") %>"><%= t("app.editor.slur_button") %></button>
+          <button type="button" class="tool tool-wide" data-act="phrase" title="<%= t("app.editor.phrasing_slur_over_the_selected_notes") %>"><%= t("app.editor.phrase") %></button>
         </div>
-        <p class="tool-sub">Slur side</p>
-        <div class="tool-row" aria-label="Slur side">
-          <button type="button" class="tool tool-wide" data-act="slur-up" title="A slur over the selected notes, or turn theirs over; again: back to where the stems leave room">⌒ Above</button>
-          <button type="button" class="tool tool-wide" data-act="slur-down" title="A slur under the selected notes, or turn theirs under; again: back to where the stems leave room">‿ Below</button>
+        <p class="tool-sub"><%= t("app.editor.slur_side") %></p>
+        <div class="tool-row" aria-label="<%= t("app.editor.slur_side") %>">
+          <button type="button" class="tool tool-wide" data-act="slur-up" title="<%= t("app.editor.a_slur_over_the_selected_notes_or_turn") %>"><%= t("app.editor.above") %></button>
+          <button type="button" class="tool tool-wide" data-act="slur-down" title="<%= t("app.editor.a_slur_under_the_selected_notes_or_turn") %>"><%= t("app.editor.below") %></button>
         </div>
-        <p class="tool-sub">Ottava</p>
-        <div class="tool-row" aria-label="Ottava">
-          <button type="button" class="tool tool-wide" data-act="ottava" data-value="1" title="8va: the selected notes drawn an octave lower, under a line; again to take it away">8va</button>
-          <button type="button" class="tool tool-wide" data-act="ottava" data-value="-1" title="8vb: the selected notes drawn an octave higher, over a line; again to take it away">8vb</button>
-          <button type="button" class="tool tool-wide" data-act="ottava-end" title="End the ottava line before the selected note">End 8va</button>
+        <p class="tool-sub"><%= t("app.editor.ottava") %></p>
+        <div class="tool-row" aria-label="<%= t("app.editor.ottava") %>">
+          <button type="button" class="tool tool-wide" data-act="ottava" data-value="1" title="<%= t("app.editor.n_8va_the_selected_notes_drawn_an_octave") %>">8va</button>
+          <button type="button" class="tool tool-wide" data-act="ottava" data-value="-1" title="<%= t("app.editor.n_8vb_the_selected_notes_drawn_an_octave") %>">8vb</button>
+          <button type="button" class="tool tool-wide" data-act="ottava-end" title="<%- t("app.editor.end_the_ottava_line_before_the_selected") %>"><%= t("app.editor.end_8va") %></button>
         </div>
       </details>
 
       <details class="tool-section" data-section="words">
-        <summary><h3>Words</h3></summary>
+        <summary><h3><%= t("app.editor.words") %></h3></summary>
         <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="lyrics" title="Lyrics under the notes (Ctrl+L)">Lyrics</button>
-          <select class="tool-select" data-verse aria-label="Verse the lyrics go in" title="Each verse is a line under the one before">
-            <option value="1">Verse 1</option><option value="2">Verse 2</option><option value="3">Verse 3</option>
-            <option value="4">Verse 4</option><option value="5">Verse 5</option><option value="6">Verse 6</option>
+          <button type="button" class="tool tool-wide" data-act="lyrics" title="<%= t("app.editor.lyrics_under_the_notes_ctrl_plus_l") %>"><%= t("app.editor.lyrics") %></button>
+          <select class="tool-select" data-verse aria-label="<%= t("app.editor.verse_the_lyrics_go_in") %>" title="<%= t("app.editor.each_verse_is_a_line_under_the_one") %>">
+            <option value="1"><%= t("app.editor.verse_1") %></option><option value="2"><%= t("app.editor.verse_2") %></option><option value="3"><%= t("app.editor.verse_3") %></option>
+            <option value="4"><%= t("app.editor.verse_4") %></option><option value="5"><%= t("app.editor.verse_5") %></option><option value="6"><%= t("app.editor.verse_6") %></option>
           </select>
-          <button type="button" class="tool tool-wide" data-act="chord" title="A chord symbol above (Ctrl+K)">Chord symbol</button>
+          <button type="button" class="tool tool-wide" data-act="chord" title="<%= t("app.editor.a_chord_symbol_above_ctrl_plus_k") %>"><%= t("app.editor.chord_symbol") %></button>
         </div>
         <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="text" title="Words above the staff: solo, pizz.…">Staff text</button>
-          <button type="button" class="tool tool-wide" data-act="expression" title="Words in italics under the staff: dolce, espressivo…">Expression</button>
+          <button type="button" class="tool tool-wide" data-act="text" title="<%= t("app.editor.words_above_the_staff_solo_pizz") %>"><%= t("app.editor.staff_text") %></button>
+          <button type="button" class="tool tool-wide" data-act="expression" title="<%= t("app.editor.words_in_italics_under_the_staff_dolce") %>">Expression</button>
         </div>
       </details>
 
       <details class="tool-section" data-section="tuplets">
-        <summary><h3>Tuplets</h3></summary>
+        <summary><h3><%= t("app.editor.tuplets") %></h3></summary>
         <div class="tool-row">
-          <button type="button" class="tool" data-act="tuplet" data-n="3" title="Triplet (Ctrl+3)">3</button>
-          <button type="button" class="tool" data-act="tuplet" data-n="5" title="Quintuplet (Ctrl+5)">5</button>
-          <button type="button" class="tool" data-act="tuplet" data-n="6" title="Sextuplet (Ctrl+6)">6</button>
-          <button type="button" class="tool" data-act="tuplet" data-n="7" title="Septuplet (Ctrl+7)">7</button>
-          <button type="button" class="tool tool-wide" data-act="untuplet" title="Make the tuplet one note again">Remove</button>
+          <button type="button" class="tool" data-act="tuplet" data-n="3" title="<%= t("app.editor.triplet_ctrl_plus_3") %>">3</button>
+          <button type="button" class="tool" data-act="tuplet" data-n="5" title="<%= t("app.editor.quintuplet_ctrl_plus_5") %>">5</button>
+          <button type="button" class="tool" data-act="tuplet" data-n="6" title="<%= t("app.editor.sextuplet_ctrl_plus_6") %>">6</button>
+          <button type="button" class="tool" data-act="tuplet" data-n="7" title="<%= t("app.editor.septuplet_ctrl_plus_7") %>">7</button>
+          <button type="button" class="tool tool-wide" data-act="untuplet" title="<%= t("app.editor.make_the_tuplet_one_note_again") %>"><%= t("app.editor.remove") %></button>
         </div>
       </details>
 
       <details class="tool-section" data-section="grace-notes">
-        <summary><h3>Grace notes</h3></summary>
+        <summary><h3><%= t("app.editor.grace_notes") %></h3></summary>
         <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="grace" data-kind="acciaccatura" title="Acciaccatura: a quick slashed note before the selected one">Acciacc.</button>
-          <button type="button" class="tool tool-wide" data-act="grace" data-kind="appoggiatura" title="Appoggiatura: a leaning note that takes time from the selected one">Appogg.</button>
-          <button type="button" class="tool tool-wide" data-act="grace" data-kind="grace" title="Grace note: a small plain note before the selected one">Grace</button>
+          <button type="button" class="tool tool-wide" data-act="grace" data-kind="acciaccatura" title="<%= t("app.editor.acciaccatura_a_quick_slashed_note_before") %>">Acciacc.</button>
+          <button type="button" class="tool tool-wide" data-act="grace" data-kind="appoggiatura" title="<%- t("app.editor.appoggiatura_a_leaning_note_that_takes") %>">Appogg.</button>
+          <button type="button" class="tool tool-wide" data-act="grace" data-kind="grace" title="<%= t("app.editor.grace_note_a_small_plain_note_before_the") %>"><%= t("app.editor.grace") %></button>
         </div>
         <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="grace-add" title="One more grace note, a step above the last">+ Note</button>
-          <button type="button" class="tool" data-act="grace-move" data-by="1" title="Last grace note a step up" aria-label="Last grace note a step up">↑</button>
-          <button type="button" class="tool" data-act="grace-move" data-by="-1" title="Last grace note a step down" aria-label="Last grace note a step down">↓</button>
-          <button type="button" class="tool tool-wide" data-act="grace-remove" title="Take the grace notes away">Remove</button>
+          <button type="button" class="tool tool-wide" data-act="grace-add" title="<%= t("app.editor.one_more_grace_note_a_step_above_the") %>">+ Note</button>
+          <button type="button" class="tool" data-act="grace-move" data-by="1" title="<%= t("app.editor.last_grace_note_a_step_up") %>" aria-label="<%= t("app.editor.last_grace_note_a_step_up") %>">↑</button>
+          <button type="button" class="tool" data-act="grace-move" data-by="-1" title="<%= t("app.editor.last_grace_note_a_step_down") %>" aria-label="<%= t("app.editor.last_grace_note_a_step_down") %>">↓</button>
+          <button type="button" class="tool tool-wide" data-act="grace-remove" title="<%= t("app.editor.take_the_grace_notes_away") %>"><%= t("app.editor.remove") %></button>
         </div>
       </details>
 
       <details class="tool-section" data-section="ornaments">
-        <summary><h3>Ornaments</h3></summary>
+        <summary><h3><%= t("app.editor.ornaments") %></h3></summary>
         <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="art" data-name="trill" title="Trill: the note and the one above, quickly in turn">tr Trill</button>
-          <button type="button" class="tool tool-wide" data-act="art" data-name="prall" title="Short trill: the note, the one above, the note">Short tr.</button>
-          <button type="button" class="tool tool-wide" data-act="art" data-name="mordent" title="Mordent: the note, the one below, the note">Mordent</button>
-          <button type="button" class="tool tool-wide" data-act="art" data-name="turn" title="Turn: above, the note, below, the note">Turn</button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="trill" title="<%= t("app.editor.trill_the_note_and_the_one_above_quickly") %>"><%= t("app.editor.tr_trill") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="prall" title="<%= t("app.editor.short_trill_the_note_the_one_above_the") %>"><%= t("app.editor.short_tr") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="mordent" title="<%= t("app.editor.mordent_the_note_the_one_below_the_note") %>"><%= t("app.editor.mordent") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="turn" title="<%= t("app.editor.turn_above_the_note_below_the_note") %>"><%= t("app.editor.turn") %></button>
         </div>
         <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="arpeggio" title="Arpeggio: the chord rolled from its lowest note up">Arpeggio</button>
-          <button type="button" class="tool tool-wide" data-act="gliss" title="Glissando: slide from this note to the next">Glissando</button>
+          <button type="button" class="tool tool-wide" data-act="arpeggio" title="<%- t("app.editor.arpeggio_the_chord_rolled_from_its") %>"><%= t("app.editor.arpeggio") %></button>
+          <button type="button" class="tool tool-wide" data-act="gliss" title="<%= t("app.editor.glissando_slide_from_this_note_to_the") %>">Glissando</button>
         </div>
-        <div class="tool-row" aria-label="Tremolo">
-          <button type="button" class="tool tool-wide" data-act="tremolo" data-value="8" title="Tremolo: the note repeated in eighths">Trem. 8</button>
-          <button type="button" class="tool tool-wide" data-act="tremolo" data-value="16" title="Tremolo: the note repeated in sixteenths">16</button>
-          <button type="button" class="tool tool-wide" data-act="tremolo" data-value="32" title="Tremolo: the note repeated in thirty-seconds">32</button>
+        <div class="tool-row" aria-label="<%= t("app.editor.tremolo") %>">
+          <button type="button" class="tool tool-wide" data-act="tremolo" data-value="8" title="<%= t("app.editor.tremolo_the_note_repeated_in_eighths") %>"><%= t("app.editor.trem_8") %></button>
+          <button type="button" class="tool tool-wide" data-act="tremolo" data-value="16" title="<%= t("app.editor.tremolo_the_note_repeated_in_sixteenths") %>">16</button>
+          <button type="button" class="tool tool-wide" data-act="tremolo" data-value="32" title="<%= t("app.editor.tremolo_the_note_repeated_in_thirty") %>">32</button>
         </div>
       </details>
 
       <details class="tool-section" data-section="stems-and-beams">
-        <summary><h3>Stems &amp; beams</h3></summary>
-        <p class="tool-sub">Stems</p>
-        <div class="tool-row" aria-label="Stems">
-          <button type="button" class="tool" data-act="stem" data-dir="1" title="Stems up over the selection">↑</button>
-          <button type="button" class="tool" data-act="stem" data-dir="-1" title="Stems down over the selection">↓</button>
-          <button type="button" class="tool" data-act="stem" data-dir="0" title="Stems as the voice wants">↕</button>
+        <summary><h3><%= t("app.editor.stems_beams") %></h3></summary>
+        <p class="tool-sub"><%= t("app.editor.stems") %></p>
+        <div class="tool-row" aria-label="<%= t("app.editor.stems") %>">
+          <button type="button" class="tool" data-act="stem" data-dir="1" title="<%= t("app.editor.stems_up_over_the_selection") %>">↑</button>
+          <button type="button" class="tool" data-act="stem" data-dir="-1" title="<%= t("app.editor.stems_down_over_the_selection") %>">↓</button>
+          <button type="button" class="tool" data-act="stem" data-dir="0" title="<%= t("app.editor.stems_as_the_voice_wants") %>">↕</button>
         </div>
-        <p class="tool-sub">Beams</p>
-        <div class="tool-row" aria-label="Beams">
-          <button type="button" class="tool tool-wide" data-act="beam" title="Beam the selected notes by hand (Alt+B); again to take the beam away">⌐ Beam</button>
-          <button type="button" class="tool tool-wide" data-act="beam-break" title="Break the beam before the selected note (Alt+Shift+B)">Break</button>
+        <p class="tool-sub"><%= t("app.editor.beams") %></p>
+        <div class="tool-row" aria-label="<%= t("app.editor.beams") %>">
+          <button type="button" class="tool tool-wide" data-act="beam" title="<%= t("app.editor.beam_the_selected_notes_by_hand_alt_plus") %>"><%= t("app.editor.beam") %></button>
+          <button type="button" class="tool tool-wide" data-act="beam-break" title="<%= t("app.editor.break_the_beam_before_the_selected_note") %>"><%= t("app.editor.break") %></button>
         </div>
-        <p class="tool-sub">Cross-staff</p>
-        <div class="tool-row" aria-label="Cross-staff">
-          <button type="button" class="tool tool-wide" data-act="cross" data-dir="-1" title="Draw the selected notes on the staff above (Ctrl+Shift+↑); again to bring them back">↥ Staff above</button>
-          <button type="button" class="tool tool-wide" data-act="cross" data-dir="1" title="Draw the selected notes on the staff below (Ctrl+Shift+↓); again to bring them back">↧ Staff below</button>
+        <p class="tool-sub"><%= t("app.editor.cross_staff") %></p>
+        <div class="tool-row" aria-label="<%= t("app.editor.cross_staff") %>">
+          <button type="button" class="tool tool-wide" data-act="cross" data-dir="-1" title="<%= t("app.editor.draw_on_the_staff_above") %>"><%= t("app.editor.staff_above") %></button>
+          <button type="button" class="tool tool-wide" data-act="cross" data-dir="1" title="<%= t("app.editor.draw_on_the_staff_below") %>"><%= t("app.editor.staff_below") %></button>
         </div>
       </details>
 
       <details class="tool-section" data-section="fingering">
-        <summary><h3>Fingering &amp; technique</h3></summary>
-        <p class="tool-sub">Fingers</p>
-        <div class="tool-row" aria-label="Fingers">
-          <button type="button" class="tool" data-act="finger" data-n="1" title="Finger 1 on the selected note (Alt+1); again to take it away">1</button>
-          <button type="button" class="tool" data-act="finger" data-n="2" title="Finger 2 (Alt+2)">2</button>
-          <button type="button" class="tool" data-act="finger" data-n="3" title="Finger 3 (Alt+3)">3</button>
-          <button type="button" class="tool" data-act="finger" data-n="4" title="Finger 4 (Alt+4)">4</button>
-          <button type="button" class="tool" data-act="finger" data-n="5" title="Finger 5 (Alt+5)">5</button>
-          <button type="button" class="tool tool-wide" data-act="finger-remove" title="Take the fingerings and string numbers away">Remove</button>
+        <summary><h3><%= t("app.editor.fingering_technique") %></h3></summary>
+        <p class="tool-sub"><%= t("app.editor.fingers") %></p>
+        <div class="tool-row" aria-label="<%= t("app.editor.fingers") %>">
+          <button type="button" class="tool" data-act="finger" data-n="1" title="<%= t("app.editor.finger_1_on_the_selected_note_alt_plus_1") %>">1</button>
+          <button type="button" class="tool" data-act="finger" data-n="2" title="<%= t("app.editor.finger_2_alt_plus_2") %>">2</button>
+          <button type="button" class="tool" data-act="finger" data-n="3" title="<%= t("app.editor.finger_3_alt_plus_3") %>">3</button>
+          <button type="button" class="tool" data-act="finger" data-n="4" title="<%= t("app.editor.finger_4_alt_plus_4") %>">4</button>
+          <button type="button" class="tool" data-act="finger" data-n="5" title="<%= t("app.editor.finger_5_alt_plus_5") %>">5</button>
+          <button type="button" class="tool tool-wide" data-act="finger-remove" title="<%= t("app.editor.take_the_fingerings_and_string_numbers") %>"><%= t("app.editor.remove") %></button>
         </div>
-        <p class="tool-sub">Strings</p>
-        <div class="tool-row" aria-label="Strings">
-          <button type="button" class="tool" data-act="string-number" data-n="1" title="Played on string 1">①</button>
-          <button type="button" class="tool" data-act="string-number" data-n="2" title="Played on string 2">②</button>
-          <button type="button" class="tool" data-act="string-number" data-n="3" title="Played on string 3">③</button>
-          <button type="button" class="tool" data-act="string-number" data-n="4" title="Played on string 4">④</button>
-          <button type="button" class="tool" data-act="string-number" data-n="5" title="Played on string 5">⑤</button>
-          <button type="button" class="tool" data-act="string-number" data-n="6" title="Played on string 6">⑥</button>
+        <p class="tool-sub"><%= t("app.editor.strings") %></p>
+        <div class="tool-row" aria-label="<%= t("app.editor.strings") %>">
+          <button type="button" class="tool" data-act="string-number" data-n="1" title="<%= t("app.editor.played_on_string_1") %>">①</button>
+          <button type="button" class="tool" data-act="string-number" data-n="2" title="<%= t("app.editor.played_on_string_2") %>">②</button>
+          <button type="button" class="tool" data-act="string-number" data-n="3" title="<%= t("app.editor.played_on_string_3") %>">③</button>
+          <button type="button" class="tool" data-act="string-number" data-n="4" title="<%= t("app.editor.played_on_string_4") %>">④</button>
+          <button type="button" class="tool" data-act="string-number" data-n="5" title="<%= t("app.editor.played_on_string_5") %>">⑤</button>
+          <button type="button" class="tool" data-act="string-number" data-n="6" title="<%= t("app.editor.played_on_string_6") %>">⑥</button>
         </div>
-        <p class="tool-sub">Bowing</p>
-        <div class="tool-row" aria-label="Bowing">
-          <button type="button" class="tool" data-act="art" data-name="downbow" title="Down-bow (\downbow)">⊓</button>
-          <button type="button" class="tool" data-act="art" data-name="upbow" title="Up-bow (\upbow)">V</button>
+        <p class="tool-sub"><%- t("app.editor.bowing") %></p>
+        <div class="tool-row" aria-label="<%- t("app.editor.bowing") %>">
+          <button type="button" class="tool" data-act="art" data-name="downbow" title="<%= t("app.editor.down_bow_downbow") %>">⊓</button>
+          <button type="button" class="tool" data-act="art" data-name="upbow" title="<%= t("app.editor.up_bow_upbow") %>">V</button>
         </div>
-        <p class="tool-sub">Pedal</p>
-        <div class="tool-row" aria-label="Pedal">
-          <button type="button" class="tool tool-wide" data-act="pedal" data-how="on" title="Press the sustain pedal on this note">Ped.</button>
-          <button type="button" class="tool" data-act="pedal" data-how="off" title="Let the pedal go on this note">*</button>
-          <button type="button" class="tool tool-wide" data-act="pedal" data-how="change" title="Let go and press again on this note">* Ped.</button>
+        <p class="tool-sub"><%= t("app.editor.pedal") %></p>
+        <div class="tool-row" aria-label="<%= t("app.editor.pedal") %>">
+          <button type="button" class="tool tool-wide" data-act="pedal" data-how="on" title="<%= t("app.editor.press_the_sustain_pedal_on_this_note") %>">Ped.</button>
+          <button type="button" class="tool" data-act="pedal" data-how="off" title="<%= t("app.editor.let_the_pedal_go_on_this_note") %>">*</button>
+          <button type="button" class="tool tool-wide" data-act="pedal" data-how="change" title="<%= t("app.editor.let_go_and_press_again_on_this_note") %>">* Ped.</button>
         </div>
       </details>
 
       <details class="tool-section" data-section="repeats">
-        <summary><h3>Repeats &amp; jumps</h3></summary>
+        <summary><h3><%= t("app.editor.repeats_jumps") %></h3></summary>
         <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="repeat" title="Repeat the selected bars — the same bars again take it away">𝄆 Repeat 𝄇</button>
-          <button type="button" class="tool tool-wide" data-act="ending" title="The selected bars become the next ending: 1., then 2.…">Ending 1. 2.</button>
+          <button type="button" class="tool tool-wide" data-act="repeat" title="<%= t("app.editor.repeat_the_selected_bars_the_same_bars") %>"><%= t("app.editor.repeat") %></button>
+          <button type="button" class="tool tool-wide" data-act="ending" title="<%= t("app.editor.the_selected_bars_become_the_next_ending") %>"><%= t("app.editor.ending_1_2") %></button>
         </div>
         <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="endings" title="Add an empty ending after the repeat (a bar is inserted)">+ Empty ending</button>
-          <button type="button" class="tool tool-wide" data-act="unrepeat" title="Take the repeat around the selection away; its bars stay">Remove</button>
+          <button type="button" class="tool tool-wide" data-act="endings" title="<%= t("app.editor.add_an_empty_ending_after_the_repeat_a") %>"><%= t("app.editor.plus_empty_ending") %></button>
+          <button type="button" class="tool tool-wide" data-act="unrepeat" title="<%= t("app.editor.take_the_repeat_around_the_selection") %>"><%= t("app.editor.remove") %></button>
         </div>
         <p class="tool-hint">
-          Drag across the bars to select them, then <b>Repeat</b>. Select the bars after it and press <b>Ending</b>
-          for 1., again for 2. On the score, drag a repeat's handles to another bar line to change where it starts,
-          ends, and how long each ending is.
+          <%- t("app.editor.repeats_hint") %>
         </p>
-        <p class="tool-sub">Marks</p>
-        <div class="tool-row" aria-label="Marks">
-          <button type="button" class="tool tool-wide" data-act="mark" data-mark="letter" title="A rehearsal letter over the selected bar: A, B, C…">Rehearsal A</button>
-          <button type="button" class="tool tool-glyph" data-act="mark" data-mark="segno" title="Segno over the selected bar" aria-label="Segno">𝄋</button>
-          <button type="button" class="tool tool-glyph" data-act="mark" data-mark="coda" title="Coda over the selected bar" aria-label="Coda">𝄌</button>
+        <p class="tool-sub"><%= t("app.editor.marks") %></p>
+        <div class="tool-row" aria-label="<%= t("app.editor.marks") %>">
+          <button type="button" class="tool tool-wide" data-act="mark" data-mark="letter" title="<%= t("app.editor.a_rehearsal_letter_over_the_selected_bar") %>"><%= t("app.editor.rehearsal_a") %></button>
+          <button type="button" class="tool tool-glyph" data-act="mark" data-mark="segno" title="<%= t("app.editor.segno_over_the_selected_bar") %>" aria-label="Segno">𝄋</button>
+          <button type="button" class="tool tool-glyph" data-act="mark" data-mark="coda" title="<%= t("app.editor.coda_over_the_selected_bar") %>" aria-label="Coda">𝄌</button>
         </div>
-        <p class="tool-sub">Jumps</p>
+        <p class="tool-sub"><%= t("app.editor.jumps") %></p>
         <div class="tool-row tool-transpose">
-          <select class="tool-select" data-jump aria-label="Jump at the end of the selected bar">
+          <select class="tool-select" data-jump aria-label="<%= t("app.editor.jump_at_the_end_of_the_selected_bar") %>">
             <option value="ds-coda">D.S. al Coda</option><option value="ds-fine">D.S. al Fine</option><option value="ds">D.S.</option>
             <option value="dc-coda">D.C. al Coda</option><option value="dc-fine">D.C. al Fine</option><option value="dc">D.C.</option>
-            <option value="to-coda">To Coda</option><option value="fine">Fine</option>
+            <option value="to-coda"><%= t("app.editor.to_coda") %></option><option value="fine">Fine</option>
           </select>
-          <button type="button" class="tool" data-act="jump" title="Put it at the end of the selected bar; again takes it away">At bar end</button>
+          <button type="button" class="tool" data-act="jump" title="<%= t("app.editor.put_it_at_the_end_of_the_selected_bar") %>"><%= t("app.editor.at_bar_end") %></button>
         </div>
-        <p class="tool-hint">The jumps are played: D.S. and D.C. go back to the segno or the start, on to the Fine, or from To Coda to the coda.</p>
+        <p class="tool-hint"><%- t("app.editor.the_jumps_are_played_d_s_and_d_c_go_back") %></p>
       </details>
 
       <details class="tool-section" data-section="bars-and-staves">
-        <summary><h3>Bars &amp; staves</h3></summary>
+        <summary><h3><%= t("app.editor.bars_staves") %></h3></summary>
         <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="add-bar" title="A bar at the end (])">+ Bar</button>
-          <button type="button" class="tool tool-wide" data-act="remove-bar" title="Take the last bar away">− Bar</button>
+          <button type="button" class="tool tool-wide" data-act="add-bar" title="<%= t("app.editor.a_bar_at_the_end") %>"><%= t("app.editor.plus_bar") %></button>
+          <button type="button" class="tool tool-wide" data-act="remove-bar" title="<%= t("app.editor.take_the_last_bar_away") %>"><%= t("app.editor.minus_bar") %></button>
         </div>
         <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="insert-bar" title="A bar before the selected one (Insert)">Insert bar</button>
-          <button type="button" class="tool tool-wide" data-act="delete-bars" title="Take the selected bars away, notes and all (Ctrl+Delete)">Delete bars</button>
+          <button type="button" class="tool tool-wide" data-act="insert-bar" title="<%= t("app.editor.a_bar_before_the_selected_one_insert") %>"><%= t("app.editor.insert_bar") %></button>
+          <button type="button" class="tool tool-wide" data-act="delete-bars" title="<%= t("app.editor.take_the_selected_bars_away_notes_and") %>"><%= t("app.editor.delete_bars") %></button>
         </div>
         <div class="tool-row">
-          <select class="tool-select" data-field="new-staff" data-instruments="new" aria-label="Instrument of a new staff"></select>
-          <button type="button" class="tool tool-wide" data-act="add-staff">+ Staff</button>
+          <select class="tool-select" data-field="new-staff" data-instruments="new" aria-label="<%- t("app.editor.instrument_of_a_new_staff") %>"></select>
+          <button type="button" class="tool tool-wide" data-act="add-staff"><%= t("app.editor.plus_staff") %></button>
         </div>
         <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="remove-staff" title="Take the selected staff away">− This staff</button>
+          <button type="button" class="tool tool-wide" data-act="remove-staff" title="<%= t("app.editor.take_the_selected_staff_away") %>"><%= t("app.editor.minus_this_staff") %></button>
         </div>
       </details>
 
       <details class="tool-section" data-section="voices">
-        <summary><h3>Voices</h3></summary>
+        <summary><h3><%= t("app.editor.voices") %></h3></summary>
         <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="voice" data-voice="1" title="Write and select in the first voice, stems up (Ctrl+Alt+1)">Voice 1</button>
-          <button type="button" class="tool tool-wide" data-act="voice" data-voice="2" title="Write and select in the second voice, stems down (Ctrl+Alt+2)">Voice 2</button>
+          <button type="button" class="tool tool-wide" data-act="voice" data-voice="1" title="<%= t("app.editor.write_and_select_in_the_first_voice") %>"><%= t("app.editor.voice_1") %></button>
+          <button type="button" class="tool tool-wide" data-act="voice" data-voice="2" title="<%= t("app.editor.write_and_select_in_the_second_voice") %>"><%= t("app.editor.voice_2") %></button>
         </div>
         <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="voice" data-voice="3" title="Write and select in the third voice, stems up (Ctrl+Alt+3)">Voice 3</button>
-          <button type="button" class="tool tool-wide" data-act="voice" data-voice="4" title="Write and select in the fourth voice, stems down (Ctrl+Alt+4)">Voice 4</button>
+          <button type="button" class="tool tool-wide" data-act="voice" data-voice="3" title="<%= t("app.editor.write_and_select_in_the_third_voice") %>"><%= t("app.editor.voice_3") %></button>
+          <button type="button" class="tool tool-wide" data-act="voice" data-voice="4" title="<%= t("app.editor.write_and_select_in_the_fourth_voice") %>"><%= t("app.editor.voice_4") %></button>
         </div>
         <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="voice-remove" title="Take the voice the cursor is in away, its notes with it; from voice 1, the staff's last voice">Remove a voice</button>
+          <button type="button" class="tool tool-wide" data-act="voice-remove" title="<%- t("app.editor.take_the_voice_the_cursor_is_in_away_its") %>"><%= t("app.editor.remove_a_voice") %></button>
         </div>
         <div class="tool-row">
-          <button type="button" class="tool tool-wide" data-act="swap-voices" title="Voices 1 and 2 exchanged in the selected bars: crossed voices put back, the high notes in voice 1">Swap voices 1 and 2</button>
+          <button type="button" class="tool tool-wide" data-act="swap-voices" title="<%= t("app.editor.voices_1_and_2_exchanged_in_the_selected") %>"><%= t("app.editor.swap_voices_1_and_2") %></button>
         </div>
-        <p class="tool-hint">Voices 1 and 3 have their stems up, 2 and 4 down, on one staff. A bar shows its voices where one past the first has notes.</p>
+        <p class="tool-hint"><%= t("app.editor.voices_1_and_3_have_their_stems_up_2_and") %></p>
       </details>
 
       <details class="tool-section" data-section="this-staff">
-        <summary><h3>This staff</h3></summary>
+        <summary><h3><%= t("app.editor.this_staff") %></h3></summary>
         <label class="tool-field">Instrument
-          <select data-field="staff-instrument" data-instruments="staff" title="Its sound, its clef, and its name unless you gave it one"></select>
+          <select data-field="staff-instrument" data-instruments="staff" title="<%= t("app.editor.its_sound_its_clef_and_its_name_unless") %>"></select>
         </label>
-        <label class="tool-field">Name <input type="text" data-field="staff-name" placeholder="Violin"></label>
-        <label class="tool-field">Short <input type="text" data-field="staff-short" placeholder="Vl."></label>
-        <label class="tool-field">Clef
+        <label class="tool-field"><%= t("app.editor.name") %> <input type="text" data-field="staff-name" placeholder="<%= t("app.editor.violin") %>"></label>
+        <label class="tool-field"><%= t("app.editor.short") %> <input type="text" data-field="staff-short" placeholder="Vl."></label>
+        <label class="tool-field"><%= t("app.editor.clef") %>
           <select data-field="staff-clef">
-            <option value="treble">Treble</option><option value="bass">Bass</option><option value="alto">Alto</option>
-            <option value="tenor">Tenor</option><option value="treble_8">Treble 8 (guitar)</option><option value="bass_8">Bass 8</option><option value="treble^8">Treble 8 above (piccolo)</option><option value="bass^8">Bass 8 above</option>
-            <option value="treble_15">Treble 15 below</option><option value="treble^15">Treble 15 above</option><option value="bass_15">Bass 15 below</option>
-            <option value="soprano">Soprano (C, first line)</option><option value="mezzosoprano">Mezzo-soprano (C, second line)</option><option value="baritone">Baritone (C, fifth line)</option>
-            <option value="varbaritone">Baritone (F, third line)</option><option value="subbass">Sub-bass (F, fifth line)</option><option value="french">French violin (G, first line)</option>
+            <option value="treble"><%= t("app.editor.treble") %></option><option value="bass"><%= t("app.editor.bass") %></option><option value="alto"><%= t("app.editor.alto") %></option>
+            <option value="tenor"><%= t("app.editor.tenor") %></option><option value="treble_8"><%= t("app.editor.treble_8_guitar") %></option><option value="bass_8"><%= t("app.editor.bass_8") %></option><option value="treble^8"><%= t("app.editor.treble_8_above_piccolo") %></option><option value="bass^8"><%= t("app.editor.bass_8_above") %></option>
+            <option value="treble_15"><%= t("app.editor.treble_15_below") %></option><option value="treble^15"><%= t("app.editor.treble_15_above") %></option><option value="bass_15"><%= t("app.editor.bass_15_below") %></option>
+            <option value="soprano"><%= t("app.editor.soprano_c_first_line") %></option><option value="mezzosoprano"><%= t("app.editor.mezzo_soprano_c_second_line") %></option><option value="baritone"><%= t("app.editor.baritone_c_fifth_line") %></option>
+            <option value="varbaritone"><%= t("app.editor.baritone_f_third_line") %></option><option value="subbass"><%= t("app.editor.sub_bass_f_fifth_line") %></option><option value="french"><%= t("app.editor.french_violin_g_first_line") %></option>
           </select>
         </label>
-        <label class="tool-field">Key
+        <label class="tool-field"><%= t("app.editor.key") %>
           <select data-field="staff-key">
-            <option value="">The score's</option>
+            <option value=""><%- t("app.editor.the_score_s") %></option>
             <% for key_choice in editor_keys() %>
               <option value="<%= key_choice[0] %>"><%= key_choice[1] %></option>
             <% end %>
@@ -672,44 +678,44 @@
       </details>
 
       <details class="tool-section" data-changes data-section="from-bar">
-        <summary><h3>From bar <span data-change-bar>—</span></h3></summary>
-        <p class="tool-hint" data-change-hint>Select a bar, or put the cursor in it: what changes here goes on to the next change.</p>
-        <label class="tool-field">Key
+        <summary><h3><%= t("app.editor.from_bar") %> <span data-change-bar>—</span></h3></summary>
+        <p class="tool-hint" data-change-hint><%- t("app.editor.select_a_bar_or_put_the_cursor_in_it") %></p>
+        <label class="tool-field"><%= t("app.editor.key") %>
           <select data-field="change-key">
-            <option value="">As before</option>
+            <option value=""><%= t("app.editor.as_before") %></option>
             <% for key_choice in editor_keys() %>
               <option value="<%= key_choice[0] %>"><%= key_choice[1] %></option>
             <% end %>
           </select>
         </label>
-        <label class="tool-field">Metre
+        <label class="tool-field"><%= t("app.editor.metre") %>
           <select data-field="change-time">
-            <option value="">As before</option>
+            <option value=""><%= t("app.editor.as_before") %></option>
             <% for metre in editor_metres() %>
               <option value="<%= metre %>"><%= metre %></option>
             <% end %>
           </select>
         </label>
-        <label class="tool-field">Tempo <input type="number" min="20" max="300" step="1" data-field="change-bpm" placeholder="as before"></label>
-        <label class="tool-field">Tempo text <input type="text" data-field="change-tempo-text" placeholder="a tempo, rit., Presto…"></label>
-        <label class="tool-field">Clef
+        <label class="tool-field">Tempo <input type="number" min="20" max="300" step="1" data-field="change-bpm" placeholder="<%= t("app.editor.as_before_placeholder") %>"></label>
+        <label class="tool-field"><%= t("app.editor.tempo_text") %> <input type="text" data-field="change-tempo-text" placeholder="a tempo, rit., Presto…"></label>
+        <label class="tool-field"><%= t("app.editor.clef") %>
           <select data-field="change-clef">
-            <option value="">As before</option>
-            <option value="treble">Treble</option><option value="bass">Bass</option><option value="alto">Alto</option>
-            <option value="tenor">Tenor</option><option value="treble_8">Treble 8 (guitar)</option><option value="bass_8">Bass 8</option><option value="treble^8">Treble 8 above (piccolo)</option><option value="bass^8">Bass 8 above</option>
-            <option value="treble_15">Treble 15 below</option><option value="treble^15">Treble 15 above</option><option value="bass_15">Bass 15 below</option>
-            <option value="soprano">Soprano (C, first line)</option><option value="mezzosoprano">Mezzo-soprano (C, second line)</option><option value="baritone">Baritone (C, fifth line)</option>
-            <option value="varbaritone">Baritone (F, third line)</option><option value="subbass">Sub-bass (F, fifth line)</option><option value="french">French violin (G, first line)</option>
+            <option value=""><%= t("app.editor.as_before") %></option>
+            <option value="treble"><%= t("app.editor.treble") %></option><option value="bass"><%= t("app.editor.bass") %></option><option value="alto"><%= t("app.editor.alto") %></option>
+            <option value="tenor"><%= t("app.editor.tenor") %></option><option value="treble_8"><%= t("app.editor.treble_8_guitar") %></option><option value="bass_8"><%= t("app.editor.bass_8") %></option><option value="treble^8"><%= t("app.editor.treble_8_above_piccolo") %></option><option value="bass^8"><%= t("app.editor.bass_8_above") %></option>
+            <option value="treble_15"><%= t("app.editor.treble_15_below") %></option><option value="treble^15"><%= t("app.editor.treble_15_above") %></option><option value="bass_15"><%= t("app.editor.bass_15_below") %></option>
+            <option value="soprano"><%= t("app.editor.soprano_c_first_line") %></option><option value="mezzosoprano"><%= t("app.editor.mezzo_soprano_c_second_line") %></option><option value="baritone"><%= t("app.editor.baritone_c_fifth_line") %></option>
+            <option value="varbaritone"><%= t("app.editor.baritone_f_third_line") %></option><option value="subbass"><%= t("app.editor.sub_bass_f_fifth_line") %></option><option value="french"><%= t("app.editor.french_violin_g_first_line") %></option>
           </select>
         </label>
-        <label class="tool-check"><input type="checkbox" data-field="change-double"> Double bar line before it</label>
+        <label class="tool-check"><input type="checkbox" data-field="change-double"> <%= t("app.editor.double_bar_line_before_it") %></label>
       </details>
 
     </aside>
 
     <main class="studio-canvas">
       <div class="studio-notice" data-notice hidden></div>
-      <div class="studio-sheet" data-sheet tabindex="0" aria-label="The score: click a note to select it">
+      <div class="studio-sheet" data-sheet tabindex="0" aria-label="<%= t("app.editor.the_score_click_a_note_to_select_it") %>">
         <%- figure["svg"].to_s %>
       </div>
       <%# What is selected, and what was last said (#419): one bar under the score. %>
@@ -722,19 +728,19 @@
 
   <section class="studio-source">
     <div class="studio-source-head">
-      <h2>LilyPond source</h2>
-      <span class="muted">Edit it here, or on the score: each follows the other.</span>
+      <h2><%= t("app.editor.lilypond_source") %></h2>
+      <span class="muted"><%- t("app.editor.edit_it_here_or_on_the_score_each") %></span>
     </div>
     <div class="studio-source-box">
       <pre class="studio-source-mark" data-source-mark aria-hidden="true"></pre>
-      <textarea data-source wrap="off" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="LilyPond source"><%= source %></textarea>
+      <textarea data-source wrap="off" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="<%= t("app.editor.lilypond_source") %>"><%= source %></textarea>
     </div>
   </section>
 
   <dialog class="studio-keys" data-keys aria-labelledby="studio-keys-title">
     <div class="studio-keys-head">
-      <h2 id="studio-keys-title">Keyboard</h2>
-      <button type="button" class="studio-menu" data-act="keys" aria-label="Close">×</button>
+      <h2 id="studio-keys-title"><%= t("app.editor.keyboard") %></h2>
+      <button type="button" class="studio-menu" data-act="keys" aria-label="<%= t("app.editor.close") %>">×</button>
     </div>
     <%# Written by studio.js from the table its keys are found in
         (public/eui-score/shortcuts.js): a key handled is a key listed. %>
@@ -745,30 +751,30 @@
       and reads by their data-field, wherever they are. %>
   <dialog class="studio-keys studio-properties" data-properties aria-labelledby="studio-properties-title">
     <div class="studio-keys-head">
-      <h2 id="studio-properties-title">Score properties</h2>
-      <button type="button" class="studio-menu" data-properties-close aria-label="Close">×</button>
+      <h2 id="studio-properties-title"><%= t("app.editor.score_properties_title") %></h2>
+      <button type="button" class="studio-menu" data-properties-close aria-label="<%= t("app.editor.close") %>">×</button>
     </div>
-        <label class="tool-field">Title <input type="text" data-field="title"></label>
-        <label class="tool-field">Subtitle <input type="text" data-field="subtitle"></label>
-        <label class="tool-field">Composer <input type="text" data-field="composer"></label>
-        <label class="tool-field">Piece <input type="text" data-field="piece" placeholder="Allegro"></label>
-        <label class="tool-field">Opus <input type="text" data-field="opus" placeholder="Op. 36, No. 1"></label>
+        <label class="tool-field"><%= t("app.editor.title") %> <input type="text" data-field="title"></label>
+        <label class="tool-field"><%= t("app.editor.subtitle") %> <input type="text" data-field="subtitle"></label>
+        <label class="tool-field"><%= t("app.editor.composer") %> <input type="text" data-field="composer"></label>
+        <label class="tool-field"><%= t("app.editor.piece") %> <input type="text" data-field="piece" placeholder="Allegro"></label>
+        <label class="tool-field">Opus <input type="text" data-field="opus" placeholder="<%= t("app.editor.op_36_no_1") %>"></label>
         <label class="tool-field">Copyright <input type="text" data-field="copyright" placeholder="© 2026 …"></label>
-        <label class="tool-field">Key
+        <label class="tool-field"><%= t("app.editor.key") %>
           <select data-field="key">
             <% for key_choice in editor_keys() %>
               <option value="<%= key_choice[0] %>"><%= key_choice[1] %></option>
             <% end %>
           </select>
         </label>
-        <label class="tool-field">Metre
+        <label class="tool-field"><%= t("app.editor.metre") %>
           <select data-field="time">
             <% for metre in editor_metres() %>
               <option value="<%= metre %>"><%= metre %></option>
             <% end %>
           </select>
         </label>
-        <label class="tool-field">Pickup
+        <label class="tool-field"><%= t("app.editor.pickup") %>
           <select data-field="pickup">
             <% for pickup in editor_pickups() %>
               <option value="<%= pickup[0] %>"><%= pickup[1] %></option>
@@ -776,125 +782,119 @@
           </select>
         </label>
         <label class="tool-field">Tempo <input type="number" min="20" max="300" step="1" data-field="bpm"></label>
-        <label class="tool-field">Tempo text <input type="text" data-field="tempo-text" placeholder="Allegro"></label>
-        <label class="tool-field">Staves
+        <label class="tool-field"><%= t("app.editor.tempo_text") %> <input type="text" data-field="tempo-text" placeholder="Allegro"></label>
+        <label class="tool-field"><%= t("app.editor.staves") %>
           <select data-field="group">
-            <option value="none">Joined by a line</option><option value="bracket">Bracket</option>
-            <option value="brace">Brace (piano)</option><option value="choir">Choir</option>
+            <option value="none"><%= t("app.editor.joined_by_a_line") %></option><option value="bracket"><%= t("app.editor.bracket") %></option>
+            <option value="brace"><%= t("app.editor.brace_piano") %></option><option value="choir"><%= t("app.editor.choir") %></option>
           </select>
         </label>
-        <label class="tool-field">Paper
+        <label class="tool-field"><%= t("app.editor.paper") %>
           <select data-field="paper-size">
-            <option value="a4">A4</option><option value="letter">US Letter</option><option value="a3">A3</option>
-            <option value="a5">A5</option><option value="legal">US Legal</option><option value="tabloid">Tabloid</option>
+            <option value="a4">A4</option><option value="letter"><%= t("app.editor.us_letter") %></option><option value="a3">A3</option>
+            <option value="a5">A5</option><option value="legal"><%= t("app.editor.us_legal") %></option><option value="tabloid">Tabloid</option>
           </select>
         </label>
         <label class="tool-field">Orientation
           <select data-field="paper-orientation">
-            <option value="portrait">Portrait</option><option value="landscape">Landscape</option>
+            <option value="portrait">Portrait</option><option value="landscape"><%= t("app.editor.landscape") %></option>
           </select>
         </label>
-        <label class="tool-field">Staff size
+        <label class="tool-field"><%= t("app.editor.staff_size") %>
           <select data-field="staff-size">
             <% for points in [14, 16, 17, 18, 20, 22, 24, 26] %>
-              <option value="<%= points %>"><%= points %> pt<%= points == 20 ? " (usual)" : "" %></option>
+              <option value="<%= points %>"><%= points %> pt<%= points == 20 ? " " + t("app.editor.usual") : "" %></option>
             <% end %>
           </select>
         </label>
-        <label class="tool-check"><input type="checkbox" data-field="even-pages"> Spread the lines evenly over the pages</label>
-        <label class="tool-field">Systems a page
+        <label class="tool-check"><input type="checkbox" data-field="even-pages"> <%= t("app.editor.spread_the_lines_evenly_over_the_pages") %></label>
+        <label class="tool-field"><%= t("app.editor.systems_a_page") %>
           <select data-field="systems-per-page">
-            <option value="">As many as fit</option>
+            <option value=""><%- t("app.editor.as_many_as_fit") %></option>
             <% for count in range(1, 11) %>
               <option value="<%= count %>"><%= count %></option>
             <% end %>
           </select>
         </label>
         <fieldset class="studio-page-lines" data-page-lines>
-          <legend>Headers and footers</legend>
-          <label class="tool-field">Header <input type="text" data-field="page-oddHeader" placeholder="{title} | | {page}"></label>
-          <label class="tool-field">Header, even pages <input type="text" data-field="page-evenHeader" placeholder="Same as the header"></label>
-          <label class="tool-field">Footer <input type="text" data-field="page-oddFooter" placeholder="The title and the page, n / N"></label>
-          <label class="tool-field">Footer, even pages <input type="text" data-field="page-evenFooter" placeholder="Same as the footer"></label>
-          <p class="muted studio-properties-note">Left | centre | right: one item is centred, two stand at the ends.
-            {title}, {composer}, {piece}, {opus}, {copyright} and {page} are filled in. The copyright is printed at the
-            foot of the first page.</p>
+          <legend><%= t("app.editor.headers_and_footers") %></legend>
+          <label class="tool-field"><%= t("app.editor.header") %> <input type="text" data-field="page-oddHeader" placeholder="{title} | | {page}"></label>
+          <label class="tool-field"><%= t("app.editor.header_even_pages") %> <input type="text" data-field="page-evenHeader" placeholder="<%- t("app.editor.same_as_the_header") %>"></label>
+          <label class="tool-field"><%= t("app.editor.footer") %> <input type="text" data-field="page-oddFooter" placeholder="<%= t("app.editor.the_title_and_the_page_n_n") %>"></label>
+          <label class="tool-field"><%= t("app.editor.footer_even_pages") %> <input type="text" data-field="page-evenFooter" placeholder="<%= t("app.editor.same_as_the_footer") %>"></label>
+          <p class="muted studio-properties-note"><%= t("app.editor.page_lines_note") %></p>
         </fieldset>
-    <p class="muted studio-properties-note">Paper and staff size are the PDF's. Each staff's instrument, clef and name: select a note of it, then the toolbox's
-      <strong>This staff</strong>.</p>
+    <p class="muted studio-properties-note"><%- t("app.editor.properties_note") %></p>
   </dialog>
 
   <%# Play ▸ MIDI learn and clock…: the controls a MIDI controller is given,
       filled by public/eui-score/midi-sync.js; kept in this browser. %>
   <dialog class="studio-keys midi-learn" data-midi-learn aria-labelledby="midi-learn-title">
     <div class="studio-keys-head">
-      <h2 id="midi-learn-title">MIDI learn</h2>
-      <button type="button" class="studio-menu" data-learn-close aria-label="Close">×</button>
+      <h2 id="midi-learn-title"><%= t("app.editor.midi_learn_title") %></h2>
+      <button type="button" class="studio-menu" data-learn-close aria-label="<%= t("app.editor.close") %>">×</button>
     </div>
-    <p class="muted midi-learn-note">Press <strong>Learn</strong>, then move a knob or a fader, or press a pad or a key, on the MIDI
-      keyboard chosen in Mode: it now does that. Pitch bend and aftertouch always sound as you play.</p>
+    <p class="muted midi-learn-note"><%- t("app.editor.learn_note") %></p>
     <div class="midi-learn-list" data-learn-list></div>
     <div class="tool-row studio-new-actions">
-      <button type="button" class="tool tool-wide" data-learn-clear-all>Clear them all</button>
+      <button type="button" class="tool tool-wide" data-learn-clear-all><%= t("app.editor.clear_them_all") %></button>
     </div>
-    <p class="muted midi-learn-note">The MIDI clock (Playback ▸ Send MIDI clock) goes to the device in Sound to, 24 pulses a quarter
-      with Start, Stop and Song Position. <strong>Ableton Link</strong> is out of a browser's reach: it talks over the
-      network, which a web page cannot; sync with Live through its MIDI clock instead.</p>
+    <p class="muted midi-learn-note"><%- t("app.editor.clock_note") %></p>
   </dialog>
 
   <%# File ▸ Print a part…: one instrument of the score, as its player reads it. %>
   <dialog class="studio-keys studio-parts" data-parts aria-labelledby="studio-parts-title">
     <div class="studio-keys-head">
-      <h2 id="studio-parts-title">Print a part</h2>
-      <button type="button" class="studio-menu" data-parts-close aria-label="Close">×</button>
+      <h2 id="studio-parts-title"><%= t("app.editor.print_a_part_title") %></h2>
+      <button type="button" class="studio-menu" data-parts-close aria-label="<%= t("app.editor.close") %>">×</button>
     </div>
     <label class="tool-field">Instrument <select data-parts-staff></select></label>
-    <p class="muted studio-parts-note">A part is written as its player reads it: a clarinet in B♭ a tone higher, a horn in F a fifth.</p>
+    <p class="muted studio-parts-note"><%= t("app.editor.a_part_is_written_as_its_player_reads_it") %></p>
     <div class="studio-parts-preview" data-parts-preview></div>
     <div class="tool-row studio-new-actions">
-      <button type="button" class="tool tool-wide" data-parts-ly>Save as .ly</button>
-      <button type="button" class="tool tool-wide tool-primary" data-parts-pdf>Print as PDF</button>
+      <button type="button" class="tool tool-wide" data-parts-ly><%= t("app.editor.save_as_ly") %></button>
+      <button type="button" class="tool tool-wide tool-primary" data-parts-pdf><%= t("app.editor.print_as_pdf") %></button>
     </div>
   </dialog>
 
   <dialog class="studio-keys studio-new" data-new aria-labelledby="studio-new-title">
     <form method="dialog" data-new-form>
       <div class="studio-keys-head">
-        <h2 id="studio-new-title">New score</h2>
-        <button type="button" class="studio-menu" data-new-close aria-label="Close">×</button>
+        <h2 id="studio-new-title"><%= t("app.editor.new_score") %></h2>
+        <button type="button" class="studio-menu" data-new-close aria-label="<%= t("app.editor.close") %>">×</button>
       </div>
       <fieldset class="studio-templates">
-        <legend>Start from</legend>
+        <legend><%= t("app.editor.start_from") %></legend>
         <div data-templates></div>
       </fieldset>
-      <label class="tool-field">Title <input type="text" id="new-title" name="title" placeholder="Untitled"></label>
-      <label class="tool-field">Composer <input type="text" id="new-composer" name="composer"></label>
-      <label class="tool-field">Key
+      <label class="tool-field"><%= t("app.editor.title") %> <input type="text" id="new-title" name="title" placeholder="<%= t("app.editor.untitled") %>"></label>
+      <label class="tool-field"><%= t("app.editor.composer") %> <input type="text" id="new-composer" name="composer"></label>
+      <label class="tool-field"><%= t("app.editor.key") %>
         <select id="new-key" name="key">
           <% for key_choice in editor_keys() %>
             <option value="<%= key_choice[0] %>"<%= key_choice[0] == 0 ? " selected" : "" %>><%= key_choice[1] %></option>
           <% end %>
         </select>
       </label>
-      <label class="tool-field">Metre
+      <label class="tool-field"><%= t("app.editor.metre") %>
         <select id="new-time" name="time">
           <% for metre in editor_metres() %>
             <option value="<%= metre %>"<%= metre == "4/4" ? " selected" : "" %>><%= metre %></option>
           <% end %>
         </select>
       </label>
-      <label class="tool-field">Pickup
+      <label class="tool-field"><%= t("app.editor.pickup") %>
         <select id="new-pickup" name="pickup">
           <% for pickup in editor_pickups() %>
             <option value="<%= pickup[0] %>"><%= pickup[1] %></option>
           <% end %>
         </select>
       </label>
-      <label class="tool-field">Tempo <input type="number" id="new-bpm" name="bpm" min="20" max="300" step="1" placeholder="none"></label>
-      <label class="tool-field">Bars <input type="number" id="new-bars" name="bars" min="1" max="500" step="1" value="16"></label>
+      <label class="tool-field">Tempo <input type="number" id="new-bpm" name="bpm" min="20" max="300" step="1" placeholder="<%= t("app.editor.none") %>"></label>
+      <label class="tool-field"><%= t("app.editor.bars") %> <input type="number" id="new-bars" name="bars" min="1" max="500" step="1" value="16"></label>
       <div class="tool-row studio-new-actions">
-        <button type="button" class="tool tool-wide" data-new-close>Cancel</button>
-        <button type="submit" class="tool tool-wide tool-primary">Create</button>
+        <button type="button" class="tool tool-wide" data-new-close><%= t("app.editor.cancel") %></button>
+        <button type="submit" class="tool tool-wide tool-primary"><%= t("app.editor.create") %></button>
       </div>
     </form>
   </dialog>

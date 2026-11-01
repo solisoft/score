@@ -1,17 +1,21 @@
 // The studio's Undo and Redo (studio.js), around others' changes too, and
 // the undo history kept in this browser (undo-history.js).
 
+// The editor's words in the page's language (#508).
+const V = new URL(import.meta.url).search;
+const { tr } = await import(`./words.js${V}`);
+
 /** Answers Undo and Redo, and the history kept in this browser. */
 export function install(ctx) {
   const { options, draftKey, sourceBox, st, H, mergeScores, conflictLines, parseKept } = ctx;
   const { readText, adoptText, snapshot, restore, saveDraft, replaceText, draw, say, applyMix } = ctx.call;
 
   function undo() {
-    undoStep(st.past, st.future, "Undo");
+    undoStep(st.past, st.future, "undo");
   }
 
   function redo() {
-    undoStep(st.future, st.past, "Redo");
+    undoStep(st.future, st.past, "redo");
   }
 
   /**
@@ -19,7 +23,8 @@ export function install(ctx) {
    * whose text is still the score's goes back as it was; one that someone
    * else's changes have come over since is taken back by a three-way merge
    * — its `after` to its `text`, on the score as it now stands — and, when
-   * they changed the same bars, not at all: theirs are never undone.
+   * they changed the same bars, not at all: theirs are never undone. `name`:
+   * "undo" or "redo", for what is said.
    */
   function undoStep(from, to, name) {
     settleHistory();
@@ -34,11 +39,14 @@ export function install(ctx) {
       const merged = mergeScores(back.after, back.text, st.text, { parse: parseKept });
       if (merged.text == null) {
         const where = merged.whole ? "" : `: ${conflictLines(merged.conflicts).join("; ")}`;
-        return say(`${name} stops here: the score was changed elsewhere since, where this step changed it too${where}. Those changes stay as they are.`, true);
+        const stops = name === "undo"
+          ? tr("Undo stops here: the score was changed elsewhere since, where this step changed it too{where}. Those changes stay as they are.", { where })
+          : tr("Redo stops here: the score was changed elsewhere since, where this step changed it too{where}. Those changes stay as they are.", { where });
+        return say(stops, true);
       }
       from.pop();
       replaceText(merged.text, { keep: true, at: back });
-      say(`${name}: done around the changes made elsewhere since; those stay.`);
+      say(name === "undo" ? tr("Undo: done around the changes made elsewhere since; those stay.") : tr("Redo: done around the changes made elsewhere since; those stay."));
     }
     now.after = st.text;
     to.push(now);
@@ -107,8 +115,8 @@ export function install(ctx) {
     H.keepWithin(st.past, st.future);
     const steps = st.past.length;
     historyNote = same
-      ? `Your undo history is back: Edit ▸ Undo goes back ${steps} step${steps === 1 ? "" : "s"}.`
-      : "Your undo history is back. The score was changed elsewhere since: Undo takes back your own steps around those changes, and stops where both changed the same bars.";
+      ? steps === 1 ? tr("Your undo history is back: Edit ▸ Undo goes back 1 step.") : tr("Your undo history is back: Edit ▸ Undo goes back {n} steps.", { n: steps })
+      : tr("Your undo history is back. The score was changed elsewhere since: Undo takes back your own steps around those changes, and stops where both changed the same bars.");
   }
 
   /** What restoreHistory said of the history it brought back, or "". */

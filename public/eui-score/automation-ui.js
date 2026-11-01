@@ -15,6 +15,8 @@ const M = await import(`./score-model.js${SEARCH}`);
 const R = await import(`./piano-roll.js${SEARCH}`);
 const A = await import(`./automation.js${SEARCH}`);
 const P = await import(`./player.js${SEARCH}`);
+// The lane's words in the page's language (#508).
+const { tr } = await import(`./words.js${SEARCH}`);
 
 /**
  * `st` is the studio's state; `edit(fn)` makes one undoable edit;
@@ -26,9 +28,9 @@ export function automationLane({ rollHost, rollScroll, st, edit, say, redraw, re
   st.cc = { lane: null, id: "1", chosen: -1, drag: null };
   const bar = Object.assign(document.createElement("div"), { className: "studio-cc-bar" });
   bar.setAttribute("role", "toolbar");
-  bar.setAttribute("aria-label", "Automation");
-  const options = A.CONTROLLERS.map((c) => `<option value="${c.id}">${c.name}${c.number != null ? ` (CC ${c.number})` : ""}</option>`).join("");
-  bar.innerHTML = `<span class="studio-velocity-what">Automation</span><label class="studio-cc-field">Staff <select data-cc-lane aria-label="The staff whose curve is drawn"></select></label><label class="studio-cc-field">Curve <select data-cc-id aria-label="The controller drawn">${options}</select></label><button type="button" class="studio-menu" data-cc-clear>Clear the curve</button><span class="studio-roll-hint">Click to add a point, drag one to move it, double-click to take it away; Alt places it off the grid.</span>`;
+  bar.setAttribute("aria-label", tr("Automation"));
+  const options = A.CONTROLLERS.map((c) => `<option value="${c.id}">${tr(c.name)}${c.number != null ? ` (CC ${c.number})` : ""}</option>`).join("");
+  bar.innerHTML = `<span class="studio-velocity-what">${tr("Automation")}</span><label class="studio-cc-field">${tr("Staff")} <select data-cc-lane aria-label="${tr("The staff whose curve is drawn")}"></select></label><label class="studio-cc-field">${tr("Curve")} <select data-cc-id aria-label="${tr("The controller drawn")}">${options}</select></label><button type="button" class="studio-menu" data-cc-clear>${tr("Clear the curve")}</button><span class="studio-roll-hint">${tr("Click to add a point, drag one to move it, double-click to take it away; Alt places it off the grid.")}</span>`;
   rollHost.append(bar);
   const laneBox = bar.querySelector("[data-cc-lane]");
   const idBox = bar.querySelector("[data-cc-id]");
@@ -67,7 +69,7 @@ export function automationLane({ rollHost, rollScroll, st, edit, say, redraw, re
     idBox.value = st.cc.id;
     if (lane == null) return "";
     const name = list.find((c) => c.lane === lane)?.name ?? "";
-    const muted = st.cc.id === "64" && A.notatedPedal(st.score, lane) ? "This staff's pedal marks (\\sustainOn) play: this curve is not heard." : "";
+    const muted = st.cc.id === "64" && A.notatedPedal(st.score, lane) ? tr("This staff's pedal marks (\\sustainOn) play: this curve is not heard.") : "";
     st.cc.geo = geo();
     return `<div class="studio-cc">${A.drawLane(st.score, st.cc.geo, st.cc.id, points(), { label: name, colour: R.laneColour(st.score, lane), chosen: st.cc.chosen, muted })}</div>`;
   }
@@ -75,7 +77,7 @@ export function automationLane({ rollHost, rollScroll, st, edit, say, redraw, re
   function commit(next, words) {
     const lane = laneNow();
     const id = st.cc.id;
-    if (edit((score) => A.setCurve(score, lane, id, next))) say(`${words} — Ctrl+Z takes it back.`);
+    if (edit((score) => A.setCurve(score, lane, id, next))) say(tr("{change} — Ctrl+Z takes it back.", { change: words }));
   }
 
   function at(event) {
@@ -89,7 +91,7 @@ export function automationLane({ rollHost, rollScroll, st, edit, say, redraw, re
     const k = A.pointAt(st.cc.geo, st.cc.id, list, p.x, p.y);
     if (k < 0) return false;
     st.cc.chosen = -1;
-    commit(A.withoutPoint(st.cc.id, list, k), "Point taken away");
+    commit(A.withoutPoint(st.cc.id, list, k), tr("Point taken away"));
     return true;
   }
 
@@ -133,7 +135,8 @@ export function automationLane({ rollHost, rollScroll, st, edit, say, redraw, re
     const was = A.curveOf(st.score, laneNow(), st.cc.id);
     if (JSON.stringify(next) === JSON.stringify(was)) return redraw();
     const point = next[Math.max(0, st.cc.chosen)];
-    commit(next, `${A.controller(st.cc.id).name}${point ? `: ${A.valueText(st.cc.id, point[1])}` : ""}`);
+    const name = tr(A.controller(st.cc.id).name);
+    commit(next, point ? tr("{name}: {value}", { name, value: A.valueText(st.cc.id, point[1]) }) : name);
   };
   rollHost.addEventListener("pointerup", end);
   rollHost.addEventListener("pointercancel", end);
@@ -157,9 +160,9 @@ export function automationLane({ rollHost, rollScroll, st, edit, say, redraw, re
     redraw();
   });
   bar.querySelector("[data-cc-clear]").addEventListener("click", () => {
-    if (!st.score || !A.curveOf(st.score, laneNow(), st.cc.id).length) return say("This curve has no point.");
+    if (!st.score || !A.curveOf(st.score, laneNow(), st.cc.id).length) return say(tr("This curve has no point."));
     st.cc.chosen = -1;
-    commit([], `${A.controller(st.cc.id).name} cleared`);
+    commit([], tr("{name} cleared", { name: tr(A.controller(st.cc.id).name) }));
   });
 
   // ---- Recording ---------------------------------------------------------------------

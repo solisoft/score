@@ -7,15 +7,19 @@
 //
 // studio.js calls `install(studio)` once, then `open(name)` from its actions.
 
+const V = new URL(import.meta.url).search;
+// The dialogs' words in the page's language (#508).
+const { tr } = await import(`./words.js${V}`);
+
 const GRID_NAMES = {
-  quarter: "Quarters",
-  eighth: "Eighths",
-  "eighth-triplet": "Triplet eighths",
-  sixteenth: "Sixteenths",
-  "sixteenth-triplet": "Triplet sixteenths",
-  "thirty-second": "Thirty-seconds",
+  quarter: tr("Quarters"),
+  eighth: tr("Eighths"),
+  "eighth-triplet": tr("Triplet eighths"),
+  sixteenth: tr("Sixteenths"),
+  "sixteenth-triplet": tr("Triplet sixteenths"),
+  "thirty-second": tr("Thirty-seconds"),
 };
-const UNIT_NAMES = { 8: "Eighths", 16: "Sixteenths" };
+const UNIT_NAMES = { 8: tr("Eighths"), 16: tr("Sixteenths") };
 
 const el = (tag, props = {}, ...children) => {
   const node = Object.assign(document.createElement(tag), props);
@@ -26,8 +30,8 @@ const el = (tag, props = {}, ...children) => {
 function dialog(root, kind, title) {
   const box = el("dialog", { className: `studio-keys studio-pattern studio-${kind}` });
   box.dataset[kind] = "";
-  const close = el("button", { type: "button", className: "studio-menu", textContent: "×", title: "Close" });
-  close.setAttribute("aria-label", "Close");
+  const close = el("button", { type: "button", className: "studio-menu", textContent: "×", title: tr("Close") });
+  close.setAttribute("aria-label", tr("Close"));
   close.addEventListener("click", () => box.close());
   box.append(el("div", { className: "studio-keys-head" }, el("h2", { textContent: title }), close));
   box.addEventListener("click", (event) => {
@@ -56,8 +60,6 @@ const slider = (name, min, max, step, value, unit) => {
   return { input, row: el("span", { className: "studio-feel-slider" }, input, shown) };
 };
 
-const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
-
 export function install(studio) {
   const { root, st, M } = studio;
 
@@ -65,43 +67,45 @@ export function install(studio) {
   function scope() {
     const all = M.staffLanes(st.score).flatMap((s) => M.voiceLanes(st.score, s));
     const end = M.barStart(st.score, M.barsOf(st.score));
-    if (!st.sel) return { lanes: all, from: 0, to: end, words: "the whole score" };
+    if (!st.sel) return { lanes: all, from: 0, to: end, words: tr("the whole score") };
     if (st.sel.bars) {
       const [a, b] = st.sel.bars;
       const lanes = st.sel.lanes?.length ? st.sel.lanes : all;
-      return { lanes, from: M.barStart(st.score, a), to: M.barStart(st.score, b + 1), words: `bars ${studio.barNo(a)}–${studio.barNo(b)}` };
+      return { lanes, from: M.barStart(st.score, a), to: M.barStart(st.score, b + 1), words: tr("bars {a}–{b}", { a: studio.barNo(a), b: studio.barNo(b) }) };
     }
     const r = studio.range();
-    if (!r) return { lanes: all, from: 0, to: end, words: "the whole score" };
+    if (!r) return { lanes: all, from: 0, to: end, words: tr("the whole score") };
     const at = M.starts(r.staff);
-    return { lanes: [r.s], from: at[r.a], to: at[r.b] + M.ticksOf(r.staff.events[r.b]), words: "the selected notes" };
+    return { lanes: [r.s], from: at[r.a], to: at[r.b] + M.ticksOf(r.staff.events[r.b]), words: tr("the selected notes") };
   }
 
   // ---- Quantize -------------------------------------------------------------------
 
-  const quantizeBox = dialog(root, "quantize", "Quantize");
+  const quantizeBox = dialog(root, "quantize", tr("Quantize"));
   const quantizeScope = el("p", { className: "muted studio-pattern-note" });
   const strength = slider("quantizeStrength", 0, 100, 5, 100, "%");
-  const ends = choice("quantizeEnds", { starts: "Starts only: each note keeps its length", both: "Starts and ends: lengths fitted to the grid too" }, "starts");
+  const ends = choice("quantizeEnds", { starts: tr("Starts only: each note keeps its length"), both: tr("Starts and ends: lengths fitted to the grid too") }, "starts");
   quantizeBox.append(
     el("p", {
       className: "muted studio-pattern-note",
       textContent:
-        "A score is notation: its notes already sit on a grid, often a fine one — a recording fitted to thirty-seconds, swing written out. Quantizing moves each note's start to the nearest step of a coarser grid, counted from its bar line, or part of the way there. Notes landing together make a chord; a note reaching the next one's start stops there. Articulations, dynamics and words go with their notes; a triplet grid, or a tuplet in the way, rewrites the notes as a recording is written: pitches and rhythm kept, what was written on them not.",
+        tr("A score is notation: its notes already sit on a grid, often a fine one — a recording fitted to thirty-seconds, swing written out. Quantizing moves each note's start to the nearest step of a coarser grid, counted from its bar line, or part of the way there. Notes landing together make a chord; a note reaching the next one's start stops there. Articulations, dynamics and words go with their notes; a triplet grid, or a tuplet in the way, rewrites the notes as a recording is written: pitches and rhythm kept, what was written on them not."),
     }),
     quantizeScope,
-    field("Grid", choice("quantizeGrid", GRID_NAMES, "eighth")),
-    field("Strength", strength.row),
-    field("What moves", ends),
-    el("div", { className: "tool-row studio-new-actions" }, el("button", { type: "button", className: "tool tool-wide tool-primary", textContent: "Quantize" })),
+    field(tr("Grid"), choice("quantizeGrid", GRID_NAMES, "eighth")),
+    field(tr("Strength"), strength.row),
+    field(tr("What moves"), ends),
+    el("div", { className: "tool-row studio-new-actions" }, el("button", { type: "button", className: "tool tool-wide tool-primary", textContent: tr("Quantize") })),
   );
   quantizeBox.querySelector(".tool-primary").dataset.quantizeApply = "";
   let quantizing = null;
 
   function openQuantize() {
-    if (!st.score) return studio.say("Quantize needs the score tools: this piece is edited in its text.", true);
+    if (!st.score) return studio.say(tr("Quantize needs the score tools: this piece is edited in its text."), true);
     quantizing = scope();
-    quantizeScope.textContent = `What moves: ${quantizing.words}${quantizing.lanes.length > 1 ? `, on ${quantizing.lanes.length} staves and voices` : ""}.`;
+    quantizeScope.textContent = quantizing.lanes.length > 1
+      ? tr("What moves: {what}, on {count} staves and voices.", { what: quantizing.words, count: quantizing.lanes.length })
+      : tr("What moves: {what}.", { what: quantizing.words });
     quantizeBox.showModal();
   }
 
@@ -116,12 +120,19 @@ export function install(studio) {
     });
     if (!done) return;
     quantizeBox.close();
-    studio.say(count ? `${plural(count, "note")} moved to ${GRID_NAMES[grid].toLowerCase()}${options.strength < 1 ? `, ${Math.round(options.strength * 100)} % of the way` : ""}. Undo takes it back.` : `Every note already sits on ${GRID_NAMES[grid].toLowerCase()}: nothing moved.`);
+    const words = { count, grid: GRID_NAMES[grid].toLowerCase(), percent: Math.round(options.strength * 100) };
+    if (!count) return studio.say(tr("Every note already sits on {grid}: nothing moved.", words));
+    if (options.strength < 1) {
+      return studio.say(count === 1
+        ? tr("1 note moved to {grid}, {percent} % of the way. Undo takes it back.", words)
+        : tr("{count} notes moved to {grid}, {percent} % of the way. Undo takes it back.", words));
+    }
+    studio.say(count === 1 ? tr("1 note moved to {grid}. Undo takes it back.", words) : tr("{count} notes moved to {grid}. Undo takes it back.", words));
   });
 
   // ---- Swing and humanize ---------------------------------------------------------
 
-  const feelBox = dialog(root, "feel", "Swing and humanize");
+  const feelBox = dialog(root, "feel", tr("Swing and humanize"));
   const swing = slider("swingAmount", 50, 75, 1, 50, "%");
   const swingUnit = choice("swingUnit", UNIT_NAMES, 8);
   const timing = slider("humanizeTime", 0, 60, 1, 0, "ms");
@@ -133,29 +144,29 @@ export function install(studio) {
     return b;
   };
   feelBox.append(
-    el("h3", { textContent: "Swing" }),
+    el("h3", { textContent: tr("Swing") }),
     el("p", {
       className: "muted studio-pattern-note",
-      textContent: "Played, not written: the first of each pair of eighths (or sixteenths) is held longer — 50 % even, 67 % a triplet feel, 75 % dotted. Play, Save the sound and Save as MIDI swing; the score stays as it is.",
+      textContent: tr("Played, not written: the first of each pair of eighths (or sixteenths) is held longer — 50 % even, 67 % a triplet feel, 75 % dotted. Play, Save the sound and Save as MIDI swing; the score stays as it is."),
     }),
-    field("Swing", swing.row),
-    field("Of", swingUnit),
-    el("p", { className: "muted studio-pattern-note", textContent: "Or written into the notes: each even pair on the beat becomes a long and a short one." }),
+    field(tr("Swing"), swing.row),
+    field(tr("Of"), swingUnit),
+    el("p", { className: "muted studio-pattern-note", textContent: tr("Or written into the notes: each even pair on the beat becomes a long and a short one.") }),
     writeScope,
-    el("div", { className: "tool-row" }, button("Write as triplets", "write-triplet", "Each pair a triplet of a long note and a short one"), button("Write dotted", "write-dotted", "Each pair a dotted note and a short one")),
-    el("h3", { textContent: "Humanize" }),
+    el("div", { className: "tool-row" }, button(tr("Write as triplets"), "write-triplet", tr("Each pair a triplet of a long note and a short one")), button(tr("Write dotted"), "write-dotted", tr("Each pair a dotted note and a short one"))),
+    el("h3", { textContent: tr("Humanize") }),
     el("p", {
       className: "muted studio-pattern-note",
-      textContent: "Each note struck a little early or late, a little softer or harder — the same each time it plays, until New take. On top of the dynamics: the score is not changed.",
+      textContent: tr("Each note struck a little early or late, a little softer or harder — the same each time it plays, until New take. On top of the dynamics: the score is not changed."),
     }),
-    field("Timing, ±", timing.row),
-    field("Velocity, ±", loudness.row),
-    el("div", { className: "tool-row studio-new-actions" }, button("New take", "seed", "Other small differences, the same settings"), el("button", { type: "button", className: "tool tool-wide tool-primary", textContent: "Keep" })),
+    field(tr("Timing, ±"), timing.row),
+    field(tr("Velocity, ±"), loudness.row),
+    el("div", { className: "tool-row studio-new-actions" }, button(tr("New take"), "seed", tr("Other small differences, the same settings")), el("button", { type: "button", className: "tool tool-wide tool-primary", textContent: tr("Keep") })),
   );
   feelBox.querySelector(".tool-primary").dataset.feelApply = "";
 
   function openFeel() {
-    if (!st.score) return studio.say("Swing and humanize need the score tools: this piece is edited in its text.", true);
+    if (!st.score) return studio.say(tr("Swing and humanize need the score tools: this piece is edited in its text."), true);
     const meta = st.score.meta ?? {};
     const set = (s, value) => {
       s.input.value = String(value);
@@ -165,7 +176,7 @@ export function install(studio) {
     swingUnit.value = String(meta.swing?.unit ?? 8);
     set(timing, meta.humanize?.time ?? 0);
     set(loudness, meta.humanize?.velocity ?? 0);
-    writeScope.textContent = `Written over ${scope().words}.`;
+    writeScope.textContent = tr("Written over {what}.", { what: scope().words });
     feelBox.showModal();
   }
 
@@ -188,8 +199,11 @@ export function install(studio) {
       score.meta = meta;
     });
     if (!done) return;
-    const said = [patch.swing ? `swing ${amount} % on ${UNIT_NAMES[patch.swing.unit].toLowerCase()}` : "no swing", patch.humanize ? `humanized ±${time} ms, ±${velocity} %` : "not humanized"];
-    studio.say(`Played with ${said.join(", ")}. Undo takes it back.`);
+    const said = [
+      patch.swing ? tr("swing {amount} % on {unit}", { amount, unit: UNIT_NAMES[patch.swing.unit].toLowerCase() }) : tr("no swing"),
+      patch.humanize ? tr("humanized ±{time} ms, ±{velocity} %", { time, velocity }) : tr("not humanized"),
+    ];
+    studio.say(tr("Played with {how}. Undo takes it back.", { how: said.join(", ") }));
   }
 
   feelBox.querySelector("[data-feel-apply]").addEventListener("click", () => {
@@ -210,7 +224,12 @@ export function install(studio) {
     });
     if (!done) return;
     feelBox.close();
-    studio.say(count ? `${plural(count, "pair")} of ${UNIT_NAMES[unit].toLowerCase()} written ${feel === "dotted" ? "dotted" : "as triplets"}. Undo takes it back.` : `No even pair of ${UNIT_NAMES[unit].toLowerCase()} on the beat there.`);
+    const words = { count, unit: UNIT_NAMES[unit].toLowerCase() };
+    if (!count) return studio.say(tr("No even pair of {unit} on the beat there.", words));
+    if (feel === "dotted") {
+      return studio.say(count === 1 ? tr("1 pair of {unit} written dotted. Undo takes it back.", words) : tr("{count} pairs of {unit} written dotted. Undo takes it back.", words));
+    }
+    studio.say(count === 1 ? tr("1 pair of {unit} written as triplets. Undo takes it back.", words) : tr("{count} pairs of {unit} written as triplets. Undo takes it back.", words));
   });
 
   return {

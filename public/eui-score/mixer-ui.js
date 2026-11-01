@@ -14,18 +14,19 @@
 
 const SEARCH = new URL(import.meta.url).search;
 const X = await import(`./mixer.js${SEARCH}`);
+const { tr } = await import(`./words.js${SEARCH}`);
 
 const escape = (text) => String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
 /** A fader's dB as words: "-6.0 dB", "off" at the bottom. */
 export function dbText(db) {
-  return db <= X.VOLUME_MIN ? "off" : `${db > 0 ? "+" : ""}${Number(db).toFixed(1)} dB`;
+  return db <= X.VOLUME_MIN ? tr("off") : `${db > 0 ? "+" : ""}${Number(db).toFixed(1)} dB`;
 }
 
 /** A pan as words: "C", "L 40", "R 100". */
 export function panText(pan) {
   const n = Math.round(Math.abs(pan) * 100);
-  return n === 0 ? "C" : `${pan < 0 ? "L" : "R"} ${n}`;
+  return n === 0 ? "C" : pan < 0 ? tr("L {n}", { n }) : tr("R {n}", { n });
 }
 
 /** The patch a control's new value makes: `field` "volume" or "eq.low"…, the value read as its kind. */
@@ -38,23 +39,28 @@ function range(lane, field, value, min, max, step, label, shown) {
   return `<label class="mixer-field"><span>${label}</span><input type="range" data-lane="${lane}" data-field="${field}" min="${min}" max="${max}" step="${step}" value="${value}" aria-label="${escape(label)}"><output>${shown}</output></label>`;
 }
 
+/** A room's name, as the reverb's list shows it. */
+function roomName(id, room) {
+  return { room: tr("Room"), chamber: tr("Chamber"), hall: tr("Hall"), cathedral: tr("Cathedral") }[id] ?? room.name;
+}
+
 function effects(lane, s) {
   const toggle = (fx, label) =>
     `<label class="mixer-fx-toggle"><input type="checkbox" data-lane="${lane}" data-field="${fx}.on"${s[fx].on ? " checked" : ""}> ${label}</label>`;
   const rooms = Object.entries(X.ROOMS)
-    .map(([id, room]) => `<option value="${id}"${s.reverb.room === id ? " selected" : ""}>${room.name}</option>`)
+    .map(([id, room]) => `<option value="${id}"${s.reverb.room === id ? " selected" : ""}>${roomName(id, room)}</option>`)
     .join("");
-  return `<details class="mixer-fx"${s.eq.on || s.comp.on || s.reverb.on ? " open" : ""}><summary>Effects</summary>
+  return `<details class="mixer-fx"${s.eq.on || s.comp.on || s.reverb.on ? " open" : ""}><summary>${tr("Effects")}</summary>
     <div class="mixer-fx-group">${toggle("eq", "EQ")}
-      ${range(lane, "eq.low", s.eq.low, -X.EQ_RANGE, X.EQ_RANGE, 0.5, "Low", `${s.eq.low} dB`)}
-      ${range(lane, "eq.mid", s.eq.mid, -X.EQ_RANGE, X.EQ_RANGE, 0.5, "Mid", `${s.eq.mid} dB`)}
-      ${range(lane, "eq.high", s.eq.high, -X.EQ_RANGE, X.EQ_RANGE, 0.5, "High", `${s.eq.high} dB`)}</div>
-    <div class="mixer-fx-group">${toggle("comp", "Compressor")}
-      ${range(lane, "comp.threshold", s.comp.threshold, -60, 0, 1, "Threshold", `${s.comp.threshold} dB`)}
+      ${range(lane, "eq.low", s.eq.low, -X.EQ_RANGE, X.EQ_RANGE, 0.5, tr("Low"), `${s.eq.low} dB`)}
+      ${range(lane, "eq.mid", s.eq.mid, -X.EQ_RANGE, X.EQ_RANGE, 0.5, tr("Mid"), `${s.eq.mid} dB`)}
+      ${range(lane, "eq.high", s.eq.high, -X.EQ_RANGE, X.EQ_RANGE, 0.5, tr("High"), `${s.eq.high} dB`)}</div>
+    <div class="mixer-fx-group">${toggle("comp", tr("Compressor"))}
+      ${range(lane, "comp.threshold", s.comp.threshold, -60, 0, 1, tr("Threshold"), `${s.comp.threshold} dB`)}
       ${range(lane, "comp.ratio", s.comp.ratio, 1, 20, 0.5, "Ratio", `${s.comp.ratio}:1`)}</div>
-    <div class="mixer-fx-group">${toggle("reverb", "Reverb")}
-      <label class="mixer-field"><span>Room</span><select data-lane="${lane}" data-field="reverb.room" aria-label="Room">${rooms}</select></label>
-      ${range(lane, "reverb.mix", s.reverb.mix, 0, 1, 0.01, "Amount", `${Math.round(s.reverb.mix * 100)} %`)}</div>
+    <div class="mixer-fx-group">${toggle("reverb", tr("Reverb"))}
+      <label class="mixer-field"><span>${tr("Room")}</span><select data-lane="${lane}" data-field="reverb.room" aria-label="${tr("Room")}">${rooms}</select></label>
+      ${range(lane, "reverb.mix", s.reverb.mix, 0, 1, 0.01, tr("Amount"), `${Math.round(s.reverb.mix * 100)} %`)}</div>
   </details>`;
 }
 
@@ -63,11 +69,11 @@ export function trackHtml({ lane, name, colour }, s, instrument = "") {
   return `<section class="mixer-strip" data-strip="${lane}" aria-label="${escape(name)}">
     <header><i style="background:${colour}"></i><span title="${escape(name)}">${escape(name)}</span></header>
     <div class="mixer-ms">
-      <button type="button" class="tool${s.mute ? " on" : ""}" data-lane="${lane}" data-toggle="mute" aria-pressed="${s.mute}" title="Mute ${escape(name)}">M</button>
-      <button type="button" class="tool${s.solo ? " on" : ""}" data-lane="${lane}" data-toggle="solo" aria-pressed="${s.solo}" title="Solo ${escape(name)}">S</button>
+      <button type="button" class="tool${s.mute ? " on" : ""}" data-lane="${lane}" data-toggle="mute" aria-pressed="${s.mute}" title="${escape(tr("Mute {name}", { name }))}">M</button>
+      <button type="button" class="tool${s.solo ? " on" : ""}" data-lane="${lane}" data-toggle="solo" aria-pressed="${s.solo}" title="${escape(tr("Solo {name}", { name }))}">S</button>
     </div>
     ${range(lane, "volume", s.volume, X.VOLUME_MIN, X.VOLUME_MAX, 0.5, "Volume", dbText(s.volume))}
-    ${range(lane, "pan", s.pan, -1, 1, 0.05, "Pan", panText(s.pan))}
+    ${range(lane, "pan", s.pan, -1, 1, 0.05, tr("Pan"), panText(s.pan))}
     ${instrument}
     ${effects(lane, s)}
   </section>`;
@@ -77,7 +83,7 @@ export function trackHtml({ lane, name, colour }, s, instrument = "") {
 export function masterHtml(s) {
   return `<section class="mixer-strip mixer-master" data-strip="master" aria-label="Master">
     <header><span>Master</span></header>
-    <div class="mixer-meter" role="meter" aria-label="Master level" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0"><div class="mixer-meter-fill"></div></div>
+    <div class="mixer-meter" role="meter" aria-label="${tr("Master level")}" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0"><div class="mixer-meter-fill"></div></div>
     ${range("master", "volume", s.volume, X.VOLUME_MIN, X.VOLUME_MAX, 0.5, "Volume", dbText(s.volume))}
     ${effects("master", s)}
   </section>`;
@@ -101,8 +107,8 @@ function shown(field, value) {
 
 export function mixerPanel({ root, tracks, mix, preview, commit, level, instrument = null }) {
   const panel = Object.assign(document.createElement("dialog"), { className: "studio-mixer" });
-  panel.setAttribute("aria-label", "Mixer");
-  panel.innerHTML = `<div class="mixer-head"><h3>Mixer</h3><span class="mixer-note">Kept with the score; heard on Play and in Save the sound.</span><button type="button" class="tool" data-mixer-close aria-label="Close the mixer">✕</button></div><div class="mixer-strips" data-mixer-strips></div>`;
+  panel.setAttribute("aria-label", tr("Mixer"));
+  panel.innerHTML = `<div class="mixer-head"><h3>${tr("Mixer")}</h3><span class="mixer-note">${tr("Kept with the score; heard on Play and in Save the sound.")}</span><button type="button" class="tool" data-mixer-close aria-label="${tr("Close the mixer")}">✕</button></div><div class="mixer-strips" data-mixer-strips></div>`;
   root.append(panel);
   instrument?.bind(panel);
   const strips = panel.querySelector("[data-mixer-strips]");

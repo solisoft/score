@@ -10,6 +10,10 @@
 // alteration, a button focused. Two actions are the handler's own:
 // "escape" (note input off, or the selection dropped) and "input-back".
 
+// What each entry does, in the page's language (#508): the keys stay as they are matched.
+const V = new URL(import.meta.url).search;
+const { tr } = await import(`./words.js${V}`);
+
 const KEY_DURATIONS = { 2: 32, 3: 16, 4: 8, 5: 4, 6: 2, 7: 1 };
 const LETTERS = { c: 0, d: 1, e: 2, f: 3, g: 4, a: 5, b: 6 };
 const lower = (k) => k.key.toLowerCase();
@@ -17,7 +21,7 @@ const lower = (k) => k.key.toLowerCase();
 export const SHORTCUTS = [
   {
     keys: "N or I / Esc",
-    does: "note input on and off / select",
+    does: tr("note input on and off / select"),
     match: (k, ctx) => {
       if (k.mod) return null;
       // I as well as N (#423).
@@ -27,17 +31,17 @@ export const SHORTCUTS = [
   },
   {
     keys: "A–G",
-    does: "write a note (Shift: add to the chord)",
+    does: tr("write a note (Shift: add to the chord)"),
     match: (k) => {
       const step = LETTERS[lower(k)];
       return k.mod || k.altKey || step === undefined ? null : ["letter", { step, add: k.shiftKey }];
     },
   },
   // R as well as 0 in note input (#423): out of it, R records (below).
-  { keys: "0 / R", does: "rest (R: in note input)", match: (k, ctx) => (!k.mod && (k.key === "0" || (ctx.inputOn && lower(k) === "r")) ? ["rest"] : null) },
+  { keys: "0 / R", does: tr("rest (R: in note input)"), match: (k, ctx) => (!k.mod && (k.key === "0" || (ctx.inputOn && lower(k) === "r")) ? ["rest"] : null) },
   {
     keys: "2–7 / .",
-    does: "32nd … whole / dot",
+    does: tr("32nd … whole / dot"),
     match: (k) => {
       if (k.mod) return null;
       if (KEY_DURATIONS[k.key]) return ["duration", { base: KEY_DURATIONS[k.key] }];
@@ -46,12 +50,12 @@ export const SHORTCUTS = [
   },
   {
     keys: "Ctrl+Shift+↑ ↓",
-    does: "draw the notes on the staff above / below (again: back)",
+    does: tr("draw the notes on the staff above / below (again: back)"),
     match: (k) => (k.mod && k.shiftKey && !k.altKey && (k.key === "ArrowUp" || k.key === "ArrowDown") ? ["cross", { dir: k.key === "ArrowUp" ? "-1" : "1" }] : null),
   },
   {
     keys: "↑ ↓",
-    does: "step; Shift semitone; Ctrl octave",
+    does: tr("step; Shift semitone; Ctrl octave"),
     match: (k) => {
       if (k.key !== "ArrowUp" && k.key !== "ArrowDown") return null;
       const by = k.key === "ArrowUp" ? 1 : -1;
@@ -61,17 +65,17 @@ export const SHORTCUTS = [
   },
   {
     keys: "Alt+↑ ↓",
-    does: "a note of the chord",
+    does: tr("a note of the chord"),
     match: (k) => (!k.mod && k.altKey && (k.key === "ArrowUp" || k.key === "ArrowDown") ? [k.key === "ArrowUp" ? "head-up" : "head-down"] : null),
   },
   {
     keys: "← →",
-    does: "previous / next; Shift extends",
+    does: tr("previous / next; Shift extends"),
     match: (k) => (!k.mod && (k.key === "ArrowRight" || k.key === "ArrowLeft") ? [k.key === "ArrowRight" ? "next" : "previous", { extend: k.shiftKey }] : null),
   },
   {
     keys: "+ − =",
-    does: "sharp, flat, natural",
+    does: tr("sharp, flat, natural"),
     match: (k, ctx) => {
       if (k.mod) return null;
       if (k.key === "+") return ["alter", { alter: Math.min(2, ctx.alter + 1) }];
@@ -81,44 +85,44 @@ export const SHORTCUTS = [
   },
   {
     keys: "T / S / Shift+S",
-    does: "tie / slur / phrasing slur",
+    does: tr("tie / slur / phrasing slur"),
     match: (k) => {
       if (k.mod) return null;
       if (lower(k) === "s" && k.shiftKey) return ["phrase"];
       return { t: ["tie"], s: ["slur"] }[lower(k)] ?? null;
     },
   },
-  { keys: "X", does: "flip the stems: up, down, as the voice wants", match: (k) => (!k.mod && !k.altKey && lower(k) === "x" ? ["stem-flip"] : null) },
+  { keys: "X", does: tr("flip the stems: up, down, as the voice wants"), match: (k) => (!k.mod && !k.altKey && lower(k) === "x" ? ["stem-flip"] : null) },
   {
     keys: "Alt+B / Alt+Shift+B",
-    does: "beam the selection by hand (again: unbeamed) / break the beam here",
+    does: tr("beam the selection by hand (again: unbeamed) / break the beam here"),
     match: (k) => (!k.mod && k.altKey && (k.code === "KeyB" || lower(k) === "b") ? [k.shiftKey ? "beam-break" : "beam"] : null),
   },
-  { keys: "J", does: "spell the other way: C♯ ↔ D♭", match: (k) => (!k.mod && !k.altKey && lower(k) === "j" ? ["enharmonic"] : null) },
+  { keys: "J", does: tr("spell the other way: C♯ ↔ D♭"), match: (k) => (!k.mod && !k.altKey && lower(k) === "j" ? ["enharmonic"] : null) },
   {
     keys: "Alt+Shift+1–5",
-    does: "fingering on the grace note before the note",
+    does: tr("fingering on the grace note before the note"),
     match: (k) => (!k.mod && k.altKey && k.shiftKey && /^(Digit|Numpad)[1-5]$/.test(k.code) ? ["grace-finger", { n: k.code.slice(-1) }] : null),
   },
   {
     keys: "Alt+1–5",
-    does: "fingering (again to take it away)",
+    does: tr("fingering (again to take it away)"),
     match: (k) => (!k.mod && k.altKey && /^(Digit|Numpad)[1-5]$/.test(k.code) ? ["finger", { n: k.code.slice(-1) }] : null),
   },
   {
     keys: "L / K, Ctrl+L / Ctrl+K",
-    does: "lyrics / chord symbol",
+    does: tr("lyrics / chord symbol"),
     match: (k) => (k.altKey ? null : { l: ["lyrics"], k: ["chord"] }[lower(k)] ?? null),
   },
-  { keys: "Ctrl+Alt+1 – 4", does: "voice 1, 2, 3 or 4", match: (k) => (k.mod && k.altKey && /^(Digit|Numpad)[1-4]$/.test(k.code) ? ["voice", { voice: k.code.slice(-1) }] : null) },
-  { keys: "Ctrl+Alt+M", does: "comment on the selection (in the app)", match: (k) => (k.mod && k.altKey && (k.code === "KeyM" || lower(k) === "m") ? ["comment"] : null) },
-  { keys: "Ctrl+3, 5, 6, 7", does: "tuplets", match: (k) => (k.mod && !k.altKey && ["3", "5", "6", "7"].includes(k.key) ? ["tuplet", { n: k.key }] : null) },
-  { keys: "]", does: "a bar at the end", match: (k) => (!k.mod && k.key === "]" ? ["add-bar"] : null) },
-  { keys: "Insert", does: "a bar before the selection", match: (k) => (!k.mod && k.key === "Insert" ? ["insert-bar"] : null) },
-  { keys: "Ctrl+Delete", does: "take the selected bars away", match: (k) => (k.mod && (k.key === "Delete" || k.key === "Backspace") ? ["delete-bars"] : null) },
+  { keys: "Ctrl+Alt+1 – 4", does: tr("voice 1, 2, 3 or 4"), match: (k) => (k.mod && k.altKey && /^(Digit|Numpad)[1-4]$/.test(k.code) ? ["voice", { voice: k.code.slice(-1) }] : null) },
+  { keys: "Ctrl+Alt+M", does: tr("comment on the selection (in the app)"), match: (k) => (k.mod && k.altKey && (k.code === "KeyM" || lower(k) === "m") ? ["comment"] : null) },
+  { keys: "Ctrl+3, 5, 6, 7", does: tr("tuplets"), match: (k) => (k.mod && !k.altKey && ["3", "5", "6", "7"].includes(k.key) ? ["tuplet", { n: k.key }] : null) },
+  { keys: "]", does: tr("a bar at the end"), match: (k) => (!k.mod && k.key === "]" ? ["add-bar"] : null) },
+  { keys: "Insert", does: tr("a bar before the selection"), match: (k) => (!k.mod && k.key === "Insert" ? ["insert-bar"] : null) },
+  { keys: "Ctrl+Delete", does: tr("take the selected bars away"), match: (k) => (k.mod && (k.key === "Delete" || k.key === "Backspace") ? ["delete-bars"] : null) },
   {
     keys: "Delete",
-    does: "make rests; in note input, Backspace takes the last note back",
+    does: tr("make rests; in note input, Backspace takes the last note back"),
     match: (k, ctx) => {
       if (k.mod) return null;
       if (k.key === "Delete") return ["rest"];
@@ -128,17 +132,17 @@ export const SHORTCUTS = [
   },
   {
     keys: "Ctrl+C V X",
-    does: "copy, paste, cut — as LilyPond, with other programs too",
+    does: tr("copy, paste, cut — as LilyPond, with other programs too"),
     match: (k) => {
       if (!k.mod || k.altKey) return null;
       if (lower(k) === "v") return k.shiftKey ? null : ["paste"];
       return { c: ["copy"], x: ["cut"] }[lower(k)] ?? null;
     },
   },
-  { keys: "Ctrl+Shift+V", does: "insert the copied bars before the selection", match: (k) => (k.mod && k.shiftKey && !k.altKey && lower(k) === "v" ? ["insert-copied"] : null) },
+  { keys: "Ctrl+Shift+V", does: tr("insert the copied bars before the selection"), match: (k) => (k.mod && k.shiftKey && !k.altKey && lower(k) === "v" ? ["insert-copied"] : null) },
   {
     keys: "Ctrl+Z / Y",
-    does: "undo / redo (Ctrl+Shift+Z redoes too)",
+    does: tr("undo / redo (Ctrl+Shift+Z redoes too)"),
     match: (k) => {
       if (!k.mod || k.altKey) return null;
       if (lower(k) === "z") return [k.shiftKey ? "redo" : "undo"];
@@ -147,17 +151,31 @@ export const SHORTCUTS = [
   },
   {
     keys: "Ctrl++ / Ctrl+−",
-    does: "larger / smaller",
+    does: tr("larger / smaller"),
     match: (k) => {
       if (!k.mod || k.altKey) return null;
       if (k.key === "+" || k.key === "=") return ["zoom-in"];
       return k.key === "-" || k.key === "_" ? ["zoom-out"] : null;
     },
   },
-  { keys: "R", does: "record from the MIDI keyboard (out of note input)", match: (k, ctx) => (!k.mod && !ctx.inputOn && lower(k) === "r" ? ["record"] : null) },
-  { keys: "Space", does: "play / pause", match: (k, ctx) => (k.key === " " && !ctx.onButton ? ["play"] : null) },
-  { keys: "?", does: "this sheet", match: (k) => (k.key === "?" ? ["keys"] : null) },
+  { keys: "R", does: tr("record from the MIDI keyboard (out of note input)"), match: (k, ctx) => (!k.mod && !ctx.inputOn && lower(k) === "r" ? ["record"] : null) },
+  { keys: "Space", does: tr("play / pause"), match: (k, ctx) => (k.key === " " && !ctx.onButton ? ["play"] : null) },
+  { keys: "?", does: tr("this sheet"), match: (k) => (k.key === "?" ? ["keys"] : null) },
 ];
+
+/** The keys of the sheet that are words, as the page's language says them; the others as they are. */
+const KEY_WORDS = () => ({
+  "N or I / Esc": tr("N or I / Esc"),
+  Insert: tr("Insert"),
+  "Ctrl+Delete": tr("Ctrl+Delete"),
+  Delete: tr("Delete"),
+  Space: tr("Space"),
+});
+
+/** An entry's `keys` as the shortcuts sheet shows them: in the page's language. */
+export function keysShown(keys) {
+  return KEY_WORDS()[keys] ?? keys;
+}
 
 /** What a keydown does: [action, data], or null for a key the editor leaves alone. */
 export function resolveKey(event, ctx = {}) {

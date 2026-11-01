@@ -145,6 +145,9 @@
     </section>
   </section>
 
+  <%# The editor's modules imported below (score-photo.js, score-model.js…) in
+      the app's language (#508), as on the editor's page; none in English. %>
+  <script>window.EUI_WORDS = <%- editor_words.length > 0 ? editor_words.to_json : "null" %>; window.EUI_WORDS_LOCALE = "<%= I18n.locale() %>";</script>
   <script type="module">
     <% script_words = {"untitled": t("app.home.untitled"), "left_out": t("app.home.left_out")} %>
     <% script_words["sending"] = t("app.home.sending_photo") %>

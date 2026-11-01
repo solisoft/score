@@ -10,6 +10,11 @@
 // tomh / tommh / tomml / toml / tomfh / tomfl the toms, hc clap, cb cowbell,
 // tamb tambourine.
 
+// A catalogue's names are data, and stay English: `english.tr` hands one back
+// as it is, and marks it for the editor's words (#508) — where it is shown,
+// words.js's `tr` says it in the page's language (config/editor_words/fr/).
+const english = { tr: (text) => text };
+
 /** The breaks the grooves share, by the steps of their bar. */
 const BREAKS = {
   16: {
@@ -36,66 +41,66 @@ const BREAKS = {
  */
 export const GROOVES = [
   // ---- Rock and pop
-  { id: "rock", name: "Rock beat", group: "Rock and pop", time: "4/4", bpm: 110, main: { hh: "x-x-x-x-x-x-x-x-", sn: "----x-------x---", bd: "x-------x-------" }, fill: "toms" },
-  { id: "rock-push", name: "Rock, pushed kick", group: "Rock and pop", time: "4/4", bpm: 120, main: { hh: "x-x-x-x-x-x-x-x-", sn: "----x-------x---", bd: "x-----x-x-------" }, fill: "toms" },
-  { id: "rock-16", name: "Rock, sixteenths", group: "Rock and pop", time: "4/4", bpm: 96, main: { hh: "xxxxxxxxxxxxxxxx", sn: "----x--g----x--g", bd: "x-----x---x-----" }, fill: "snare" },
-  { id: "hard-rock", name: "Hard rock on the ride", group: "Rock and pop", time: "4/4", bpm: 128, main: { rb: "x-x-x-x-x-x-x-x-", sn: "----x-------x---", bd: "x-x-----x-x-----" }, fill: "toms" },
-  { id: "pop", name: "Pop", group: "Rock and pop", time: "4/4", bpm: 100, main: { hh: "x-x-x-x-x-x-x-x-", sn: "----x-------x---", bd: "x-------x-x-----" }, fill: "pickup" },
-  { id: "pop-halftime", name: "Pop, half time", group: "Rock and pop", time: "4/4", bpm: 140, main: { hh: "x-x-x-x-x-x-x-x-", sn: "--------x-------", bd: "x-----x---x-----" }, fill: "snare" },
-  { id: "power-ballad", name: "Power ballad", group: "Rock and pop", time: "4/4", bpm: 70, main: { hh: "x---x---x---x---", sn: "----x-------x---", bd: "x-----x-x-------" }, fill: "toms" },
-  { id: "motown", name: "Motown", group: "Rock and pop", time: "4/4", bpm: 120, main: { hh: "x-x-x-x-x-x-x-x-", sn: "x---x---x---x---", tamb: "----x-------x---", bd: "x-------x-x-----" }, fill: "pickup" },
-  { id: "punk", name: "Punk", group: "Rock and pop", time: "4/4", bpm: 180, main: { hh: "x-x-x-x-x-x-x-x-", sn: "--x---x---x---x-", bd: "x---x---x---x---" }, fill: "rolls" },
-  { id: "train", name: "Train beat (country)", group: "Rock and pop", time: "4/4", bpm: 160, main: { sn: "xxxxxxxxxxxxxxxx", bd: "x-------x-------" }, fill: "stop" },
-  { id: "tom-groove", name: "Tom groove", group: "Rock and pop", time: "4/4", bpm: 100, main: { tomfh: "x--x--x---x--x--", sn: "----x-------x---", bd: "x-------x-------" }, fill: "toms" },
-  { id: "indie", name: "Indie, busy kick", group: "Rock and pop", time: "4/4", bpm: 124, main: { hh: "x-x-x-x-x-x-x-x-", sn: "----x-------x---", bd: "x--x--x---x--x--" }, fill: "snare" },
-  { id: "metal", name: "Metal, double kick", group: "Rock and pop", time: "4/4", bpm: 140, main: { cymr: "x---x---x---x---", sn: "----x-------x---", bd: "xxxxxxxxxxxxxxxx" }, fill: "rolls" },
+  { id: "rock", name: english.tr("Rock beat"), group: english.tr("Rock and pop"), time: "4/4", bpm: 110, main: { hh: "x-x-x-x-x-x-x-x-", sn: "----x-------x---", bd: "x-------x-------" }, fill: "toms" },
+  { id: "rock-push", name: english.tr("Rock, pushed kick"), group: english.tr("Rock and pop"), time: "4/4", bpm: 120, main: { hh: "x-x-x-x-x-x-x-x-", sn: "----x-------x---", bd: "x-----x-x-------" }, fill: "toms" },
+  { id: "rock-16", name: english.tr("Rock, sixteenths"), group: english.tr("Rock and pop"), time: "4/4", bpm: 96, main: { hh: "xxxxxxxxxxxxxxxx", sn: "----x--g----x--g", bd: "x-----x---x-----" }, fill: "snare" },
+  { id: "hard-rock", name: english.tr("Hard rock on the ride"), group: english.tr("Rock and pop"), time: "4/4", bpm: 128, main: { rb: "x-x-x-x-x-x-x-x-", sn: "----x-------x---", bd: "x-x-----x-x-----" }, fill: "toms" },
+  { id: "pop", name: english.tr("Pop"), group: english.tr("Rock and pop"), time: "4/4", bpm: 100, main: { hh: "x-x-x-x-x-x-x-x-", sn: "----x-------x---", bd: "x-------x-x-----" }, fill: "pickup" },
+  { id: "pop-halftime", name: english.tr("Pop, half time"), group: english.tr("Rock and pop"), time: "4/4", bpm: 140, main: { hh: "x-x-x-x-x-x-x-x-", sn: "--------x-------", bd: "x-----x---x-----" }, fill: "snare" },
+  { id: "power-ballad", name: english.tr("Power ballad"), group: english.tr("Rock and pop"), time: "4/4", bpm: 70, main: { hh: "x---x---x---x---", sn: "----x-------x---", bd: "x-----x-x-------" }, fill: "toms" },
+  { id: "motown", name: english.tr("Motown"), group: english.tr("Rock and pop"), time: "4/4", bpm: 120, main: { hh: "x-x-x-x-x-x-x-x-", sn: "x---x---x---x---", tamb: "----x-------x---", bd: "x-------x-x-----" }, fill: "pickup" },
+  { id: "punk", name: english.tr("Punk"), group: english.tr("Rock and pop"), time: "4/4", bpm: 180, main: { hh: "x-x-x-x-x-x-x-x-", sn: "--x---x---x---x-", bd: "x---x---x---x---" }, fill: "rolls" },
+  { id: "train", name: english.tr("Train beat (country)"), group: english.tr("Rock and pop"), time: "4/4", bpm: 160, main: { sn: "xxxxxxxxxxxxxxxx", bd: "x-------x-------" }, fill: "stop" },
+  { id: "tom-groove", name: english.tr("Tom groove"), group: english.tr("Rock and pop"), time: "4/4", bpm: 100, main: { tomfh: "x--x--x---x--x--", sn: "----x-------x---", bd: "x-------x-------" }, fill: "toms" },
+  { id: "indie", name: english.tr("Indie, busy kick"), group: english.tr("Rock and pop"), time: "4/4", bpm: 124, main: { hh: "x-x-x-x-x-x-x-x-", sn: "----x-------x---", bd: "x--x--x---x--x--" }, fill: "snare" },
+  { id: "metal", name: english.tr("Metal, double kick"), group: english.tr("Rock and pop"), time: "4/4", bpm: 140, main: { cymr: "x---x---x---x---", sn: "----x-------x---", bd: "xxxxxxxxxxxxxxxx" }, fill: "rolls" },
 
   // ---- Funk, soul and hip-hop
-  { id: "funk", name: "Funk", group: "Funk and soul", time: "4/4", bpm: 100, main: { hh: "x-xxx-xxx-xxx-xx", sn: "----x--g-g--x---", bd: "x--x--x---x-----" }, fill: "snare" },
-  { id: "funk-16", name: "Funk, sixteenths", group: "Funk and soul", time: "4/4", bpm: 96, main: { hh: "xxxxxxxxxxxxxxxx", sn: "----x--g-g--x--g", bd: "x-x---x---x-x---" }, fill: "pickup" },
-  { id: "linear", name: "Linear funk", group: "Funk and soul", time: "4/4", bpm: 92, main: { hh: "-x-x--x-x-x--x-x", sn: "---gx--g---gx---", bd: "x-x--x---x---x--" }, fill: "toms" },
-  { id: "purdie", name: "Half-time shuffle", group: "Funk and soul", time: "4/4", bpm: 84, swing: 67, main: { hh: "x-x-x-x-x-x-x-x-", sn: "-g-g-g-gxg-g-g-g", bd: "x-----x---x-----" }, fill: "swing" },
-  { id: "soul", name: "Soul", group: "Funk and soul", time: "4/4", bpm: 96, main: { hh: "x-x-x-x-x-x-x-x-", sn: "----x------gx---", bd: "x------xx-------" }, fill: "pickup" },
-  { id: "rnb", name: "R&B, slow", group: "Funk and soul", time: "4/4", bpm: 70, main: { hh: "x-xxx-x-x-xxx-x-", sn: "----x--g----x-g-", bd: "x--x------x-----" }, fill: "snare" },
-  { id: "neo-soul", name: "Neo-soul", group: "Funk and soul", time: "4/4", bpm: 80, swing: 58, main: { hh: "x-x-x-x-x-x-x-x-", ss: "----x-------x---", bd: "x-------xx-x----" }, fill: "swing" },
-  { id: "disco", name: "Disco", group: "Funk and soul", time: "4/4", bpm: 120, main: { hh: "x---x---x---x---", hho: "--x---x---x---x-", sn: "----x-------x---", bd: "x---x---x---x---" }, fill: "pickup" },
-  { id: "boom-bap", name: "Hip-hop, boom bap", group: "Funk and soul", time: "4/4", bpm: 90, swing: 58, main: { hh: "x-x-x-x-x-x-x-x-", sn: "----x-------x---", bd: "x------x--x-----" }, fill: "stop" },
-  { id: "trap", name: "Trap", group: "Funk and soul", time: "4/4", bpm: 140, main: { hh: "x-x-x-xxx-x-x-xx", hc: "--------x-------", bd: "x------x--x-----" }, fill: "electro" },
+  { id: "funk", name: english.tr("Funk"), group: english.tr("Funk and soul"), time: "4/4", bpm: 100, main: { hh: "x-xxx-xxx-xxx-xx", sn: "----x--g-g--x---", bd: "x--x--x---x-----" }, fill: "snare" },
+  { id: "funk-16", name: english.tr("Funk, sixteenths"), group: english.tr("Funk and soul"), time: "4/4", bpm: 96, main: { hh: "xxxxxxxxxxxxxxxx", sn: "----x--g-g--x--g", bd: "x-x---x---x-x---" }, fill: "pickup" },
+  { id: "linear", name: english.tr("Linear funk"), group: english.tr("Funk and soul"), time: "4/4", bpm: 92, main: { hh: "-x-x--x-x-x--x-x", sn: "---gx--g---gx---", bd: "x-x--x---x---x--" }, fill: "toms" },
+  { id: "purdie", name: english.tr("Half-time shuffle"), group: english.tr("Funk and soul"), time: "4/4", bpm: 84, swing: 67, main: { hh: "x-x-x-x-x-x-x-x-", sn: "-g-g-g-gxg-g-g-g", bd: "x-----x---x-----" }, fill: "swing" },
+  { id: "soul", name: english.tr("Soul"), group: english.tr("Funk and soul"), time: "4/4", bpm: 96, main: { hh: "x-x-x-x-x-x-x-x-", sn: "----x------gx---", bd: "x------xx-------" }, fill: "pickup" },
+  { id: "rnb", name: english.tr("R&B, slow"), group: english.tr("Funk and soul"), time: "4/4", bpm: 70, main: { hh: "x-xxx-x-x-xxx-x-", sn: "----x--g----x-g-", bd: "x--x------x-----" }, fill: "snare" },
+  { id: "neo-soul", name: english.tr("Neo-soul"), group: english.tr("Funk and soul"), time: "4/4", bpm: 80, swing: 58, main: { hh: "x-x-x-x-x-x-x-x-", ss: "----x-------x---", bd: "x-------xx-x----" }, fill: "swing" },
+  { id: "disco", name: english.tr("Disco"), group: english.tr("Funk and soul"), time: "4/4", bpm: 120, main: { hh: "x---x---x---x---", hho: "--x---x---x---x-", sn: "----x-------x---", bd: "x---x---x---x---" }, fill: "pickup" },
+  { id: "boom-bap", name: english.tr("Hip-hop, boom bap"), group: english.tr("Funk and soul"), time: "4/4", bpm: 90, swing: 58, main: { hh: "x-x-x-x-x-x-x-x-", sn: "----x-------x---", bd: "x------x--x-----" }, fill: "stop" },
+  { id: "trap", name: english.tr("Trap"), group: english.tr("Funk and soul"), time: "4/4", bpm: 140, main: { hh: "x-x-x-xxx-x-x-xx", hc: "--------x-------", bd: "x------x--x-----" }, fill: "electro" },
 
   // ---- Electronic
-  { id: "house", name: "House", group: "Electronic", time: "4/4", bpm: 124, main: { hho: "--x---x---x---x-", hc: "----x-------x---", bd: "x---x---x---x---" }, fill: "electro" },
-  { id: "techno", name: "Techno", group: "Electronic", time: "4/4", bpm: 130, main: { hh: "xxxxxxxxxxxxxxxx", hc: "----x-------x---", bd: "x---x---x---x---" }, fill: "electro" },
-  { id: "breakbeat", name: "Breakbeat", group: "Electronic", time: "4/4", bpm: 170, main: { hh: "x-x-x-x-x-x-x-x-", sn: "----x--x-x--x---", bd: "x-x-------x-----" }, fill: "snare" },
-  { id: "reggaeton", name: "Reggaeton (dembow)", group: "Electronic", time: "4/4", bpm: 96, main: { hh: "x-x-x-x-x-x-x-x-", sn: "---x--x----x--x-", bd: "x---x---x---x---" }, fill: "electro" },
+  { id: "house", name: english.tr("House"), group: english.tr("Electronic"), time: "4/4", bpm: 124, main: { hho: "--x---x---x---x-", hc: "----x-------x---", bd: "x---x---x---x---" }, fill: "electro" },
+  { id: "techno", name: english.tr("Techno"), group: english.tr("Electronic"), time: "4/4", bpm: 130, main: { hh: "xxxxxxxxxxxxxxxx", hc: "----x-------x---", bd: "x---x---x---x---" }, fill: "electro" },
+  { id: "breakbeat", name: english.tr("Breakbeat"), group: english.tr("Electronic"), time: "4/4", bpm: 170, main: { hh: "x-x-x-x-x-x-x-x-", sn: "----x--x-x--x---", bd: "x-x-------x-----" }, fill: "snare" },
+  { id: "reggaeton", name: english.tr("Reggaeton (dembow)"), group: english.tr("Electronic"), time: "4/4", bpm: 96, main: { hh: "x-x-x-x-x-x-x-x-", sn: "---x--x----x--x-", bd: "x---x---x---x---" }, fill: "electro" },
 
   // ---- Latin and Caribbean
-  { id: "bossa", name: "Bossa nova", group: "Latin and Caribbean", time: "4/4", bpm: 130, main: { hh: "x-x-x-x-x-x-x-x-", ss: "x--x--x---x-x---", bd: "x--x----x--x----" }, fill: "latin" },
-  { id: "samba", name: "Samba", group: "Latin and Caribbean", time: "4/4", bpm: 100, main: { hh: "xxxxxxxxxxxxxxxx", sn: "----x--x-x--x---", bd: "x--xx--xx--xx--x" }, fill: "latin" },
-  { id: "songo", name: "Songo", group: "Latin and Caribbean", time: "4/4", bpm: 110, main: { rb: "x-x-x-x-x-x-x-x-", sn: "---x--x---x--x--", bd: "---x-------x----", tomfh: "------x-------x-" }, fill: "latin" },
-  { id: "cha-cha", name: "Cha-cha", group: "Latin and Caribbean", time: "4/4", bpm: 116, main: { cb: "x---x---x---x---", tomh: "--------------xx", ss: "----x-------x---", bd: "x-------x-------" }, fill: "latin" },
-  { id: "mambo", name: "Mambo", group: "Latin and Caribbean", time: "4/4", bpm: 180, main: { cb: "x-x-x-x-x-x-x-x-", ss: "----x-----x-----", bd: "---x-------x----", tomfh: "------x-------x-" }, fill: "latin" },
-  { id: "cumbia", name: "Cumbia", group: "Latin and Caribbean", time: "4/4", bpm: 96, main: { hh: "x-xxx-xxx-xxx-xx", ss: "----x-------x---", bd: "x-------x-------" }, fill: "latin" },
-  { id: "one-drop", name: "Reggae, one drop", group: "Latin and Caribbean", time: "4/4", bpm: 76, main: { hh: "x-x-x-x-x-x-x-x-", ss: "--------x-------", bd: "--------x-------" }, fill: "toms" },
-  { id: "rockers", name: "Reggae, rockers", group: "Latin and Caribbean", time: "4/4", bpm: 80, main: { hh: "--x---x---x---x-", ss: "----x-------x---", bd: "x---x---x---x---" }, fill: "toms" },
-  { id: "ska", name: "Ska", group: "Latin and Caribbean", time: "4/4", bpm: 150, main: { hh: "--x---x---x---x-", sn: "----x-------x---", bd: "x-------x-------" }, fill: "snare" },
-  { id: "afrobeat", name: "Afrobeat", group: "Latin and Caribbean", time: "4/4", bpm: 110, main: { hh: "x-xxx-x-x-xxx-x-", sn: "----x--x-x--x---", bd: "x-----x---x--x--", cb: "x--x--x---x-x---" }, fill: "latin" },
-  { id: "second-line", name: "Second line (New Orleans)", group: "Latin and Caribbean", time: "4/4", bpm: 100, swing: 60, main: { sn: "x--xx-x-x--xx-x-", bd: "x-----x-x-------" }, fill: "snare" },
+  { id: "bossa", name: english.tr("Bossa nova"), group: english.tr("Latin and Caribbean"), time: "4/4", bpm: 130, main: { hh: "x-x-x-x-x-x-x-x-", ss: "x--x--x---x-x---", bd: "x--x----x--x----" }, fill: "latin" },
+  { id: "samba", name: english.tr("Samba"), group: english.tr("Latin and Caribbean"), time: "4/4", bpm: 100, main: { hh: "xxxxxxxxxxxxxxxx", sn: "----x--x-x--x---", bd: "x--xx--xx--xx--x" }, fill: "latin" },
+  { id: "songo", name: english.tr("Songo"), group: english.tr("Latin and Caribbean"), time: "4/4", bpm: 110, main: { rb: "x-x-x-x-x-x-x-x-", sn: "---x--x---x--x--", bd: "---x-------x----", tomfh: "------x-------x-" }, fill: "latin" },
+  { id: "cha-cha", name: english.tr("Cha-cha"), group: english.tr("Latin and Caribbean"), time: "4/4", bpm: 116, main: { cb: "x---x---x---x---", tomh: "--------------xx", ss: "----x-------x---", bd: "x-------x-------" }, fill: "latin" },
+  { id: "mambo", name: english.tr("Mambo"), group: english.tr("Latin and Caribbean"), time: "4/4", bpm: 180, main: { cb: "x-x-x-x-x-x-x-x-", ss: "----x-----x-----", bd: "---x-------x----", tomfh: "------x-------x-" }, fill: "latin" },
+  { id: "cumbia", name: english.tr("Cumbia"), group: english.tr("Latin and Caribbean"), time: "4/4", bpm: 96, main: { hh: "x-xxx-xxx-xxx-xx", ss: "----x-------x---", bd: "x-------x-------" }, fill: "latin" },
+  { id: "one-drop", name: english.tr("Reggae, one drop"), group: english.tr("Latin and Caribbean"), time: "4/4", bpm: 76, main: { hh: "x-x-x-x-x-x-x-x-", ss: "--------x-------", bd: "--------x-------" }, fill: "toms" },
+  { id: "rockers", name: english.tr("Reggae, rockers"), group: english.tr("Latin and Caribbean"), time: "4/4", bpm: 80, main: { hh: "--x---x---x---x-", ss: "----x-------x---", bd: "x---x---x---x---" }, fill: "toms" },
+  { id: "ska", name: english.tr("Ska"), group: english.tr("Latin and Caribbean"), time: "4/4", bpm: 150, main: { hh: "--x---x---x---x-", sn: "----x-------x---", bd: "x-------x-------" }, fill: "snare" },
+  { id: "afrobeat", name: english.tr("Afrobeat"), group: english.tr("Latin and Caribbean"), time: "4/4", bpm: 110, main: { hh: "x-xxx-x-x-xxx-x-", sn: "----x--x-x--x---", bd: "x-----x---x--x--", cb: "x--x--x---x-x---" }, fill: "latin" },
+  { id: "second-line", name: english.tr("Second line (New Orleans)"), group: english.tr("Latin and Caribbean"), time: "4/4", bpm: 100, swing: 60, main: { sn: "x--xx-x-x--xx-x-", bd: "x-----x-x-------" }, fill: "snare" },
 
   // ---- Jazz and blues
-  { id: "swing", name: "Swing", group: "Jazz and blues", time: "4/4", bpm: 140, swing: 66, main: { cymr: "x---x-x-x---x-x-", hhp: "----x-------x---", bd: "x---------------" }, fill: "swing" },
-  { id: "bebop", name: "Bebop, up tempo", group: "Jazz and blues", time: "4/4", bpm: 220, swing: 62, main: { cymr: "x---x-x-x---x-x-", hhp: "----x-------x---", sn: "------x-------x-" }, fill: "swing" },
-  { id: "brushes", name: "Ballad, brushes", group: "Jazz and blues", time: "4/4", bpm: 60, swing: 66, main: { sn: "x---x-x-x---x-x-", hhp: "----x-------x---", bd: "x-------x-------" }, fill: "swing" },
-  { id: "shuffle", name: "Blues shuffle", group: "Jazz and blues", time: "4/4", bpm: 100, swing: 67, main: { hh: "x-x-x-x-x-x-x-x-", sn: "----x-------x---", bd: "x-----x-x-----x-" }, fill: "swing" },
-  { id: "jazz-waltz", name: "Jazz waltz", group: "Jazz and blues", time: "3/4", bpm: 150, swing: 66, main: { cymr: "x---x-x-x-x-", hhp: "----x-------", bd: "x-----------" }, fill: "toms" },
-  { id: "slow-blues", name: "Slow blues (12/8)", group: "Jazz and blues", time: "12/8", bpm: 60, main: { hh: "xxxxxxxxxxxx", sn: "---x-----x--", bd: "x-----x-----" }, fill: "toms" },
-  { id: "gospel-128", name: "Gospel (12/8)", group: "Jazz and blues", time: "12/8", bpm: 72, main: { cymr: "xxxxxxxxxxxx", sn: "---x-----x--", bd: "x-x---x-x---" }, fill: "snare" },
+  { id: "swing", name: english.tr("Swing"), group: english.tr("Jazz and blues"), time: "4/4", bpm: 140, swing: 66, main: { cymr: "x---x-x-x---x-x-", hhp: "----x-------x---", bd: "x---------------" }, fill: "swing" },
+  { id: "bebop", name: english.tr("Bebop, up tempo"), group: english.tr("Jazz and blues"), time: "4/4", bpm: 220, swing: 62, main: { cymr: "x---x-x-x---x-x-", hhp: "----x-------x---", sn: "------x-------x-" }, fill: "swing" },
+  { id: "brushes", name: english.tr("Ballad, brushes"), group: english.tr("Jazz and blues"), time: "4/4", bpm: 60, swing: 66, main: { sn: "x---x-x-x---x-x-", hhp: "----x-------x---", bd: "x-------x-------" }, fill: "swing" },
+  { id: "shuffle", name: english.tr("Blues shuffle"), group: english.tr("Jazz and blues"), time: "4/4", bpm: 100, swing: 67, main: { hh: "x-x-x-x-x-x-x-x-", sn: "----x-------x---", bd: "x-----x-x-----x-" }, fill: "swing" },
+  { id: "jazz-waltz", name: english.tr("Jazz waltz"), group: english.tr("Jazz and blues"), time: "3/4", bpm: 150, swing: 66, main: { cymr: "x---x-x-x-x-", hhp: "----x-------", bd: "x-----------" }, fill: "toms" },
+  { id: "slow-blues", name: english.tr("Slow blues (12/8)"), group: english.tr("Jazz and blues"), time: "12/8", bpm: 60, main: { hh: "xxxxxxxxxxxx", sn: "---x-----x--", bd: "x-----x-----" }, fill: "toms" },
+  { id: "gospel-128", name: english.tr("Gospel (12/8)"), group: english.tr("Jazz and blues"), time: "12/8", bpm: 72, main: { cymr: "xxxxxxxxxxxx", sn: "---x-----x--", bd: "x-x---x-x---" }, fill: "snare" },
 
   // ---- In three, and marching
-  { id: "waltz", name: "Waltz", group: "In three, and marching", time: "3/4", bpm: 140, main: { hh: "x---x---x---", ss: "----x---x---", bd: "x-----------" }, fill: "toms" },
-  { id: "pop-34", name: "Pop in 3/4", group: "In three, and marching", time: "3/4", bpm: 100, main: { hh: "x-x-x-x-x-x-", sn: "----x-------", bd: "x-------x---" }, fill: "snare" },
-  { id: "ballad-68", name: "6/8 ballad", group: "In three, and marching", time: "6/8", bpm: 60, main: { hh: "x-x-x-x-x-x-", ss: "------x-----", bd: "x-----x-----" }, fill: "toms" },
-  { id: "rock-68", name: "6/8 rock", group: "In three, and marching", time: "6/8", bpm: 70, main: { hh: "x-x-x-x-x-x-", sn: "------x-----", bd: "x---x-------" }, fill: "snare" },
-  { id: "march", name: "March", group: "In three, and marching", time: "4/4", bpm: 112, main: { sn: "x-xxx---x-xxx---", bd: "x-------x-------", cymc: "x---------------" }, fill: "rolls" },
+  { id: "waltz", name: english.tr("Waltz"), group: english.tr("In three, and marching"), time: "3/4", bpm: 140, main: { hh: "x---x---x---", ss: "----x---x---", bd: "x-----------" }, fill: "toms" },
+  { id: "pop-34", name: english.tr("Pop in 3/4"), group: english.tr("In three, and marching"), time: "3/4", bpm: 100, main: { hh: "x-x-x-x-x-x-", sn: "----x-------", bd: "x-------x---" }, fill: "snare" },
+  { id: "ballad-68", name: english.tr("6/8 ballad"), group: english.tr("In three, and marching"), time: "6/8", bpm: 60, main: { hh: "x-x-x-x-x-x-", ss: "------x-----", bd: "x-----x-----" }, fill: "toms" },
+  { id: "rock-68", name: english.tr("6/8 rock"), group: english.tr("In three, and marching"), time: "6/8", bpm: 70, main: { hh: "x-x-x-x-x-x-", sn: "------x-----", bd: "x---x-------" }, fill: "snare" },
+  { id: "march", name: english.tr("March"), group: english.tr("In three, and marching"), time: "4/4", bpm: 112, main: { sn: "x-xxx---x-xxx---", bd: "x-------x-------", cymc: "x---------------" }, fill: "rolls" },
 ];
 
 /** The groove of id `id`, or null. */

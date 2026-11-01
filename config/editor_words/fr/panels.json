@@ -1,0 +1,8 @@
+{
+  "The AI is writing the music… {time}": "L'IA écrit la musique… {time}",
+  "The AI is thinking the photo over… {time}, {chars} characters of reasoning so far. It writes the music after, within 10 minutes.": "L'IA réfléchit à la photo… {time}, {chars} caractères de réflexion pour l'instant. Elle écrit la musique ensuite, en 10 minutes au plus.",
+  "The AI is reading the photo… {time}. It thinks before it writes, often for several minutes.": "L'IA lit la photo… {time}. Elle réfléchit avant d'écrire, souvent plusieurs minutes.",
+  "Waiting for the AI… {time}": "En attente de l'IA… {time}",
+  "The photo could not be sent. Check your connection and try again.": "La photo n'a pas pu être envoyée. Vérifiez votre connexion et réessayez.",
+  "No answer after an hour. Try again in a moment.": "Pas de réponse après une heure. Réessayez dans un moment."
+}

@@ -21,6 +21,11 @@
 // news) is exported for tests/js/comments.test.mjs; `startComments` draws
 // the panel.
 
+// The panel's words in the page's language (#508). A thread's label is kept
+// as it was sent, in English ("Bars 3–5, Piano"): it is the thread's data.
+const V = new URL(import.meta.url).search;
+const { tr } = await import(`./words.js${V}`);
+
 /** Open threads first, each group the latest first. */
 export function sortThreads(threads) {
   return [...threads].sort((a, b) => Number(a.resolved) - Number(b.resolved) || (b.updated_at ?? 0) - (a.updated_at ?? 0));
@@ -45,7 +50,7 @@ export function takeNews(threads, news) {
   return [...others, news.thread];
 }
 
-/** "Bars 3–5": a place's bars, counted from 1, when the editor cannot name them better. */
+/** "Bars 3–5": a place's bars, counted from 1, when the editor cannot name them better — sent with a new thread, so in English. */
 export function barsLabel(bars) {
   const [a, b] = bars;
   return a === b ? `Bar ${a + 1}` : `Bars ${a + 1}–${b + 1}`;
@@ -53,8 +58,8 @@ export function barsLabel(bars) {
 
 /** What a detached thread says of its place. */
 export function detachedSaid(thread) {
-  if (thread.detached === "staff") return "Its staff was removed";
-  if (thread.detached === "bars") return "Its bars were removed";
+  if (thread.detached === "staff") return tr("Its staff was removed");
+  if (thread.detached === "bars") return tr("Its bars were removed");
   return "";
 }
 
@@ -98,9 +103,9 @@ export function withMention(text, caret, mention, person) {
 /** When, said shortly: "just now", "5 min ago", "3 h ago", or the date. */
 export function whenSaid(seconds, now = Date.now() / 1000) {
   const ago = Math.max(0, now - seconds);
-  if (ago < 60) return "just now";
-  if (ago < 3600) return `${Math.floor(ago / 60)} min ago`;
-  if (ago < 86400) return `${Math.floor(ago / 3600)} h ago`;
+  if (ago < 60) return tr("just now");
+  if (ago < 3600) return tr("{n} min ago", { n: Math.floor(ago / 60) });
+  if (ago < 86400) return tr("{n} h ago", { n: Math.floor(ago / 3600) });
   return new Date(seconds * 1000).toLocaleDateString();
 }
 
@@ -161,7 +166,7 @@ export function startComments(panel, options = {}) {
     const list = el("ul", { className: "comment-mentions", hidden: true });
     list.id = `comment-mentions-${++listCount}`;
     list.setAttribute("role", "listbox");
-    list.setAttribute("aria-label", "People of the score");
+    list.setAttribute("aria-label", tr("People of the score"));
     box.setAttribute("aria-autocomplete", "list");
     box.setAttribute("aria-controls", list.id);
     box.setAttribute("aria-expanded", "false");
@@ -243,7 +248,7 @@ export function startComments(panel, options = {}) {
     });
     const json = (response.headers.get("Content-Type") || "").includes("application/json");
     const answer = json ? await response.json() : {};
-    if (!response.ok || !json) throw new Error(answer.error ?? (response.status === 403 ? "You may not do that on this score." : "Not sent: check your connection and try again."));
+    if (!response.ok || !json) throw new Error(answer.error ?? (response.status === 403 ? tr("You may not do that on this score.") : tr("Not sent: check your connection and try again.")));
     return answer;
   };
 
@@ -280,7 +285,7 @@ export function startComments(panel, options = {}) {
 
   function compose(place, label) {
     if (!options.manual && !place) {
-      error = "Select some bars or a note first: the comment goes on them.";
+      error = tr("Select some bars or a note first: the comment goes on them.");
       composing = null;
       draw();
       return;
@@ -310,18 +315,18 @@ export function startComments(panel, options = {}) {
   }
 
   function newThreadForm() {
-    const body = draftBox("new", { rows: 3, maxLength: 5000, placeholder: "Your comment. @name or @e-mail tells someone of the score." });
-    body.setAttribute("aria-label", "Your comment");
+    const body = draftBox("new", { rows: 3, maxLength: 5000, placeholder: tr("Your comment. @name or @e-mail tells someone of the score.") });
+    body.setAttribute("aria-label", tr("Your comment"));
     const fields = [];
     let manual = null;
     if (options.manual) {
       const number = (label, value) => el("label", { className: "comment-number" }, label, el("input", { type: "number", min: 1, max: 9999, value, required: true }));
-      manual = { staff: number("Staff", 1), from: number("Bars", 1), to: number("to", 1) };
+      manual = { staff: number(tr("Staff"), 1), from: number(tr("Bars"), 1), to: number(tr("to"), 1) };
       fields.push(el("div", { className: "comment-place-fields" }, manual.staff, manual.from, manual.to));
     } else {
-      fields.push(el("p", { className: "comment-place" }, "On ", el("strong", { textContent: composing.label })));
+      fields.push(el("p", { className: "comment-place" }, `${tr("On")} `, el("strong", { textContent: composing.label })));
     }
-    const form = el("form", { className: "comment-form" }, ...fields, body, el("div", { className: "comment-form-actions" }, el("button", { type: "submit", className: "btn btn-primary", textContent: "Comment" }), el("button", { type: "button", className: "btn btn-ghost", textContent: "Cancel", onclick: () => ((composing = null), draw()) })));
+    const form = el("form", { className: "comment-form" }, ...fields, body, el("div", { className: "comment-form-actions" }, el("button", { type: "submit", className: "btn btn-primary", textContent: tr("Comment") }), el("button", { type: "button", className: "btn btn-ghost", textContent: tr("Cancel"), onclick: () => ((composing = null), draw()) })));
     form.dataset.commentNew = "";
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -345,11 +350,11 @@ export function startComments(panel, options = {}) {
 
   function messageView(thread, message) {
     const mine = message.author_id === options.me;
-    const head = el("div", { className: "comment-head" }, el("strong", { textContent: message.author || "Someone" }), el("time", { textContent: whenSaid(message.created_at) + (message.edited_at ? " · edited" : "") }));
+    const head = el("div", { className: "comment-head" }, el("strong", { textContent: message.author || tr("Someone") }), el("time", { textContent: message.edited_at ? tr("{when} · edited", { when: whenSaid(message.created_at) }) : whenSaid(message.created_at) }));
     if (editing === message.id) {
       const box = draftBox(`edit:${message.id}`, { rows: 3, maxLength: 5000, value: message.body });
-      box.setAttribute("aria-label", "Your message");
-      const form = el("form", { className: "comment-form" }, box, el("div", { className: "comment-form-actions" }, el("button", { type: "submit", className: "btn btn-primary", textContent: "Save" }), el("button", { type: "button", className: "btn btn-ghost", textContent: "Cancel", onclick: () => ((editing = null), delete drafts[`edit:${message.id}`], draw()) })));
+      box.setAttribute("aria-label", tr("Your message"));
+      const form = el("form", { className: "comment-form" }, box, el("div", { className: "comment-form-actions" }, el("button", { type: "submit", className: "btn btn-primary", textContent: tr("Save") }), el("button", { type: "button", className: "btn btn-ghost", textContent: tr("Cancel"), onclick: () => ((editing = null), delete drafts[`edit:${message.id}`], draw()) })));
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         if (await run(() => send(`/${thread.id}/messages/${message.id}`, "PUT", { body: box.value }))) {
@@ -364,11 +369,11 @@ export function startComments(panel, options = {}) {
       ? el(
           "div",
           { className: "comment-tools" },
-          el("button", { type: "button", textContent: "Edit", onclick: () => ((editing = message.id), draw()) }),
+          el("button", { type: "button", textContent: tr("Edit"), onclick: () => ((editing = message.id), draw()) }),
           el("button", {
             type: "button",
-            textContent: "Delete",
-            onclick: () => confirm("Delete this message?") && run(() => send(`/${thread.id}/messages/${message.id}`, "DELETE", {})),
+            textContent: tr("Delete"),
+            onclick: () => confirm(tr("Delete this message?")) && run(() => send(`/${thread.id}/messages/${message.id}`, "DELETE", {})),
           }),
         )
       : null;
@@ -378,15 +383,15 @@ export function startComments(panel, options = {}) {
   }
 
   function threadView(thread) {
-    const place = el("button", { type: "button", className: `comment-anchor${thread.detached ? " comment-detached" : ""}`, textContent: thread.label || barsLabel(thread.bars), title: thread.detached ? detachedSaid(thread) : options.onSelect ? "Select these bars" : "" });
+    const place = el("button", { type: "button", className: `comment-anchor${thread.detached ? " comment-detached" : ""}`, textContent: thread.label || barsLabel(thread.bars), title: thread.detached ? detachedSaid(thread) : options.onSelect ? tr("Select these bars") : "" });
     if (thread.detached) place.disabled = true;
     else place.addEventListener("click", () => options.onSelect?.(thread));
     const state = thread.resolved
-      ? el("button", { type: "button", className: "comment-state", textContent: "Reopen", onclick: () => run(() => send(`/${thread.id}/reopen`, "POST", {})) })
-      : el("button", { type: "button", className: "comment-state", textContent: "Resolve", onclick: () => run(() => send(`/${thread.id}/resolve`, "POST", {})) });
-    const reply = draftBox(`reply:${thread.id}`, { rows: 1, maxLength: 5000, placeholder: "Reply…" });
-    reply.setAttribute("aria-label", "Reply");
-    const form = el("form", { className: "comment-reply" }, reply, el("button", { type: "submit", className: "btn btn-ghost", textContent: "Reply" }));
+      ? el("button", { type: "button", className: "comment-state", textContent: tr("Reopen"), onclick: () => run(() => send(`/${thread.id}/reopen`, "POST", {})) })
+      : el("button", { type: "button", className: "comment-state", textContent: tr("Resolve"), onclick: () => run(() => send(`/${thread.id}/resolve`, "POST", {})) });
+    const reply = draftBox(`reply:${thread.id}`, { rows: 1, maxLength: 5000, placeholder: tr("Reply…") });
+    reply.setAttribute("aria-label", tr("Reply"));
+    const form = el("form", { className: "comment-reply" }, reply, el("button", { type: "submit", className: "btn btn-ghost", textContent: tr("Reply") }));
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const text = reply.value;
@@ -400,8 +405,8 @@ export function startComments(panel, options = {}) {
       "article",
       { className: `comment-thread${thread.resolved ? " comment-resolved" : ""}` },
       el("header", { className: "comment-thread-head" }, place, state),
-      thread.detached ? el("p", { className: "comment-detached-note", textContent: `${detachedSaid(thread)} from the score: the comment stays here.` }) : null,
-      thread.resolved ? el("p", { className: "comment-resolved-by", textContent: `Resolved${thread.resolved_by ? ` by ${thread.resolved_by}` : ""}` }) : null,
+      thread.detached ? el("p", { className: "comment-detached-note", textContent: tr("{what} from the score: the comment stays here.", { what: detachedSaid(thread) }) }) : null,
+      thread.resolved ? el("p", { className: "comment-resolved-by", textContent: thread.resolved_by ? tr("Resolved by {who}", { who: thread.resolved_by }) : tr("Resolved") }) : null,
       ...thread.messages.map((message) => messageView(thread, message)),
       thread.resolved ? null : form,
     );
@@ -425,10 +430,10 @@ export function startComments(panel, options = {}) {
   function redraw() {
     const resolved = threads.filter((thread) => thread.resolved).length;
     const shown = visibleThreads(threads, showResolved);
-    const toggle = el("label", { className: "comment-toggle" }, el("input", { type: "checkbox", checked: showResolved, onchange: (event) => ((showResolved = event.target.checked), draw()) }), ` Show resolved (${resolved})`);
+    const toggle = el("label", { className: "comment-toggle" }, el("input", { type: "checkbox", checked: showResolved, onchange: (event) => ((showResolved = event.target.checked), draw()) }), ` ${tr("Show resolved ({n})", { n: resolved })}`);
     const list = el("div", { className: "comment-list" }, ...shown.map(threadView));
-    const empty = shown.length ? null : el("p", { className: "muted comment-empty", textContent: options.manual ? "No comments yet." : "No comments yet. Select some bars, then Edit › Comment on the selection." });
-    const startButton = options.manual && !composing ? el("button", { type: "button", className: "btn btn-ghost comment-start", textContent: "New comment", onclick: () => compose(null) }) : null;
+    const empty = shown.length ? null : el("p", { className: "muted comment-empty", textContent: options.manual ? tr("No comments yet.") : tr("No comments yet. Select some bars, then Edit › Comment on the selection.") });
+    const startButton = options.manual && !composing ? el("button", { type: "button", className: "btn btn-ghost comment-start", textContent: tr("New comment"), onclick: () => compose(null) }) : null;
     const parts = [
       el("div", { className: "comment-panel-head" }, toggle, startButton),
       error ? el("p", { className: "form-error comment-error", role: "alert", textContent: error }) : null,

@@ -19,6 +19,7 @@
 
 const V = new URL(import.meta.url).search;
 const F = await import(`./feel.js${V}`);
+const { tr } = await import(`./words.js${V}`);
 
 export const TRANSPOSE_MIN = -12;
 export const TRANSPOSE_MAX = 12;
@@ -44,8 +45,9 @@ export function rateOf(value) {
 /** "+3 semitones", "−1 semitone", "as written". */
 export function transposeText(n) {
   const k = transposition(n);
-  if (!k) return "as written";
-  return `${k > 0 ? "+" : "−"}${Math.abs(k)} semitone${Math.abs(k) === 1 ? "" : "s"}`;
+  if (!k) return tr("as written");
+  const signed = `${k > 0 ? "+" : "−"}${Math.abs(k)}`;
+  return Math.abs(k) === 1 ? tr("{n} semitone", { n: signed }) : tr("{n} semitones", { n: signed });
 }
 
 const isNote = (data) => [0x80, 0x90, 0xa0].includes(data[0] & 0xf0);
@@ -154,5 +156,7 @@ export function rampPlan(ramp) {
 export function rampText(ramp, pass) {
   const r = rampOf(ramp);
   const now = rampPercent(r, pass);
-  return `Pass ${pass + 1} · ${now} %${now < r.to ? ` (to ${r.to} %)` : r.atTarget === "loop" ? " (the target, looping)" : " (the target, last pass)"}`;
+  const said = { pass: pass + 1, now, to: r.to };
+  if (now < r.to) return tr("Pass {pass} · {now} % (to {to} %)", said);
+  return r.atTarget === "loop" ? tr("Pass {pass} · {now} % (the target, looping)", said) : tr("Pass {pass} · {now} % (the target, last pass)", said);
 }

@@ -1,6 +1,10 @@
 // The studio's note input (studio.js): notes written at the cursor, their
 // duration, the cursor and the selection moved along, and the voices.
 
+// The editor's words in the page's language (#508).
+const V = new URL(import.meta.url).search;
+const { tr } = await import(`./words.js${V}`);
+
 /** Answers note input: writing at the cursor, durations, moving along, voices. */
 export function install(ctx) {
   const { st, M } = ctx;
@@ -30,7 +34,7 @@ export function install(ctx) {
     return edit((score) => {
       const s = st.input.staff;
       if (step !== null && drum !== M.isDrums(score, s)) {
-        throw new Error(drum ? "Drums go on a drum staff: add one with + Staff, Drum kit" : "A drum staff has drums, not pitches: the drum buttons write them");
+        throw new Error(drum ? tr("Drums go on a drum staff: add one with + Staff, Drum kit") : tr("A drum staff has drums, not pitches: the drum buttons write them"));
       }
       const pitch = () => M.pitchOfKey(step.key, M.keyOf(score, s, st.input.t));
       const strike = (lane, i, extra) => {
@@ -51,7 +55,7 @@ export function install(ctx) {
           const before = at.findLastIndex((t) => t < st.input.t);
           i = staff.events[here] && !staff.events[here].rest && at[here] === st.input.t ? here : before;
         }
-        if (i < 0 || score.staves[lane].events[i].rest) throw new Error("Shift+letter adds to a note's chord: write a note, or put the cursor on one");
+        if (i < 0 || score.staves[lane].events[i].rest) throw new Error(tr("Shift+letter adds to a note's chord: write a note, or put the cursor on one"));
         strike(lane, i, true);
         st.input.last = { staff: lane, t: M.starts(score.staves[lane])[i] };
         return;
@@ -100,7 +104,7 @@ export function install(ctx) {
       const s = st.input.staff;
       const staff = score.staves[s];
       const i = M.eventAt(staff, st.input.t);
-      if (i >= 0 && staff.events[i].tuplet) throw new Error("already in a tuplet");
+      if (i >= 0 && staff.events[i].tuplet) throw new Error(tr("already in a tuplet"));
       M.tupletAt(score, s, st.input.t, inputTicks(), n);
     });
   }
@@ -189,16 +193,16 @@ export function install(ctx) {
       st.sel = { staff: lane, t0: 0, t1: 0, head: -1 };
     }
     // A \\partCombine staff's voices are its parts.
-    if (M.isCombined(st.score, lane)) say(voice === 1 ? "Part I: its notes are drawn with part II's, stems up where they part" : "Part II: its notes are drawn with part I's, stems down where they part");
-    else say(VOICE_SAID[voice] ?? "Voice 1");
+    if (M.isCombined(st.score, lane)) say(voice === 1 ? tr("Part I: its notes are drawn with part II's, stems up where they part") : tr("Part II: its notes are drawn with part I's, stems down where they part"));
+    else say(voiceSaid(voice));
     draw();
   }
 
-  const VOICE_SAID = {
-    2: "Voice 2: notes written now go under voice 1, stems down",
-    3: "Voice 3: notes written now go beside voice 1, stems up",
-    4: "Voice 4: notes written now go beside voice 2, stems down",
-  };
+  const voiceSaid = (voice) => ({
+    2: tr("Voice 2: notes written now go under voice 1, stems down"),
+    3: tr("Voice 3: notes written now go beside voice 1, stems up"),
+    4: tr("Voice 4: notes written now go beside voice 2, stems down"),
+  })[voice] ?? tr("Voice 1");
 
   return { inputTicks, setInput, inputWrite, inputBack, inputTuplet, duration, toggleDot, step, chordHead, toVoice };
 }

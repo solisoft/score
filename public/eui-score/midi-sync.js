@@ -18,6 +18,9 @@
 // The pure parts (the clock's times, the follower, the learnt controls) are
 // exported for tests; `attach` wires them into the studio.
 
+const V = new URL(import.meta.url).search;
+const { tr } = await import(`./words.js${V}`);
+
 export const PPQN = 24;
 const SPP_MAX = 16383;
 
@@ -233,9 +236,9 @@ export const CONTINUOUS = new Set(["tempo", "volume"]);
 
 /** A control as words: "CC 7, channel 1" or "note C4, channel 10". */
 export function controlName({ kind, channel, number }) {
-  if (kind === "cc") return `CC ${number}, channel ${channel + 1}`;
+  if (kind === "cc") return tr("CC {number}, channel {channel}", { number, channel: channel + 1 });
   const names = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
-  return `note ${names[number % 12]}${Math.floor(number / 12) - 1}, channel ${channel + 1}`;
+  return tr("note {note}, channel {channel}", { note: `${names[number % 12]}${Math.floor(number / 12) - 1}`, channel: channel + 1 });
 }
 
 const same = (a, b) => a.kind === b.kind && a.channel === b.channel && a.number === b.number;
@@ -372,12 +375,12 @@ export function attach({ root, st, M, P, act, say }) {
     if (name === "clock-out") {
       settings.clockOut = event.target.checked;
       if (!settings.clockOut) sender?.stop();
-      if (!settings.clockOut) say("No MIDI clock sent.");
-      else if (P.outputPort?.()) say("The MIDI clock goes with the music to the device chosen in Sound to.");
-      else say("The MIDI clock goes to a MIDI device: choose one in Sound to.");
+      if (!settings.clockOut) say(tr("No MIDI clock sent."));
+      else if (P.outputPort?.()) say(tr("The MIDI clock goes with the music to the device chosen in Sound to."));
+      else say(tr("The MIDI clock goes to a MIDI device: choose one in Sound to."));
     } else if (name === "clock-in") {
       settings.clockIn = event.target.checked;
-      say(settings.clockIn ? "Following the MIDI clock of the keyboard chosen in Mode: its Start, Stop and tempo." : "No longer following a MIDI clock.");
+      say(settings.clockIn ? tr("Following the MIDI clock of the keyboard chosen in Mode: its Start, Stop and tempo.") : tr("No longer following a MIDI clock."));
     } else if (name === "delay") {
       settings.delay = Math.max(-500, Math.min(500, Number(event.target.value) || 0));
       P.setDeviceDelay?.(settings.delay);
@@ -441,7 +444,7 @@ export function attach({ root, st, M, P, act, say }) {
     if (data[0] >= 0xf0) return false;
     const done = learnt.message(data);
     if (done?.learnt) {
-      say(`${labelOf(done.learnt)}: ${controlName(done.control)}.`);
+      say(tr("{target}: {control}.", { target: labelOf(done.learnt), control: controlName(done.control) }));
       renderLearn();
       return true;
     }
@@ -479,14 +482,14 @@ export function attach({ root, st, M, P, act, say }) {
   /** The controls that can be learnt: the transport, the speed, the volume, each staff's mute and solo. */
   function targets() {
     const list = [
-      ["play", "Play or pause"],
-      ["stop", "Stop"],
-      ["record", "Record"],
-      ["tempo", "Speed"],
+      ["play", tr("Play or pause")],
+      ["stop", tr("Stop")],
+      ["record", tr("Record")],
+      ["tempo", tr("Speed")],
       ["volume", "Volume"],
     ];
     for (const { lane, name } of st.score ? M.channels(st.score) : []) {
-      list.push([`mute:${lane}`, `Mute ${name}`], [`solo:${lane}`, `Solo ${name}`]);
+      list.push([`mute:${lane}`, tr("Mute {name}", { name })], [`solo:${lane}`, tr("Solo {name}", { name })]);
     }
     return list;
   }
@@ -505,14 +508,14 @@ export function attach({ root, st, M, P, act, say }) {
       row.dataset.target = target;
       row.append(Object.assign(document.createElement("span"), { className: "midi-learn-name", textContent: label }));
       const armed = learnt.armed === target;
-      row.append(Object.assign(document.createElement("span"), { className: "midi-learn-control", textContent: armed ? "move a control…" : control ? controlName(control) : "—" }));
-      const learn = Object.assign(document.createElement("button"), { type: "button", className: `tool${armed ? " on" : ""}`, textContent: "Learn" });
+      row.append(Object.assign(document.createElement("span"), { className: "midi-learn-control", textContent: armed ? tr("move a control…") : control ? controlName(control) : "—" }));
+      const learn = Object.assign(document.createElement("button"), { type: "button", className: `tool${armed ? " on" : ""}`, textContent: tr("Learn") });
       learn.dataset.learn = target;
       learn.setAttribute("aria-pressed", String(armed));
-      learn.setAttribute("aria-label", `Learn ${label}`);
-      const clear = Object.assign(document.createElement("button"), { type: "button", className: "tool", textContent: "Clear", disabled: !control });
+      learn.setAttribute("aria-label", tr("Learn {target}", { target: label }));
+      const clear = Object.assign(document.createElement("button"), { type: "button", className: "tool", textContent: tr("Clear"), disabled: !control });
       clear.dataset.learnClear = target;
-      clear.setAttribute("aria-label", `Clear ${label}`);
+      clear.setAttribute("aria-label", tr("Clear {target}", { target: label }));
       row.append(learn, clear);
       list.append(row);
     }
@@ -525,13 +528,13 @@ export function attach({ root, st, M, P, act, say }) {
     if (button.dataset.learnClose != null) return dialog.close();
     if (button.dataset.learnClearAll != null) {
       learnt.clear();
-      say("Every MIDI control forgotten.");
+      say(tr("Every MIDI control forgotten."));
     } else if (button.dataset.learnClear) {
       learnt.clear(button.dataset.learnClear);
     } else if (button.dataset.learn) {
       const target = button.dataset.learn;
       learnt.learn(learnt.armed === target ? null : target);
-      if (learnt.armed && !root.querySelector("[data-midi-in]")?.value) say("Choose a MIDI keyboard first (Mode › MIDI keyboard): its knobs and keys are learnt.", true);
+      if (learnt.armed && !root.querySelector("[data-midi-in]")?.value) say(tr("Choose a MIDI keyboard first (Mode › MIDI keyboard): its knobs and keys are learnt."), true);
     }
     renderLearn();
   });

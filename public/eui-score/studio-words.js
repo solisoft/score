@@ -2,7 +2,10 @@
 // diagrams and texts, typed in a box over the note.
 
 // A chord diagram starts from the shape of the chord sounding there (#440).
-const Voicings = await import(`./voicings.js${new URL(import.meta.url).search}`);
+const V = new URL(import.meta.url).search;
+const Voicings = await import(`./voicings.js${V}`);
+// The editor's words in the page's language (#508).
+const { tr } = await import(`./words.js${V}`);
 
 /** Answers the words box: lyrics, chord symbols, figures, texts typed over the score. */
 export function install(ctx) {
@@ -15,27 +18,27 @@ export function install(ctx) {
 
   function openWords(kind) {
     let t = target();
-    if (!t || !st.score) return say("Select a note first", true);
+    if (!t || !st.score) return say(tr("Select a note first"), true);
     closeWords();
     if (kind === "lyric") {
       const staff = st.score.staves[t.s];
       const skip = M.melismata(staff);
-      if (staff.events[t.i].rest) return say("A syllable goes under a note: select a note", true);
+      if (staff.events[t.i].rest) return say(tr("A syllable goes under a note: select a note"), true);
       if (skip[t.i]) {
         // A note held from an earlier one (a tie, a slur) sings that note's syllable.
         let i = t.i;
         while (i > 0 && skip[i]) i--;
         t = { ...t, i };
         st.sel = { staff: t.s, t0: M.starts(staff)[i], t1: M.starts(staff)[i], head: -1 };
-        say("That note is held from the one before (tie or slur): its syllable goes here.");
+        say(tr("That note is held from the one before (tie or slur): its syllable goes here."));
         draw();
       }
     }
-    if (kind === "fret" && st.score.staves[t.s].events[t.i].rest) return say("A chord diagram goes over a note: select a note", true);
+    if (kind === "fret" && st.score.staves[t.s].events[t.i].rest) return say(tr("A chord diagram goes over a note: select a note"), true);
     // A chord symbol over a staff under a line of chord names goes on the line, at that time; figures on the figured bass under it.
     const time = M.starts(st.score.staves[t.s])[t.i];
     const line = kind === "chord" ? M.chordLineOver(st.score, t.s) : kind === "figure" ? M.figureLineUnder(st.score, t.s) : -1;
-    if (kind === "figure" && line < 0) return say("Add a figured bass under the staff first: Insert › A figured bass under the staff", true);
+    if (kind === "figure" && line < 0) return say(tr("Add a figured bass under the staff first: Insert › A figured bass under the staff"), true);
     const lane = line >= 0 ? line : t.s;
     const at = M.eventAt(st.score.staves[lane], time);
     const ev = at >= 0 ? st.score.staves[lane].events[at] : null;
@@ -49,16 +52,16 @@ export function install(ctx) {
     const shape = kind === "fret" && !box.value ? Voicings.guitarShape(Voicings.chordAt(st.score, time)) : null;
     if (shape) {
       box.value = M.fretText(Voicings.fretSpecOf(shape));
-      say(`The ${shape.name} shape, from the chord symbol: Enter puts it, or click the frets to change it.`);
+      say(tr("The {shape} shape, from the chord symbol: Enter puts it, or click the frets to change it.", { shape: shape.name }));
     }
-    box.placeholder = { lyric: "syllable", chord: "Am7", text: "solo", expression: "dolce", figure: "6 4", fret: "x32010" }[kind];
+    box.placeholder = { lyric: tr("syllable"), chord: "Am7", text: "solo", expression: "dolce", figure: "6 4", fret: "x32010" }[kind];
     box.setAttribute("aria-label", {
-      lyric: "Syllable — Space next note, - hyphen, Enter done",
-      chord: "Chord symbol — Space next note, Enter done",
-      text: "Staff text — Enter done",
-      expression: "Expression, in italics — Enter done",
-      figure: "Figures, as 6 4 or 7+ — Space next beat, Enter done",
-      fret: "Guitar chord, low E first: x32010 — Enter done",
+      lyric: tr("Syllable — Space next note, - hyphen, Enter done"),
+      chord: tr("Chord symbol — Space next note, Enter done"),
+      text: tr("Staff text — Enter done"),
+      expression: tr("Expression, in italics — Enter done"),
+      figure: tr("Figures, as 6 4 or 7+ — Space next beat, Enter done"),
+      fret: tr("Guitar chord, low E first: x32010 — Enter done"),
     }[kind]);
     sheet.appendChild(box);
     // A chord diagram's frets, clicked under its box (#434).
@@ -96,7 +99,8 @@ export function install(ctx) {
 
   // ---- A chord diagram's grid (#434) -------------------------------------------------
 
-  const STRINGS = ["low E", "A", "D", "G", "B", "high E"];
+  // The six strings, from the low E, as a screen reader names them.
+  const STRINGS = () => [tr("low E string"), tr("A string"), tr("D string"), tr("G string"), tr("B string"), tr("high E string")];
 
   /**
    * A chord diagram drawn large under its box (#434, #436): six strings and
@@ -112,7 +116,7 @@ export function install(ctx) {
     grid.setAttribute("role", "group");
     grid.setAttribute(
       "aria-label",
-      "Chord diagram: click a fret to put a finger there, over the nut for open or not played; drag along a fret across strings, or Shift+click a second string, for a barre",
+      tr("Chord diagram: click a fret to put a finger there, over the nut for open or not played; drag along a fret across strings, or Shift+click a second string, for a barre"),
     );
     // The shape in the box: each string's fret from the low E, and its barre [from string, to string, fret] or null.
     const read = () => {
@@ -147,7 +151,8 @@ export function install(ctx) {
           button.dataset.fret = fret;
           // Placed by hand: the barre is laid over the cells, not among them.
           Object.assign(button.style, { gridRow: String(row + 1), gridColumn: String(string + 1) });
-          button.setAttribute("aria-label", fret === "nut" ? `${STRINGS[string]} string: open or not played` : `${STRINGS[string]} string, fret ${fret}`);
+          const name = STRINGS()[string];
+          button.setAttribute("aria-label", fret === "nut" ? tr("{string}: open or not played", { string: name }) : tr("{string}, fret {fret}", { string: name, fret }));
           grid.appendChild(button);
         }
       });
@@ -167,7 +172,7 @@ export function install(ctx) {
       const [from, to, fret] = barre;
       const bar = Object.assign(document.createElement("button"), { type: "button", className: "studio-fret-barre" });
       Object.assign(bar.style, { gridRow: String(fret - first + 2), gridColumn: `${7 - Math.max(from, to)} / ${8 - Math.min(from, to)}` });
-      bar.setAttribute("aria-label", `Barre at fret ${fret}, strings ${Math.max(from, to)} to ${Math.min(from, to)}: click to take it away`);
+      bar.setAttribute("aria-label", tr("Barre at fret {fret}, strings {from} to {to}: click to take it away", { fret, from: Math.max(from, to), to: Math.min(from, to) }));
       grid.appendChild(bar);
     };
     // A barre at `fret` from column `a` to column `b`: the strings it holds down

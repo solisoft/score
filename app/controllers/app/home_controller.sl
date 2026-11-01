@@ -32,6 +32,8 @@ class AppHomeController < AppBaseController
     # The templates' names in the app's language (#505); in English, the
     # score model's own.
     @template_words = I18n.locale() == "en" ? {} : @_template_words
+    # The editor's modules' words (#508): the photo's progress, the model's messages.
+    @editor_words = EditorWords.of(I18n.locale())
   end
 
   private

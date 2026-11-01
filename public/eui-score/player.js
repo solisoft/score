@@ -22,6 +22,7 @@
 
 // Served immutable: this module's version goes to the files it loads.
 const V = new URL(import.meta.url).search;
+const { tr } = await import(`./words.js${V}`);
 const SOUNDS = new URL("../soundfonts/MuseScore_General.sf3?v=0.2", import.meta.url);
 const CACHE = "eui-score-sounds";
 
@@ -155,7 +156,7 @@ async function sounds() {
     cache = null; // no Cache Storage (plain http, private window): the HTTP cache only
   }
   const response = await fetch(SOUNDS);
-  if (!response.ok) throw new Error(`the sounds could not be loaded (${response.status})`);
+  if (!response.ok) throw new Error(tr("the sounds could not be loaded ({status})", { status: response.status }));
   const total = Number(response.headers.get("content-length")) || 0;
   const reader = response.body.getReader();
   const chunks = [];
@@ -337,14 +338,14 @@ let access = null;
 
 /** The MIDI outputs the browser may use, asking the person the first time: [{ id, name }]. */
 export async function midiOutputs() {
-  if (!navigator.requestMIDIAccess) throw new Error("This browser sends no MIDI: Chrome, Edge and Firefox do, Safari does not.");
+  if (!navigator.requestMIDIAccess) throw new Error(tr("This browser sends no MIDI: Chrome, Edge and Firefox do, Safari does not."));
   access ??= await navigator.requestMIDIAccess();
   return [...access.outputs.values()].map((port) => ({ id: port.id, name: port.name }));
 }
 
 /** The MIDI keyboards the browser may read, asking the person the first time: [{ id, name }]. */
 export async function midiInputs() {
-  if (!navigator.requestMIDIAccess) throw new Error("This browser reads no MIDI keyboard: Chrome, Edge and Firefox do, Safari does not.");
+  if (!navigator.requestMIDIAccess) throw new Error(tr("This browser reads no MIDI keyboard: Chrome, Edge and Firefox do, Safari does not."));
   access ??= await navigator.requestMIDIAccess();
   return [...access.inputs.values()].map((port) => ({ id: port.id, name: port.name }));
 }

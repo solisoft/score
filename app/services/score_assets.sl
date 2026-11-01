@@ -14,6 +14,7 @@
 # holds this list to studio.js's imports.
 const SCORE_STUDIO_MODULES = [
   "studio.js",
+  "words.js",
   "eui-score.js",
   "score-model.js",
   "player.js",
@@ -74,6 +75,7 @@ class ScoreAssets
     return ScoreAssets.cached unless ScoreAssets.cached.blank?
 
     parts = [
+      "words.js",
       "eui-score.js",
       "eui-score-editor.js",
       "studio.js",

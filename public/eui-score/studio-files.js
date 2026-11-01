@@ -4,6 +4,7 @@
 
 // Served immutable: this module's version goes to the ones it loads.
 const V = new URL(import.meta.url).search;
+const { tr } = await import(`./words.js${V}`);
 /** The MP3 and the stems (audio-export.js), loaded the first time one is saved. */
 const audioExport = () => import(`./audio-export.js${V}`);
 const isMusicXmlName = (name) => /\.(musicxml|mxl|xml)$/i.test(name ?? "");
@@ -11,10 +12,28 @@ const isMusicXmlName = (name) => /\.(musicxml|mxl|xml)$/i.test(name ?? "");
 const midiImport = () => import(`./midi-import.js${V}`);
 const isMidiName = (name) => /\.(mid|midi|smf|kar)$/i.test(name ?? "");
 
+/** A template's name and what it holds (score-model.js's TEMPLATES), in the page's language. */
+function templateWords(template) {
+  const words = {
+    blank: [tr("Blank"), tr("One empty staff")],
+    piano: [tr("Piano"), tr("Two staves in a brace")],
+    "voice-piano": [tr("Voice and piano")],
+    "lead-sheet": [tr("Lead sheet"), tr("A melody, for chord symbols and lyrics")],
+    satb: [tr("Choir (SATB)")],
+    "satb-piano": [tr("Choir and piano")],
+    "string-quartet": [tr("String quartet")],
+    "wind-quintet": [tr("Wind quintet")],
+    guitar: [tr("Guitar"), tr("Treble clef an octave down")],
+    band: [tr("Rock band")],
+    drums: [tr("Drum kit"), tr("One drum staff, General MIDI kit")],
+  }[template.id] ?? [];
+  return { name: words[0] ?? template.name, about: template.about == null ? null : (words[1] ?? template.about) };
+}
+
 /** The File menu's dialogs set up; answers what opens, shares and saves files. */
 export function install(ctx) {
   const { root, options, sheet, status, st, quantizeBox, loaded, toPdf, download, engine, M, P, X, musicXml } = ctx;
-  const { open, refuse, say, mixHeard, soundMidi } = ctx.call;
+  const { open, refuse, say, mixHeard, soundMidi, instrumentName } = ctx.call;
 
   // "New…": a dialog to start from a template, its title, key, metre, tempo and bars set.
   const newDialog = root.querySelector("[data-new]");
@@ -22,8 +41,10 @@ export function install(ctx) {
   for (const template of M.TEMPLATES) {
     const label = Object.assign(document.createElement("label"), { className: "studio-template" });
     const radio = Object.assign(document.createElement("input"), { type: "radio", name: "template", value: template.id, id: `new-template-${template.id}`, checked: template.id === "piano" });
-    const staves = template.staves.map((spec) => spec.name ?? spec.instrument).filter((name, k, all) => name !== all[k - 1]);
-    label.append(radio, Object.assign(document.createElement("b"), { textContent: template.name }), Object.assign(document.createElement("small"), { textContent: template.about ?? staves.join(", ") }));
+    const staves = template.staves.map((spec) => instrumentName(spec.name ?? spec.instrument)).filter((name, k, all) => name !== all[k - 1]);
+    // The staves named as the score names them.
+    const words = templateWords(template);
+    label.append(radio, Object.assign(document.createElement("b"), { textContent: words.name }), Object.assign(document.createElement("small"), { textContent: words.about ?? staves.join(", ") }));
     templateBox.append(label);
   }
   for (const close of newDialog.querySelectorAll("[data-new-close]")) close.addEventListener("click", () => newDialog.close());
@@ -50,7 +71,7 @@ export function install(ctx) {
         pickup: M.pickupOf(form.get("pickup") ?? ""),
       });
       score.timeParts = metre.parts;
-      open(M.toLilyPond(score).source, `A new score: ${template.name.toLowerCase()}. Press N, then the letters, to write notes.`);
+      open(M.toLilyPond(score).source, tr("A new score: {template}. Press N, then the letters, to write notes.", { template: templateWords(template).name.toLowerCase() }));
     } catch (error) {
       event.preventDefault();
       say(error.message, true);
@@ -72,10 +93,10 @@ export function install(ctx) {
     }
   }
   function openParts() {
-    if (!st.score) return say("A part needs the score tools: this piece is edited in its text.", true);
+    if (!st.score) return say(tr("A part needs the score tools: this piece is edited in its text."), true);
     partsStaff.replaceChildren(...M.staffLanes(st.score).map((s, n) => {
       const staff = st.score.staves[s];
-      const name = staff.name || M.INSTRUMENTS[M.instrumentOf(st.score, s)]?.name || `Staff ${n + 1}`;
+      const name = staff.name || (M.INSTRUMENTS[M.instrumentOf(st.score, s)] ? instrumentName(M.INSTRUMENTS[M.instrumentOf(st.score, s)].name) : null) || tr("Staff {n}", { n: n + 1 });
       return new Option(name, String(s));
     }));
     partsDialog.showModal();
@@ -93,7 +114,7 @@ export function install(ctx) {
     if (el.matches('[data-act="example"]') && el.value) {
       const path = `${options.examples ?? "/examples"}/${el.value}/source.ly`;
       el.value = "";
-      fetch(path).then((r) => r.text()).then((text) => open(text, "Example opened.")).catch(() => say("Could not open that example", true));
+      fetch(path).then((r) => r.text()).then((text) => open(text, tr("Example opened."))).catch(() => say(tr("Could not open that example"), true));
       return true;
     }
     if (el.matches('[data-act="open"]') && el.files?.[0]) {
@@ -103,9 +124,10 @@ export function install(ctx) {
       // editor does not write is named, and where the file becomes a score of
       // its own (the app), asked about first.
       const opened = ({ source, warnings }) => {
-        const left = warnings.length ? `Left out: ${warnings.join("; ")}.` : "";
-        if (left && options.onOpen && !confirm(`${file.name}: ${left}\n\nOpen it as a new score anyway?`)) return say(`${file.name} not opened. ${left}`, true);
-        open(source, `${file.name} opened.${left ? ` ${left}` : ""}`);
+        const left = warnings.length ? tr("Left out: {what}.", { what: warnings.join("; ") }) : "";
+        const said = { file: file.name, left };
+        if (left && options.onOpen && !confirm(tr("{file}: {left}\n\nOpen it as a new score anyway?", said))) return say(tr("{file} not opened. {left}", said), true);
+        open(source, left ? tr("{file} opened. {left}", said) : tr("{file} opened.", said));
       };
       const failed = (error) => say(error.message ?? String(error), true);
       if (isMidiName(file.name)) {
@@ -116,7 +138,7 @@ export function install(ctx) {
         return true;
       }
       if (!isMusicXmlName(file.name)) {
-        file.text().then((text) => open(text, `${file.name} opened.`));
+        file.text().then((text) => open(text, tr("{file} opened.", { file: file.name })));
         return true;
       }
       // MusicXML, from MuseScore, Sibelius, Finale or Dorico: read as LilyPond.
@@ -135,12 +157,12 @@ export function install(ctx) {
     const link = inApp ? new URL(options.scoreUrl, location.origin).href : `${location.origin}${location.pathname}#s=${await M.shareCode(st.text)}`;
     try {
       await navigator.clipboard.writeText(link);
-      if (inApp) return say("Link copied: it opens this score for those it is shared with.");
-      return say("Link copied: whoever opens it gets this score. It lives in the link, not on the site.");
+      if (inApp) return say(tr("Link copied: it opens this score for those it is shared with."));
+      return say(tr("Link copied: whoever opens it gets this score. It lives in the link, not on the site."));
     } catch (error) {
-      say("Copy this link:");
+      say(tr("Copy this link:"));
       const field = Object.assign(document.createElement("input"), { type: "text", value: link, readOnly: true, className: "studio-link" });
-      field.setAttribute("aria-label", "Link to this score");
+      field.setAttribute("aria-label", tr("Link to this score"));
       status.append(" ", field);
       field.select();
     }
@@ -165,13 +187,13 @@ export function install(ctx) {
       return refuse(error);
     }
     const muted = st.score ? M.channels(st.score).filter(({ lane }) => !X.audible(mixHeard(), lane)).map(({ channel }) => channel) : [];
-    say("Making the WAV file…");
+    say(tr("Making the WAV file…"));
     try {
-      const wav = await P.renderWav(bytes, { muted, onProgress: (f) => say(`Loading the sounds… ${Math.round(100 * f)} % (38 MB, once)`) });
+      const wav = await P.renderWav(bytes, { muted, onProgress: (f) => say(tr("Loading the sounds… {percent} % (38 MB, once)", { percent: Math.round(100 * f) })) });
       download(wav, `${fileName()}.wav`, "audio/wav");
-      say(`${fileName()}.wav saved — ${(wav.size / 1048576).toFixed(1)} MB`);
+      say(tr("{file} saved — {size} MB", { file: `${fileName()}.wav`, size: (wav.size / 1048576).toFixed(1) }));
     } catch (error) {
-      say(`The WAV file could not be made: ${error.message ?? error}`, true);
+      say(tr("The WAV file could not be made: {error}", { error: error.message ?? error }), true);
     }
   }
 
@@ -189,7 +211,7 @@ export function install(ctx) {
       const muted = st.score ? M.channels(st.score).filter(({ lane }) => !X.audible(mixHeard(), lane)).map(({ channel }) => channel) : [];
       return ex.saveMp3({ ...common, muted });
     }
-    if (!st.score) return say("The stems are made from the score the editor reads; this text holds what it does not edit.", true);
+    if (!st.score) return say(tr("The stems are made from the score the editor reads; this text holds what it does not edit."), true);
     const tracks = M.channels(st.score);
     // Each staff alone: the others muted, its own mute and every solo let go.
     const alone = (lane) => {

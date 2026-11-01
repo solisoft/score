@@ -28,16 +28,19 @@
 // Pure: `parse` is eui-score's `score_json`, handed in.
 
 // Served immutable: this module's version goes to the model it loads.
-const M = await import(`./score-model.js${new URL(import.meta.url).search}`);
+const V = new URL(import.meta.url).search;
+const M = await import(`./score-model.js${V}`);
+// The conflicts said in the page's language (#508).
+const { tr } = await import(`./words.js${V}`);
 
 const SIDES = ["mine", "theirs"];
 const ABSENT = "∅";
 
 /** The names the meta line's keys are shown under. */
-const META_NAMES = { mixer: "Mixer", velocity: "Note velocities", swing: "Swing", humanize: "Humanize", cc: "Automation curves", synth: "Synthesizer", soundfont: "Own SoundFont" };
+const META_NAMES = () => ({ mixer: tr("Mixer"), velocity: tr("Note velocities"), swing: tr("Swing"), humanize: tr("Humanize"), cc: tr("Automation curves"), synth: tr("Synthesizer"), soundfont: tr("Own SoundFont") });
 
 /** The names the score's fields are shown under. */
-const SCORE_NAMES = { key: "Key", mode: "Key", time: "Time signature", tempo: "Tempo", pickup: "Pickup", group: "Staff groups", groups: "Staff groups", repeats: "Repeats", paper: "Page layout", compress: "Bars of rest", timeParts: "Time signature" };
+const SCORE_NAMES = () => ({ key: tr("Key"), mode: tr("Key"), time: tr("Time signature"), tempo: tr("Tempo"), pickup: tr("Pickup"), group: tr("Staff groups"), groups: tr("Staff groups"), repeats: tr("Repeats"), paper: tr("Page layout"), compress: tr("Bars of rest"), timeParts: tr("Time signature") });
 
 /** `text` read into the model, its meta line on it; null when the model cannot hold it. */
 function read(text, parse) {
@@ -204,7 +207,7 @@ function mergeMeta(b, x, y, path, conflicts, prefer) {
     else if ([xv, yv].every(isObject) && (bv === undefined || isObject(bv))) value = mergeMeta(bv ?? {}, xv, yv, [...path, name], conflicts, prefer);
     else {
       const [top, ...rest] = [...path, name];
-      conflicts.push({ area: "meta", label: `${META_NAMES[top] ?? top}${rest.length ? ` (${rest.join(" › ")})` : ""}` });
+      conflicts.push({ area: "meta", label: `${META_NAMES()[top] ?? top}${rest.length ? ` (${rest.join(" › ")})` : ""}` });
       value = prefer === "theirs" ? yv : xv;
     }
     if (value !== undefined) out[name] = value;
@@ -219,9 +222,21 @@ function staffLabel(score, staff, number) {
   const lanes = M.staffLanes(score);
   const brace = (score.groups ?? []).find((g) => g.kind === "brace" && g.first <= number && number <= g.last && g.last - g.first === 1);
   const group = brace ?? (score.group === "brace" && lanes.length === 2 ? { first: 0, name: "" } : null);
-  if (group) return `${group.name || "Piano"} ${number === group.first ? "right hand" : "left hand"}`;
-  if (lanes.length === 1) return "the staff";
-  return st?.instrument ? `${st.instrument} (staff ${number + 1})` : `Staff ${number + 1}`;
+  const piano = group?.name || "Piano";
+  if (group) return number === group.first ? tr("{piano} right hand", { piano }) : tr("{piano} left hand", { piano });
+  if (lanes.length === 1) return tr("the staff");
+  return st?.instrument ? tr("{instrument} (staff {n})", { instrument: st.instrument, n: number + 1 }) : tr("Staff {n}", { n: number + 1 });
+}
+
+/** A staff's setting, as a conflict names it: "Violin: its clef". */
+function fieldLabel(staff, name) {
+  const said = { staff };
+  if (name === "short") return tr("{staff}: its short name", said);
+  if (name === "name") return tr("{staff}: its name", said);
+  if (name === "instrument") return tr("{staff}: its instrument", said);
+  if (name === "clef") return tr("{staff}: its clef", said);
+  if (name === "key") return tr("{staff}: its key", said);
+  return tr("{staff}: its {field}", { staff, field: name });
 }
 
 const whole = (reason) => ({ text: null, conflicts: [{ area: "score", label: reason }], whole: true });
@@ -237,10 +252,10 @@ export function mergeScores(base, mine, theirs, { parse, prefer = null } = {}) {
   if (mine === theirs || theirs === base) return { text: mine, conflicts: [], whole: false };
   if (mine === base) return { text: theirs, conflicts: [], whole: false };
   const models = { base: read(base, parse), mine: read(mine, parse), theirs: read(theirs, parse) };
-  if (!models.base || !models.mine || !models.theirs) return whole("The score's text, which the editor cannot merge by bar");
+  if (!models.base || !models.mine || !models.theirs) return whole(tr("The score's text, which the editor cannot merge by bar"));
   // A side's text that is not what the editor writes for its own model holds
   // something the model does not keep: merging it by bar would drop it.
-  for (const side of SIDES) if (written(models[side]) !== (side === "mine" ? mine : theirs)) return whole("The score's text, which holds what cannot be merged by bar");
+  for (const side of SIDES) if (written(models[side]) !== (side === "mine" ? mine : theirs)) return whole(tr("The score's text, which holds what cannot be merged by bar"));
   const c = { base: cells(models.base), mine: cells(models.mine), theirs: cells(models.theirs) };
   const conflicts = [];
   const choose = (side, label, extra = {}) => {
@@ -253,9 +268,9 @@ export function mergeScores(base, mine, theirs, { parse, prefer = null } = {}) {
   const reshaped = (side) => ({ bars: c[side].bars !== c.base.bars, staves: c[side].staves.length !== c.base.staves.length });
   const shape = { mine: reshaped("mine"), theirs: reshaped("theirs") };
   const changers = SIDES.filter((side) => shape[side].bars || shape[side].staves);
-  if (changers.length === 2) return whole("Bars or staves added or taken away on both sides");
+  if (changers.length === 2) return whole(tr("Bars or staves added or taken away on both sides"));
   const S = changers[0] ?? null;
-  if (S && shape[S].bars && shape[S].staves) return whole("Bars and staves added or taken away at once");
+  if (S && shape[S].bars && shape[S].staves) return whole(tr("Bars and staves added or taken away at once"));
   const N = S === "mine" ? "theirs" : "mine";
 
   // The output's staves and bars, each with its index on every side.
@@ -267,16 +282,16 @@ export function mergeScores(base, mine, theirs, { parse, prefer = null } = {}) {
   if (S && shape[S].bars) {
     const lined = align(c.base.bars, c[S].bars, (i, j) => barSignature(c.base, i) === barSignature(c[S], j));
     for (const x of lined) {
-      if (x.side === null && changedBar(N, x.base)) return whole(`Bar ${M.barNumber(models.base, x.base)}, taken away on one side and changed on the other`);
+      if (x.side === null && changedBar(N, x.base)) return whole(tr("Bar {n}, taken away on one side and changed on the other", { n: M.barNumber(models.base, x.base) }));
     }
     barMap = lined.filter((x) => x.side !== null).map((x) => ({ base: x.base, [S]: x.side, [N]: x.base }));
     // Bars numbered by the base: the repeats of a side that kept its bars no longer line up.
-    if (key(c[N].fields.repeats) !== key(c.base.fields.repeats)) return whole("Repeats changed while bars were added or taken away");
+    if (key(c[N].fields.repeats) !== key(c.base.fields.repeats)) return whole(tr("Repeats changed while bars were added or taken away"));
   }
   if (S && shape[S].staves) {
     const lined = align(c.base.staves.length, c[S].staves.length, (i, j) => staffSignature(c.base.staves[i]) === staffSignature(c[S].staves[j]));
     for (const x of lined) {
-      if (x.side === null && changedStaff(N, x.base)) return whole(`${staffLabel(models.base, c.base.staves[x.base].lane, x.base)}, taken away on one side and changed on the other`);
+      if (x.side === null && changedStaff(N, x.base)) return whole(tr("{staff}, taken away on one side and changed on the other", { staff: staffLabel(models.base, c.base.staves[x.base].lane, x.base) }));
     }
     staffMap = lined.filter((x) => x.side !== null).map((x) => ({ base: x.base, [S]: x.side, [N]: x.base }));
   }
@@ -290,27 +305,26 @@ export function mergeScores(base, mine, theirs, { parse, prefer = null } = {}) {
   const out = { header: {}, staves: [], changes: [], breaks: {}, ...Object.fromEntries(MID_LISTS.map((name) => [name, []])) };
   const names = (part) => new Set(["base", "mine", "theirs"].flatMap((side) => Object.keys(c[side][part])));
   for (const name of names("fields")) {
-    const value = fromCells((side) => c[side].fields[name], SCORE_NAMES[name] ?? name, { area: "score" });
+    const value = fromCells((side) => c[side].fields[name], SCORE_NAMES()[name] ?? name, { area: "score" });
     if (value !== undefined) out[name] = value;
   }
   for (const name of names("header")) {
-    const value = fromCells((side) => c[side].header[name], name === "title" ? "Title" : name === "composer" ? "Composer" : `Header (${name})`, { area: "header" });
+    const value = fromCells((side) => c[side].header[name], name === "title" ? tr("Title") : name === "composer" ? tr("Composer") : tr("Header ({field})", { field: name }), { area: "header" });
     if (value !== undefined) out.header[name] = value;
   }
 
   // Each bar's head: its changes, its keys inside it, the break after it.
   const shown = models.mine;
-  const barLabel = (k) => {
-    const b = barMap[k].mine;
-    return b == null ? `New bar ${k + 1}` : `Bar ${M.barNumber(shown, b)}`;
-  };
+  // A bar's number, as said, and the bar said: "Bar 4", "New bar 5".
+  const barAt = (k) => (barMap[k].mine == null ? k + 1 : M.barNumber(shown, barMap[k].mine));
+  const barLabel = (k) => (barMap[k].mine == null ? tr("New bar {n}", { n: barAt(k) }) : tr("Bar {n}", { n: barAt(k) }));
   const cellOf = (side, k, get) => {
     const b = barMap[k][side];
     return b == null ? undefined : get(c[side], b);
   };
   barMap.forEach((x, k) => {
     const heads = Object.fromEntries(["base", "mine", "theirs"].map((side) => [side, cellOf(side, k, (cs, b) => cs.heads[b])]));
-    const side = heads.base === undefined ? S : choose(pick(heads.base.key, heads.mine.key, heads.theirs.key), `${barLabel(k)}: its key, time, tempo or marks`, { area: "bar", bar: k });
+    const side = heads.base === undefined ? S : choose(pick(heads.base.key, heads.mine.key, heads.theirs.key), tr("{bar}: its key, time, tempo or marks", { bar: barLabel(k) }), { area: "bar", bar: k });
     const head = heads[side].value;
     if (head.change) out.changes.push({ bar: k, ...head.change });
     if (head.break) out.breaks[k] = head.break;
@@ -330,14 +344,14 @@ export function mergeScores(base, mine, theirs, { parse, prefer = null } = {}) {
     else {
       const fields = new Set([...Object.keys(st.base.props), ...Object.keys(st.mine.props), ...Object.keys(st.theirs.props)]);
       for (const name of fields) {
-        const value = fromCells((side) => st[side].props[name], `${label}: its ${name === "short" ? "short name" : name}`, { area: "staff" });
+        const value = fromCells((side) => st[side].props[name], fieldLabel(label, name), { area: "staff" });
         if (value !== undefined) props[name] = value;
       }
     }
     const voices = new Set(["base", "mine", "theirs"].flatMap((side) => Object.keys(st[side]?.voices ?? {}).map(Number)));
     const lanes = {};
     for (const v of [...voices].sort()) {
-      const laneLabel = v > 1 ? `${label}, voice ${v}` : label;
+      const laneLabel = v > 1 ? tr("{staff}, voice {n}", { staff: label, n: v }) : label;
       lanes[v] = barMap.map((bx, k) => {
         const cell = (side) => {
           const b = bx[side];
@@ -347,7 +361,8 @@ export function mergeScores(base, mine, theirs, { parse, prefer = null } = {}) {
         const three = { base: cell("base"), mine: cell("mine"), theirs: cell("theirs") };
         // A bar or a staff only one side has: that side's.
         if (!three.base) return (three[S] ?? { value: null }).value;
-        const side = choose(pick(three.base.key, three.mine.key, three.theirs.key), `${barLabel(k)}, ${laneLabel}`, { area: "lane", bar: k, staff: number, voice: v });
+        // `at` and `where`, the bar and the lane apart: conflictLines gathers the bars next to one another.
+        const side = choose(pick(three.base.key, three.mine.key, three.theirs.key), tr("{bar}, {lane}", { bar: barLabel(k), lane: laneLabel }), { area: "lane", bar: k, staff: number, voice: v, at: barAt(k), where: laneLabel });
         return three[side].value;
       });
     }
@@ -390,7 +405,7 @@ export function mergeScores(base, mine, theirs, { parse, prefer = null } = {}) {
   // they belong to. What sat in a bar or a staff taken away on one side
   // goes with it, unless the other side changed it.
   const laid = Object.fromEntries(["base", "mine", "theirs"].map((side) => [side, layMeta(models[side], c[side].meta, side, staffMap, barMap, laneAt, out)]));
-  if (S && key(laid[N].dropped) !== key(laid.base.dropped)) return whole("Velocities or curves in a bar or staff taken away on one side, changed on the other");
+  if (S && key(laid[N].dropped) !== key(laid.base.dropped)) return whole(tr("Velocities or curves in a bar or staff taken away on one side, changed on the other"));
   const meta = mergeMeta(laid.base.meta, laid.mine.meta, laid.theirs.meta, [], conflicts, prefer);
   if (conflicts.length && !prefer) return { text: null, conflicts, whole: false };
   out.meta = meta;
@@ -398,14 +413,14 @@ export function mergeScores(base, mine, theirs, { parse, prefer = null } = {}) {
   for (const lane of out.staves) {
     const at = M.starts(lane);
     const total = M.lengthOf(lane);
-    if (Math.abs(total - M.barStart(out, bars)) > 1e-6) return whole("The bars no longer line up once merged");
+    if (Math.abs(total - M.barStart(out, bars)) > 1e-6) return whole(tr("The bars no longer line up once merged"));
     for (let k = 0; k < bars; k++) {
       const begin = M.barStart(out, k);
-      if (lane.events.length && !at.some((t) => Math.abs(t - begin) < 1e-6)) return whole("The bars no longer line up once merged");
+      if (lane.events.length && !at.some((t) => Math.abs(t - begin) < 1e-6)) return whole(tr("The bars no longer line up once merged"));
     }
   }
   const text = written(out);
-  if (!read(text, parse)) return whole("The merged score, which the engraver does not read");
+  if (!read(text, parse)) return whole(tr("The merged score, which the engraver does not read"));
   return { text, conflicts, whole: false };
 }
 
@@ -530,10 +545,11 @@ export function conflictLines(conflicts) {
     let run = [list[0]];
     const say = () => {
       const [first, last] = [run[0], run[run.length - 1]];
-      const where = first.label.replace(/^(New bar|Bar) [^,]*, /, "");
-      const from = first.label.match(/^(?:New bar|Bar) ([^,]*),/)?.[1];
-      const to = last.label.match(/^(?:New bar|Bar) ([^,]*),/)?.[1];
-      lines.push(run.length > 1 ? `Bars ${from}–${to}, ${where}` : first.label);
+      // The bar and the lane as the merge put them apart (`at`, `where`); else read from the label.
+      const where = first.where ?? first.label.replace(/^(New bar|Bar) [^,]*, /, "");
+      const from = first.at ?? first.label.match(/^(?:New bar|Bar) ([^,]*),/)?.[1];
+      const to = last.at ?? last.label.match(/^(?:New bar|Bar) ([^,]*),/)?.[1];
+      lines.push(run.length > 1 ? tr("Bars {a}–{b}, {lane}", { a: from, b: to, lane: where }) : first.label);
     };
     for (const x of list.slice(1)) {
       if (x.bar === run[run.length - 1].bar + 1) run.push(x);

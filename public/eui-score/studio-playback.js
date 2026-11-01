@@ -1,6 +1,10 @@
 // The studio's playing (studio.js, player.js): the MIDI heard, Play and
 // Stop, the metronome and the count-in, practice, the loop, the progress.
 
+// The editor's words in the page's language (#508).
+const V = new URL(import.meta.url).search;
+const { tr } = await import(`./words.js${V}`);
+
 /** The Playback section set up; answers Play, Stop, the loop, and the MIDI heard. */
 export function install(ctx) {
   const { root, state, playhead, st, toMidi, M, P, X, Vel, Pr, Sy, F, A, Ch, G } = ctx;
@@ -94,8 +98,9 @@ export function install(ctx) {
     const name = event.target.dataset?.practice;
     if (!name) return;
     // The audio takes (#390) are sound, not notes: they keep their pitch.
-    const takes = st.audio?.mixerTracks().length ? " The audio takes keep their own pitch." : "";
-    if (name === "transpose") say(`Play transposed: ${Pr.transposeText(transposeNow())}${st.playing ? ", heard from the next Play" : ""}.${takes}`);
+    const takes = st.audio?.mixerTracks().length ? ` ${tr("The audio takes keep their own pitch.")}` : "";
+    const how = { how: Pr.transposeText(transposeNow()) };
+    if (name === "transpose") say(`${st.playing ? tr("Play transposed: {how}, heard from the next Play.", how) : tr("Play transposed: {how}.", how)}${takes}`);
     try {
       const all = Object.fromEntries([...root.querySelectorAll("[data-practice]")].map((el) => [el.dataset.practice, el.type === "checkbox" ? el.checked : el.value]));
       localStorage.setItem(PRACTICE, JSON.stringify(all));
@@ -115,7 +120,7 @@ export function install(ctx) {
     const next = Pr.rampAfter(state.ramp, state.pass);
     if (next.done) {
       stopPlay();
-      const text = `Practice loop: ${next.percent} % reached after ${state.pass + 1} passes.`;
+      const text = tr("Practice loop: {percent} % reached after {n} passes.", { percent: next.percent, n: state.pass + 1 });
       showRamp(text);
       return say(text);
     }
@@ -135,11 +140,11 @@ export function install(ctx) {
       if (playing.handle.paused) {
         playing.handle.resume();
         playing.next = null;
-        say("Playing — Space to pause");
+        say(tr("Playing — Space to pause"));
       } else {
         playing.handle.pause();
         playing.voices?.silence();
-        say("Paused — Space to play on, Stop to go back to the start");
+        say(tr("Paused — Space to play on, Stop to go back to the start"));
       }
       return showState();
     }
@@ -161,7 +166,7 @@ export function install(ctx) {
     // From the selection's bar (its first pass), or from the start.
     const loopBars = st.taking ? null : (st.loopBars ?? (looping ? selectedBarsOrNull() : null));
     const loop = loopBars && st.score ? loopOf(passes, loopBars) : null;
-    if (looping && !loop) say("Select the bars to loop: playing from the start.");
+    if (looping && !loop) say(tr("Select the bars to loop: playing from the start."));
     if (st.recording) st.recording.loop = loop ? loopBars : null;
     const from = changeBar();
     const at = loop ? loop.start : from == null ? 0 : (passes.find((p) => p.bar === from)?.start ?? 0);
@@ -186,9 +191,9 @@ export function install(ctx) {
     }
     st.playing = state;
     showState();
-    const progress = (f) => st.playing === state && say(`Loading the sounds… ${Math.round(100 * f)} % (38 MB, once)`);
+    const progress = (f) => st.playing === state && say(tr("Loading the sounds… {percent} % (38 MB, once)", { percent: Math.round(100 * f) }));
     try {
-      if (!P.isReady()) say("Loading the sounds…");
+      if (!P.isReady()) say(tr("Loading the sounds…"));
       await P.prepare(progress);
       if (st.playing !== state) return;
       // A recording always counts a bar in.
@@ -197,7 +202,7 @@ export function install(ctx) {
       state.handle = await P.play(bytes, { at, onStop: () => st.playing === state && stopPlay() });
     } catch (error) {
       if (st.playing === state) stopPlay();
-      return say("The sounds could not be loaded.", true);
+      return say(tr("The sounds could not be loaded."), true);
     }
     if (!state.handle || st.playing !== state) return;
     state.handle.rate = state.ramp ? Pr.rampPercent(state.ramp, 0) / 100 : rate();
@@ -218,8 +223,8 @@ export function install(ctx) {
       state.padChannel = M.channels(played).at(-1).channel;
       P.mute(state.padChannel, true);
     }
-    if (state.unramped) say("Faster each pass plays a loop: set one first (Play ▸ Loop, or the MIDI view's ruler). Playing from the start — Space to pause");
-    else if (!st.recording && !st.taking) say(loop ? "Looping the selected bars — Space to pause" : "Playing — Space to pause");
+    if (state.unramped) say(tr("Faster each pass plays a loop: set one first (Play ▸ Loop, or the MIDI view's ruler). Playing from the start — Space to pause"));
+    else if (!st.recording && !st.taking) say(loop ? tr("Looping the selected bars — Space to pause") : tr("Playing — Space to pause"));
     showState();
     state.timer = setInterval(showProgress, 200);
     state.ticker = setInterval(tick, 25);
@@ -253,7 +258,7 @@ export function install(ctx) {
     const beat = ((M.WHOLE / den) / (M.WHOLE / pass.base)) * (60 / pass.bpm) / (state.ramp ? Pr.rampPercent(state.ramp, 0) / 100 : rate());
     const t0 = P.audioTime() + 0.05;
     for (let k = 0; k < num; k++) P.click(t0 + k * beat, k === 0 && accent());
-    say("One bar to come in…");
+    say(tr("One bar to come in…"));
     return new Promise((resolve) => setTimeout(resolve, (num * beat + 0.05) * 1000));
   }
 
@@ -351,9 +356,10 @@ export function install(ctx) {
     progress.hidden = false;
     progress.querySelector(".studio-progress-fill").style.width = total ? `${(100 * now) / total}%` : "0";
     const pass = M.passAt(st.playing.passes, now);
-    const bars = pass && st.score ? ` · bar ${barNo(pass.bar)} of ${barNo(M.barsOf(st.score) - 1)}` : "";
-    progress.querySelector(".studio-progress-text").textContent = `${clock(now)} / ${clock(total)}${bars}`;
-    state.textContent = `Playing${bars} · ${clock(now)} / ${clock(total)} — Space to stop`;
+    const bars = pass && st.score ? ` · ${tr("bar {n} of {last}", { n: barNo(pass.bar), last: barNo(M.barsOf(st.score) - 1) })}` : "";
+    const times = `${clock(now)} / ${clock(total)}`;
+    progress.querySelector(".studio-progress-text").textContent = `${times}${bars}`;
+    state.textContent = tr("Playing{bars} · {times} — Space to stop", { bars, times });
   }
 
   // ---- The loop ---------------------------------------------------------------------
@@ -363,11 +369,12 @@ export function install(ctx) {
   // selected bars; a click on it, or Play › No loop, takes it away.
 
   function setLoop(bars) {
-    if (bars === undefined || (bars === null && !st.loopBars)) return say(bars === null ? "No loop" : "Select the bars to loop first", bars !== null);
+    if (bars === undefined || (bars === null && !st.loopBars)) return say(bars === null ? tr("No loop") : tr("Select the bars to loop first"), bars !== null);
     st.loopBars = bars ? [Math.min(...bars), Math.max(...bars)] : null;
     if (st.playing) stopPlay();
     const [a, b] = st.loopBars ?? [];
-    say(st.loopBars ? `Loop: ${a === b ? `bar ${barNo(a)}` : `bars ${barNo(a)}–${barNo(b)}`}, played over and over (and recorded into). A click on it in the MIDI view's ruler, or Play › No loop, takes it away.` : "No loop: the music plays on.");
+    const looped = st.loopBars ? (a === b ? tr("bar {n}", { n: barNo(a) }) : tr("bars {a}–{b}", { a: barNo(a), b: barNo(b) })) : "";
+    say(st.loopBars ? tr("Loop: {bars}, played over and over (and recorded into). A click on it in the MIDI view's ruler, or Play › No loop, takes it away.", { bars: looped }) : tr("No loop: the music plays on."));
     draw();
   }
 
