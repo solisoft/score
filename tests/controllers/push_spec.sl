@@ -176,6 +176,28 @@ describe("Push notifications") do
       assert_eq(PushSubscription.count_of(second), 0)
     end
 
+    test("another account's endpoint with other keys is refused, and the row stays theirs (#542)") do
+      first = push_spec_user()
+      second = push_spec_user()
+      device = push_spec_device(first, "taken-#{first._key}")
+      forged = push_spec_raw("taken-#{first._key}")
+      forged["keys"] = {"p256dh": "BAttacker_key_0123", "auth": "attacker-auth"}
+      refused = PushSubscription.keep(second, forged, "Attacker")
+      assert_eq(refused["error"], SiteText.t("security_542.push_taken"))
+      assert_not(refused["error"].contains("security_542"), "a sentence, not its key")
+      assert_null(refused["subscription"])
+      stored = PushSubscription.find(device._key)
+      assert_eq(stored.user_id, first._key)
+      assert_eq(stored.p256dh, "BC4Qx_y-z0123456789")
+      assert_eq(stored.auth, "qZQ-abc_123")
+      assert_eq(stored.label, "Spec browser")
+      assert_eq(PushSubscription.count_of(second), 0)
+      # Its own person may change its keys (a browser that subscribed anew).
+      renewed = PushSubscription.keep(first, forged, "Spec browser")
+      assert_null(renewed["error"])
+      assert_eq(PushSubscription.find(device._key).auth, "attacker-auth")
+    end
+
     test("a person has at most PUSH_DEVICES_MAX devices") do
       user = push_spec_user()
       (0 .. PUSH_DEVICES_MAX).each do |i|

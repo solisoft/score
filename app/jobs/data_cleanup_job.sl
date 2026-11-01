@@ -3,7 +3,8 @@
 # included — with their versions, shares and suggestions; and the photo
 # readings and AI suggestions cut off mid-way by a restart (failed, their
 # picture or text let go); the engravings kept past their time, or past the
-# newest ENGRAVINGS_KEPT. Answers what it did.
+# newest ENGRAVINGS_KEPT; the OAuth clients registered long ago that never
+# got a token (#541). Answers what it did.
 class DataCleanupJob
   static cron: String = Cron.daily_at("03:30")
 
@@ -13,7 +14,8 @@ class DataCleanupJob
       "readings": ScoreReading.expire_stuck,
       "old_readings": ScoreReading.let_go,
       "suggestions": ScoreSuggestion.expire_stuck,
-      "engravings": Engraving.expire
+      "engravings": Engraving.expire,
+      "oauth_clients": OauthClient.purge_unused
     }
   end
 end

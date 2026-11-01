@@ -227,7 +227,7 @@
               <% push_words["send_failed"] = t("app.account.push_send_failed") %>
               <script data-push-script>
                 (() => {
-                  const words = <%- push_words.to_json %>;
+                  const words = <%- json_for_script(push_words) %>;
                   const fill = (text, name, value) => text.replace(`{${name}}`, value);
                   const box = document.querySelector("[data-push]");
                   if (!box || box.dataset.ready) return;

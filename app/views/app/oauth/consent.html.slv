@@ -1,7 +1,9 @@
 <%# The consent page of an MCP client asking to connect (#461). %>
 <section class="auth" data-oauth-consent>
-  <h1><%= t("app.oauth.heading", {"name": client_name}) %></h1>
+  <%# Named by where the answer goes, which Score checked; the name is the client's own (#541). %>
+  <h1><%= heading %></h1>
   <p><%- t("app.oauth.asks_html", {"name": h(client_name), "email": h(email)}) %></p>
+  <p class="muted"><%= t("security_541.name_unchecked") %></p>
   <ul class="oauth-can">
     <li><%= t("app.oauth.can_list") %></li>
     <li><%= t("app.oauth.can_change") %></li>
@@ -10,6 +12,7 @@
   <p class="muted"><%- t("app.oauth.goes_back_html", {"host": h(redirect_host)}) %></p>
   <form action="<%= app_oauth_consent_path() %>" method="POST" class="oauth-decide">
     <%- csrf_field() %>
+    <input type="hidden" name="request_id" value="<%= request_id %>">
     <button type="submit" name="decision" value="allow" class="btn btn-primary" data-oauth-allow><%= t("app.oauth.allow") %></button>
     <button type="submit" name="decision" value="deny" class="btn btn-ghost" data-oauth-deny><%= t("app.oauth.deny") %></button>
   </form>

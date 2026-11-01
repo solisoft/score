@@ -194,3 +194,34 @@ test("the lane under the roll: its curve, its points, where a click lands", () =
   assert.deepEqual([A.valueText("64", 127), A.valueText("bend", 5), A.valueText("bend", -5), A.valueText("1", 7)], ["on", "+5", "-5", "7"]);
   assert.deepEqual([A.idOfNumber(64), A.idOfNumber(74), A.controller("bend").name], ["64", null, "Pitch bend"]);
 });
+
+// A score's text is anyone's: a curve written by hand (or by an attacker) on
+// the meta line must not put markup in the MIDI view (#537).
+test("a curve on the meta line is read as numbers: no markup drawn, values in range (#537)", () => {
+  const payload = "<img src=x onerror=alert(1)>";
+  const cc = { 0: { 1: [[0, payload], [Q, 300], ["<b>", 5], [2 * Q, 40], 7, "x"], bend: [[0, -20000]], nonsense: [[0, 1]], 64: payload }, "<i>": { 1: [[0, 1]] } };
+  const score = read(`{ c'4 d' e' f' }\n%% eui-score ${JSON.stringify({ cc })}\n`);
+  assert.deepEqual(A.curveOf(score, 0, "1"), [[Q, 127], [2 * Q, 40]], "the value that is no number gone, the others clamped");
+  assert.deepEqual(A.curveOf(score, 0, "bend"), [[0, -8192]]);
+  assert.deepEqual(A.curveOf(score, 0, "64"), []);
+  assert.deepEqual(Object.keys(A.curvesOf(score)), ["0"], "no lane that is no staff's");
+  assert.deepEqual(Object.keys(A.curvesOf(score)[0]).sort(), ["1", "bend"], "no controller not followed");
+  const geo = R.rollLayout(score, { layout: "tracks" });
+  const svg = A.drawLane(score, geo, "1", A.curveOf(score, 0, "1"));
+  assert.doesNotMatch(svg, /<img|onerror|NaN/);
+  assert.equal(svg.match(/data-cc-point=/g).length, 2);
+  // Handed raw points all the same, the lane still writes text, not markup.
+  const raw = A.drawLane(score, geo, "1", [[0, payload]]);
+  assert.doesNotMatch(raw, /<img/);
+  // And the MIDI gets only numbers.
+  assert.doesNotThrow(() => A.applyAutomation(score, played(score)));
+});
+
+test("a curves map that is no map reads as none (#537)", () => {
+  for (const cc of ["<img src=x onerror=alert(1)>", [[0, 1]], 42, null, { 0: "<img>" }]) {
+    const score = read("{ c'4 }");
+    score.meta = { cc };
+    assert.deepEqual(A.curvesOf(score), {});
+    assert.deepEqual(A.curveOf(score, 0, "1"), []);
+  }
+});

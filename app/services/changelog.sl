@@ -12,6 +12,38 @@ class Changelog
     [
       {"date": "2026-11-01", "entries": [
         {
+          "area": "site",
+          "title": "Push, recordings and exports kept in bounds",
+          "text": "Push notifications go only to the browsers' own push services, and the test message is sent in the "
+          + "background, a few an hour. Audio takes keep at most 2 GB an account while Pro is not on sale. The data "
+          + "export splits a score's versions across its zips, each version named by when it was kept.",
+          "app": true
+        },
+        {
+          "area": "site",
+          "title": "Sharing that stops when you say so",
+          "text": "Readers of a shared link now show as « A reader », never by their address. A new link, a score "
+          + "made private, someone uninvited or a score put in the trash now closes at once the live view of those "
+          + "who may no longer read it, and a score in the trash can no longer be changed by its collaborators.",
+          "app": true
+        },
+        {
+          "area": "site",
+          "title": "Connecting an app is safer",
+          "text": "The page that lets an app such as Claude reach your scores now names where the answer goes, not "
+          + "just the name the app gives itself, and it approves only the request it showed. A connection whose "
+          + "renewal is replayed is closed, and the connection endpoints are rate-limited.",
+          "app": true
+        },
+        {
+          "area": "editor",
+          "title": "A score cannot hide a script any more",
+          "text": "A score's hidden settings line (note velocities, controller curves) could carry code that ran when "
+          + "someone opened the MIDI view. They are now read as numbers only, and what is drawn is escaped. A synth "
+          + "preset or reverb room named after a JavaScript property no longer breaks the panels.",
+          "app": true
+        },
+        {
           "area": "engine",
           "title": "Instrument and composer apart on a phone",
           "text": "On a narrow page, a score's instrument (centred) and its composer (on the right) ran into each "

@@ -2,7 +2,8 @@
 # subscription, as `PushSubscription.toJSON()` gives it — the push
 # service's `endpoint`, and the keys its messages are encrypted with
 # (`p256dh`, `auth`). One row an endpoint (a unique index): a browser that
-# subscribes again, maybe signed in as someone else, takes the row over.
+# subscribes again, maybe signed in as someone else, takes the row over —
+# with the keys it holds, which a stranger who knows the endpoint has not.
 # WebPush sends to them; one the push service says is gone is deleted.
 const PUSH_KEY_PATTERN = "^[A-Za-z0-9_-]+={0,2}$"
 const PUSH_DEVICES_MAX = 20
@@ -55,6 +56,13 @@ class PushSubscription < Model
     end
 
     existing = PushSubscription.find_by("endpoint", endpoint)
+    # Another account's device is taken over only by the same browser: one
+    # that shows its keys (#542). An endpoint alone is no proof — it is not
+    # a secret — and would turn their notifications to someone else.
+    if !existing.nil? && existing.user_id != user._key && !PushSubscription.same_keys?(existing, keys)
+      return {"error": SiteText.t("security_542.push_taken")}
+    end
+
     if existing.nil? && PushSubscription.count_of(user) >= PUSH_DEVICES_MAX
       return {"error": "Push notifications are on for #{PUSH_DEVICES_MAX} devices already: turn one off first."}
     end
@@ -71,6 +79,13 @@ class PushSubscription < Model
     return {"error": "This is not a push subscription."} if row._errors && row._errors.length > 0
 
     {"subscription": row}
+  end
+
+  # Are `keys` (the browser's p256dh and auth) those `row` keeps?
+  static def same_keys?(row, keys)
+    p256dh_matches = Crypto.secure_compare(row.p256dh.to_s, keys["p256dh"].to_s)
+    auth_matches = Crypto.secure_compare(row.auth.to_s, keys["auth"].to_s)
+    p256dh_matches && auth_matches
   end
 
   # `user`'s subscription at `endpoint` deleted: whether there was one.
