@@ -7,12 +7,15 @@ const SCORE_UNTITLED = "Untitled score"
 # How many scores a page of the library shows.
 const SCORE_PAGE_SIZE = 60
 # The most music a score may write out to, its repeats and variables in
-# full (WrittenOut): some 100 times the gallery's largest piece (the
-# symphony, 844), about a second of engraving on the server — where the
-# 80 characters of three nested `\repeat unfold` came to 262,144 and
-# several seconds a page. Its refusals say it in words
-# (config/locales, security_540): change them with it.
-const SCORE_MOST_WRITTEN_OUT = 100000
+# full (WrittenOut): some 35 times the gallery's largest piece (the
+# symphony, 844). Measured at the bound on a laptop: the engraver lays it
+# out in some 0.15 s, ScoreSvg draws it in 2.3 to 3.3 s (an SVG of 3.5 to
+# 3.9 MB), its PDF prints in 0.4 s (11 to 17 MB) and its MIDI in 0.03 s —
+# so each made anew is counted (ENGRAVINGS_PER_MINUTE) — where the 80
+# characters of three nested `\repeat unfold` came to 262,144.
+# Its refusals say it in words (config/locales, security_540): change
+# them with it.
+const SCORE_MOST_WRITTEN_OUT = 30000
 # Who may read a score without an invitation: nobody but its owner and the
 # people it is shared with ("private"), whoever has its link ("link"), or
 # anyone, search engines included ("public").
@@ -30,11 +33,16 @@ class Score < Model
   )
   validates(
     "source",
-    {
-      "presence": true,
-      "max_length": 1000000,
-      "custom": "source_written_out"
-    }
+    {"presence": true, "max_length": 1000000}
+  )
+  # The music a new score writes out to (Score.written_out_refusal): on
+  # create only — an update's record knows nothing of what changed, and a
+  # score stored before the bound must still be renamed, trashed, restored
+  # or shared. The updates that bring new music check it themselves (the
+  # editor's save, Score.refusal_of; a version restored).
+  validates(
+    "source",
+    {"custom": fn(value) { Score.written_out_refusal(value) }, "on": "create"}
   )
   validates(
     "visibility",
@@ -319,13 +327,14 @@ class Score < Model
     nil
   end
 
-  # The validation of the same bound, for every create and save that runs
-  # them (a new score, an import, an AI reading kept, a copy). Past a million
-  # characters the length's own validation answers, without this reading it.
-  def source_written_out
-    return nil if @source.to_s.length > 1000000
+  # The validation of the same bound, for every new score (a blank one, an
+  # import, an AI reading kept, a copy): its refusal, or true. Past a
+  # million characters the length's own validation answers, without this
+  # reading it.
+  static def written_out_refusal(source)
+    return true if source.to_s.length > 1000000
 
-    Score.too_much_music?(@source) ? SiteText.t("security_540.too_much_music") : nil
+    Score.too_much_music?(source) ? SiteText.t("security_540.too_much_music") : true
   end
 
   # Whether `source` writes out to more music than the server engraves
@@ -337,7 +346,11 @@ class Score < Model
   end
 
   # Back to `version`, by `author`: the score as it stands is kept first.
+  # False, and nothing kept, when the version writes out to more music than
+  # the server engraves.
   def restore_version(version, author = nil)
+    return false if version.source != @source && Score.too_much_music?(version.source)
+
     ScoreVersion.keep(this, @source, "restore", @saved_by)
     @source = version.source
     @saved_by = author&._key

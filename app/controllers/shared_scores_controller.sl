@@ -7,10 +7,13 @@ class SharedScoresController < Controller
     this.layout = "application"
   }
 
-  # GET /s/:token
+  # GET /s/:token — 429 when the address (or the account) had too many
+  # pictures made this minute
   def show
     @score = @_readable_score
-    @figure = ScoreSvg.figure(@score.source, 1040, 7)
+    @figure = ScoreSvg.figure(@score.source, 1040, 7, ScoreSvg.sender("page", current_user(), client_ip(req)))
+    return ScoreSvg.too_many if @figure["throttled"]
+
     @pdf_url = "#{shared_score_path(this.score.share_token)}/score.pdf"
     @source_url = "#{shared_score_path(this.score.share_token)}/source.ly"
     # The downloads' name: the title's (score.pdf, score.mid… say nothing once saved).
@@ -59,11 +62,9 @@ class SharedScoresController < Controller
       }
     end
 
-    unless ScoreSvg.engraving_allowed?("pdf", current_user(), client_ip(req))
-      halt(429, SiteText.t("security_540.too_many_engravings"))
-    end
+    printed = ScoreSvg.pdf(score.source, score.title, ScoreSvg.sender("pdf", current_user(), client_ip(req)))
+    return ScoreSvg.too_many if printed["throttled"] == true
 
-    printed = ScoreSvg.pdf(score.source, score.title)
     halt(422, printed["error"]) if printed["file"].nil?
 
     headers = {"Content-Type": "application/pdf", "Content-Disposition": score.content_disposition("inline", "pdf")}

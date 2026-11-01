@@ -302,7 +302,7 @@ class ScoreMcp
     answer = nil
     answer = ScoreMcp.list_scores(user, args) if name == "list_scores"
     answer = ScoreMcp.get_score(user, args) if name == "get_score"
-    answer = ScoreMcp.check_source(args) if name == "check_source"
+    answer = ScoreMcp.check_source(user, args) if name == "check_source"
     answer = ScoreMcp.create_score(user, args) if name == "create_score"
     answer = ScoreMcp.update_score(user, args) if name == "update_score"
     answer = ScoreMcp.transcribe_image(user, args) if name == "transcribe_image"
@@ -330,16 +330,12 @@ class ScoreMcp
     base + "/app/scores/" + score._key
   end
 
-  # Why the engraver does not read `source`, or nil when it does: never
-  # asked when it writes out to more than the server engraves.
-  static def engraver_refusal(source)
-    refusal = ScoreSvg.refusal(source)
-    return refusal unless refusal.nil?
-
-    laid = eui_score_layout(source, 100, {}) rescue {"error": "the engraver could not read it"}
-    return laid["error"].to_s if laid.has_key("error")
-
-    nil
+  # Whether the engraver reads `source`, for `user` (ScoreSvg.check):
+  # {"error": nil}, {"error": why}, or "throttled" past the account's
+  # engravings of the minute. Asked once its bounds hold (Score.refusal_of,
+  # which reads its music once: WrittenOut keeps the last count).
+  static def engraver_check(user, source)
+    ScoreSvg.check(source, ScoreSvg.sender("mcp", user, nil))
   end
 
   static def list_scores(user, args)
@@ -398,12 +394,16 @@ class ScoreMcp
     ScoreMcp.done("#{score.title} (revision #{score.revision}):\n\n#{data["source"]}", data)
   end
 
-  static def check_source(args)
+  static def check_source(user, args)
     source = args["source"].to_s
     return ScoreMcp.refused("The source is empty.") if source.trim.blank?
 
-    refusal = Score.refusal_of(source) ?? ScoreMcp.engraver_refusal(source)
-    return ScoreMcp.refused("The engraver does not read it: #{refusal}") unless refusal.nil?
+    bounds = Score.refusal_of(source)
+    return ScoreMcp.refused("The engraver does not read it: #{bounds}") unless bounds.nil?
+
+    checked = ScoreMcp.engraver_check(user, source)
+    return ScoreMcp.refused(checked["error"]) if checked["throttled"] == true
+    return ScoreMcp.refused("The engraver does not read it: #{checked["error"]}") unless checked["error"].nil?
 
     ScoreMcp.done("ok: the engraver reads it.", {"ok": true})
   end
@@ -414,7 +414,7 @@ class ScoreMcp
     source = Score.blank_source(title) if source.trim.blank?
     source = Score.with_title(source, title) if Score.title_in(source).nil? && !title.blank?
     # The bounds first, read without engraving; then the engraver.
-    refusal = Score.refusal_of(source) ?? ScoreMcp.engraver_refusal(source)
+    refusal = Score.refusal_of(source) ?? ScoreMcp.engraver_check(user, source)["error"]
     return ScoreMcp.refused("Not created: #{refusal}") unless refusal.nil?
 
     score = Score.start(user, source)
@@ -438,7 +438,10 @@ class ScoreMcp
     bounds = Score.refusal_of(source)
     return ScoreMcp.refused(bounds) unless bounds.nil?
 
-    refusal = ScoreMcp.engraver_refusal(source)
+    checked = ScoreMcp.engraver_check(user, source)
+    return ScoreMcp.refused("Not saved: #{checked["error"]}") if checked["throttled"] == true
+
+    refusal = checked["error"]
     return ScoreMcp.refused("Not saved: the engraver does not read it: #{refusal}") unless refusal.nil?
 
     revision = args.has_key("revision") ? args["revision"].to_s.to_i : score.revision.to_s.to_i

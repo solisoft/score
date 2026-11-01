@@ -9,8 +9,8 @@ const MCP_BATCH_MOST = 20
 
 class McpController < Controller
   # POST /mcp — JSON-RPC: 200 with the answer, 202 for notifications alone,
-  # 401 without a valid token, 429 past MCP_CALLS_PER_MINUTE, 400 for a
-  # batch of more than MCP_BATCH_MOST
+  # 401 without a valid token, 429 past MCP_CALLS_PER_MINUTE, 400 for an
+  # empty batch or one of more than MCP_BATCH_MOST
   def handle
     user = AccessToken.user_for(@_bearer(req))
     return @_unauthorized if user.nil?
@@ -20,6 +20,8 @@ class McpController < Controller
     # A batch counts each of its messages against the limit, not the
     # request once: those past it are answered "too many", not run.
     if type(message) == "array"
+      # An empty batch is one invalid request, answered once (JSON-RPC 2.0).
+      return @_reply(ScoreMcp.error(nil, -32600, "An empty batch is not a request."), 400) if message.length == 0
       if message.length > MCP_BATCH_MOST
         return @_reply(ScoreMcp.error(nil, -32600, "A batch is #{MCP_BATCH_MOST} messages at most."), 400)
       end
@@ -61,7 +63,9 @@ class McpController < Controller
   private
 
   def _too_many
-    @_reply(ScoreMcp.error(nil, -32000, "Too many calls: wait a minute."), 429)
+    answer = @_reply(ScoreMcp.error(nil, -32000, "Too many calls: wait a minute."), 429)
+    answer["headers"]["Retry-After"] = "60"
+    answer
   end
 
   # A batch's message past the limit: its refusal, or nothing for a

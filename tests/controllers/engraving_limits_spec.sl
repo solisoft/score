@@ -2,8 +2,9 @@
 # more music than Score engraves is refused wherever it is saved — the
 # editor, the MCP tools, a shared section — with nothing written; one stored
 # before the bound is refused at once, not engraved; a read page's PDF is
-# printed once, then read back; the files a sender may have made are so
-# many a minute; and an MCP batch counts each of its messages.
+# printed once, then read back; the engravings a sender may have made — made,
+# not read back — are so many a minute; and an MCP batch counts each of its
+# messages.
 
 const LIMITS_PASSWORD = "correct horse battery"
 # 80 characters that lay out 262,144 notes.
@@ -71,6 +72,12 @@ def limits_scores(user)
   Score.where({"user_id": user._key}).count
 end
 
+# `user`'s score, its stored source changed to a new one: the next engraving
+# of it is made, not read back.
+def limits_renewed(score)
+  Score.where("doc._key == @key", {"key": score._key}).update_all({"source": Score.blank_source("Renewed #{uuid_v4}")})
+end
+
 describe("Engraving limits (#540)") do
   before_each() do
     as_guest()
@@ -83,14 +90,13 @@ describe("Engraving limits (#540)") do
       owner = limits_user()
       score = Score.start(owner, Score.blank_source("Calm"))
       limits_sign_in(owner)
-      started = clock()
       refused = put(
         "/app/scores/#{score._key}",
         {"source": LIMITS_BOMB, "revision": score.revision}
       )
-      assert_lt(clock() - started, 1.5, "refused without engraving")
       assert_eq(res_status(refused), 422)
-      assert_contains(res_json(refused)["error"], "100,000")
+      assert_eq(res_json(refused)["error"], SiteText.t("security_540.not_saved_too_much_music"), "the estimator's")
+      assert_contains(res_json(refused)["error"], "30,000")
       stored = Score.find(score._key)
       assert_eq(stored.revision, score.revision)
       assert_contains(stored.source, "r1")
@@ -106,21 +112,23 @@ describe("Engraving limits (#540)") do
       token = AccessToken.issue(owner, "Spec client")["token"]
       kept = Score.start(owner, LIMITS_SOURCE)
       before = limits_scores(owner)
-      started = clock()
       created = res_json(limits_mcp(token, limits_tool(1, "create_score", {"source": LIMITS_BOMB})))["result"]
       updated = res_json(limits_mcp(token, limits_tool(2, "update_score", {
         "id": kept._key,
         "source": LIMITS_BOMB
       })))["result"]
       checked = res_json(limits_mcp(token, limits_tool(3, "check_source", {"source": LIMITS_BOMB})))["result"]
-      assert_lt(clock() - started, 2.0, "none of them engraved it")
       assert(created["isError"])
       assert_contains(created["content"][0]["text"], "Not created")
-      assert_contains(created["content"][0]["text"], "100,000")
+      assert_contains(created["content"][0]["text"], "30,000")
       assert(updated["isError"])
-      assert_contains(updated["content"][0]["text"], "100,000")
+      assert_contains(updated["content"][0]["text"], "30,000")
       assert(checked["isError"])
-      assert_contains(checked["content"][0]["text"], "100,000")
+      assert_contains(checked["content"][0]["text"], "30,000")
+      assert_null(
+        Engraving.find_by("_key", ScoreSvg.file_digest("check", "", LIMITS_BOMB)),
+        "the engraver never read it"
+      )
       assert_eq(limits_scores(owner), before)
       assert_eq(Score.find(kept._key).source, LIMITS_SOURCE)
       fine = res_json(limits_mcp(token, limits_tool(4, "create_score", {"source": LIMITS_SOURCE})))["result"]
@@ -148,33 +156,30 @@ describe("Engraving limits (#540)") do
         }]},
         "source": LIMITS_BOMB
       }
-      started = clock()
       response = post("/app/sections", fields)
-      assert_lt(clock() - started, 1.5)
       assert_eq(res_status(response), 422)
-      assert_contains(res_json(response)["error"], "Too much music")
+      assert_contains(res_json(response)["error"], SiteText.t("security_540.too_much_to_engrave"))
       assert_eq(SharedSection.where({"user_id": author._key}).count, 0)
     end
   end
 
   describe("a source stored before the bound") do
-    test("its read page, PDF and preview answer at once, without engraving it") do
+    test("its read page, PDF and preview answer the estimator's refusal: the engraver never sees it") do
       owner = limits_user()
       score = limits_stored(owner, LIMITS_BOMB)
+      refused = SiteText.t("security_540.too_much_to_engrave")
       clear_cookies()
-      started = clock()
       page = get("/s/#{score.share_token}")
       pdf = get("/s/#{score.share_token}/score.pdf")
-      assert_lt(clock() - started, 1.5, "nothing engraved")
       assert_eq(res_status(page), 200)
+      assert_eq(Engraving.find(ScoreSvg.digest(LIMITS_BOMB, 1040, 7, 0, {})).error, refused)
       assert_eq(res_status(pdf), 422)
-      assert_contains(res_body(pdf), "Too much music to engrave")
+      assert_eq(res_body(pdf), refused)
       limits_sign_in(owner)
-      started = clock()
       preview = get("/app/scores/#{score._key}/preview.svg")
-      assert_lt(clock() - started, 1.0)
       assert_eq(res_status(preview), 200)
       assert_contains(res_body(preview), "width=\"1\"")
+      assert_eq(Engraving.find(ScoreSvg.digest(LIMITS_BOMB, 560, 5.5, 230, {})).error, refused)
     end
 
     test("a section's MIDI is refused, not written") do
@@ -197,10 +202,9 @@ describe("Engraving limits (#540)") do
         "hidden": false,
         "created_at": DateTime.utc.to_unix
       })
-      started = clock()
       midi = get("/sections/#{section._key}/play.mid")
-      assert_lt(clock() - started, 1.0)
       assert_eq(res_status(midi), 422)
+      assert_null(Engraving.find_by("_key", ScoreSvg.file_digest("midi", 96, LIMITS_BOMB)), "never written")
     end
   end
 
@@ -228,39 +232,168 @@ describe("Engraving limits (#540)") do
       assert_eq(res_status(again), 200)
       assert_eq(res_body(again), "%PDF kept")
     end
+
+    test("reads back the very PDF it printed, byte for byte") do
+      owner = limits_user()
+      score = Score.start(owner, Score.blank_source("Bytes #{uuid_v4}"))
+      score.make_visible("link")
+      clear_cookies()
+      path = "/s/#{score.share_token}/score.pdf"
+      first = get(path)
+      kept = Engraving.find(ScoreSvg.file_digest("pdf", score.title, score.source))
+      assert_eq(kept.file, res_body(first))
+      again = get(path)
+      assert_eq(res_body(again), res_body(first))
+      assert_eq(res_body(again).length, kept.bytes)
+    end
   end
 
-  describe("so many files a minute") do
-    test("a reader's PDFs: the one past the limit answers 429") do
+  describe("so many engravings a minute, made and not read back") do
+    test("a reader's PDFs: those read back are not counted; the one made past the limit answers 429") do
       owner = limits_user()
       score = Score.start(owner, Score.blank_source("Often"))
       limits_sign_in(owner)
       path = "/s/#{score.share_token}/score.pdf"
-      (0 .. ENGRAVINGS_PER_MINUTE["pdf"]).each do |n|
-        assert_eq(res_status(get(path)), 200, "PDF #{n + 1}")
+      (0 .. ENGRAVINGS_PER_MINUTE["pdf"] + 5).each do |n|
+        assert_eq(res_status(get(path)), 200, "PDF read back #{n + 1}")
       end
+      (0 .. ENGRAVINGS_PER_MINUTE["pdf"] - 1).each do |n|
+        limits_renewed(score)
+        assert_eq(res_status(get(path)), 200, "PDF made #{n + 2}")
+      end
+      limits_renewed(score)
       refused = get(path)
       assert_eq(res_status(refused), 429)
+      assert_eq(res_header(refused, "Retry-After"), "60")
       assert_contains(res_body(refused), "Too many engravings")
+      stored = Score.find(score._key)
+      assert_null(
+        Engraving.find_by("_key", ScoreSvg.file_digest("pdf", stored.title, stored.source)),
+        "nothing printed"
+      )
       other = limits_user()
-      other_score = Score.start(other, Score.blank_source("Other"))
+      other_score = Score.start(other, Score.blank_source("Other #{uuid_v4}"))
       limits_sign_in(other)
       assert_eq(res_status(get("/s/#{other_score.share_token}/score.pdf")), 200, "another account is counted apart")
     end
 
-    test("a library's previews: the one past the limit answers 429") do
+    test("a library's previews: past the limit, a blank picture with a 429") do
       owner = limits_user()
       score = Score.start(owner, Score.blank_source("Cards"))
       limits_sign_in(owner)
       path = "/app/scores/#{score._key}/preview.svg"
-      (0 .. ENGRAVINGS_PER_MINUTE["preview"]).each do |n|
-        assert_eq(res_status(get(path)), 200, "preview #{n + 1}")
+      (0 .. ENGRAVINGS_PER_MINUTE["preview"] + 5).each do |n|
+        assert_eq(res_status(get(path)), 200, "preview read back #{n + 1}")
       end
-      assert_eq(res_status(get(path)), 429)
+      (0 .. ENGRAVINGS_PER_MINUTE["preview"] - 1).each do |n|
+        limits_renewed(score)
+        assert_eq(res_status(get(path)), 200, "preview made #{n + 2}")
+      end
+      limits_renewed(score)
+      refused = get(path)
+      assert_eq(res_status(refused), 429)
+      assert_eq(res_header(refused, "Content-Type"), "image/svg+xml")
+      assert_eq(res_header(refused, "Retry-After"), "60")
+      assert(res_body(refused).starts_with?("<svg "))
+    end
+
+    # Signed in, so the address the other specs read from stays free: the
+    # limit of an address signed out is ScoreSvg's own spec
+    # (tests/services/written_out_spec.sl), the same sender either way.
+    test("a read page: a reader is held to so many pictures made a minute") do
+      owner = limits_user()
+      score = Score.start(owner, Score.blank_source("Read"))
+      score.make_visible("link")
+      limits_sign_in(limits_user())
+      path = "/s/#{score.share_token}"
+      (0 .. ENGRAVINGS_PER_MINUTE["page"] + 5).each do |n|
+        assert_eq(res_status(get(path)), 200, "page read back #{n + 1}")
+      end
+      # A picture and its MIDI file made each time.
+      (0 .. ENGRAVINGS_PER_MINUTE["page"] / 2 - 1).each do |n|
+        limits_renewed(score)
+        assert_eq(res_status(get(path)), 200, "page made #{n + 2}")
+      end
+      limits_renewed(score)
+      refused = get(path)
+      assert_eq(res_status(refused), 429)
+      assert_eq(res_header(refused, "Retry-After"), "60")
+      assert_contains(res_body(refused), "Too many engravings")
+    end
+
+    test("the editor: an account is held to so many pictures made a minute") do
+      owner = limits_user()
+      score = Score.start(owner, Score.blank_source("Edited"))
+      limits_sign_in(owner)
+      path = "/app/scores/#{score._key}"
+      (0 .. ENGRAVINGS_PER_MINUTE["page"] / 2).each do |n|
+        limits_renewed(score)
+        assert_eq(res_status(get(path)), 200, "editor #{n + 1}")
+      end
+      limits_renewed(score)
+      refused = get(path)
+      assert_eq(res_status(refused), 429)
+      assert_eq(res_header(refused, "Retry-After"), "60")
+    end
+
+    test("an MCP client: so many sources checked a minute; one checked again is read back") do
+      owner = limits_user()
+      token = AccessToken.issue(owner, "Spec client")["token"]
+      checked = res_json(limits_mcp(token, limits_tool(1, "check_source", {"source": LIMITS_SOURCE})))["result"]
+      assert_not(checked["isError"] ?? false)
+      (0 .. ENGRAVINGS_PER_MINUTE["mcp"]).each do |n|
+        source = LIMITS_SOURCE + "% #{n} #{uuid_v4}\n"
+        answer = res_json(limits_mcp(token, limits_tool(n + 2, "check_source", {"source": source})))["result"]
+        assert_not(answer["isError"] ?? false, "check #{n + 2}")
+      end
+      held = res_json(limits_mcp(token, limits_tool(99, "check_source", {"source": LIMITS_SOURCE
+      + "% #{uuid_v4}\n"})))["result"]
+      assert(held["isError"])
+      assert_contains(held["content"][0]["text"], "Too many engravings")
+      before = limits_scores(owner)
+      created = res_json(limits_mcp(
+        token,
+        limits_tool(100, "create_score", {"source": LIMITS_SOURCE + "% #{uuid_v4}\n"})
+      ))["result"]
+      assert(created["isError"])
+      assert_contains(created["content"][0]["text"], "Too many engravings")
+      assert_eq(limits_scores(owner), before, "nothing created")
+      again = res_json(limits_mcp(token, limits_tool(101, "check_source", {"source": LIMITS_SOURCE})))["result"]
+      assert_not(again["isError"] ?? false, "a source checked before is read back, not counted")
+    end
+
+    test("an MCP tool reads a source's music once, though it checks it twice") do
+      owner = limits_user()
+      readings = WrittenOut.readings
+      created = ScoreMcp.create_score(owner, {"source": LIMITS_SOURCE + "% create #{uuid_v4}\n"})
+      assert_not(created["isError"] ?? false)
+      assert_eq(WrittenOut.readings, readings + 1, "its bounds, then the new score's validation")
+      readings = WrittenOut.readings
+      checked = ScoreMcp.check_source(owner, {"source": LIMITS_SOURCE + "% check #{uuid_v4}\n"})
+      assert_not(checked["isError"] ?? false)
+      assert_eq(WrittenOut.readings, readings + 1)
+      # update_score: its bounds, then the editor's save, which reads them again.
+      kept = Score.start(owner, LIMITS_SOURCE)
+      source = LIMITS_SOURCE + "% update #{uuid_v4}\n"
+      readings = WrittenOut.readings
+      assert_null(Score.refusal_of(source))
+      assert_eq(kept.save_from_editor(source, kept.revision, owner)["status"], 200)
+      assert_eq(WrittenOut.readings, readings + 1)
     end
   end
 
   describe("an MCP batch") do
+    test("that is empty is one invalid request, answered once") do
+      owner = limits_user()
+      token = AccessToken.issue(owner, "Spec client")["token"]
+      response = limits_mcp(token, [])
+      assert_eq(res_status(response), 400)
+      answer = res_json(response)
+      assert_eq(type(answer), "hash", "one answer, not a batch of them")
+      assert_eq(answer["error"]["code"], -32600)
+      assert_null(answer["id"])
+    end
+
     test("of more than 20 messages is refused whole, and runs none of them") do
       owner = limits_user()
       token = AccessToken.issue(owner, "Spec client")["token"]
@@ -282,14 +415,16 @@ describe("Engraving limits (#540)") do
         assert_eq(res_json(answered).length, 20)
         assert_null(res_json(answered)[19]["error"])
       end
-      assert_eq(res_status(limits_mcp(
+      held = limits_mcp(
         token,
         {
           "jsonrpc": "2.0",
           "id": 1,
           "method": "ping"
         }
-      )), 429)
+      )
+      assert_eq(res_status(held), 429)
+      assert_eq(res_header(held, "Retry-After"), "60")
       assert_eq(res_status(limits_mcp(token, limits_pings(2))), 429, "a batch too")
     end
 

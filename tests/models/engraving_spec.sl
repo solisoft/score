@@ -1,13 +1,14 @@
 # The server's engravings, kept a few days: the same score at the same size
 # is engraved once, then read back.
 
-# An engraving kept `age` seconds ago, under a key of its own.
-def engraving_made(age)
+# An engraving kept `age` seconds ago, under a key of its own, weighing `bytes`.
+def engraving_made(age, bytes = 6)
   Engraving.upsert(
     Crypto.sha256(uuid_v4),
     {
       "svg": "<svg/>",
       "error": nil,
+      "bytes": bytes,
       "created_at": DateTime.utc.to_unix - age
     }
   )
@@ -71,6 +72,80 @@ describe("Engraving") do
       assert_eq(renewed.svg, fresh["svg"])
       assert_gt(renewed.created_at, Engraving.cutoff)
       assert(fresh["svg"].starts_with?("<svg xmlns="))
+    end
+  end
+
+  describe("what is kept, and how much") do
+    test("keeps an engraving with its weight; one past ENGRAVED_FILE_KEPT is not kept") do
+      light = Crypto.sha256(uuid_v4)
+      Engraving.remember(
+        light,
+        {"file": "%PDF small", "error": nil}
+      )
+      assert_eq(Engraving.find(light).bytes, 10)
+      heavy = Crypto.sha256(uuid_v4)
+      Engraving.remember(
+        heavy,
+        {"file": "x" * (ENGRAVED_FILE_KEPT + 1), "error": nil}
+      )
+      assert_null(Engraving.find_by("_key", heavy))
+      edge = Crypto.sha256(uuid_v4)
+      Engraving.remember(
+        edge,
+        {"file": "x" * ENGRAVED_FILE_KEPT, "error": nil}
+      )
+      assert_not_null(Engraving.find_by("_key", edge), "the bound itself is kept")
+      drawing = Crypto.sha256(uuid_v4)
+      Engraving.remember(
+        drawing,
+        {"svg": "x" * (ENGRAVED_FILE_KEPT * 2), "error": nil}
+      )
+      assert_not_null(Engraving.find_by("_key", drawing), "a drawing may weigh more")
+      huge = Crypto.sha256(uuid_v4)
+      Engraving.remember(
+        huge,
+        {"svg": "x" * (ENGRAVED_SVG_KEPT + 1), "error": nil}
+      )
+      assert_null(Engraving.find_by("_key", huge))
+    end
+
+    test("past so many kept, the oldest go as a new one comes in") do
+      kept = Engraving.count + 2
+      oldest = engraving_made(5000)
+      newer = (0 .. 2).map do |i|
+        engraving_made(100 + i)
+      end
+      Engraving.bound(6, kept, ENGRAVINGS_BYTES_KEPT)
+      assert_null(Engraving.find_by("_key", oldest._key))
+      newer.each do |made|
+        assert_not_null(Engraving.find_by("_key", made._key))
+      end
+      assert_eq(Engraving.count, kept)
+    end
+
+    test("past the weight they may have together, a heavy one coming in lets the oldest go") do
+      Engraving.where("doc.created_at > 0", {}).delete_all
+      old = engraving_made(3000, 400)
+      middle = engraving_made(2000, 400)
+      recent = engraving_made(1000, 400)
+      newest = engraving_made(0, ENGRAVING_HEAVY + 1)
+      Engraving.bound(6, 1000, ENGRAVING_HEAVY + 900)
+      assert_not_null(Engraving.find_by("_key", old._key), "a light one in does not weigh them")
+      Engraving.bound(ENGRAVING_HEAVY + 1, 1000, ENGRAVING_HEAVY + 900)
+      assert_null(Engraving.find_by("_key", old._key), "the oldest, past the budget")
+      assert_not_null(Engraving.find_by("_key", middle._key))
+      assert_not_null(Engraving.find_by("_key", recent._key))
+      Engraving.bound(ENGRAVING_HEAVY + 1, 1000, ENGRAVING_HEAVY + 100)
+      assert_null(Engraving.find_by("_key", middle._key))
+      assert_null(Engraving.find_by("_key", recent._key))
+      assert_not_null(Engraving.find_by("_key", newest._key), "the newest stays")
+    end
+
+    test("within the weight, nothing goes") do
+      Engraving.where("doc.created_at > 0", {}).delete_all
+      made = engraving_made(10, 500)
+      Engraving.keep_within(1000)
+      assert_not_null(Engraving.find_by("_key", made._key))
     end
   end
 
