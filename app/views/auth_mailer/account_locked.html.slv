@@ -1,13 +1,14 @@
-<%# The words of the e-mail in the language of the request that sent it (#471); the addresses escaped: they go in as HTML. %>
+<%# The words of the e-mail in the language of the request that sent it (#471); the addresses escaped: they go in as HTML. A network's lock or the account's (#539): either way, the browser the owner usually signs in from still does. %>
+<% which = locals["lock"] == "account" ? "account" : "source" %>
 <% words = {"email": h(user.email), "new_email": h(locals["new_email"].to_s)} %>
 <% words = words.merge({"hours": locals["hours"].to_s, "minutes": locals["lock_minutes"].to_s}) %>
 <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
   <h1 style="font-size: 20px;"><%- t("mail.account_locked.title", words) %></h1>
   <p>
-    <%- t("mail.account_locked.body", words) %>
+    <%- t("security_539.account_locked.#{which}_body", words) %>
   </p>
   <p style="color: #666; font-size: 13px;">
-    <%- t("mail.account_locked.advice", words) %>
+    <%- t("security_539.account_locked.#{which}_advice", words) %>
   </p>
   <p style="margin: 24px 0;">
     <a href="<%= reset_url %>"

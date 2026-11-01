@@ -1422,6 +1422,26 @@ fr:
   # (#538) security: two-step sign-in and resets — keys under `security_538:` right below
   # ---
   # (#539) security: tokens, passwords and accounts — keys under `security_539:` right below
+  security_539:
+    password_changed: "Mot de passe changé. Vos autres navigateurs sont déconnectés, et les applications connectées à votre compte (Claude et les autres clients MCP) ont perdu leur accès : connectez-les de nouveau."
+    reset_disconnects: "Un nouveau mot de passe déconnecte tous les navigateurs et les applications connectées à votre compte (Claude et les autres clients MCP)."
+    email_change_disconnects: "Les applications connectées au compte (Claude et les autres clients MCP) perdent aussi leur accès : connectez-les de nouveau."
+    tries_spent: "Trop de mots de passe erronés : réessayez dans {minutes} minutes."
+    token_password: "Tapez votre mot de passe pour créer un jeton."
+    token_password_label: "Votre mot de passe"
+    signup_taken:
+      title: "Votre adresse a déjà un compte"
+      body: "Quelqu'un a essayé de créer un compte Score avec <strong>{email}</strong>, qui en a déjà un : aucun second compte n'a été créé."
+      sign_in: "Se connecter"
+      forgot: "Mot de passe oublié ?"
+      reset: "En choisir un nouveau"
+      footer: "Si ce n'était pas vous, il n'y a rien à faire : votre compte et son mot de passe n'ont pas changé."
+    account_locked:
+      source_body: "Il y a eu trop de tentatives de connexion échouées pour <strong>{email}</strong> depuis un même réseau : nous avons bloqué la connexion depuis ce réseau pendant {minutes} minutes."
+      source_advice: "La connexion depuis tout autre réseau fonctionne comme d'habitude, depuis votre navigateur habituel aussi. Si c'était vous, attendez la fin du blocage, ou réinitialisez votre mot de passe si vous l'avez oublié. Sinon, quelqu'un essaie de deviner votre mot de passe : les tentatives ont échoué, mais un mot de passe plus solide est une bonne idée."
+      account_body: "Il y a eu trop de tentatives de connexion échouées pour <strong>{email}</strong> depuis de nombreux réseaux : pendant {minutes} minutes, le compte ne se connecte que depuis un navigateur où vous vous êtes déjà connecté."
+      account_advice: "Votre navigateur habituel vous connecte toujours comme avant. Quelqu'un essaie de deviner votre mot de passe depuis de nombreux endroits : les tentatives ont échoué, mais un mot de passe plus solide est une bonne idée, et un nouveau lève le blocage."
+    unconfirmed_hint: "Nouveau compte ? Confirmez d'abord votre adresse avec le lien envoyé par e-mail, ou demandez-en un nouveau."
   # ---
   # (#540) security: engraving limits and MCP batches — keys under `security_540:` right below
   # ---

@@ -13,6 +13,15 @@ class Changelog
       {"date": "2026-11-01", "entries": [
         {
           "area": "site",
+          "title": "An account harder to guess into",
+          "text": "A new password or address now closes every app connection made before. Wrong passwords lock the "
+          + "network that tried them, and too many from anywhere lock the account for new browsers while yours, "
+          + "already signed in, still get in. The reset and sign-up pages no longer tell whether an address has "
+          + "an account, and the account pages ask for your password a few times only.",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "Pages that run only their own scripts",
           "text": "Every page now tells the browser exactly which of its scripts may run, so a script slipped into a "
           + "page is refused. The administration asks for a two-step code in the same session and keeps a log of "

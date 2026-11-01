@@ -455,6 +455,29 @@ describe("The admin section") do
       response = post("/admin/customers/#{customer._key}/confirm", {})
       assert_contains(res_body(get(res_location(response))), "confirmed already")
     end
+
+    test("says which lock holds signing in: some networks', or the account's (#539)") do
+      admin = admin_spec_user("admin")
+      customer = admin_spec_user()
+      admin_spec_sign_in(admin)
+      assert_contains(res_body(get("/admin/customers/#{customer._key}")), "data-locked=\"false\">Open")
+      (0 .. AUTH_MAX_FAILED_ATTEMPTS).each do |_|
+        User.find(customer._key).register_failed_attempt("192.0.2.50")
+      end
+      one = res_body(get("/admin/customers/#{customer._key}"))
+      assert_contains(one, "Locked from 1 network: too many wrong passwords from it")
+      (0 .. AUTH_MAX_FAILED_ATTEMPTS).each do |_|
+        User.find(customer._key).register_failed_attempt("192.0.2.51")
+      end
+      assert_contains(res_body(get("/admin/customers/#{customer._key}")), "Locked from 2 networks")
+      wide = User.find(customer._key)
+      wide.account_locked_at = DateTime.utc.to_unix
+      wide.update()
+      account = res_body(get("/admin/customers/#{customer._key}"))
+      assert_contains(account, "Locked for every browser that never signed in to it")
+      post("/admin/customers/#{customer._key}/unlock", {})
+      assert_not(User.find(customer._key).locked?)
+    end
   end
 
   describe("the payments") do

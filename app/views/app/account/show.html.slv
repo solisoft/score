@@ -472,6 +472,9 @@
             <label class="field"><%- t("app.account.token_name") %> <span class="muted"><%- t("app.account.token_name_hint") %></span>
               <input name="name" type="text" required maxlength="60" placeholder="<%- t("app.account.token_placeholder") %>">
             </label>
+            <label class="field"><%- t("security_539.token_password_label") %>
+              <input id="token_password" name="password" type="password" required autocomplete="current-password">
+            </label>
             <button type="submit" class="btn btn-primary"><%- t("app.account.make_token") %></button>
           </form>
         </details>

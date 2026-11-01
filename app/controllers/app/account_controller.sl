@@ -13,13 +13,21 @@ class AppAccountController < AppBaseController
   end
 
   # POST /app/account/tokens — a personal access token named `name`, for the
-  # MCP server: shown once, on the page this answers (#460)
+  # MCP server, with the password (#539): shown once, on the page this
+  # answers (#460)
   def create_token
     @user = current_user()
-    made = AccessToken.issue(@user, params["name"])
     @title = SiteText.t("app.account.page_title")
     @description = SiteText.t("app.account.page_description")
     @error = ""
+    if @user.password_tries_spent?
+      @token_error = @_tries_spent_message
+      @tokens = AccessToken.of(@user)
+      return render("app/account/show", {}, {"status": 429})
+    end
+
+    made = {"error": SiteText.t("security_539.token_password")}
+    made = AccessToken.issue(@user, params["name"]) if @user.confirms_password?(params["password"])
     @tokens = AccessToken.of(@user)
     unless made["error"].nil?
       @token_error = made["error"]
@@ -46,6 +54,8 @@ class AppAccountController < AppBaseController
   # POST /app/account/password — the current password, then the new one twice
   def password
     @user = current_user()
+    return @_refuse_tries if @user.password_tries_spent?
+
     @error = @user.password_change_error(
       params["current_password"],
       params["password"],
@@ -61,7 +71,9 @@ class AppAccountController < AppBaseController
     session_regenerate()
     session_set("user_id", @user["_key"])
     session_set("session_version", @user.current_session_version())
-    flash("notice", SiteText.t("app.account.password_changed"))
+    # Still a browser the account knows: the new password voided the others.
+    set_cookie("device", @user.device_cookie, User.device_cookie_options)
+    flash("notice", SiteText.t("security_539.password_changed"))
     redirect(app_account_path())
   end
 
@@ -94,7 +106,9 @@ class AppAccountController < AppBaseController
   # POST /app/account/two-step/stop — the password and a code turn it off
   def stop_two_step
     @user = current_user()
-    unless @user.authenticate(params["password"].to_s) && @user.second_step?(params["code"])
+    return @_refuse_tries if @user.password_tries_spent?
+
+    unless @user.confirms_password?(params["password"]) && @user.second_step?(params["code"])
       @title = SiteText.t("app.account.page_title")
       @description = SiteText.t("app.account.page_description")
       @error = SiteText.t("app.account.two_step_still_on")
@@ -167,7 +181,9 @@ class AppAccountController < AppBaseController
   # DELETE /app/account — the password confirms it
   def destroy
     @user = current_user()
-    unless @user.authenticate(params["password"].to_s)
+    return @_refuse_tries if @user.password_tries_spent?
+
+    unless @user.confirms_password?(params["password"])
       @title = SiteText.t("app.account.page_title")
       @error = SiteText.t("app.account.not_your_password")
       return render("app/account/show", {}, {"status": 422})
@@ -258,6 +274,19 @@ class AppAccountController < AppBaseController
     @email_error = message
     @typed_email = params["email"].to_s.trim
     render("app/account/show", {}, {"status": status})
+  end
+
+  # The account page again, when the wrong passwords typed lately leave no
+  # try (#539): nothing is checked, the right password included.
+  def _refuse_tries
+    @title = SiteText.t("app.account.page_title")
+    @description = SiteText.t("app.account.page_description")
+    @error = @_tries_spent_message
+    render("app/account/show", {}, {"status": 429})
+  end
+
+  def _tries_spent_message
+    SiteText.t("security_539.tries_spent", {"minutes": ACCOUNT_PASSWORD_WINDOW / 60})
   end
 
   # The page that sets an authenticator app up: the QR code and the secret.
