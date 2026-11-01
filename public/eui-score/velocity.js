@@ -44,7 +44,7 @@ export function velocitiesOf(score) {
   const kept = score?.meta?.velocity;
   if (!kept || typeof kept !== "object" || Array.isArray(kept)) return {};
   const out = {};
-  for (const [id, v] of Object.entries(kept)) if (id !== "__proto__" && typeof v === "number" && Number.isFinite(v)) out[id] = clampVelocity(v);
+  for (const [id, v] of Object.entries(kept)) if (typeof v === "number" && Number.isFinite(v)) out[id] = clampVelocity(v);
   return out;
 }
 
