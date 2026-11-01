@@ -1436,6 +1436,8 @@ en:
     name_unchecked: "Score does not check that name: allow only if you have just asked this application to connect."
     stale_title: "This request was replaced"
     stale_body: "Another connection request was started since this page was shown, so nothing was allowed. Start again from the application that asked to connect."
+    outdated_title: "This page is out of date"
+    outdated_body: "This page is out of date: start the connection again from your app. Nothing was allowed."
   # ---
   # (#542) security: live sharing and rights — keys under `security_542:` right below
   # ---

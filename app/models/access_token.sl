@@ -15,8 +15,19 @@ const ACCESS_TOKEN_TOUCH_SECONDS = 300
 const OAUTH_ACCESS_SECONDS = 3600
 const OAUTH_REFRESH_SECONDS = 2592000
 const OAUTH_REFRESH_PREFIX = "score_rt_"
+# A refresh token presented again this soon after its rotation is a client
+# retrying an answer it lost, or two sessions sharing one connection: it is
+# refused, the connection kept. Later, it is a replay: the connection ends.
+const OAUTH_REUSE_GRACE_SECONDS = 30
+# How often a rotation is tried again when only the row's use was noted
+# between its read and its write.
+const OAUTH_ROTATE_ATTEMPTS = 3
 
 class AccessToken < Model
+  # Every write checks the row is still the one read (a lock_version, and an
+  # If-Match on the revision in SoliDB): a refresh writing from a stale read
+  # is refused, not merged (#541).
+  optimistic_lock
   validates("user_id", {"presence": true})
   validates("name", {"presence": true})
   validates("digest", {"presence": true})
@@ -80,7 +91,8 @@ class AccessToken < Model
   # same row (the old ones stop working): {"token", "refresh_token",
   # "record"}, or nil — unknown, expired, used already or another client's.
   # A refresh token used already is a stolen or replayed one (#541): the
-  # connection it belonged to ends, the thief's tokens and the owner's alike.
+  # connection it belonged to ends, the thief's tokens and the owner's alike
+  # — past a short grace (AccessToken.refuse_reuse).
   static def refresh_oauth(raw, client_id)
     text = raw.to_s
     return nil unless text.starts_with?(OAUTH_REFRESH_PREFIX)
@@ -89,8 +101,9 @@ class AccessToken < Model
     record = AccessToken.where({"refresh_digest": presented}).first
     if record.nil?
       reused = AccessToken.where({"previous_refresh_digest": presented}).first
-      reused.delete unless reused.nil?
-      return nil
+      return nil if reused.nil?
+
+      return AccessToken.refuse_reuse(reused)
     end
     return nil if record.oauth_client_id.to_s != client_id.to_s
     return nil if DateTime.utc.to_unix > record.refresh_expires_at.to_s.to_i
@@ -99,42 +112,70 @@ class AccessToken < Model
   end
 
   # Connection `record`'s new pair, if its refresh token is still the one of
-  # digest `presented`: one write that checks and rotates at once, so two
-  # refreshes racing with one token cannot both win. The one that finds it
-  # rotated already is a reuse: the connection is revoked, and nil (#541).
+  # digest `presented`: the write is a compare-and-set (optimistic_lock), so
+  # two refreshes racing with one token cannot both win. The one that finds
+  # it rotated already is a reuse (AccessToken.refuse_reuse); one that only
+  # finds its use noted tries again. nil when it does not rotate (#541).
   static def rotate(record, presented)
-    now = DateTime.utc.to_unix
-    secret = ACCESS_TOKEN_PREFIX + Crypto.random_token(32)
-    refresh = OAUTH_REFRESH_PREFIX + Crypto.random_token(32)
-    key = record._key
-    digest = Crypto.sha256(secret)
-    hint = secret.substring(0, ACCESS_TOKEN_PREFIX.length + 4)
-    expires_at = now + OAUTH_ACCESS_SECONDS
-    refresh_digest = Crypto.sha256(refresh)
-    refresh_expires_at = now + OAUTH_REFRESH_SECONDS
-    rows = @sdbql{
-      FOR row IN access_tokens
-      FILTER row._key == #{key} AND row.refresh_digest == #{presented}
-      UPDATE row WITH {
-        digest: #{digest},
-        hint: #{hint},
-        expires_at: #{expires_at},
-        refresh_digest: #{refresh_digest},
-        refresh_expires_at: #{refresh_expires_at},
-        previous_refresh_digest: #{presented}
-      } IN access_tokens
-      RETURN NEW._key
-    }
-    unless type(rows) == "array" && rows.length > 0
-      record.delete
-      return nil
-    end
+    row = record
+    attempts = 0
+    while attempts < OAUTH_ROTATE_ATTEMPTS
+      attempts = attempts + 1
+      now = DateTime.utc.to_unix
+      secret = ACCESS_TOKEN_PREFIX + Crypto.random_token(32)
+      refresh = OAUTH_REFRESH_PREFIX + Crypto.random_token(32)
+      row.digest = Crypto.sha256(secret)
+      row.hint = secret.substring(0, ACCESS_TOKEN_PREFIX.length + 4)
+      row.expires_at = now + OAUTH_ACCESS_SECONDS
+      row.refresh_digest = Crypto.sha256(refresh)
+      row.refresh_expires_at = now + OAUTH_REFRESH_SECONDS
+      row.previous_refresh_digest = presented
+      row.rotated_at = now
+      saved = row.save rescue false
+      outcome = AccessToken.write_outcome(saved == true, row.stale?)
+      if outcome == "rotated"
+        return {
+          "token": secret,
+          "refresh_token": refresh,
+          "record": row
+        }
+      end
 
-    {
-      "token": secret,
-      "refresh_token": refresh,
-      "record": AccessToken.find(key)
-    }
+      row = AccessToken.after_write(row, presented, outcome)
+      return nil if row.nil?
+    end
+    nil
+  end
+
+  # What a rotation's write did: "rotated", "stale" (another write landed
+  # since the row was read) or "failed" (the database said no).
+  static def write_outcome(saved, stale)
+    return "rotated" if saved
+
+    stale ? "stale" : "failed"
+  end
+
+  # After a rotation's write that did not go through (`outcome`): the row to
+  # try again with — read again, its refresh token still the presented one
+  # — or nil. A failed write revokes nothing: an error is not a reuse. A row
+  # rotated by another refresh meanwhile is one (AccessToken.refuse_reuse).
+  static def after_write(row, presented, outcome)
+    return nil if outcome == "failed"
+
+    current = AccessToken.find_by("_key", row._key)
+    return nil if current.nil?
+    return current if current.refresh_digest == presented
+
+    AccessToken.refuse_reuse(current)
+  end
+
+  # Connection `record`'s previous refresh token, presented again: refused,
+  # nil. Within OAUTH_REUSE_GRACE_SECONDS of the rotation that is all (a lost
+  # answer retried, two sessions); later the connection is revoked (#541).
+  static def refuse_reuse(record)
+    rotated_at = record.rotated_at.to_s.to_i
+    record.delete if DateTime.utc.to_unix - rotated_at > OAUTH_REUSE_GRACE_SECONDS
+    nil
   end
 
   # The connection token `raw` (an access or a refresh token) belongs to,
@@ -166,11 +207,21 @@ class AccessToken < Model
     return nil if user.nil?
 
     now = DateTime.utc.to_unix
-    if record.last_used_at.to_s.to_i < now - ACCESS_TOKEN_TOUCH_SECONDS
-      record.last_used_at = now
-      record.update()
-    end
+    AccessToken.note_use(record, now) if record.last_used_at.to_s.to_i < now - ACCESS_TOKEN_TOUCH_SECONDS
     user
+  end
+
+  # Token `record` used at `now`: that field alone is written. The row read
+  # may be stale already (a refresh rotated it since): writing it whole
+  # would bring the old pair back (#541). The keys written, an array.
+  static def note_use(record, now)
+    key = record._key
+    @sdbql{
+      FOR row IN access_tokens
+      FILTER row._key == #{key}
+      UPDATE row WITH {last_used_at: #{now}} IN access_tokens
+      RETURN NEW._key
+    }
   end
 
   # `user`'s tokens, the latest made first.

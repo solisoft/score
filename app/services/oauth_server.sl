@@ -11,11 +11,12 @@
 const OAUTH_SCOPE = "score"
 # What one address may ask of the open endpoints (#541): registrations an
 # hour (a client registers once per connection), token and revocation
-# calls a minute. Generous: a hosted client (claude.ai's connectors) calls
-# for all its users from a few addresses.
-const OAUTH_REGISTRATIONS_PER_IP_HOUR = (getenv("OAUTH_REGISTRATIONS_PER_IP_HOUR") ?? "60").to_i
-const OAUTH_TOKEN_CALLS_PER_IP_MINUTE = (getenv("OAUTH_TOKEN_CALLS_PER_IP_MINUTE") ?? "120").to_i
-const OAUTH_REVOCATIONS_PER_IP_MINUTE = (getenv("OAUTH_REVOCATIONS_PER_IP_MINUTE") ?? "60").to_i
+# calls a minute. Generous: a hosted client (claude.ai's connectors)
+# registers and refreshes for all its users from a few addresses. Each one
+# is set in the server's .env (deploy/README.md).
+const OAUTH_REGISTRATIONS_PER_IP_HOUR = (getenv("OAUTH_REGISTRATIONS_PER_IP_HOUR") ?? "600").to_i
+const OAUTH_TOKEN_CALLS_PER_IP_MINUTE = (getenv("OAUTH_TOKEN_CALLS_PER_IP_MINUTE") ?? "600").to_i
+const OAUTH_REVOCATIONS_PER_IP_MINUTE = (getenv("OAUTH_REVOCATIONS_PER_IP_MINUTE") ?? "300").to_i
 
 class OauthServer
   # Score's public origin, which is also the issuer.

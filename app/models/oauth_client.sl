@@ -49,10 +49,20 @@ class OauthClient < Model
     gone
   end
 
-  # Noted: it got a token, so it is kept.
+  # Noted, the first time: it got a token, so it is kept. That field alone,
+  # and only while unset: a copy read earlier writes nothing else (#541).
   def token_issued
-    @token_issued_at = DateTime.utc.to_unix
-    @update()
+    return nil unless @token_issued_at.nil?
+
+    key = @_key
+    now = DateTime.utc.to_unix
+    @sdbql{
+      FOR row IN oauth_clients
+      FILTER row._key == #{key} AND row.token_issued_at == null
+      UPDATE row WITH {token_issued_at: #{now}} IN oauth_clients
+      RETURN NEW._key
+    }
+    @token_issued_at = now
   end
 
   # Whether codes may be sent to `uri`: one it registered, exactly.

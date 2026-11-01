@@ -1436,6 +1436,8 @@ fr:
     name_unchecked: "Score ne vérifie pas ce nom : n'autorisez que si vous venez de demander à cette application de se connecter."
     stale_title: "Cette demande a été remplacée"
     stale_body: "Une autre demande de connexion a été lancée depuis l'affichage de cette page : rien n'a été autorisé. Recommencez depuis l'application qui demandait à se connecter."
+    outdated_title: "Cette page n'est plus à jour"
+    outdated_body: "Cette page n'est plus à jour : relancez la connexion depuis votre application. Rien n'a été autorisé."
   # ---
   # (#542) security: live sharing and rights — keys under `security_542:` right below
   # ---

@@ -4,7 +4,7 @@
   <% if reason == "nothing_pending" %>
     <p>No application is waiting for your answer: start again from the application that asked to connect.</p>
   <% elsif reason == "stale_request" %>
-    <p><%= t("security_541.stale_body") %></p>
+    <p><%= stale_body %></p>
   <% elsif reason == "unknown_client" %>
     <p>The application asking to connect is not one Score knows: start again from it.</p>
   <% else %>

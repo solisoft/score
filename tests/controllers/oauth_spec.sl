@@ -317,6 +317,14 @@ def oauth_refresh(refresh_token, client_id)
   )
 end
 
+# The connection whose refresh token is `refresh_token`, as if rotated
+# `seconds` ago.
+def oauth_age_rotation(refresh_token, seconds)
+  row = AccessToken.where({"refresh_digest": Crypto.sha256(refresh_token)}).first
+  row.rotated_at = DateTime.utc.to_unix - seconds
+  row.update()
+end
+
 # How many connections `user` has.
 def oauth_connections(user)
   AccessToken.where({"user_id": user._key, "kind": "oauth"}).count
@@ -354,9 +362,13 @@ describe("The OAuth server's hardening (#541)") do
       "/app/oauth/consent",
       {"decision": "allow", "request_id": shown_id}
     )), 400, "spent")
-    # Without its request id, an answer is refused just the same.
+    # Without its request id (a page shown before the request ids came), an
+    # answer is refused just the same: the page is out of date.
     get(oauth_authorize_path(shown_client))
-    assert_eq(res_status(post("/app/oauth/consent", {"decision": "allow"})), 400)
+    outdated = post("/app/oauth/consent", {"decision": "allow"})
+    assert_eq(res_status(outdated), 400)
+    assert_contains(res_body(outdated), "This page is out of date: start the connection again from your app")
+    assert_not(res_body(outdated).contains("Another connection request was started"))
     assert_eq(OauthCode.count, codes_before)
     # The page on show answered with its own id: a code.
     get(oauth_authorize_path(shown_client))
@@ -384,12 +396,13 @@ describe("The OAuth server's hardening (#541)") do
     assert_eq(assigns()["title"], "Connect an app on this computer")
   end
 
-  test("a refresh token used twice: the whole connection is revoked, old and new tokens refused") do
+  test("a refresh token used twice, past the grace: the whole connection is revoked, old and new tokens refused") do
     user = oauth_user()
     client_id = oauth_register()
     tokens = res_json(oauth_exchange(client_id, oauth_code_for(user, client_id)))
     renewed = res_json(oauth_refresh(tokens["refresh_token"], client_id))
     assert_eq(res_status(oauth_mcp(renewed["access_token"])), 200)
+    oauth_age_rotation(renewed["refresh_token"], OAUTH_REUSE_GRACE_SECONDS + 1)
     reused = oauth_refresh(tokens["refresh_token"], client_id)
     assert_eq(res_status(reused), 400)
     assert_eq(res_json(reused)["error"], "invalid_grant")
@@ -406,7 +419,28 @@ describe("The OAuth server's hardening (#541)") do
     assert_eq(res_status(oauth_mcp(kept["access_token"])), 200)
   end
 
-  test("two refreshes racing with one token: the loser finds it rotated and revokes the connection") do
+  test("the previous refresh token again within the grace: refused, no new pair, the connection kept") do
+    user = oauth_user()
+    client_id = oauth_register()
+    tokens = res_json(oauth_exchange(client_id, oauth_code_for(user, client_id)))
+    renewed = res_json(oauth_refresh(tokens["refresh_token"], client_id))
+    # The client lost the answer and retries (or a second session shares it).
+    retried = oauth_refresh(tokens["refresh_token"], client_id)
+    assert_eq(res_status(retried), 400)
+    assert_eq(res_json(retried)["error"], "invalid_grant")
+    assert_null(res_json(retried)["access_token"], "nothing re-issued")
+    assert_eq(oauth_connections(user), 1, "the connection stays")
+    row = AccessToken.where({"refresh_digest": Crypto.sha256(renewed["refresh_token"])}).first
+    assert_not_null(row, "the current pair is still the stored one")
+    assert_eq(row.previous_refresh_digest, Crypto.sha256(tokens["refresh_token"]))
+    assert_eq(res_status(oauth_mcp(renewed["access_token"])), 200, "the current access token")
+    again = res_json(oauth_refresh(renewed["refresh_token"], client_id))
+    assert_not_null(again["access_token"], "the current refresh still works")
+    assert_eq(res_status(oauth_mcp(again["access_token"])), 200)
+    assert_eq(oauth_connections(user), 1)
+  end
+
+  test("two refreshes racing with one token: the loser gets nothing; past the grace it revokes the connection") do
     user = oauth_user()
     client_id = oauth_register()
     tokens = res_json(oauth_exchange(client_id, oauth_code_for(user, client_id)))
@@ -415,7 +449,13 @@ describe("The OAuth server's hardening (#541)") do
     seen = AccessToken.where({"refresh_digest": presented}).first
     renewed = res_json(oauth_refresh(tokens["refresh_token"], client_id))
     assert_not_null(renewed["access_token"])
-    # The second, its read now stale, rotates nothing.
+    # The second, its read now stale, rotates nothing and, so soon, revokes nothing.
+    assert_null(AccessToken.rotate(seen, presented))
+    assert_eq(oauth_connections(user), 1)
+    assert_eq(res_status(oauth_mcp(renewed["access_token"])), 200, "the winner's pair")
+    assert_eq(AccessToken.find(seen._key).refresh_digest, Crypto.sha256(renewed["refresh_token"]))
+    # Later than the grace, the same stale read is a replay: revoked.
+    oauth_age_rotation(renewed["refresh_token"], OAUTH_REUSE_GRACE_SECONDS + 1)
     assert_null(AccessToken.rotate(seen, presented))
     assert_eq(oauth_connections(user), 0)
     assert_eq(res_status(oauth_mcp(renewed["access_token"])), 401)
@@ -428,6 +468,74 @@ describe("The OAuth server's hardening (#541)") do
     assert_eq(AccessToken.where({"refresh_digest": Crypto.sha256(pair["refresh_token"])}).count, 1)
     assert_eq(AccessToken.where({"refresh_digest": digest}).count, 0)
     assert_eq(res_status(oauth_mcp(pair["token"])), 200)
+  end
+
+  test("a row only noted as used since it was read still rotates") do
+    user = oauth_user()
+    client_id = oauth_register()
+    tokens = res_json(oauth_exchange(client_id, oauth_code_for(user, client_id)))
+    presented = Crypto.sha256(tokens["refresh_token"])
+    seen = AccessToken.where({"refresh_digest": presented}).first
+    AccessToken.note_use(AccessToken.find(seen._key), DateTime.utc.to_unix)
+    pair = AccessToken.rotate(seen, presented)
+    assert_not_null(pair["token"])
+    assert_eq(AccessToken.find(seen._key).refresh_digest, Crypto.sha256(pair["refresh_token"]))
+    assert_eq(res_status(oauth_mcp(pair["token"])), 200)
+  end
+
+  test("a rotation's write: done, beaten by another, or failed — a failure revokes nothing") do
+    assert_eq(AccessToken.write_outcome(true, false), "rotated")
+    assert_eq(AccessToken.write_outcome(false, true), "stale")
+    assert_eq(AccessToken.write_outcome(false, false), "failed")
+    user = oauth_user()
+    client_id = oauth_register()
+    tokens = res_json(oauth_exchange(client_id, oauth_code_for(user, client_id)))
+    row = AccessToken.where({"refresh_digest": Crypto.sha256(tokens["refresh_token"])}).first
+    assert_null(AccessToken.after_write(row, Crypto.sha256(tokens["refresh_token"]), "failed"))
+    assert_eq(oauth_connections(user), 1, "a failed write is not a reuse")
+    assert_eq(res_status(oauth_mcp(tokens["access_token"])), 200)
+  end
+
+  test("a /mcp call that read the row before a rotation does not bring the old pair back") do
+    user = oauth_user()
+    client_id = oauth_register()
+    tokens = res_json(oauth_exchange(client_id, oauth_code_for(user, client_id)))
+    # The /mcp call reads the row; a refresh rotates it; the call then notes its use.
+    stale = AccessToken.where({"digest": Crypto.sha256(tokens["access_token"])}).first
+    renewed = res_json(oauth_refresh(tokens["refresh_token"], client_id))
+    noted_at = DateTime.utc.to_unix
+    assert_eq(AccessToken.note_use(stale, noted_at), [stale._key], "the query ran, on that row")
+    row = AccessToken.find(stale._key)
+    assert_eq(row.last_used_at, noted_at, "the use is noted")
+    assert_eq(row.refresh_digest, Crypto.sha256(renewed["refresh_token"]), "the new refresh is the stored one")
+    assert_eq(row.digest, Crypto.sha256(renewed["access_token"]))
+    assert_eq(row.previous_refresh_digest, Crypto.sha256(tokens["refresh_token"]))
+    assert_eq(res_status(oauth_mcp(tokens["access_token"])), 401, "the old access token")
+    assert_eq(
+      res_json(oauth_refresh(tokens["refresh_token"], client_id))["error"],
+      "invalid_grant",
+      "the old refresh"
+    )
+    assert_eq(oauth_connections(user), 1, "within the grace: kept")
+    assert_eq(res_status(oauth_mcp(renewed["access_token"])), 200, "the new access token")
+    assert_not_null(res_json(oauth_refresh(renewed["refresh_token"], client_id))["access_token"], "the new refresh")
+  end
+
+  test("a client's first token is stamped once, writing nothing else") do
+    client = OauthClient.register("Stamped", [OAUTH_REDIRECT])
+    stale = OauthClient.for_id(client.client_id)
+    renamed = OauthClient.for_id(client.client_id)
+    renamed.client_name = "Renamed meanwhile"
+    renamed.update()
+    stale.token_issued
+    row = OauthClient.for_id(client.client_id)
+    assert_not_null(row.token_issued_at)
+    assert_eq(row.client_name, "Renamed meanwhile", "the stale copy wrote only the stamp")
+    first = row.token_issued_at
+    row.token_issued_at = first - 100
+    row.update()
+    OauthClient.for_id(client.client_id).token_issued
+    assert_eq(OauthClient.for_id(client.client_id).token_issued_at, first - 100, "stamped already: kept")
   end
 
   test("a code asked with a redirect_uri is traded only with it; one asked without, without") do
@@ -476,7 +584,10 @@ describe("The OAuth server's hardening (#541)") do
       refused = OauthServer.throttled(endpoint, ip)
       assert_eq(refused["status"], 429, endpoint)
       assert_eq(JSON.parse(refused["body"])["error"], "too_many_requests")
-      assert_not_null(refused["headers"]["Retry-After"])
+      window = OauthServer.limiter(endpoint, ip).status()["window"]
+      wait = refused["headers"]["Retry-After"]
+      assert_eq(wait.to_i.to_s, wait, "#{endpoint}: whole seconds")
+      assert(wait.to_i >= 1 && wait.to_i <= window, "#{endpoint}: within its window")
       assert_null(OauthServer.throttled(endpoint, "198.51.100.#{uuid_v4}"), endpoint)
     end
     assert_eq(OauthServer.limiter("register", "x").status()["window"], 3600)
@@ -509,7 +620,11 @@ describe("The OAuth server's hardening (#541)") do
     assert_eq(OauthClient.purge_unused, 0, "nothing more to purge")
   end
 
-  # Last of the file: they spend this address's minute of token and revocation calls.
+  # Last of the file, on purpose: they spend this address's minute of token
+  # and revocation calls on the test server. The specs cannot give it back
+  # nor come from elsewhere: the limiter lives in the server's process, not
+  # the spec's, and no proxy is trusted in tests (.env.test), so every
+  # request is 127.0.0.1's.
   test("past the minute's token calls: 429, and a good code is not spent") do
     user = oauth_user()
     client_id = oauth_register()

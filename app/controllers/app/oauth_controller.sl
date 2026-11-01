@@ -41,9 +41,11 @@ class AppOauthController < AppBaseController
     # The answer is to the request its page showed: another one started since
     # (in a tab, or by a page opening /oauth/authorize behind the person's
     # back) is not approved by it (#541).
+    # A page with no id at all was shown before the ids came (a deploy since).
     shown = params["request_id"].to_s
     expected = pending["request_id"].to_s
-    return @_stale_request if shown.blank? || expected.blank? || !secure_compare(shown, expected)
+    return @_stale_request("outdated") if shown.blank? || expected.blank?
+    return @_stale_request("stale") unless secure_compare(shown, expected)
 
     checked = OauthServer.check_authorization(pending)
     return @_nothing_pending unless checked["ok"] == true
@@ -83,10 +85,12 @@ class AppOauthController < AppBaseController
     render("oauth_server/error", {}, {"status": 400})
   end
 
-  def _stale_request
-    @title = SiteText.t("security_541.stale_title")
+  # `why`: "stale" (another request replaced it) or "outdated" (no id on it).
+  def _stale_request(why)
+    @title = SiteText.t("security_541.#{why}_title")
     @description = SiteText.t("app.oauth.nothing_description")
     @reason = "stale_request"
+    @stale_body = SiteText.t("security_541.#{why}_body")
     render("oauth_server/error", {}, {"status": 400})
   end
 end
