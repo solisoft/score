@@ -6,6 +6,21 @@
 # WebPush sends to them; one the push service says is gone is deleted.
 const PUSH_KEY_PATTERN = "^[A-Za-z0-9_-]+={0,2}$"
 const PUSH_DEVICES_MAX = 20
+# The push services browsers subscribe through (#543): an endpoint on any
+# other host is refused, so the app never posts to an address a person
+# chose. Chrome, Opera, Brave and Samsung Internet use Google's FCM;
+# Firefox, Mozilla's autopush; Safari, Apple's; Edge on Windows,
+# Microsoft's WNS. A host here, or one under a domain below.
+const PUSH_SERVICE_HOSTS = [
+  "fcm.googleapis.com",
+  "updates.push.services.mozilla.com",
+  "web.push.apple.com"
+]
+const PUSH_SERVICE_DOMAINS = [
+  "push.services.mozilla.com",
+  "notify.windows.com",
+  "push.apple.com"
+]
 
 class PushSubscription < Model
   validates("user_id", {"presence": true})
@@ -36,7 +51,7 @@ class PushSubscription < Model
     data = raw.is_a?("hash") ? raw : {}
     keys = data["keys"].is_a?("hash") ? data["keys"] : {}
     endpoint = data["endpoint"].to_s.trim
-    return {"error": "This is not a push subscription."} unless endpoint.starts_with?("https://")
+    return {"error": "This is not a push subscription."} unless PushSubscription.push_service?(endpoint)
     if keys["p256dh"].to_s.blank? || keys["auth"].to_s.blank?
       return {"error": "This is not a push subscription."}
     end
@@ -72,9 +87,32 @@ class PushSubscription < Model
     true
   end
 
+  # Whether `endpoint` is an https:// address on a browser's push service
+  # (PUSH_SERVICE_HOSTS, PUSH_SERVICE_DOMAINS): its host plain letters,
+  # digits, dots and dashes (no port, no user), then a path.
+  static def push_service?(endpoint)
+    text = endpoint.to_s
+    return false unless Regex.matches("^https://[a-z0-9.-]+/", text)
+
+    host = text.substring(8, text.length).split("/")[0]
+    return true if PUSH_SERVICE_HOSTS.includes?(host)
+
+    PUSH_SERVICE_DOMAINS.any? do |domain|
+      host.ends_with?(".#{domain}")
+    end
+  end
+
   # The devices of `user`.
   static def of(user)
     PushSubscription.where({"user_id": user._key}).limit(PUSH_DEVICES_MAX).all
+  end
+
+  # The devices of `user` a message may go to: those on a push service (a
+  # row kept before #543 checked the host is skipped).
+  static def reachable_of(user)
+    PushSubscription.of(user).filter do |device|
+      PushSubscription.push_service?(device.endpoint)
+    end
   end
 
   static def count_of(user)

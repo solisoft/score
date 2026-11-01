@@ -162,6 +162,37 @@ describe("AppTakesController") do
       assert_eq(ScoreTake.where({"score_id": score._key}).first.size, SCORE_TAKE_MAX_BYTES)
     end
 
+    test("refuses a take past the room an account keeps, and stores nothing (#543)") do
+      room = take_room()
+      score = room["score"]
+      owner = room["owner"]
+      ScoreTake.create({
+        "score_id": score._key,
+        "user_id": owner._key,
+        "track": 2,
+        "name": "Long",
+        "size": Plan.limits(owner)["take_bytes"] - TAKE_WAV.length + 1,
+        "created_at": DateTime.utc.to_unix
+      })
+      take_sign_in(owner)
+      answer = take_upload(score)
+      assert_eq(res_status(answer), 422)
+      assert_contains(res_json(answer)["error"], "would pass the 2 GB")
+      assert_eq(take_count(score), 1)
+      assert_eq(ScoreTake.where({
+        "score_id": score._key,
+        "track": 1
+      }).count, 0)
+
+      room_left = Plan.limits(owner)["take_bytes"] - TAKE_WAV.length
+      ScoreTake.where({"score_id": score._key, "track": 2}).first.update({"size": room_left})
+      assert_eq(res_status(take_upload(score)), 201, "at the limit")
+      assert_eq(ScoreTake.where({
+        "score_id": score._key,
+        "track": 1
+      }).count, 1)
+    end
+
     test("refuses details out of range, or no sound, and writes nothing") do
       room = take_room()
       score = room["score"]

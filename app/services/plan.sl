@@ -44,15 +44,16 @@ class Plan
   end
 
   # What everyone not on Pro has while payments are not open: the site as it
-  # was before the plans (AI with one's own key, every audio track, a take
-  # capped only by SCORE_TAKE_MAX_BYTES, anyone a score is shared with).
+  # was before the plans (AI with one's own key, every audio track, anyone a
+  # score is shared with), and the room Pro keeps for takes: not without end
+  # (#543), since no one could pay for it.
   static def today_limits
     {
       "plan": "free",
       "upgrade": false,
       "own_key_ai": true,
       "take_tracks": SCORE_TAKE_TRACKS,
-      "take_bytes": nil,
+      "take_bytes": Plan.pro_limits["take_bytes"],
       "people_per_score": nil
     }
   end

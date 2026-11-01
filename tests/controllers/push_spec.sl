@@ -27,10 +27,25 @@ def push_spec_sign_in(user)
 end
 
 def push_spec_raw(name = nil)
-  {"endpoint": "https://push.example.com/send/#{name ?? uuid_v4}", "keys": {
+  {"endpoint": "https://fcm.googleapis.com/fcm/send/#{name ?? uuid_v4}", "keys": {
     "p256dh": "BC4Qx_y-z0123456789",
     "auth": "qZQ-abc_123"
   }}
+end
+
+# A subscription to `endpoint`, as a browser would send it.
+def push_spec_raw_at(endpoint)
+  {"endpoint": endpoint, "keys": {
+    "p256dh": "BC4Qx_y-z0123456789",
+    "auth": "qZQ-abc_123"
+  }}
+end
+
+# The rows of the job queue for `job` naming `key` in its arguments.
+def push_spec_jobs(job, key)
+  Job.list().filter do |row|
+    row.to_json.contains(job) && row.to_json.contains(key)
+  end
 end
 
 def push_spec_device(user, name = nil)
@@ -100,6 +115,39 @@ describe("Push notifications") do
         "keys": {"p256dh": "no spaces allowed", "auth": "b"}
       }, "")["error"], "not a push")
       assert_eq(PushSubscription.count_of(user), 0)
+    end
+
+    test("refuses an endpoint on a host that is not a browser's push service, and keeps nothing") do
+      user = push_spec_user()
+      [
+        "https://evil.example/push",
+        "https://evil.example/fcm.googleapis.com/x",
+        "https://fcm.googleapis.com.evil.example/x",
+        "https://fcm.googleapis.com@evil.example/x",
+        "https://fcm.googleapis.com:8443/x",
+        "https://evilfcm.googleapis.com/x",
+        "https://10.0.0.1/x",
+        "https://fcm.googleapis.com"
+      ].each do |endpoint|
+        refused = PushSubscription.keep(user, push_spec_raw_at(endpoint), "")
+        assert_contains(refused["error"].to_s, "not a push subscription", endpoint)
+      end
+      assert_eq(PushSubscription.count_of(user), 0)
+      assert_eq(PushSubscription.where({"endpoint": "https://evil.example/push"}).count, 0)
+    end
+
+    test("keeps an endpoint on each browser's push service") do
+      user = push_spec_user()
+      [
+        "https://fcm.googleapis.com/fcm/send/abc",
+        "https://updates.push.services.mozilla.com/wpush/v2/abc",
+        "https://web.push.apple.com/QGx",
+        "https://wns2-par02p.notify.windows.com/w/?token=abc"
+      ].each do |endpoint|
+        kept = PushSubscription.keep(user, push_spec_raw_at("#{endpoint}#{user._key}"), "")
+        assert(kept["error"].nil?, endpoint)
+      end
+      assert_eq(PushSubscription.count_of(user), 4)
     end
 
     test("someone else subscribing the same browser takes it over; one forgets only their own") do
@@ -178,13 +226,52 @@ describe("Push notifications") do
       assert_eq(PushSubscription.count_of(owner), 0)
     end
 
-    test("a test with no device sends nothing") do
+    test("a test with no device queues nothing") do
       user = push_spec_user()
       push_spec_sign_in(user)
       set_header("Accept", "application/json")
       answer = post("/app/push/test", {})
       assert_eq(res_status(answer), 200)
-      assert_contains(res_body(answer), "\"sent\":0")
+      assert_eq(res_json(answer)["devices"], 0)
+      assert_eq(res_json(answer)["queued"], false)
+      assert_eq(push_spec_jobs("PushTestJob", user._key).length, 0)
+    end
+
+    test("a test is queued for a job and answered at once: no push service is called in the request") do
+      user = push_spec_user()
+      device = push_spec_device(user)
+      push_spec_sign_in(user)
+      set_header("Accept", "application/json")
+      answer = post("/app/push/test", {})
+      assert_eq(res_status(answer), 200)
+      assert_eq(res_json(answer)["devices"], 1)
+      assert_eq(res_json(answer)["queued"], true)
+      assert_eq(push_spec_jobs("PushTestJob", user._key).length, 1)
+      # A send would have counted a failure (no VAPID key here) or a success.
+      stored = PushSubscription.find(device._key)
+      assert_eq(stored.failures, 0)
+      assert_null(stored.last_sent_at)
+    end
+
+    test("tests are limited to PUSH_TESTS_PER_HOUR an hour, each person their own") do
+      user = push_spec_user()
+      push_spec_device(user)
+      push_spec_sign_in(user)
+      set_header("Accept", "application/json")
+      (0 .. PUSH_TESTS_PER_HOUR).each do |i|
+        assert_eq(res_status(post("/app/push/test", {})), 200)
+      end
+      refused = post("/app/push/test", {})
+      assert_eq(res_status(refused), 429)
+      assert_contains(res_json(refused)["error"], "Too many test messages")
+      assert_eq(push_spec_jobs("PushTestJob", user._key).length, PUSH_TESTS_PER_HOUR)
+
+      other = push_spec_user()
+      push_spec_device(other)
+      clear_headers()
+      push_spec_sign_in(other)
+      set_header("Accept", "application/json")
+      assert_eq(res_status(post("/app/push/test", {})), 200)
     end
 
     test("keeps the kinds chosen, the others off") do
@@ -266,6 +353,35 @@ describe("Push notifications") do
       sent = []
       assert_eq(WebPush.test(user, push_spec_transport(201, sent))["sent"], 1)
       assert_contains(sent[0]["payload"], "Push notifications work")
+    end
+
+    test("the test job sends nothing without VAPID keys, nor for someone gone") do
+      user = push_spec_user()
+      device = push_spec_device(user)
+      assert_eq(PushTestJob.perform({"user_id": user._key})["off"], 1)
+      assert_eq(PushTestJob.perform({"user_id": "no-such-user"})["off"], 1)
+      assert_eq(PushSubscription.find(device._key).failures, 0)
+    end
+
+    test("a device kept before the push services were checked is skipped, not sent to") do
+      user = push_spec_user()
+      push_spec_device(user, "good-#{user._key}")
+      PushSubscription.create({
+        "user_id": user._key,
+        "endpoint": "https://evil.example/relay-#{user._key}",
+        "p256dh": "BC4Qx_y-z0123456789",
+        "auth": "qZQ-abc_123",
+        "failures": 0
+      })
+      assert_eq(PushSubscription.count_of(user), 2)
+      sent = []
+      done = WebPush.deliver(push_spec_notification(user), push_spec_transport(201, sent))
+      assert_eq(done["sent"], 1)
+      WebPush.test(user, push_spec_transport(201, sent))
+      assert_eq(sent.length, 2)
+      sent.each do |message|
+        assert(message["endpoint"].starts_with?("https://fcm.googleapis.com/"), message["endpoint"])
+      end
     end
 
     test("without VAPID keys nothing is queued, and the subject falls back to the site") do

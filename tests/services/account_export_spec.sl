@@ -24,6 +24,24 @@ def export_names(files)
   files.keys.sort()
 end
 
+# The characters of a part's entries, each sized in `size_of`.
+def export_part_size(part, size_of)
+  part.map do |key|
+    size_of[key]
+  end.sum
+end
+
+# Every file under `folder` in all of `parts`, by name.
+def export_folder_files(user, parts, folder)
+  found = {}
+  (1 .. parts.length + 1).each do |number|
+    AccountExport.files(user, parts, number, 1792700073).each do |file|
+      found[file["name"]] = file["text"] if file["name"].starts_with?("#{folder}/")
+    end
+  end
+  found
+end
+
 describe("AccountExport") do
   describe("files") do
     test("each score in its folder with every version, the trash flagged, and the sharing") do
@@ -262,6 +280,51 @@ describe("AccountExport") do
         file["name"] == "scores.json"
       })["text"])
       assert_eq(listed.map(&:part), [1, 2])
+    end
+  end
+
+  describe("a score with many versions (#543)") do
+    test("is split across parts, each within the limit, and every version is still exported") do
+      user = export_user("many")
+      score = Score.start(user, Score.blank_source("Many"))
+      sources = (0 .. 7).map do |i|
+        "\\header { title = \"Many\" }\n{ c'#{i + 1} " + "c'4 " * 20 + "}"
+      end
+      size_of = {}
+      size_of[score._key] = Score.find(score._key).source.length
+      sources.each_with_index do |source, i|
+        version = ScoreVersion.keep(score, source, "manual", user._key)
+        version.created_at = 1792700000 + i
+        version.update()
+        size_of["version:#{version._key}"] = source.length
+      end
+      limit = 300
+      parts = AccountExport.parts(user, limit)
+      assert_gt(parts.length, 2)
+      parts.each do |part|
+        assert_not(part.length == 0, "an empty part")
+        total = export_part_size(part, size_of)
+        assert(total <= limit, "a part of #{total} characters")
+      end
+      assert_eq(parts.flatten().length, sources.length + 1)
+
+      folder = "scores/many-#{score._key}"
+      exported = export_folder_files(user, parts, folder)
+      names = exported.keys.sort()
+      assert_eq(names.length, sources.length + 1)
+      assert_eq(names[0], "#{folder}/many.ly")
+      names.slice(1, names.length).each_with_index do |name, i|
+        assert_match(name, "versions/00#{i + 1}-.*-manual\\.ly$")
+        assert_eq(exported[name], sources[i])
+      end
+
+      listed = JSON.parse(AccountExport.files(user, parts, 1, 1792700073).find(&{ |file|
+        file["name"] == "scores.json"
+      })["text"])
+      assert_eq(listed[0]["part"], 1)
+      assert_eq(listed[0]["versions"].length, sources.length)
+      assert_eq(listed[0]["versions"].map(&:part).uniq.length, parts.length)
+      assert_eq(listed[0]["versions"][sources.length - 1]["part"], parts.length)
     end
   end
 

@@ -1434,6 +1434,10 @@ en:
   # (#542) security: live sharing and rights — keys under `security_542:` right below
   # ---
   # (#543) security: push, storage and export — keys under `security_543:` right below
+  security_543:
+    push_test_limited: "Too many test messages: try again in an hour."
+    push_queued_one: "On its way to {n} device."
+    push_queued_other: "On its way to {n} devices."
   # ---
   # (#544) security: CSP, configuration and admin — keys under `security_544:` right below
   # ---
