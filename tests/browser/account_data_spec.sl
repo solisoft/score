@@ -14,7 +14,8 @@ def move_user
 end
 
 # Sends the form whose action is `action`, as its button does. (The form is
-# low on the account page: a click by position lands mid-scroll.)
+# low on the account page, folded under Change: a click by position lands
+# mid-scroll.)
 def send_form(action)
   evaluate("document.querySelector('form[action=\"#{action}\"] button[type=submit]').click()")
 end
@@ -28,6 +29,7 @@ describe("Changing one's email address") do
     visit("/app/account")
     wait_for_text("Change your email address")
     assert_text("Export all your data")
+    click("#email summary")
     fill_in("#new_email", new_email)
     fill_in("#email_password", MOVE_PASSWORD)
     send_form("/app/account/email")
@@ -50,6 +52,7 @@ describe("Changing one's email address") do
     login(user.email, MOVE_PASSWORD)
     visit("/app/account")
     wait_for_text("Change your email address")
+    click("#email summary")
     fill_in("#new_email", "other-#{uuid_v4}@example.com")
     fill_in("#email_password", "not the password")
     send_form("/app/account/email")
