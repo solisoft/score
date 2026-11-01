@@ -6,6 +6,13 @@ const SCORE_TRASH_DAYS = 30
 const SCORE_UNTITLED = "Untitled score"
 # How many scores a page of the library shows.
 const SCORE_PAGE_SIZE = 60
+# The most music a score may write out to, its repeats and variables in
+# full (WrittenOut): some 100 times the gallery's largest piece (the
+# symphony, 844), about a second of engraving on the server — where the
+# 80 characters of three nested `\repeat unfold` came to 262,144 and
+# several seconds a page. Its refusals say it in words
+# (config/locales, security_540): change them with it.
+const SCORE_MOST_WRITTEN_OUT = 100000
 # Who may read a score without an invitation: nobody but its owner and the
 # people it is shared with ("private"), whoever has its link ("link"), or
 # anyone, search engines included ("public").
@@ -23,7 +30,11 @@ class Score < Model
   )
   validates(
     "source",
-    {"presence": true, "max_length": 1000000}
+    {
+      "presence": true,
+      "max_length": 1000000,
+      "custom": "source_written_out"
+    }
   )
   validates(
     "visibility",
@@ -296,15 +307,33 @@ class Score < Model
   end
 
   # Why the editor's `source` may not be saved, or nil: the validations
-  # above (source and title lengths), read before the conditional write,
-  # which does not run them.
+  # above (source and title lengths, the music it writes out to), read
+  # before the conditional write, which does not run them.
   static def refusal_of(source)
     return "Not saved: the score is too long to keep (a million characters at most)." if source.length > 1000000
 
     title = Score.title_in(source) ?? SCORE_UNTITLED
     return "Not saved: the title is too long (200 characters at most)." if title.length > 200
+    return SiteText.t("security_540.not_saved_too_much_music") if Score.too_much_music?(source)
 
     nil
+  end
+
+  # The validation of the same bound, for every create and save that runs
+  # them (a new score, an import, an AI reading kept, a copy). Past a million
+  # characters the length's own validation answers, without this reading it.
+  def source_written_out
+    return nil if @source.to_s.length > 1000000
+
+    Score.too_much_music?(@source) ? SiteText.t("security_540.too_much_music") : nil
+  end
+
+  # Whether `source` writes out to more music than the server engraves
+  # (SCORE_MOST_WRITTEN_OUT): what is refused on save, and what every server
+  # engraving (ScoreSvg) refuses to draw, so a score stored before the bound
+  # costs no more than one that could be stored now.
+  static def too_much_music?(source)
+    WrittenOut.count(source) > SCORE_MOST_WRITTEN_OUT
   end
 
   # Back to `version`, by `author`: the score as it stands is kept first.

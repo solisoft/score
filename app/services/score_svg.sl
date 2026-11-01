@@ -11,6 +11,16 @@
 # first point, so the same shape anywhere is the same string. On a piano
 # page that is some 80 paths for 200 placements. Coordinates are kept to a
 # tenth of a pixel, finer than any screen draws them.
+
+# How many of each file one account, or one address when signed out, may
+# have made a minute (ScoreSvg.engraving_allowed?): a library page asks for
+# 60 previews at once, and a browser keeps them a day.
+const ENGRAVINGS_PER_MINUTE = {
+  "pdf": 20,
+  "midi": 60,
+  "preview": 120
+}
+
 class ScoreSvg
   # {"svg": markup, "error": nil}, or {"svg": nil, "error": the engraver's
   # refusal, "score: … (at character N)"}. `width` and `staff_space` in px;
@@ -39,8 +49,16 @@ class ScoreSvg
     Crypto.sha256("#{ENGRAVING_FORMAT}|#{width}|#{staff_space}|#{max_height}|#{marks.to_json}|#{src}")
   end
 
-  # The engraving itself: `engrave`'s answer, every time anew.
+  # The engraving itself: `engrave`'s answer, every time anew. A source
+  # that writes out to more music than a score may hold (Score.too_much_music?)
+  # is refused before the engraver sees it: one stored before that bound,
+  # or an AI's answer, costs no more than one saved now.
   static def draw(src, width, staff_space, max_height, marks)
+    refusal = ScoreSvg.refusal(src)
+    unless refusal.nil?
+      return {"svg": nil, "error": refusal}
+    end
+
     laid = eui_score_layout(src, width / staff_space, {})
     if laid.has_key("error")
       return {"svg": nil, "error": laid["error"]}
@@ -202,10 +220,69 @@ class ScoreSvg
   # 100 a quarter when the source sets no tempo, as the editor plays it
   # (DEFAULT_BPM in public/eui-score/score-model.js).
   static def midi_url(src)
-    bytes = eui_score_midi(src, {"bpm": 100}) rescue nil
-    return nil if bytes.nil?
+    encoded = ScoreSvg.midi_base64(src, 100)
+    return nil if encoded.nil?
 
-    "data:audio/midi;base64," + Base64.encode(bytes)
+    "data:audio/midi;base64," + encoded
+  end
+
+  # Whether `user` — or, signed out, whoever asks from `ip` — may have the
+  # server make one more `kind` of file (ENGRAVINGS_PER_MINUTE): a read
+  # page's PDF, a section's MIDI, a library card's preview. Each is kept
+  # once made, but a source changed each time is made anew, so a sender is
+  # held to so many a minute.
+  static def engraving_allowed?(kind, user, ip)
+    sender = user.nil? ? "ip:#{ip}" : "user:#{user._key}"
+    RateLimiter("engrave-#{kind}:#{sender}", ENGRAVINGS_PER_MINUTE[kind], 60).allowed()
+  end
+
+  # What a file made of `src` is kept under: its kind, what else made it
+  # (the MIDI's tempo, the PDF's title), the drawing's format, the source.
+  static def file_digest(kind, made_with, src)
+    Crypto.sha256("#{kind}|#{ENGRAVING_FORMAT}|#{made_with}|#{src}")
+  end
+
+  # Why the server does not engrave `src` at all, or nil.
+  static def refusal(src)
+    Score.too_much_music?(src) ? SiteText.t("security_540.too_much_to_engrave") : nil
+  end
+
+  # The MIDI file of `src` at `bpm` a quarter, in Base64; nil when refused.
+  # Kept as an engraving is (Engraving), so a read page seen again does not
+  # write it again.
+  static def midi_base64(src, bpm)
+    digest = ScoreSvg.file_digest("midi", bpm, src)
+    kept = Engraving.recall(digest)
+    return kept["file"] unless kept.nil?
+    return nil unless ScoreSvg.refusal(src).nil?
+
+    bytes = eui_score_midi(src, {"bpm": bpm}) rescue nil
+    encoded = bytes.nil? ? nil : Base64.encode(bytes)
+    Engraving.remember(
+      digest,
+      {"file": encoded, "error": encoded.nil? ? "refused" : nil}
+    )
+    encoded
+  end
+
+  # The score printed, as a PDF titled `title`: {"file": the document,
+  # "error": nil}, or {"file": nil, "error": why}. Kept as an engraving is,
+  # when no bigger than ENGRAVED_FILE_KEPT: a read page's PDF asked again is
+  # read, not printed again.
+  static def pdf(src, title)
+    digest = ScoreSvg.file_digest("pdf", title, src)
+    kept = Engraving.recall(digest)
+    return kept unless kept.nil?
+
+    refusal = ScoreSvg.refusal(src)
+    unless refusal.nil?
+      return {"file": nil, "error": refusal}
+    end
+
+    document = eui_score_pdf(src, title) rescue nil
+    printed = {"file": document, "error": document.nil? ? "score: it could not be printed" : nil}
+    Engraving.remember(digest, printed) if document.nil? || document.length <= ENGRAVED_FILE_KEPT
+    printed
   end
 
   # The engraving alone, as an image a browser caches: the gallery's

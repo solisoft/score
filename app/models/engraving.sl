@@ -9,6 +9,9 @@
 # run; SoliDB, which it does, holds these as well.
 const ENGRAVING_DAYS = 3
 const ENGRAVINGS_KEPT = 2000
+# The biggest file (a PDF) kept with them, in characters: a bigger one is
+# printed again each time rather than weigh on the database.
+const ENGRAVED_FILE_KEPT = 4000000
 # Part of every engraving's key (ScoreSvg.digest): one more, and every kept
 # engraving is drawn anew — for a change of drawing or of engraver (2: Soli
 # 2.28.4, the browser's engraver on the server; 3: data-breaks for printing;
@@ -20,14 +23,19 @@ const ENGRAVING_FORMAT = 8
 
 class Engraving < Model
   # The engraving kept under `digest`, as `ScoreSvg.engrave` answers it
-  # ({"svg", "error"}), or nil: never kept, past its time, or no database.
+  # ({"svg", "error"}) — or a file it made (ScoreSvg.pdf, ScoreSvg.midi:
+  # {"file", "error"}) — or nil: never kept, past its time, or no database.
   static def recall(digest)
     return nil unless AppSetup.ready?
 
     kept = Engraving.find_by("_key", digest) rescue nil
     return nil if kept.nil? || kept.created_at < Engraving.cutoff
 
-    {"svg": kept.svg, "error": kept.error}
+    {
+      "svg": kept.svg,
+      "file": kept.file,
+      "error": kept.error
+    }
   end
 
   # `engraved` kept under `digest` (its _key). Two requests engraving the
@@ -39,6 +47,7 @@ class Engraving < Model
       digest,
       {
         "svg": engraved["svg"],
+        "file": engraved["file"],
         "error": engraved["error"],
         "created_at": DateTime.utc.to_unix
       }

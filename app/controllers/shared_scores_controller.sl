@@ -59,12 +59,18 @@ class SharedScoresController < Controller
       }
     end
 
-    document = eui_score_pdf(score.source, score.title)
+    unless ScoreSvg.engraving_allowed?("pdf", current_user(), client_ip(req))
+      halt(429, SiteText.t("security_540.too_many_engravings"))
+    end
+
+    printed = ScoreSvg.pdf(score.source, score.title)
+    halt(422, printed["error"]) if printed["file"].nil?
+
     headers = {"Content-Type": "application/pdf", "Content-Disposition": score.content_disposition("inline", "pdf")}
     {
       "status": 200,
       "headers": headers.merge(caching),
-      "body": document
+      "body": printed["file"]
     }
   end
 

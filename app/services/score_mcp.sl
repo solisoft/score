@@ -330,8 +330,12 @@ class ScoreMcp
     base + "/app/scores/" + score._key
   end
 
-  # Why the engraver does not read `source`, or nil when it does.
+  # Why the engraver does not read `source`, or nil when it does: never
+  # asked when it writes out to more than the server engraves.
   static def engraver_refusal(source)
+    refusal = ScoreSvg.refusal(source)
+    return refusal unless refusal.nil?
+
     laid = eui_score_layout(source, 100, {}) rescue {"error": "the engraver could not read it"}
     return laid["error"].to_s if laid.has_key("error")
 
@@ -398,7 +402,7 @@ class ScoreMcp
     source = args["source"].to_s
     return ScoreMcp.refused("The source is empty.") if source.trim.blank?
 
-    refusal = ScoreMcp.engraver_refusal(source) ?? Score.refusal_of(source)
+    refusal = Score.refusal_of(source) ?? ScoreMcp.engraver_refusal(source)
     return ScoreMcp.refused("The engraver does not read it: #{refusal}") unless refusal.nil?
 
     ScoreMcp.done("ok: the engraver reads it.", {"ok": true})
@@ -409,7 +413,8 @@ class ScoreMcp
     source = args["source"].to_s
     source = Score.blank_source(title) if source.trim.blank?
     source = Score.with_title(source, title) if Score.title_in(source).nil? && !title.blank?
-    refusal = ScoreMcp.engraver_refusal(source) ?? Score.refusal_of(source)
+    # The bounds first, read without engraving; then the engraver.
+    refusal = Score.refusal_of(source) ?? ScoreMcp.engraver_refusal(source)
     return ScoreMcp.refused("Not created: #{refusal}") unless refusal.nil?
 
     score = Score.start(user, source)
@@ -430,6 +435,9 @@ class ScoreMcp
     return ScoreMcp.refused("“#{score.title}” is read-only for this account.") unless score.writable_by?(user)
 
     source = args["source"].to_s
+    bounds = Score.refusal_of(source)
+    return ScoreMcp.refused(bounds) unless bounds.nil?
+
     refusal = ScoreMcp.engraver_refusal(source)
     return ScoreMcp.refused("Not saved: the engraver does not read it: #{refusal}") unless refusal.nil?
 

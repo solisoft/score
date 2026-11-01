@@ -182,6 +182,10 @@ class AppScoresController < AppBaseController
   # GET /app/scores/:id/preview.svg — the first systems, for the library's card
   def preview
     score = @_score("show")
+    unless ScoreSvg.engraving_allowed?("preview", current_user(), client_ip(req))
+      halt(429, SiteText.t("security_540.too_many_engravings"))
+    end
+
     {
       "status": 200,
       "headers": {"Content-Type": "image/svg+xml", "Cache-Control": "private, max-age=86400"},

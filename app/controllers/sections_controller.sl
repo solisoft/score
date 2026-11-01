@@ -99,13 +99,17 @@ class SectionsController < Controller
   # GET /sections/:id/play.mid — its bars as MIDI, for the Play button of its card
   def midi
     section = @_visible
-    bytes = eui_score_midi(section.source, {"bpm": section.bpm.to_s.to_i > 0 ? section.bpm.to_s.to_i : 100}) rescue nil
-    halt(422, "Those bars could not be played") if bytes.nil?
+    unless ScoreSvg.engraving_allowed?("midi", current_user(), client_ip(req))
+      halt(429, SiteText.t("security_540.too_many_engravings"))
+    end
+
+    encoded = ScoreSvg.midi_base64(section.source, section.bpm.to_s.to_i > 0 ? section.bpm.to_s.to_i : 100)
+    halt(422, "Those bars could not be played") if encoded.nil?
 
     {
       "status": 200,
       "headers": {"Content-Type": "audio/midi", "Cache-Control": "public, max-age=3600"},
-      "body": bytes
+      "body": Base64.decode(encoded)
     }
   end
 
