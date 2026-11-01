@@ -123,7 +123,8 @@ describe("Push notifications") do
       forged = push_spec_raw("taken-#{first._key}")
       forged["keys"] = {"p256dh": "BAttacker_key_0123", "auth": "attacker-auth"}
       refused = PushSubscription.keep(second, forged, "Attacker")
-      assert_contains(refused["error"], "another account's")
+      assert_eq(refused["error"], SiteText.t("security_542.push_taken"))
+      assert_not(refused["error"].contains("security_542"), "a sentence, not its key")
       assert_null(refused["subscription"])
       stored = PushSubscription.find(device._key)
       assert_eq(stored.user_id, first._key)

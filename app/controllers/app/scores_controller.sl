@@ -87,8 +87,6 @@ class AppScoresController < AppBaseController
   # score's live room (ScoreRoom), asked for before each (re)connect
   def room_ticket
     score = @_score("update")
-    halt(404, "That score is in the trash.") if score.trashed?
-
     render_json({"ticket": ScoreRoom.ticket(score, current_user(), DateTime.utc.to_unix)})
   end
 
@@ -216,6 +214,8 @@ class AppScoresController < AppBaseController
     score = @_score("show")
     halt(422, SiteText.t("app.scores.errors.not_shared")) unless ScoreShare.leave(score, current_user())
 
+    # Gone from the room too, at once: no more presence, cursors, saves (#542).
+    ScoreRoom.show_out(score)
     flash("notice", SiteText.t("app.scores.flash.left", {"title": score.title}))
     redirect(app_scores_path())
   end
@@ -294,6 +294,8 @@ class AppScoresController < AppBaseController
       return render("app/scores/share", {}, {"status": share["limit"] ? 429 : 422})
     end
 
+    # Invited again to read only, someone editing stops editing now (#542).
+    ScoreRoom.show_out(@score)
     inviter = current_user().email
     # Told in the app (#385); the invitation e-mail is the only one, unless
     # the invitee turned the e-mails of shares off.

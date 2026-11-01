@@ -71,29 +71,37 @@ class ScoreRoom
   # may change it; a listener while they may see it through their account,
   # the saves only while it is open to them by its link or in public — by
   # the link they came in with (`link`, its `link_mark`), still its own.
-  static def hearing(score, user, role, link = nil)
+  # (`current_mark`: the mark of the score's link, when the caller has it.)
+  static def hearing(score, user, role, link = nil, current_mark = nil)
     return nil if score.nil? || score.trashed?
     return (ScoreRoom.allowed?(score, user) ? "all" : nil) if role == "edit"
     return nil unless role == "listen"
     return "all" unless score.access_of(user).nil?
-    return "saves" if score.readable_by?(user) && ScoreRoom.current_link?(score, link)
+    return "saves" if score.readable_by?(user) && ScoreRoom.current_link?(score, link, current_mark)
 
     nil
   end
 
   # The mark of a read-page link (a share token) that a listener's ticket
   # and the lobby's presence carry: the link's own, not the link itself.
+  # Signed with a key of its own, drawn from the secret (`link_key`), so a
+  # mark is never a ticket's signature.
   static def link_mark(token)
     return "" if token.to_s.blank?
 
-    Crypto.hmac("link:#{token}", ScoreRoom.secret)
+    Crypto.hmac(token.to_s, ScoreRoom.link_key)
   end
 
-  # Is `link` (a `link_mark`) the mark of `score`'s link as it now stands?
-  static def current_link?(score, link)
+  static def link_key
+    Crypto.hmac("score room link marks", ScoreRoom.secret)
+  end
+
+  # Is `link` (a `link_mark`) the mark of `score`'s link as it now stands
+  # (`current_mark`, worked out here when not given)?
+  static def current_link?(score, link, current_mark = nil)
     return false if link.to_s.blank? || score.share_token.to_s.blank?
 
-    Crypto.secure_compare(link.to_s, ScoreRoom.link_mark(score.share_token))
+    Crypto.secure_compare(link.to_s, current_mark ?? ScoreRoom.link_mark(score.share_token))
   end
 
   # A ticket for `user` (nil: someone signed out, on a read page) into
@@ -294,10 +302,11 @@ class ScoreRoom
   static def delivery(score, presences, lobby = false)
     send_to = []
     close = []
+    current_mark = lobby && presences.length > 0 ? ScoreRoom.link_mark(score&.share_token) : nil
     presences.each do |presence|
       user = User.find_by("_key", presence["user_id"].to_s)
       (presence["metas"] ?? []).each do |meta|
-        hearing = ScoreRoom.hearing(score, user, meta["role"] ?? "edit", meta["link"])
+        hearing = ScoreRoom.hearing(score, user, meta["role"] ?? "edit", meta["link"], current_mark)
         stays = lobby ? !hearing.nil? : hearing == "all"
         if stays
           send_to = send_to + [meta["connection_id"].to_s]
@@ -321,17 +330,28 @@ class ScoreRoom
 
   # Those of the room and of its lobby who no longer may hear `score`,
   # shown out now rather than at its next save: after a new link, the score
-  # made private or trashed, an invitation removed (AppScoresController).
+  # made private or trashed, an invitation removed, left or lowered to
+  # read only (AppScoresController). (Who goes is `show_out_delivery`'s to say.)
   static def show_out(score)
-    room = ScoreRoom.delivery(score, ScoreRoom.presences(ScoreRoom.channel(score._key)))
-    lobby = ScoreRoom.delivery(score, ScoreRoom.presences(ScoreRoom.lobby(score._key)), true)
+    close = ScoreRoom.show_out_delivery(
+      score,
+      ScoreRoom.presences(ScoreRoom.channel(score._key)),
+      ScoreRoom.presences(ScoreRoom.lobby(score._key))
+    )
     ScoreRoom.deliver(
-      {
-        "send": [],
-        "close": room["close"] + lobby["close"]
-      },
+      {"send": [], "close": close},
       ""
     )
+  end
+
+  # The connections of the room (`room_presences`) and of its lobby
+  # (`lobby_presences`), as ws_list_presence answers, that no longer may
+  # hear `score` (`hearing`): those `show_out` closes. Nobody is sent
+  # anything.
+  static def show_out_delivery(score, room_presences, lobby_presences)
+    room = ScoreRoom.delivery(score, room_presences)
+    lobby = ScoreRoom.delivery(score, lobby_presences, true)
+    room["close"] + lobby["close"]
   end
 
   # What the room hears when a comment thread of the score changes (#385):

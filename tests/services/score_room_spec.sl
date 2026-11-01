@@ -592,3 +592,114 @@ describe("ScoreRoom, listening from the read page (#392)") do
     assert_eq(news["origin"], "editor-9")
   end
 end
+
+# One person's presence in the room: `user`, by each of `metas` (a connection
+# id and its role).
+def room_presence(user, metas)
+  {"user_id": user._key, "metas": metas.map do |meta|
+    {"connection_id": meta[0], "role": meta[1]}
+  end}
+end
+
+describe("ScoreRoom, shown out at once (#542)") do
+  test("a new link: the old link's listeners go, the new one's and the people of the score stay") do
+    owner = room_user()
+    reader = room_user()
+    score = Score.start(owner, Score.blank_source("Old and new"))
+    score.make_visible("link")
+    ScoreShare.invite(score, reader.email, "read")
+    old_listeners = lobby_listeners(score, ["old-1", "old-2"])
+    room = [room_presence(owner, [["owner-tab", "edit"]]), room_presence(reader, [["reader-tab", "listen"]])]
+    assert_eq(ScoreRoom.show_out_delivery(score, room, old_listeners), [], "nobody goes while the link stands")
+    score.new_link
+    new_listeners = lobby_listeners(score, ["new-1"])
+    lobby = [old_listeners[0], new_listeners[0]]
+    assert_eq(ScoreRoom.show_out_delivery(score, room, lobby), ["old-1", "old-2"])
+  end
+
+  test("made private: the link's listeners go, the people it is shared with stay") do
+    owner = room_user()
+    writer = room_user()
+    score = Score.start(owner, Score.blank_source("Closing"))
+    score.make_visible("link")
+    ScoreShare.invite(score, writer.email, "write")
+    lobby = lobby_listeners(score, ["guest-1"])
+    room = [
+      room_presence(owner, [["owner-tab", "edit"]]),
+      room_presence(writer, [["writer-tab", "edit"], ["writer-read", "listen"]])
+    ]
+    score.make_visible("private")
+    assert_eq(ScoreRoom.show_out_delivery(score, room, lobby), ["guest-1"])
+  end
+
+  test("an invitation removed, or left: that person goes, in every tab, and nobody else") do
+    owner = room_user()
+    writer = room_user()
+    reader = room_user()
+    score = Score.start(owner, Score.blank_source("Fewer"))
+    share = ScoreShare.invite(score, writer.email, "write")
+    ScoreShare.invite(score, reader.email, "read")
+    room = [
+      room_presence(owner, [["owner-tab", "edit"]]),
+      room_presence(writer, [["writer-tab", "edit"], ["writer-read", "listen"]]),
+      room_presence(reader, [["reader-tab", "listen"]])
+    ]
+    assert_eq(ScoreRoom.show_out_delivery(score, room, []), [])
+    share.delete
+    assert_eq(ScoreRoom.show_out_delivery(score, room, []), ["writer-tab", "writer-read"])
+    assert(ScoreShare.leave(score, reader))
+    assert_eq(ScoreRoom.show_out_delivery(score, room, []), [
+      "writer-tab",
+      "writer-read",
+      "reader-tab"
+    ])
+  end
+
+  test("invited again to read only: their editor goes, their read page stays") do
+    owner = room_user()
+    writer = room_user()
+    score = Score.start(owner, Score.blank_source("Downgraded"))
+    ScoreShare.invite(score, writer.email, "write")
+    room = [
+      room_presence(owner, [["owner-tab", "edit"]]),
+      room_presence(writer, [["writer-tab", "edit"], ["writer-read", "listen"]])
+    ]
+    assert_eq(ScoreRoom.show_out_delivery(score, room, []), [])
+    ScoreShare.invite(score, writer.email, "read")
+    assert_eq(ScoreRoom.show_out_delivery(score, room, []), ["writer-tab"])
+  end
+
+  test("in the trash: everyone goes, its owner and the link's listeners included") do
+    owner = room_user()
+    reader = room_user()
+    score = Score.start(owner, Score.blank_source("Binned"))
+    score.make_visible("link")
+    ScoreShare.invite(score, reader.email, "read")
+    lobby = lobby_listeners(score, ["guest-1"])
+    room = [
+      room_presence(owner, [["owner-tab", "edit"], ["owner-read", "listen"]]),
+      room_presence(reader, [["reader-tab", "listen"]])
+    ]
+    score.move_to_trash
+    assert_eq(ScoreRoom.show_out_delivery(score, room, lobby), [
+      "owner-tab",
+      "owner-read",
+      "reader-tab",
+      "guest-1"
+    ])
+  end
+
+  test("a link mark is not a ticket's signature, and changes with the link") do
+    owner = room_user()
+    score = Score.start(owner, Score.blank_source("Marked"))
+    score.make_visible("link")
+    mark = ScoreRoom.link_mark(score.share_token)
+    assert_ne(mark, Crypto.hmac(score.share_token, ScoreRoom.secret))
+    assert_ne(mark, Crypto.hmac("link:#{score.share_token}", ScoreRoom.secret))
+    assert_eq(ScoreRoom.link_mark(""), "")
+    score.new_link
+    assert_ne(ScoreRoom.link_mark(score.share_token), mark)
+    assert_not(ScoreRoom.current_link?(score, mark))
+    assert(ScoreRoom.current_link?(score, ScoreRoom.link_mark(score.share_token)))
+  end
+end
