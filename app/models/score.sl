@@ -342,15 +342,20 @@ class Score < Model
 
   # "owner", "write", "read" or nil: what `user` may do with this score
   # through their account. (A link or public score is also readable by
-  # anyone: `readable_by?`.)
+  # anyone: `readable_by?`.) In the trash it is its owner's alone (#542).
   def access_of(user)
     return nil if user.nil?
     return "owner" if this.owned_by?(user)
+    return nil if this.trashed?
 
     ScoreShare.role_for(this, user)
   end
 
+  # Nobody changes a score in the trash, its owner included: they restore it
+  # first (#542).
   def writable_by?(user)
+    return false if this.trashed?
+
     ["owner", "write"].includes?(this.access_of(user))
   end
 

@@ -23,6 +23,13 @@
 # open to — by its link, or in public — listens from its lobby
 # (`lobby`): the saves only, with no presence of the room's people (their
 # addresses) and no comments, which are for the people of the score.
+#
+# The lobby is the link's (#542): a listener's ticket names the link it was
+# given by (a mark of the score's share token, `link_mark`), and the lobby
+# keeps them only while that link still opens the score. A new link ("the
+# old one stops working"), the score made private or trashed, or an
+# invitation removed shows out at once those who no longer hear
+# (`show_out`). In the lobby everyone is "A reader": no address, no key.
 const SCORE_ROOM_TICKET_SECONDS = 3600
 const SCORE_ROOM_ROLES = ["edit", "listen"]
 
@@ -62,44 +69,72 @@ class ScoreRoom
   # of `score`: "all" (the room: presence, cursors, saves, comments),
   # "saves" (the lobby), or nil: shown out. An editor hears all while they
   # may change it; a listener while they may see it through their account,
-  # the saves only while it is open to them by its link or in public.
-  static def hearing(score, user, role)
+  # the saves only while it is open to them by its link or in public — by
+  # the link they came in with (`link`, its `link_mark`), still its own.
+  # (`current_mark`: the mark of the score's link, when the caller has it.)
+  static def hearing(score, user, role, link = nil, current_mark = nil)
     return nil if score.nil? || score.trashed?
     return (ScoreRoom.allowed?(score, user) ? "all" : nil) if role == "edit"
     return nil unless role == "listen"
     return "all" unless score.access_of(user).nil?
-    return "saves" if score.readable_by?(user)
+    return "saves" if score.readable_by?(user) && ScoreRoom.current_link?(score, link, current_mark)
 
     nil
   end
 
+  # The mark of a read-page link (a share token) that a listener's ticket
+  # and the lobby's presence carry: the link's own, not the link itself.
+  # Signed with a key of its own, drawn from the secret (`link_key`), so a
+  # mark is never a ticket's signature.
+  static def link_mark(token)
+    return "" if token.to_s.blank?
+
+    Crypto.hmac(token.to_s, ScoreRoom.link_key)
+  end
+
+  static def link_key
+    Crypto.hmac("score room link marks", ScoreRoom.secret)
+  end
+
+  # Is `link` (a `link_mark`) the mark of `score`'s link as it now stands
+  # (`current_mark`, worked out here when not given)?
+  static def current_link?(score, link, current_mark = nil)
+    return false if link.to_s.blank? || score.share_token.to_s.blank?
+
+    Crypto.secure_compare(link.to_s, current_mark ?? ScoreRoom.link_mark(score.share_token))
+  end
+
   # A ticket for `user` (nil: someone signed out, on a read page) into
-  # `score`'s room as `role`, good until `now` + SCORE_ROOM_TICKET_SECONDS:
-  # "<score>.<user>.<until>.<role>.<signature>".
+  # `score`'s room as `role`, good until `now` + SCORE_ROOM_TICKET_SECONDS,
+  # a listener's by the score's link as it stands (its `link_mark`):
+  # "<score>.<user>.<until>.<role>.<link>.<signature>".
   static def ticket(score, user, now, role = "edit")
-    body = "#{score._key}.#{user&._key.to_s}.#{now + SCORE_ROOM_TICKET_SECONDS}.#{role}"
+    link = role == "listen" ? ScoreRoom.link_mark(score.share_token) : ""
+    body = "#{score._key}.#{user&._key.to_s}.#{now + SCORE_ROOM_TICKET_SECONDS}.#{role}.#{link}"
     body + "." + Crypto.hmac(body, ScoreRoom.secret)
   end
 
-  # {"score", "user" ("" for someone signed out), "until", "role"} of a
-  # ticket signed here, run out or not; nil for one changed by hand or made up.
+  # {"score", "user" ("" for someone signed out), "until", "role", "link"}
+  # of a ticket signed here, run out or not; nil for one changed by hand or
+  # made up.
   static def signed(ticket)
     parts = ticket.to_s.split(".")
-    return nil unless parts.length == 5
+    return nil unless parts.length == 6
 
-    body = parts.slice(0, 4).join(".")
-    return nil unless Crypto.secure_compare(Crypto.hmac(body, ScoreRoom.secret), parts[4])
+    body = parts.slice(0, 5).join(".")
+    return nil unless Crypto.secure_compare(Crypto.hmac(body, ScoreRoom.secret), parts[5])
     return nil unless SCORE_ROOM_ROLES.includes?(parts[3])
 
     {
       "score": parts[0],
       "user": parts[1],
       "until": parts[2].to_i,
-      "role": parts[3]
+      "role": parts[3],
+      "link": parts[4]
     }
   end
 
-  # {"score", "user", "role"} the ticket lets in at `now`, or nil.
+  # {"score", "user", "role", "link"} the ticket lets in at `now`, or nil.
   static def admit(ticket, now)
     parts = ScoreRoom.signed(ticket)
     return nil if parts.nil? || parts["until"] < now
@@ -107,7 +142,8 @@ class ScoreRoom
     {
       "score": parts["score"],
       "user": parts["user"],
-      "role": parts["role"]
+      "role": parts["role"],
+      "link": parts["link"]
     }
   end
 
@@ -151,15 +187,27 @@ class ScoreRoom
     return refused if user.nil? && !admitted["user"].blank?
 
     score = Score.find_by("_key", admitted["score"])
-    hearing = ScoreRoom.hearing(score, user, admitted["role"])
+    hearing = ScoreRoom.hearing(score, user, admitted["role"], admitted["link"])
     return refused if hearing.nil?
 
-    channel = hearing == "all" ? ScoreRoom.channel(admitted["score"]) : ScoreRoom.lobby(admitted["score"])
+    if hearing == "all"
+      channel = ScoreRoom.channel(admitted["score"])
+      return {"join": channel, "track": {
+        "channel": channel,
+        "user_id": user._key,
+        "name": user.email,
+        "role": admitted["role"]
+      }}
+    end
+
+    # The lobby: everyone a reader, signed in or not, kept by their link.
+    channel = ScoreRoom.lobby(admitted["score"])
     {"join": channel, "track": {
       "channel": channel,
-      "user_id": user&._key ?? "guest",
-      "name": user.nil? ? "A reader" : user.email,
-      "role": admitted["role"]
+      "user_id": "guest",
+      "name": "A reader",
+      "role": admitted["role"],
+      "link": admitted["link"]
     }}
   end
 
@@ -254,10 +302,11 @@ class ScoreRoom
   static def delivery(score, presences, lobby = false)
     send_to = []
     close = []
+    current_mark = lobby && presences.length > 0 ? ScoreRoom.link_mark(score&.share_token) : nil
     presences.each do |presence|
       user = User.find_by("_key", presence["user_id"].to_s)
       (presence["metas"] ?? []).each do |meta|
-        hearing = ScoreRoom.hearing(score, user, meta["role"] ?? "edit")
+        hearing = ScoreRoom.hearing(score, user, meta["role"] ?? "edit", meta["link"], current_mark)
         stays = lobby ? !hearing.nil? : hearing == "all"
         if stays
           send_to = send_to + [meta["connection_id"].to_s]
@@ -277,6 +326,32 @@ class ScoreRoom
     ScoreRoom.deliver(ScoreRoom.delivery(score, presences), news)
     listeners = ws_list_presence(ScoreRoom.lobby(score._key)) rescue []
     ScoreRoom.deliver(ScoreRoom.delivery(score, listeners, true), news)
+  end
+
+  # Those of the room and of its lobby who no longer may hear `score`,
+  # shown out now rather than at its next save: after a new link, the score
+  # made private or trashed, an invitation removed, left or lowered to
+  # read only (AppScoresController). (Who goes is `show_out_delivery`'s to say.)
+  static def show_out(score)
+    close = ScoreRoom.show_out_delivery(
+      score,
+      ScoreRoom.presences(ScoreRoom.channel(score._key)),
+      ScoreRoom.presences(ScoreRoom.lobby(score._key))
+    )
+    ScoreRoom.deliver(
+      {"send": [], "close": close},
+      ""
+    )
+  end
+
+  # The connections of the room (`room_presences`) and of its lobby
+  # (`lobby_presences`), as ws_list_presence answers, that no longer may
+  # hear `score` (`hearing`): those `show_out` closes. Nobody is sent
+  # anything.
+  static def show_out_delivery(score, room_presences, lobby_presences)
+    room = ScoreRoom.delivery(score, room_presences)
+    lobby = ScoreRoom.delivery(score, lobby_presences, true)
+    room["close"] + lobby["close"]
   end
 
   # What the room hears when a comment thread of the score changes (#385):
