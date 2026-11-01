@@ -193,6 +193,10 @@ describe("The automation lane, in a browser") do
     )
     assert_eq(evaluate("document.querySelectorAll('.cc-point').length"), 1, "the point that is no number left out")
     assert_eq(evaluate("document.querySelector('.cc-point title').textContent"), "90")
+    # Kept: the page is left with nothing unsaved, or the next visit is held
+    # up by the page's "leave?" question.
+    sleep(2)
+    wait_for_text("Saved")
     assert_no_page_errors()
   end
 
