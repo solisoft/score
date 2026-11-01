@@ -89,7 +89,10 @@ class SessionsController < Controller
     # just signed up — sign-up's answer says nothing of that, this one must
     # not either. Every refused sign-in reads how to confirm; the right
     # password sends the link again, as often as account e-mails go.
+    # It counts as a failure for the network too: a wrong one did, and the
+    # lock must trip at the same guess whichever the last one was.
     if auth_require_confirmed_email() && !user.confirmed?()
+      user.register_failed_attempt(ip, false, trusted)
       AuthMailJob.ask("confirm", email) if User.account_email_allowed?(email, ip)
       return this._reject(SiteText.t("auth.invalid"), email, 401)
     end
@@ -123,12 +126,7 @@ class SessionsController < Controller
     # A browser the account now knows (#539): the account-wide lock does
     # not hold it. Signed (the mac in it), not secret: it opens nothing on
     # its own, the password and the two-step code are still asked.
-    set_cookie("device", user.device_cookie, {
-      "max_age": AUTH_DEVICE_DAYS * 86400,
-      "http_only": true,
-      "same_site": "Lax",
-      "secure": true
-    })
+    set_cookie("device", user.device_cookie, User.device_cookie_options)
 
     if remember
       token = user.start_remember_me()

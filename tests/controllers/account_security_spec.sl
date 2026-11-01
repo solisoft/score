@@ -163,6 +163,15 @@ def guard_resets_allowed(address)
   sent
 end
 
+# The `device` cookie `response` sets, or nil.
+def guard_device_set(response)
+  headers = str(res_headers(response))
+  parts = headers.split("device=")
+  return nil if parts.length < 2
+
+  parts[1].split(";")[0]
+end
+
 # AUTH_ACCOUNT_MAX_FAILURES wrong sign-ins at `user`, each from another /64.
 def guard_lock_account(user)
   (0 .. AUTH_ACCOUNT_MAX_FAILURES).each do |i|
@@ -511,7 +520,11 @@ describe("Account security (#539)") do
       source = User.failure_source("192.0.2.7")
       assert_eq(source.length, 24)
       assert_ne(source, Crypto.sha256("sign-in:192.0.2.7").substring(0, 24))
-      assert_eq(source, Crypto.hmac("sign-in:192.0.2.7", User.auth_secret).substring(0, 24))
+      assert_eq(source, Crypto.hmac("sign-in:192.0.2.7", User.auth_key("sign-in")).substring(0, 24))
+      # One key per purpose, none of them the server's secret.
+      assert_ne(User.auth_key("sign-in"), User.auth_key("device"))
+      assert_ne(User.auth_key("sign-in"), User.auth_secret)
+      assert_ne(Crypto.hmac("sign-in:192.0.2.7", User.auth_secret).substring(0, 24), source)
     end
 
     test("a locked source is never forgotten to make room for others") do
@@ -609,6 +622,114 @@ describe("Account security (#539)") do
     end
   end
 
+  describe("the devices an account knows") do
+    test("a device given before a reset no longer gets past the lock after it") do
+      user = guard_user()
+      before = User.find(user._key).device_cookie
+      token = User.find(user._key).start_password_reset
+      reset = post(
+        "/password/update",
+        {
+          "token": token,
+          "password": GUARD_NEW_PASSWORD,
+          "password_confirmation": GUARD_NEW_PASSWORD
+        }
+      )
+      assert_eq(res_status(reset), 302)
+      assert_not(User.find(user._key).trusts_device?(before), "voided by the reset")
+      guard_lock_account(user)
+      assert_eq(res_status(guard_sign_in_with(user, before, GUARD_NEW_PASSWORD)), 401)
+      # The browser that followed the reset link is one the account knows.
+      given = guard_device_set(reset)
+      assert_not_null(given, "the reset gives a device cookie")
+      assert(User.find(user._key).trusts_device?(given))
+      assert_eq(res_status(guard_sign_in_with(user, given, GUARD_NEW_PASSWORD)), 302)
+    end
+
+    test("a new password or a new address voids the devices given before") do
+      user = guard_user()
+      before = User.find(user._key).device_cookie
+      assert(User.find(user._key).trusts_device?(before))
+      User.find(user._key).change_password(GUARD_NEW_PASSWORD)
+      assert_not(User.find(user._key).trusts_device?(before), "a new password")
+      again = User.find(user._key).device_cookie
+      moved = User.find(user._key)
+      moved.start_email_change("moved-#{uuid_v4}@example.com")
+      User.find(user._key).finish_email_change
+      assert_not(User.find(user._key).trusts_device?(again), "a new address")
+    end
+
+    test("the password changed on the account page keeps this browser one the account knows") do
+      user = guard_user()
+      guard_sign_in(user)
+      changed = guard_change_password(GUARD_PASSWORD)
+      assert_eq(res_status(changed), 302)
+      assert(User.find(user._key).trusts_device?(guard_device_set(changed)))
+    end
+
+    test("a remember-me cookie that signs a browser in makes it one the account knows") do
+      user = guard_user()
+      token = User.find(user._key).start_remember_me
+      clear_cookies()
+      set_request_cookie("remember_token", "#{user._key}:#{token}")
+      promoted = get("/app/account")
+      assert_eq(res_status(promoted), 200)
+      given = guard_device_set(promoted)
+      assert_not_null(given, "a device cookie")
+      assert(User.find(user._key).trusts_device?(given))
+      # A wrong remember-me cookie gives none.
+      clear_cookies()
+      set_request_cookie("remember_token", "#{user._key}:not-the-token")
+      assert_null(guard_device_set(get("/app/account")))
+    end
+  end
+
+  describe("the failures, counted by the database") do
+    test("each failure adds to the stored count, whatever copy the request read") do
+      user = guard_user()
+      first = User.find(user._key)
+      second = User.find(user._key)
+      first.register_failed_attempt("192.0.2.77")
+      second.register_failed_attempt("192.0.2.77")
+      entry = User.find(user._key).sign_in_failures[User.failure_source("192.0.2.77")]
+      assert_eq(entry["count"], 2)
+      assert_eq(User.find(user._key).account_failures["count"], 2)
+    end
+
+    test("the lock trips, and is told, from the stored values") do
+      user = guard_user()
+      source = User.failure_source("192.0.2.78")
+      now = DateTime.utc.to_unix
+      stored = User.find(user._key)
+      failures = {}
+      failures[source] = {
+        "count": AUTH_MAX_FAILED_ATTEMPTS - 1,
+        "at": now,
+        "locked_at": nil
+      }
+      stored.sign_in_failures = failures
+      stored.account_failures = {
+        "count": AUTH_ACCOUNT_MAX_FAILURES - 2,
+        "since": now
+      }
+      stored.update
+      network = User.count_failure(user._key, source, now)
+      assert(network["source_locked"])
+      assert_not(network["account_locked"])
+      assert(network["told"])
+      after = User.find(user._key)
+      assert_eq(after.sign_in_failures[source]["locked_at"], now)
+      assert_eq(after.lock_told_at, now)
+      assert_eq(after.account_failures["count"], AUTH_ACCOUNT_MAX_FAILURES - 1)
+      account = User.count_failure(user._key, User.failure_source("192.0.2.79"), now)
+      assert(account["account_locked"])
+      assert(account["told"], "the account's lock is told within the window too")
+      assert_eq(User.find(user._key).account_locked_at, now)
+      assert_null(User.find(user._key).account_failures)
+      assert_null(User.count_failure("no-such-key", source, now))
+    end
+  end
+
   describe("the password asked by a signed-in page") do
     test("counts a try before the password is checked, and a right one starts the count again") do
       probe = GuardCountingUser.new()
@@ -666,6 +787,9 @@ describe("Account security (#539)") do
         guard_job_args(job)["kind"] == "confirm"
       end
       assert_eq(sent.length, 1, "the link again, for the right password only")
+      # The right password counted for the network as the wrong one did.
+      entry = User.find(user._key).sign_in_failures.values()[0]
+      assert_eq(entry["count"], 2)
     end
   end
 

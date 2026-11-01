@@ -71,6 +71,8 @@ class AppAccountController < AppBaseController
     session_regenerate()
     session_set("user_id", @user["_key"])
     session_set("session_version", @user.current_session_version())
+    # Still a browser the account knows: the new password voided the others.
+    set_cookie("device", @user.device_cookie, User.device_cookie_options)
     flash("notice", SiteText.t("security_539.password_changed"))
     redirect(app_account_path())
   end

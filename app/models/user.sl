@@ -655,7 +655,7 @@ class User < Model
   # the server's secret, so that the keys stored cannot be turned back into
   # addresses by hashing all 2^32 IPv4 ones.
   static def failure_source(ip)
-    Crypto.hmac("sign-in:#{User.failure_network(ip)}", User.auth_secret).substring(0, 24)
+    Crypto.hmac("sign-in:#{User.failure_network(ip)}", User.auth_key("sign-in")).substring(0, 24)
   end
 
   # The server's own secret (the one the live room's tickets are signed
@@ -665,12 +665,31 @@ class User < Model
     ScoreRoom.secret_from(getenv("SOLI_SESSION_SECRET"), getenv("APP_SECRET"))
   end
 
-  # A new `device` cookie, for a browser that has just signed in to this
-  # account: "<id>.<mac>", the mac the server's over the account and the id.
-  # Nothing is stored: `trusts_device?` checks the mac.
+  # The key of one `purpose` ("sign-in", "device"), derived from the
+  # server's secret: none of them is the secret itself, nor another's.
+  static def auth_key(purpose)
+    Crypto.hmac(purpose, User.auth_secret)
+  end
+
+  # A new `device` cookie, for a browser that has just proved itself to this
+  # account (a sign-in, a reset link followed, a remember-me cookie, a new
+  # password or address while signed in): "<id>.<mac>", the mac the server's
+  # over the account, its session version and the id. Nothing is stored:
+  # `trusts_device?` checks the mac. A reset, a new password or a new address
+  # bump the session version, which voids every device given before.
   def device_cookie
     id = Crypto.random_token(16)
     "#{id}.#{this._device_mac(id)}"
+  end
+
+  # How the `device` cookie is set: a year, HttpOnly, Secure, SameSite=Lax.
+  static def device_cookie_options
+    {
+      "max_age": AUTH_DEVICE_DAYS * 86400,
+      "http_only": true,
+      "same_site": "Lax",
+      "secure": true
+    }
   end
 
   # Whether `value` (a browser's `device` cookie) is one this account gave.
@@ -682,7 +701,7 @@ class User < Model
   end
 
   def _device_mac(id)
-    Crypto.hmac("device:#{this._key}:#{id}", User.auth_secret)
+    Crypto.hmac("device:#{this._key}:#{this.current_session_version}:#{id}", User.auth_key("device"))
   end
 
   # Whether signing in is locked for whoever comes from `ip`, in a browser
@@ -777,64 +796,76 @@ class User < Model
     return true if stored.locked_for?(ip, trusted)
 
     now = DateTime.utc.to_unix
-    source = User.failure_source(ip)
     live = stored._live_failures(now)
-    count = (live[source] ?? {})["count"].to_s.to_i + 1
-    source_locked = count >= AUTH_MAX_FAILED_ATTEMPTS
-    # The entries dropped (quiet, or the oldest open ones) go, this one is
-    # written: nothing else of `sign_in_failures` is touched.
+    # The entries to drop (quiet, or the oldest open ones): those still open
+    # when the statement runs go.
     dropped = (stored.sign_in_failures ?? {}).keys.filter do |key|
       !live.has_key(key)
     end
-    entries = {}
-    entries[source] = {
-      "count": count,
-      "at": now,
-      "locked_at": source_locked ? now : nil
-    }
-    patch = {}
-    account_locked = stored._count_account_failure(patch, now)
-    # Tell the owner when a network's lock trips, once a window however many
-    # lock: a mail per network would be a way to flood them. The account's
-    # lock is told when it trips, which is once a window at most.
-    tell = account_locked || (source_locked && now - stored.lock_told_at.to_s.to_i > AUTH_LOCKOUT_SECONDS)
-    patch["lock_told_at"] = now if tell
-    @_patch_stored(patch, entries, dropped)
+    counted = User.count_failure(this._key, User.failure_source(ip), now, dropped)
+    return true if counted.nil?
 
+    @_read_lock_fields(User.find_by("_key", this._key))
     # The sign-in response says only "Invalid email or password" whether or
     # not the address is locked, because a distinct "locked" reply during the
     # lockout tells an attacker which guess was the right one. The mail is
     # queued: its sending, or failing, is not the request's.
-    if tell
-      lock = account_locked ? "account" : "source"
+    if counted["told"]
       AuthMailJob.ask("account_locked", @email, {
-        "lock": lock,
+        "lock": counted["account_locked"] ? "account" : "source",
         "by_code": by_code
       })
     end
     true
   end
 
-  # The account's own count, one more, written into `patch`: whether it
-  # trips the account-wide lock. Not counted while that lock is on (a
-  # browser the account knows is still guessing): it runs out on schedule.
-  def _count_account_failure(patch, now)
-    return false if @account_locked?
-
-    window = @account_failures ?? {}
-    current = !window["since"].nil? && now - window["since"].to_s.to_i <= AUTH_ACCOUNT_WINDOW
-    total = (current ? window["count"].to_s.to_i : 0) + 1
-    if total >= AUTH_ACCOUNT_MAX_FAILURES
-      patch["account_failures"] = nil
-      patch["account_locked_at"] = now
-      return true
-    end
-
-    patch["account_failures"] = {
-      "count": total,
-      "since": current ? window["since"] : now
+  # One more failure from network `source` at the account of key `key`, at
+  # `now`, counted by the database in the one statement that writes it: the
+  # +1 and whether it trips a lock are decided from the stored values, so
+  # two failures at once count two, whatever copies their requests read.
+  # The networks in `dropped` go unless they are locked by then; the
+  # account's own count is not counted while its lock is on (a browser it
+  # knows is still guessing: the lock runs out on schedule). The owner is
+  # told when a network's lock trips, once a window however many lock (a
+  # mail per network would be a way to flood them), and when the account's
+  # trips, which is once a window at most. Answers {"source_locked",
+  # "account_locked" (tripped by this one), "told"}, or nil (no account).
+  static def count_failure(key, source, now, dropped = [])
+    lockout = AUTH_LOCKOUT_SECONDS
+    max_failures = AUTH_MAX_FAILED_ATTEMPTS
+    account_window = AUTH_ACCOUNT_WINDOW
+    account_max = AUTH_ACCOUNT_MAX_FAILURES
+    rows = @sdbql{
+      FOR u IN users
+      FILTER u._key == #{key}
+      LET old_entries = u.sign_in_failures == null ? {} : u.sign_in_failures
+      LET gone_keys = (FOR k IN #{dropped} FILTER old_entries[k] == null || old_entries[k].locked_at == null RETURN k)
+      LET old_entry = old_entries[#{source}]
+      LET is_recent = old_entry != null && #{now} - old_entry.at <= #{lockout}
+      LET source_count = (is_recent ? old_entry.count : 0) + 1
+      LET source_trips = source_count >= #{max_failures}
+      LET is_open = u.account_locked_at == null || #{now} - u.account_locked_at > #{account_window}
+      LET in_window = u.account_failures != null && #{now} - u.account_failures.since <= #{account_window}
+      LET account_total = (in_window ? u.account_failures.count : 0) + 1
+      LET account_trips = is_open && account_total >= #{account_max}
+      LET source_tells = source_trips && (u.lock_told_at == null || #{now} - u.lock_told_at > #{lockout})
+      LET tells = account_trips || source_tells
+      LET source_entry = {count: source_count, at: #{now}, locked_at: source_trips ? #{now} : null}
+      LET window_since = in_window ? u.account_failures.since : #{now}
+      LET account_doc = account_trips ? null : {count: account_total, since: window_since}
+      UPDATE u WITH {
+        sign_in_failures: MERGE(UNSET(old_entries, gone_keys), ZIP([#{source}], [source_entry])),
+        account_failures: is_open ? account_doc : u.account_failures,
+        account_locked_at: account_trips ? #{now} : u.account_locked_at,
+        lock_told_at: tells ? #{now} : u.lock_told_at
+      } IN users
+      RETURN {source_locked: source_trips, account_locked: account_trips, told: tells}
     }
-    false
+    # An @sdbql block answers a refused query with its error, as a string.
+    throw "User.count_failure: #{rows}" if type(rows) == "string"
+    return nil if rows.length == 0
+
+    rows[0]
   end
 
   # A right password from `ip`: its network's count starts again. Another
@@ -864,7 +895,11 @@ class User < Model
     # An @sdbql block answers a refused query with its error, as a string.
     throw "User#_patch_stored: #{written}" if type(written) == "string"
 
-    stored = User.find_by("_key", this._key)
+    @_read_lock_fields(User.find_by("_key", this._key))
+  end
+
+  # This copy's lockout fields, as `stored` (the account read again) has them.
+  def _read_lock_fields(stored)
     return true if stored.nil?
 
     @sign_in_failures = stored.sign_in_failures

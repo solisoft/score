@@ -32,6 +32,8 @@ class EmailChangesController < Controller
       session_regenerate()
       session_set("user_id", user._key)
       session_set("session_version", user.current_session_version())
+      # Still a browser the account knows: the change voided the others (#539).
+      set_cookie("device", user.device_cookie, User.device_cookie_options)
       @stays_signed_in = true
     end
     @_show("changed", user, new_email)

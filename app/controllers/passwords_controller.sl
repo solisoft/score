@@ -117,6 +117,10 @@ class PasswordsController < Controller
     session_set("user_id", user["_key"])
     # Stamped so a later password reset can invalidate this session.
     session_set("session_version", user.current_session_version())
+    # A browser the account knows (#539): the reset voided every other one,
+    # and whoever holds the mail's link could set the password anyway — so
+    # someone keeping the account-wide lock on does not keep its owner out.
+    set_cookie("device", User.find(user._key).device_cookie, User.device_cookie_options)
     redirect(app_home_path())
   end
 
