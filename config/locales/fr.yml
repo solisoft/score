@@ -1432,6 +1432,9 @@ fr:
   # (#541) security: the OAuth server — keys under `security_541:` right below
   # ---
   # (#542) security: live sharing and rights — keys under `security_542:` right below
+  security_542:
+    trashed: "Cette partition est dans la corbeille."
+    push_taken: "Les notifications de cet appareil sont celles d'un autre compte : désactivez-les d'abord depuis ce compte."
   # ---
   # (#543) security: push, storage and export — keys under `security_543:` right below
   # ---

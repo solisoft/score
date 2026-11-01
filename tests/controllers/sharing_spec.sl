@@ -510,4 +510,121 @@ describe("Sharing") do
       assert_eq(ScoreShare.invitations_left(share_user()), SCORE_INVITATIONS_PER_DAY)
     end
   end
+
+  describe("a new link, live (#542)") do
+    test("the old link's room ticket opens nothing once the owner asks for a new one") do
+      owner = share_user()
+      score = Score.start(owner, Score.blank_source("Moved on"))
+      score.make_visible("link")
+      old_token = score.share_token
+      answer = get("/s/#{old_token}/room_ticket")
+      assert_eq(res_status(answer), 200)
+      old_ticket = res_json(answer)["ticket"]
+      now = DateTime.utc.to_unix
+      connect = {"type": "connect", "query": {"ticket": old_ticket}}
+      assert_eq(ScoreRoom.on_event(connect, now)["join"], "score:#{score._key}:lobby")
+      share_sign_in(owner)
+      assert_eq(res_status(post("/app/scores/#{score._key}/share/link", {})), 302)
+      fresh = Score.find(score._key)
+      assert_ne(fresh.share_token, old_token)
+      assert_contains(ScoreRoom.on_event(connect, now)["send"], "refused")
+      clear_cookies()
+      assert_eq(res_status(get("/s/#{old_token}/room_ticket")), 404)
+      new_ticket = res_json(get("/s/#{fresh.share_token}/room_ticket"))["ticket"]
+      joined = ScoreRoom.on_event(
+        {"type": "connect", "query": {"ticket": new_ticket}},
+        now
+      )
+      assert_eq(joined["join"], "score:#{score._key}:lobby")
+    end
+
+    test("made private, the link's tickets open nothing; its people still listen in the room") do
+      owner = share_user()
+      reader = share_user()
+      score = Score.start(owner, Score.blank_source("Closed door"))
+      score.make_visible("link")
+      ScoreShare.invite(score, reader.email, "read")
+      guest_ticket = res_json(get("/s/#{score.share_token}/room_ticket"))["ticket"]
+      share_sign_in(reader)
+      reader_ticket = res_json(get("/s/#{score.share_token}/room_ticket"))["ticket"]
+      share_sign_in(owner)
+      post("/app/scores/#{score._key}/share", {"visibility": "private"})
+      assert_eq(Score.find(score._key).visibility, "private")
+      now = DateTime.utc.to_unix
+      assert_contains(ScoreRoom.on_event(
+        {"type": "connect", "query": {"ticket": guest_ticket}},
+        now
+      )["send"], "refused")
+      inside = ScoreRoom.on_event(
+        {"type": "connect", "query": {"ticket": reader_ticket}},
+        now
+      )
+      assert_eq(inside["join"], "score:#{score._key}")
+    end
+  end
+
+  describe("a score in the trash (#542)") do
+    test("those it is shared with neither save, keep, ask the AI, read its versions nor copy it") do
+      owner = share_user()
+      writer = share_user()
+      score = Score.start(owner, Score.blank_source("Binned"))
+      ScoreShare.invite(score, writer.email, "write")
+      version = ScoreVersion.keep(score, score.source, "manual", owner._key)
+      score.move_to_trash
+      versions_before = ScoreVersion.history(score).length
+      share_sign_in(writer)
+      saved = put(
+        "/app/scores/#{score._key}",
+        {"source": "\\header { title = \"Binned\" }\n{ c'1 }", "revision": score.revision}
+      )
+      assert_eq(res_status(saved), 403)
+      assert_eq(res_json(saved)["error"], "you may no longer change this score")
+      stored = Score.find(score._key)
+      assert_contains(stored.source, "r1")
+      assert_eq(stored.revision, score.revision)
+      assert_eq(res_status(post("/app/scores/#{score._key}/versions", {})), 403)
+      assert_eq(ScoreVersion.history(score).length, versions_before)
+      asked = post("/app/scores/#{score._key}/suggestions", {"action": "chords"})
+      assert_eq(res_status(asked), 403)
+      assert_eq(ScoreSuggestion.where({"score_id": score._key}).count, 0)
+      assert_eq(res_status(get("/app/scores/#{score._key}/versions")), 404)
+      assert_eq(res_status(get("/app/scores/#{score._key}/versions/#{version._key}")), 404)
+      assert_eq(res_status(post("/app/scores/#{score._key}/versions/#{version._key}/restore", {})), 404)
+      assert_eq(res_status(post("/app/scores/#{score._key}/versions/#{version._key}/copy", {})), 404)
+      assert_eq(res_status(post("/app/scores/#{score._key}/duplicate", {})), 404)
+      assert_eq(res_status(post("/app/scores/#{score._key}/rename", {"title": "Mine now"})), 404)
+      assert_eq(res_status(get("/app/scores/#{score._key}/preview.svg")), 404)
+      assert_eq(Score.library(writer, "", "title").length, 0, "no copy made")
+      assert_eq(Score.find(score._key).title, "Binned")
+      assert_eq(Score.find(score._key).source, stored.source)
+    end
+
+    test("its owner neither renames, restores a version nor shares it; they restore it, then all works again") do
+      owner = share_user()
+      score = Score.start(owner, Score.blank_source("Paused"))
+      version = ScoreVersion.keep(score, "\\header { title = \"Older\" }\n{ d'1 }", "manual", owner._key)
+      score.move_to_trash
+      share_sign_in(owner)
+      assert_eq(res_status(post("/app/scores/#{score._key}/rename", {"title": "Renamed"})), 404)
+      assert_eq(res_status(post("/app/scores/#{score._key}/versions/#{version._key}/restore", {})), 404)
+      assert_eq(res_status(put(
+        "/app/scores/#{score._key}",
+        {"source": "{ e'1 }", "revision": score.revision}
+      )), 403)
+      assert_eq(res_status(post("/app/scores/#{score._key}/share/link", {})), 404)
+      assert_eq(res_status(post("/app/scores/#{score._key}/share", {"visibility": "public"})), 404)
+      stored = Score.find(score._key)
+      assert_eq(stored.title, "Paused")
+      assert_contains(stored.source, "r1")
+      assert_eq(stored.visibility, "private")
+      assert_eq(stored.share_token, score.share_token)
+      # Still theirs to look at in the trash, and to bring back.
+      assert_eq(res_status(get("/app/scores/#{score._key}/preview.svg")), 200)
+      assert_eq(res_location(get("/app/scores/#{score._key}")), "/app/trash")
+      assert_eq(res_status(post("/app/scores/#{score._key}/restore", {})), 302)
+      assert_not(Score.find(score._key).trashed?)
+      assert_eq(res_status(post("/app/scores/#{score._key}/rename", {"title": "Renamed"})), 302)
+      assert_eq(Score.find(score._key).title, "Renamed")
+    end
+  end
 end

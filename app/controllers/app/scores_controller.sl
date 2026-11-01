@@ -224,6 +224,7 @@ class AppScoresController < AppBaseController
   def move_to_trash
     score = @_score("destroy")
     score.move_to_trash
+    ScoreRoom.show_out(score)
     trashed = SCORE_TRASH_DAYS == 1 ? "app.scores.flash.trashed_one" : "app.scores.flash.trashed_other"
     flash("notice", SiteText.t(
       trashed,
@@ -263,6 +264,7 @@ class AppScoresController < AppBaseController
     score = @_score("share")
     halt(422, SiteText.t("app.scores.errors.choose_visibility")) unless score.make_visible(params["visibility"].to_s)
 
+    ScoreRoom.show_out(score)
     visibility = SiteText.t("app.scores.flash.visibility_#{score.visibility}")
     flash("notice", SiteText.t(
       "app.scores.flash.visibility",
@@ -275,6 +277,8 @@ class AppScoresController < AppBaseController
   def new_link
     score = @_score("share")
     score.new_link
+    # Those listening by the old link hear nothing more, from now (#542).
+    ScoreRoom.show_out(score)
     flash("notice", SiteText.t("app.scores.flash.new_link"))
     redirect(app_score_share_path(score))
   end
@@ -309,6 +313,7 @@ class AppScoresController < AppBaseController
     halt(404, SiteText.t("app.scores.errors.no_such_share")) unless share.score_id == score._key
 
     share.delete
+    ScoreRoom.show_out(score)
     flash("notice", SiteText.t(
       "app.scores.flash.uninvited",
       {"email": share.email, "title": score.title}
@@ -363,9 +368,15 @@ class AppScoresController < AppBaseController
   end
 
   # The score of the route, if the signed-in person may `action` it (403
-  # otherwise; 404 for no such score).
+  # otherwise; 404 for no such score). A score in the trash is a 404 but to
+  # its owner, who still sees it ("show": its card, its versions) and takes
+  # it out or deletes it ("destroy"), and changes nothing else (#542).
   def _score(action)
-    authorize(Score.find(params["id"]), action)
+    score = Score.find(params["id"])
+    in_reach = !score.trashed? || (["show", "destroy"].includes?(action) && score.owned_by?(current_user()))
+    halt(404, SiteText.t("security_542.trashed")) unless in_reach
+
+    authorize(score, action)
   end
 
   # The version of the route, if it is one of `score`'s (404 otherwise).
