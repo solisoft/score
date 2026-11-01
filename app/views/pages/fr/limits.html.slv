@@ -1,0 +1,129 @@
+<div class="wrap-narrow">
+  <header class="page-head">
+    <span class="eyebrow">Limites</span>
+    <h1>Ce qu'eui-score ne grave pas</h1>
+    <p class="lead">
+      Tout ce qui sort du sous-ensemble est refusé, avec le caractère où le graveur s'est arrêté. Les messages
+      ci-dessous ne sont pas recopiés : chaque source est confiée au graveur à l'affichage de cette page, et c'est
+      sa réponse qui est imprimée.
+    </p>
+  </header>
+
+  <div class="prose">
+    <% for refusal in refusals %>
+      <div class="refusal">
+        <h3><%= refusal["what"] %></h3>
+        <pre><code><%- score_highlight(refusal["src"]) %></code></pre>
+        <% if refusal["message"].nil? %>
+          <p class="muted">Acceptée par cette version du graveur.</p>
+        <% else %>
+          <p class="score-error"><%= refusal["message"] %></p>
+        <% end %>
+      </div>
+    <% end %>
+
+    <h2>Ce qui n'est plus une limite</h2>
+    <p>
+      Depuis EUI 0.11 (Soli 2.28.2), le graveur lit LilyPond tel qu'on l'écrit : les variables et
+      <code>\global</code>, <code>\new Voice</code> avec <code>\voiceOne</code>/<code>\voiceTwo</code>,
+      <code>\new Lyrics \lyricsto</code>, <code>\language</code>, <code>\fixed</code>, <code>\transpose</code>,
+      <code>q</code>, <code>\partial</code>, <code>\cadenzaOn</code>, les silences invisibles, <code>\repeat unfold</code> et
+      <code>percent</code>, les petites notes, les clés d'ut 4e, d'ut 1re, de fa 3e et <code>treble_8</code>, les doigtés,
+      <code>\markup</code>, <code>\mark</code>, <code>\ottava</code>, les liaisons de phrasé, <code>\trill</code> et les autres
+      ornements, <code>\arpeggio</code>, <code>\glissando</code>, les trémolos, ainsi que <code>\new ChordNames</code>,
+      <code>\new DrumStaff</code> et <code>\new TabStaff</code> — chacun dessiné comme LilyPond 2.25 le dessine.
+    </p>
+    <p>
+      Depuis Soli 2.28.4, le serveur grave avec le même graveur que le navigateur : quadruples et quintuples
+      croches, un n-olet dans un n-olet, jusqu'à quatre voix sur une portée, plusieurs couplets <code>\addlyrics</code>,
+      n'importe quelle mesure ; une note plus longue que ce qui reste de sa mesure est coupée à la barre en notes
+      liées, comme la coupe le <code>Completion_heads_engraver</code> de LilyPond ; la pédale de sustain
+      (<code>\sustainOn</code>, <code>\sustainOff</code>) est dessinée et tenue ; et les sauts de LilyPond 2.24,
+      <code>\jump "D.S. al Coda"</code> et <code>\fine</code>, sont placés contre leur barre de mesure. La
+      bibliothèque, les pages partagées et les PDF montrent ce que montre l'éditeur.
+    </p>
+    <p>
+      Depuis Soli 2.28.5, les vrais fichiers LilyPond s'ouvrent. Les réglages de mise en page que presque tout
+      fichier écrit — <code>\override</code>, <code>\set</code>, <code>\tweak</code>, un <code>\with { … }</code> ou un
+      bloc <code>\layout</code>, des champs d'en-tête qu'aucun titre n'imprime — sont lus et ignorés, chacun nommé
+      dans un avertissement, pour que la musique qui les suit soit gravée ; <code>\stemUp</code>/<code>\stemDown</code> et
+      <code>\autoBeamOff</code> sont respectés. <code>\breathe</code>, <code>\caesura</code>, <code>\upbow</code>,
+      <code>\downbow</code>, <code>\flageolet</code>, <code>\espressivo</code>, <code>\laissezVibrer</code>,
+      <code>\repeatTie</code>, <code>\cresc</code> et <code>\dim</code> en toutes lettres et les extensions de texte sont dessinés,
+      de même que les altérations forcées et de précaution (<code>cis!</code>, <code>cis?</code>). Plusieurs blocs
+      <code>\score</code>, ou un <code>\book</code> de <code>\bookpart</code>s, deviennent des mouvements, chacun
+      commençant sur une ligne à lui. Une clé ou une armure peut changer au milieu d'une mesure, et
+      <code>\compressMMRests</code> regroupe des mesures de silence en une seule.
+    </p>
+    <p>
+      Depuis Soli 2.28.9, les deux portées du piano se croisent comme LilyPond les croise : une ligature sur des
+      notes des deux portées est dessinée une seule fois entre elles, les liaisons et liaisons de prolongation vont
+      d'une portée à l'autre, <code>\autoChange</code> partage une voix entre les mains, et <code>\showStaffSwitch</code>
+      et <code>\crossStaff</code> sont dessinés. Les réglages courants <code>\override</code>, <code>\set</code>,
+      <code>\tweak</code>, <code>\omit</code> et <code>\hide</code> sont suivis au lieu d'être ignorés (directions,
+      décalages, tailles, regroupement des ligatures, styles de repères et de chiffrages, styles de têtes de notes,
+      numéros de mesure). <code>\RemoveEmptyStaves</code> masque une portée qui se tait pendant tout un système, et
+      <code>\partCombine</code> réunit deux parties sur une portée avec <em>a2</em>, <em>Solo</em> et deux voix.
+      Les lignes sont réparties sur l'ensemble de la pièce, et les réglages <code>\paper</code> de largeurs,
+      retraits, lignes non justifiées et pages, d'espace entre les systèmes et de nombre de systèmes ou de pages
+      sont respectés.
+    </p>
+    <p>
+      L'éditeur de partitions modifie désormais ce que le graveur dessine dans de tels fichiers au lieu de le
+      laisser au texte : des portées qui changent d'armure ou de mesure séparément, un tempo, un repère, une barre
+      de mesure ou un signe de reprise au milieu d'une mesure, <code>\cadenzaOn</code>, un n-olet dans un n-olet,
+      toutes les clés que dessine le graveur, <code>\open</code> et <code>\stopped</code>, <code>\tiny</code> et
+      <code>\small</code>, <code>\new TabStaff</code>, <code>\new CueVoice</code> et <code>\cueDuring</code>, et un
+      ossia. <code>\override</code>, <code>\set</code>, <code>\tweak</code>, le <code>\with</code> d'une portée,
+      <code>\layout</code> et <code>\paper</code> sont conservés là où ils sont écrits.
+    </p>
+    <p>
+      L'éditeur de partitions modifie aussi désormais, sur la partition, une portée faite par <code>\partCombine</code>,
+      ses deux parties en deux voix (les variables qu'il nomme conservées), et une portée de piano faite par
+      <code>\autoChange</code> comme une seule voix, utilisé directement ou dans une variable ; un <code>\tweak</code>
+      sur une articulation, des mots ou une nuance reste avec eux. Toujours conservés tels qu'écrits, leurs notes
+      modifiées dans le texte : <code>\partCombineUp</code> et <code>\partCombineDown</code>, une partie qui dit
+      comment les parties se combinent (<code>\partCombineApart</code> et consorts), et toute autre musique à côté
+      de <code>\partCombine</code> ou <code>\autoChange</code> sur sa portée.
+    </p>
+    <p>
+      Depuis sa deuxième série de travaux sur LilyPond, le graveur dessine aussi des portées plus petites
+      (<code>\magnifyStaff</code>, <code>StaffSymbol.staff-space</code> avec <code>fontSize</code>, portées d'ossia et de
+      réplique), un <code>\time</code> au milieu d'une mesure, un <code>\partial</code> plus loin dans une pièce, un
+      <code>\time</code> écrit dans une seule portée, la polymétrie à mesures d'une même longueur
+      (<code>\enablePolymeter</code>, <code>\scaleDurations</code>, <code>timeSignatureFraction</code>) et des voix
+      à l'intérieur d'une voix. Les altérations d'une note passée sur l'autre portée sont comptées sur cette portée.
+      Les pages sont espacées avec les ressorts de LilyPond (une page chargée se resserre, une page qui a de la
+      place s'étire, l'encre ne se heurte jamais), et les ligatures sont inclinées et placées comme le
+      <em>quanting</em> de LilyPond les place.
+    </p>
+    <p>
+      L'éditeur de partitions ouvre aussi sur la partition ce que le graveur lit désormais de la mesure : un
+      <code>\time</code> au milieu d'une mesure, un <code>\partial</code> après la première mesure (sur une barre
+      ou à l'intérieur d'une mesure), un <code>\time</code> écrit dans une seule portée, une mesure dessinée à côté
+      d'une autre avec des mesures aussi longues (<code>\set Staff.timeSignatureFraction</code> et
+      <code>\scaleDurations</code>, ou <code>\enablePolymeter</code>), des voix à l'intérieur d'une voix, et des
+      portées dessinées plus petites (<code>\magnifyStaff</code>, un <code>staff-space</code> et un
+      <code>fontSize</code> dans le <code>\with</code> d'une portée). Chacun est réécrit là où il était tant que les
+      mesures disent toujours la même chose ; une mesure dont une modification a déplacé le <code>\time</code> ou
+      le <code>\partial</code> est écrite comme un <code>\partial</code> de sa longueur.
+    </p>
+    <ul>
+      <li><strong>Mesure</strong> : les portées dont les mesures ont des durées différentes (polymétrie à mesures de
+        longueurs différentes) sont refusées : alignez-les avec <code>\scaleDurations</code> ou <code>timeSignatureFraction</code>.</li>
+      <li><strong>Mise en page</strong> : une ligature n'est pas écartée des autres objets qu'elle pourrait toucher, et
+        les espacements <code>\paper</code> autour des titres et des textes ne sont pas lus.</li>
+      <li><strong>Éditeur</strong> : les notes d'une portée mise à l'échelle par <code>\scaleDurations</code> gardent
+        leurs durées sur la partition (leurs hauteurs, marques et silences se modifient ; la saisie de notes, les
+        durées, le collage et un nouveau chiffrage y sont refusés et se modifient dans le texte), une mesure
+        dessinée qui change après le début d'une portée (<code>timeSignatureFraction</code>) est laissée au texte,
+        et les portées dont les mesures ont des durées différentes restent l'affaire du seul graveur.</li>
+      <li><strong>Réglages</strong> : un <code>\override</code> absent des listes ci-dessus est toujours ignoré, avec
+        un avertissement.</li>
+    </ul>
+    <div class="callout">
+      Un doute ? Collez votre source dans le <a href="<%= playground_path() %>">bac à sable</a> : le message du
+      graveur désigne le caractère exact où il s'arrête.
+    </div>
+  </div>
+</div>

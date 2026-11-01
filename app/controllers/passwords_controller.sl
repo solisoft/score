@@ -15,7 +15,7 @@ class PasswordsController < Controller
     render(
       "passwords/new",
       {
-        "title": "Reset password",
+        "title": SiteText.t("auth.reset_password"),
         "notice": "",
         "error": ""
       }
@@ -32,16 +32,16 @@ class PasswordsController < Controller
     limiter = rate_limiter_from_ip(req, AUTH_ATTEMPTS_PER_IP, AUTH_IP_WINDOW_SECONDS)
     unless limiter.allowed()
       return render("passwords/new", {
-        "title": "Reset password",
+        "title": SiteText.t("auth.reset_password"),
         "notice": "",
-        "error": "Too many reset requests. Try again in a few minutes."
+        "error": SiteText.t("auth.too_many_resets")
       }, {"status": 429})
     end
 
     email = params["email"].to_s.trim().downcase()
     unless User.account_email_allowed?(email, client_ip(req))
       return render("passwords/new", {
-        "title": "Reset password",
+        "title": SiteText.t("auth.reset_password"),
         "notice": "",
         "error": AUTH_EMAILS_REFUSED
       }, {"status": 429})
@@ -56,8 +56,8 @@ class PasswordsController < Controller
     return render(
       "passwords/new",
       {
-        "title": "Reset password",
-        "notice": "If that email exists, a reset link is on its way.",
+        "title": SiteText.t("auth.reset_password"),
+        "notice": SiteText.t("auth.reset_sent"),
         "error": ""
       }
     )
@@ -70,9 +70,9 @@ class PasswordsController < Controller
       return render(
         "passwords/new",
         {
-          "title": "Reset password",
+          "title": SiteText.t("auth.reset_password"),
           "notice": "",
-          "error": "That reset link is invalid or has expired. Request a new one."
+          "error": SiteText.t("auth.reset_bad_link")
         }
       )
     end
@@ -80,7 +80,7 @@ class PasswordsController < Controller
     return render(
       "passwords/edit",
       {
-        "title": "Choose a new password",
+        "title": SiteText.t("auth.new_password_title"),
         "token": params["token"].to_s,
         "error": ""
       }
@@ -94,9 +94,9 @@ class PasswordsController < Controller
       return render(
         "passwords/new",
         {
-          "title": "Reset password",
+          "title": SiteText.t("auth.reset_password"),
           "notice": "",
-          "error": "That reset link is invalid or has expired. Request a new one."
+          "error": SiteText.t("auth.reset_bad_link")
         }
       )
     end
@@ -108,7 +108,7 @@ class PasswordsController < Controller
     password_error = user.password_error(password)
     return this._reject_edit(password_error) unless password_error.nil?
 
-    return this._reject_edit("Passwords don't match.") if password != params["password_confirmation"].to_s
+    return this._reject_edit(SiteText.t("auth.no_match")) if password != params["password_confirmation"].to_s
 
     user.finish_password_reset(password)
     # The reset link reached this inbox: the address is confirmed too.
@@ -127,7 +127,7 @@ class PasswordsController < Controller
   # token so the user doesn't have to click the emailed link again.
   def _reject_edit(message)
     return render("passwords/edit", {
-      "title": "Choose a new password",
+      "title": SiteText.t("auth.new_password_title"),
       "token": params["token"].to_s,
       "error": message
     }, {"status": 422})

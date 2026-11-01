@@ -1,0 +1,280 @@
+<% sandbox = playground_path() %>
+<div class="wrap">
+  <header class="page-head">
+    <span class="eyebrow">Guide</span>
+    <h1>La visionneuse de partitions d'EUI</h1>
+    <p class="lead">
+      <strong>eui-score</strong> est le graveur qui anime le widget <code>score()</code> du catalogue EUI : un
+      sous-ensemble du langage LilyPond, mis en page comme LilyPond le met en page, dessiné en tracés ; la même
+      source jouée en fichier MIDI et imprimée en PDF.
+    </p>
+  </header>
+
+  <div class="doc-layout">
+    <aside class="toc" aria-label="Sommaire">
+      <p class="toc-title">Sur cette page</p>
+      <ol>
+        <li><a href="#what">De quoi s'agit-il</a></li>
+        <li><a href="#show">Afficher une partition</a></li>
+        <li><a href="#width">Largeur et systèmes</a></li>
+        <li><a href="#marks">Notes mises en évidence</a></li>
+        <li><a href="#a4">Sur papier A4</a></li>
+        <li><a href="#midi">Écouter : MIDI</a></li>
+        <li><a href="#pdf">Imprimer : PDF</a></li>
+        <li><a href="#server">Sur un serveur Soli</a></li>
+        <li><a href="#rust">Depuis Rust</a></li>
+        <li><a href="#fidelity">Fidèle à LilyPond</a></li>
+        <li><a href="#speed">Vitesse</a></li>
+        <li><a href="#editor">L'éditeur</a></li>
+      </ol>
+    </aside>
+
+    <div class="prose">
+      <section class="doc-section" id="what">
+        <h2>De quoi s'agit-il<a class="anchor" href="#what">#</a></h2>
+        <p>
+          Dans EUI, une partition n'est pas une image : c'est une liste de tracés. Les lignes de portée, les hampes
+          et les barres de mesure sont des rectangles ; tout ce qui est courbe — têtes de notes, clés, altérations,
+          crochets, ligatures, liaisons qui s'épaississent vers le milieu — est un contour découpé dans
+          <strong>Emmentaler</strong>, la police musicale de LilyPond. Les titres et les indications de tempo sont
+          dessinés de la même façon, à partir des lettres de <strong>TeX Gyre Schola</strong>. Aucune police ne
+          voyage et aucun nœud texte n'intervient : chaque glyphe tombe à la taille et à l'endroit que veut la
+          gravure, au centième de pixel près.
+        </p>
+        <p>
+          La crate Rust <code>eui-score</code> est un portage, fonction par fonction, du graveur écrit en Soli
+          (<code>eui_builders_score.sl</code>). Ses tests de référence la tiennent à l'original sur les 26 pièces du
+          corpus : chaque tracé au centième de pixel, le MIDI et le PDF à l'octet près, et ses 44 refus mot pour
+          mot, position comprise. Compilée en WebAssembly, elle tourne aussi dans le navigateur :
+          <a href="<%= lp(embed_path()) %>">deux balises suffisent pour afficher des partitions sur n'importe quel site</a>.
+        </p>
+        <div class="callout">
+          <strong>Refuser plutôt que mal dessiner.</strong> Une source que le graveur ne sait pas mettre en page est
+          refusée avec le caractère où il s'est arrêté — <code>score: … (at character N)</code> — jamais à moitié
+          dessinée.
+        </div>
+      </section>
+
+      <section class="doc-section" id="show">
+        <h2>Afficher une partition<a class="anchor" href="#show">#</a></h2>
+        <p>Dans une vue EUI, la partition est un widget comme un autre :</p>
+<pre class="code-block"><code>score("\\relative c' { \\key g \\major \\time 3/4 g'4( a b) | d2. \\bar \"|.\" }",
+      {"width": 640})</code></pre>
+        <%- score_figure(hello, {"name": "syntax/hello", "sandbox": sandbox, "source": "none"}) %>
+        <p>
+          Elle est dessinée en canevas : un pour les titres, un par système. Une modification ne redessine et ne
+          renvoie que le système qu'elle touche — chaque système garde ses tracés sous une signature de ce qu'il
+          dessine.
+        </p>
+        <div class="table-scroll">
+          <table class="ref-table">
+            <thead><tr><th>Option</th><th>Par défaut</th><th>Ce qu'elle fait</th></tr></thead>
+            <tbody>
+              <tr><td><code>width</code></td><td>600</td><td>Largeur en px logiques ; les mesures sont réparties en systèmes qui y tiennent.</td></tr>
+              <tr><td><code>staff_space</code></td><td>8</td><td>Px logiques entre deux lignes de portée : la taille de la gravure.</td></tr>
+              <tr><td><code>colour</code></td><td><code>text.default</code></td><td>L'encre, un rôle de couleur : la partition suit le thème clair ou sombre.</td></tr>
+              <tr><td><code>marks</code></td><td><code>{}</code></td><td>Numéro d'élément (notes et silences à partir de 0, en chaîne) → le rôle dans lequel le dessiner.</td></tr>
+              <tr><td><code>page</code></td><td>absente</td><td><code>"a4"</code> met la musique en page sur des feuilles A4, à la taille de portée de LilyPond.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="doc-section" id="width">
+        <h2>Largeur et systèmes<a class="anchor" href="#width">#</a></h2>
+        <p>
+          La même source à deux largeurs : le graveur répartit les mesures en lignes, justifie chaque ligne pleine
+          et laisse la dernière à sa largeur naturelle. Les lignes après la première s'ouvrent sur leur numéro de
+          mesure ; un changement d'armure ou de chiffrage en début de ligne est annoncé à la fin de la précédente.
+        </p>
+        <%- score_figure(narrow, {"source": "none", "caption": "« Petite valse », largeur 440, staff_space 5.5"}) %>
+        <% wide_caption = "La même, largeur 1000, staff_space 6.5" %>
+        <%- score_figure(wide, {"name": "piano/waltz", "sandbox": sandbox, "source": "closed", "caption": wide_caption}) %>
+      </section>
+
+      <section class="doc-section" id="marks">
+        <h2>Notes mises en évidence<a class="anchor" href="#marks">#</a></h2>
+        <p>
+          <code>marks</code> redessine certains éléments dans une autre couleur : c'est ainsi qu'un éditeur montre
+          sa sélection, et un lecteur la note qui sonne. Les éléments sont les notes et les silences, numérotés à
+          partir de 0 dans l'ordre de la source. Ici l'élément 1 (le la) et l'élément 3 (le ré) :
+        </p>
+<pre class="code-block"><code>score(src, {"width": 640, "marks": {"1": "accent.base", "3": "warning.base"}})</code></pre>
+        <%- score_figure(marked, {"source": "none"}) %>
+        <p>
+          La mise en évidence est une copie des tracés de l'élément posée sur le système intact : quand la tête de
+          lecture avance, seule cette couche change. Sur la Cinquième de Beethoven en grande partition, un pas de
+          la tête de lecture envoie de 3,5 à 8,9 Ko au lieu des 267 Ko du système.
+        </p>
+      </section>
+
+      <section class="doc-section" id="a4">
+        <h2>Sur papier A4<a class="anchor" href="#a4">#</a></h2>
+        <p>
+          Avec <code>"page": "a4"</code>, la musique est mise en page comme le ferait LilyPond à sa taille de portée
+          par défaut (20 pt, un interligne de 1,764 mm) : marges latérales de 10 mm et 5 mm en haut, premier
+          système en retrait de 15 mm, 12 interlignes d'une portée à l'autre, les sauts de page de LilyPond. Les
+          pages pleines sont étirées jusqu'à la marge du bas ; les pages après la première portent leur numéro au
+          coin supérieur extérieur. <code>score()</code> renvoie alors une colonne de feuilles larges de
+          <code>width</code> px.
+        </p>
+<pre class="code-block"><code>score(src, {"width": 794, "page": "a4"})</code></pre>
+      </section>
+
+      <section class="doc-section" id="midi">
+        <h2>Écouter : MIDI<a class="anchor" href="#midi">#</a></h2>
+        <p>
+          <code>score_midi(src, opts)</code> écrit la même source en Standard MIDI File, comme le ferait le bloc
+          <code>\midi</code> de LilyPond : chiffrages, armures et tempos ; une seule note par liaison de
+          prolongation ; les nuances en volumes selon les valeurs mêmes de LilyPond, un soufflet faisant varier le
+          volume note après note, les accents plus forts et les staccatos plus courts. Une piste par portée, chacune
+          sur son propre canal avec son <code>midiInstrument</code>. Sur les pièces de la galerie EUI, ses notes,
+          instants et durées sont ceux de LilyPond 2.24, note pour note.
+        </p>
+<pre class="code-block"><code>bytes = score_midi(src, {"bpm": 96, "beat": 4, "program": 0})   # a list of bytes</code></pre>
+        <p>
+          <code>bpm</code> et <code>beat</code> donnent un tempo à une source qui n'en a pas ; <code>program</code>
+          un instrument General MIDI à une portée qui n'en nomme aucun. Chaque partition de ce site a un bouton
+          <strong>Lecture</strong> qui joue ce fichier.
+        </p>
+      </section>
+
+      <section class="doc-section" id="pdf">
+        <h2>Imprimer : PDF<a class="anchor" href="#pdf">#</a></h2>
+        <p>
+          <code>score_pdf(src)</code> écrit les pages A4 en PDF : les mêmes tracés qu'à l'écran, en vectoriel à
+          cinq points par interligne, chaque lettre en contour pour qu'aucune police ne soit embarquée, le titre
+          dans les informations du document et dans le pied de chaque page avec son numéro. Le résultat est une
+          chaîne ASCII : un gestionnaire <code>file_save</code> peut la renvoyer telle quelle.
+        </p>
+        <p>
+          Essayez : <a href="<%= example_pdf_path("ensembles", "symphony-5") %>">la Cinquième de Beethoven en PDF</a>, ou
+          <a href="<%= example_pdf_path("piano", "minuet-in-g") %>">le Menuet en sol</a>.
+        </p>
+      </section>
+
+      <section class="doc-section" id="server">
+        <h2>Sur un serveur Soli<a class="anchor" href="#server">#</a></h2>
+        <p>
+          Le graveur natif est disponible pour toute application Soli (la fonctionnalité <code>eui</code>, dans les
+          binaires publiés) au travers de quatre fonctions. Le widget <code>score()</code> les utilise quand elles
+          sont là et grave en Soli sinon ; les deux dessinent la même chose.
+        </p>
+        <div class="table-scroll">
+          <table class="ref-table">
+            <thead><tr><th>Fonction</th><th>Renvoie</th></tr></thead>
+            <tbody>
+              <tr><td><code>eui_score_layout(src, width, layout)</code></td><td>La mise en page, <code>width</code> en interlignes : systèmes, pages et, pour chaque mesure, ses éléments avec leur x et leurs têtes — de quoi placer et détecter les clics. Une source refusée renvoie <code>{"error": message}</code>.</td></tr>
+              <tr><td><code>eui_score_bands(laid, sp, opts, total)</code></td><td>Une page en bandes, un canevas chacune, à <code>sp</code> px par interligne : <code>paths</code> dans l'encre, <code>lit</code> pour les éléments de <code>opts["marks"]</code>.</td></tr>
+              <tr><td><code>eui_score_midi(src, opts)</code></td><td>Le fichier MIDI, en liste d'octets.</td></tr>
+              <tr><td><code>eui_score_pdf(src, title)</code></td><td>Le PDF A4, en chaîne.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Un tracé est un tableau : <code>[1, ink, x, y, w, h, 0]</code> pour un rectangle, <code>[5, ink, commands…]</code>
+          pour un contour, où <code>0</code> est un déplacement, <code>1</code> une ligne, <code>2</code> une
+          quadratique, <code>3</code> une cubique et <code>4</code> une fermeture. Les pages rendues côté serveur
+          de ce site n'utilisent rien d'autre : chaque partition est gravée à chaque requête et convertie en SVG en
+          quelques dizaines de lignes.
+        </p>
+<pre class="code-block"><code>laid = eui_score_layout(src, width / staff_space, {})
+return {"error": laid["error"]} if laid.has_key("error")
+
+total = (laid["height"] * staff_space).ceil()
+eui_score_bands(laid, staff_space, {"colour": "ink"}, total).each do |band|
+  band["paths"].each do |shape|
+    # shape[0] == 1: a &lt;rect&gt;, otherwise a &lt;path d="M… L… Q… C… Z"&gt;
+    # moved down by band["y"]
+  end
+end</code></pre>
+      </section>
+
+      <section class="doc-section" id="rust">
+        <h2>Depuis Rust<a class="anchor" href="#rust">#</a></h2>
+        <p>La crate a une seule dépendance, <code>serde_json</code>, pour lire les données de la police.</p>
+<pre class="code-block"><code>let eng = eui_score::engrave(src, 80.0, &amp;eui_score::Layout::default())?;  // 80 staff spaces wide
+let (paths, ranges) = eui_score::paths(&amp;eng, 8.0, 0)?;   // page 0, 8 px a staff space
+let bands = eui_score::bands(&amp;eng, 8.0, 0, total_px)?;   // the same, as bands
+
+let a4 = eui_score::engrave_a4(src)?;                     // the music on A4
+let midi: Vec&lt;u8&gt; = eui_score::midi(src, &amp;eui_score::MidiOptions::default())?;
+let pdf: String = eui_score::pdf(src, "Title")?;</code></pre>
+        <p>
+          À l'intérieur, toutes les longueurs sont en interlignes, y vers le bas, la ligne du haut d'une portée à 0
+          et celle du bas à 4 ; les tracés sont en pixels, à <code>sp</code> px par interligne. Une ronde
+          (<code>WHOLE</code>) vaut 26 880 ticks : une triple croche doublement pointée tombe sur un nombre entier,
+          et chacune d'elles aussi dans un triolet, un quintolet, un sextolet ou un septolet.
+        </p>
+      </section>
+
+      <section class="doc-section" id="fidelity">
+        <h2>Fidèle à LilyPond<a class="anchor" href="#fidelity">#</a></h2>
+        <p>
+          Les règles sont celles de LilyPond partout où elles s'énoncent en une ligne, et les épaisseurs sont ses
+          valeurs par défaut à la taille de portée 20 :
+        </p>
+        <ul>
+          <li>un espacement calculé à partir de la note la plus brève la plus courante, 1,2 interligne de plus à chaque doublement ;</li>
+          <li>des hampes de 3,5 interlignes qui atteignent la ligne du milieu ;</li>
+          <li>des croches ligaturées selon la mesure, une ligature placée pour que ses hampes aient en moyenne leur longueur idéale, puis quantifiée pour reposer sur une ligne, la chevaucher ou y pendre ;</li>
+          <li>des liaisons qui mettent leurs extrémités à niveau avant de s'arquer au-dessus d'une note gênante, à la hauteur <code>height-limit · 2/π · atan(π/2 · ratio / height-limit · width)</code> ;</li>
+          <li>ligne de portée 0,1 interligne, hampe 0,13, ligature 0,48, barre de mesure fine 0,19, barre épaisse 0,6.</li>
+        </ul>
+        <p>
+          Comparées à LilyPond 2.24 à la même taille de portée, les trois pièces de référence d'EUI tombent à moins
+          de 2 % de ses largeurs.
+        </p>
+      </section>
+
+      <section class="doc-section" id="speed">
+        <h2>Vitesse<a class="anchor" href="#speed">#</a></h2>
+        <p>
+          Face à LilyPond lui-même, sur les mêmes fichiers et la même machine : LilyPond 2.24.4 chronométré sur le
+          processus entier (meilleur de trois), eui-score à la révision livrée avec Soli 2.28.2, dans le processus
+          (meilleur de vingt). Mesuré le 19 octobre 2026.
+        </p>
+        <div class="table-scroll">
+          <table class="ref-table">
+            <thead><tr><th>Pièce</th><th>eui-score, PDF A4</th><th>LilyPond, PDF</th><th>eui-score, écran</th><th>LilyPond, SVG</th></tr></thead>
+            <tbody>
+              <tr><td><a href="<%= lp(example_path("ensembles", "symphony-5")) %>">Symphonie n° 5</a> (grande partition)</td><td><strong>9,7 ms</strong></td><td>567 ms</td><td><strong>1,0 ms</strong></td><td>5 403 ms</td></tr>
+              <tr><td><a href="<%= lp(example_path("piano", "minuet-in-g")) %>">Menuet en sol</a></td><td><strong>2,1 ms</strong></td><td>321 ms</td><td><strong>0,25 ms</strong></td><td>1 218 ms</td></tr>
+              <tr><td><a href="<%= lp(example_path("ensembles", "string-quartet")) %>">Canon en ré</a> (quatuor)</td><td><strong>2,6 ms</strong></td><td>297 ms</td><td><strong>0,24 ms</strong></td><td>1 001 ms</td></tr>
+              <tr><td><a href="<%= lp(example_path("solos", "ode-to-joy")) %>">Ode à la joie</a></td><td><strong>1,4 ms</strong></td><td>295 ms</td><td><strong>0,14 ms</strong></td><td>844 ms</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          LilyPond passe environ 250 ms à démarrer — un fichier d'une seule note prend 253 ms — si bien que, même
+          ce temps mis à part, eui-score imprime la symphonie une trentaine de fois plus vite. L'enjeu n'est pas le
+          banc d'essai : c'est qu'une modification redessine une grande partition dès l'image suivante, dans un
+          navigateur ou sur un serveur qui répond à une requête. LilyPond grave toujours bien plus que ce
+          sous-ensemble ; voir les <a href="<%= lp(limits_path()) %>">limites</a>.
+        </p>
+      </section>
+
+      <section class="doc-section" id="editor">
+        <h2>L'éditeur de partitions<a class="anchor" href="#editor">#</a></h2>
+        <p>
+          L'application de démonstration d'EUI (<code>examples/demo-app</code>) sert un éditeur bâti sur ce
+          graveur : A–G écrit une note, 2–7 sont les durées telles que MuseScore les numérote, les flèches
+          déplacent et sélectionnent, un clic sélectionne une note et un second clic la déplace. La source LilyPond
+          à côté de la portée peut être modifiée ou collée ; une note écrite par-dessus une barre de mesure est
+          coupée et liée pour vous.
+        </p>
+        <ul>
+          <li><strong>Partition</strong> : titres, clé, armure, mesure et tempo, pour toute la pièce ou à partir de la mesure sélectionnée ;</li>
+          <li><strong>Mesures</strong> : reprises (<code>[</code> et <code>]</code>), sauts de ligne et de page ;</li>
+          <li><strong>Expression</strong> : nuances, soufflets, articulations, texte au-dessus ou au-dessous ;</li>
+          <li><strong>Pistes</strong> : un instrument par piste, volume, panoramique, sourdine, regroupement par crochet ou accolade, et la grande partition sous la feuille ;</li>
+          <li>triolets (Ctrl+3) et sextolets (Ctrl+6), soixante annulations, export <strong>PDF</strong> et <strong>MIDI</strong>, lecture mixée en <code>.wav</code> par le serveur.</li>
+        </ul>
+        <p>
+          Pour écrire sans rien installer, le <a href="<%= sandbox %>">bac à sable</a> de ce site grave votre
+          LilyPond au fil de la frappe.
+        </p>
+      </section>
+    </div>
+  </div>
+</div>

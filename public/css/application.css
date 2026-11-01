@@ -1301,6 +1301,20 @@
     color: var(--ink);
     text-decoration: none;
   }
+  .nav-lang {
+    color: var(--ink-soft);
+    font: 600 12px/1 var(--font-sans);
+    letter-spacing: 0.04em;
+    padding: 6px 8px;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .nav-lang:hover {
+    background: var(--paper-deep);
+    color: var(--ink);
+    text-decoration: none;
+  }
   .footer-nav {
     flex: 1 0 100%;
     display: flex;

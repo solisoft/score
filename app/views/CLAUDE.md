@@ -516,3 +516,19 @@ soli lint app/views/
 **not** the templates: `.html.slv` files are left alone and stay hand-indented.
 Don't read "fmt reported nothing" as "the template is fine" — run it on the
 helper you changed, and keep the template tidy yourself.
+
+## Two languages (#471)
+
+The site and the account pages exist in English at `/…` and in French at
+`/fr/…` (`config/routes.sl` declares them twice; `SiteLocale` says which
+paths). In a view:
+
+- words: `t("key")` from `config/locales/en.yml` and `fr.yml` (both must get
+  every key); `{name}` placeholders with `t("key", {"name": value})`;
+- links to those pages: `lp(guide_path())` — the path in the page's language.
+  Controllers use `SiteLocale.path(...)` and `SiteText.t(...)` instead
+  (helpers are not seen from controllers);
+- a page of prose is translated whole: `app/views/pages/fr/<page>.html.slv`,
+  which `PagesController#_in_language` renders in French.
+
+The app (`/app/…`) and the editor are English for now.

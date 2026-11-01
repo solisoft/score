@@ -15,21 +15,21 @@ class TwoStepController < SessionsController
 
   # GET /login/code
   def new
-    return redirect(login_path()) if @_pending_user.nil?
+    return redirect(SiteLocale.path(login_path())) if @_pending_user.nil?
 
     render(
       "two_step/new",
-      {"title": "Two-step sign-in", "error": ""}
+      {"title": SiteText.t("auth.two_step_title"), "error": ""}
     )
   end
 
   # POST /login/code
   def create
     user = @_pending_user
-    return redirect(login_path()) if user.nil?
+    return redirect(SiteLocale.path(login_path())) if user.nil?
 
     limiter = rate_limiter_from_ip(req, AUTH_ATTEMPTS_PER_IP, AUTH_IP_WINDOW_SECONDS)
-    return @_refuse("Too many attempts. Try again in a few minutes.", 429) unless limiter.allowed()
+    return @_refuse(SiteText.t("auth.too_many_attempts"), 429) unless limiter.allowed()
 
     if user.second_step?(params["code"])
       remember = session_get("two_step_remember") == true
@@ -43,14 +43,14 @@ class TwoStepController < SessionsController
     if tries >= TWO_STEP_TRIES
       @_forget_pending
       return render("sessions/new", {
-        "title": "Sign in",
-        "error": "Too many wrong codes: sign in again.",
+        "title": SiteText.t("auth.sign_in"),
+        "error": SiteText.t("auth.too_many_codes"),
         "email": user.email,
         "return_to": ""
       }, {"status": 401})
     end
     session_set("two_step_tries", tries)
-    @_refuse("That code is not right, or it was already used.", 401)
+    @_refuse(SiteText.t("auth.bad_code"), 401)
   end
 
   # Who is half-way through signing in, while there is still time: or nil.
@@ -69,6 +69,6 @@ class TwoStepController < SessionsController
   end
 
   def _refuse(message, status)
-    render("two_step/new", {"title": "Two-step sign-in", "error": message}, {"status": status})
+    render("two_step/new", {"title": SiteText.t("auth.two_step_title"), "error": message}, {"status": status})
   end
 end

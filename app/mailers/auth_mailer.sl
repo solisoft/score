@@ -8,14 +8,14 @@
 class AuthMailer < Mailer
   def reset_password(user, token)
     @user = user
-    @reset_url = auth_base_url() + "/password/edit?token=" + token
-    this.mail(to: user.email, subject: "Reset your password")
+    @reset_url = auth_base_url() + SiteLocale.path("/password/edit") + "?token=" + token
+    this.mail(to: user.email, subject: SiteText.t("mail.reset_password.title"))
   end
 
   def confirm_email(user, token)
     @user = user
-    @confirm_url = auth_base_url() + "/confirm_email?token=" + token
-    this.mail(to: user.email, subject: "Confirm your email address")
+    @confirm_url = auth_base_url() + SiteLocale.path("/confirm_email") + "?token=" + token
+    this.mail(to: user.email, subject: SiteText.t("mail.confirm_email.title"))
   end
 
   # To the new address of a change asked for on the account page: the link
@@ -24,8 +24,8 @@ class AuthMailer < Mailer
     @user = user
     @new_email = user.email_change_to
     @hours = EMAIL_CHANGE_TTL / 3600
-    @confirm_url = auth_base_url() + "/account/email?token=" + token
-    this.mail(to: user.email_change_to, subject: "Confirm your new email address")
+    @confirm_url = auth_base_url() + SiteLocale.path("/account/email") + "?token=" + token
+    this.mail(to: user.email_change_to, subject: SiteText.t("mail.confirm_new_email.title"))
   end
 
   # To the old address, as the change is asked for: nothing changes until
@@ -33,8 +33,8 @@ class AuthMailer < Mailer
   def email_change_requested(user)
     @user = user
     @new_email = user.email_change_to
-    @reset_url = auth_base_url() + "/password/reset"
-    this.mail(to: user.email, subject: "A change of your email address was asked for")
+    @reset_url = auth_base_url() + SiteLocale.path("/password/reset")
+    this.mail(to: user.email, subject: SiteText.t("mail.email_change_requested.title"))
   end
 
   # Sent once, when the lockout trips. The sign-in response deliberately says
@@ -44,7 +44,7 @@ class AuthMailer < Mailer
   def account_locked(user, lock_minutes)
     @user = user
     @lock_minutes = lock_minutes
-    @reset_url = auth_base_url() + "/password/reset"
-    this.mail(to: user.email, subject: "Your account is temporarily locked")
+    @reset_url = auth_base_url() + SiteLocale.path("/password/reset")
+    this.mail(to: user.email, subject: SiteText.t("mail.account_locked.title"))
   end
 end

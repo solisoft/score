@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<%= I18n.locale() %>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -59,7 +59,7 @@
             </div>
         <% end %>
         <nav class="app-nav" aria-label="App">
-            <a href="<%= root_path() %>">The site</a>
+            <a href="<%= lp(root_path()) %>"><%= t("app_nav.site") %></a>
             <% if signed_in?() %>
                 <a href="<%= app_scores_path() %>"<%- current_path.starts_with?("/app/scores") || current_path == app_trash_path() ? " aria-current=\"page\"" : "" %>>Your scores</a>
                 <a href="<%= app_account_path() %>"<%- current_path == app_account_path() ? " aria-current=\"page\"" : "" %>>Account</a>
@@ -73,8 +73,12 @@
                     <span class="app-bell-count" data-bell-count hidden></span>
                 </a>
             <% else %>
-                <a href="<%= login_path() %>"<%- current_path == login_path() ? " aria-current=\"page\"" : "" %>>Sign in</a>
-                <a class="app-nav-cta" href="<%= signup_path() %>">Create account</a>
+                <a href="<%= lp(login_path()) %>"<%- current_path == lp(login_path()) ? " aria-current=\"page\"" : "" %>><%= t("auth.sign_in") %></a>
+                <a class="app-nav-cta" href="<%= lp(signup_path()) %>"><%= t("auth.create_account") %></a>
+                <% other_path = other_language_path(current_path) %>
+                <% unless other_path.nil? %>
+                    <a class="nav-lang" data-no-nav href="<%= other_path %>" hreflang="<%= I18n.locale() == "fr" ? "en" : "fr" %>" lang="<%= I18n.locale() == "fr" ? "en" : "fr" %>" title="<%= t("nav.other_language") %>"><%= I18n.locale() == "fr" ? "EN" : "FR" %></a>
+                <% end %>
             <% end %>
         </nav>
     </header>

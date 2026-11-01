@@ -1,29 +1,29 @@
 <section class="auth">
-  <h1>Sign in</h1>
+  <h1><%= t("auth.sign_in") %></h1>
   <% if error.present? %>
     <p class="form-error" role="alert"><%= error %></p>
   <% end %>
   <% if locals["unconfirmed"] == true %>
-    <form action="<%= confirmation_resend_path() %>" method="POST" class="auth-resend">
+    <form action="<%= lp(confirmation_resend_path()) %>" method="POST" class="auth-resend">
       <%- csrf_field() %>
       <input type="hidden" name="email" value="<%= email %>">
-      <button type="submit" class="btn btn-ghost">Send the link again</button>
+      <button type="submit" class="btn btn-ghost"><%= t("auth.send_again") %></button>
     </form>
   <% end %>
-  <form action="<%= login_path() %>" method="POST" class="auth-form">
+  <form action="<%= lp(login_path()) %>" method="POST" class="auth-form">
     <%- csrf_field() %>
     <input type="hidden" name="return_to" value="<%= return_to %>">
-    <label class="field">Email
+    <label class="field"><%= t("auth.email") %>
       <input id="email" name="email" type="email" required autofocus autocomplete="email" value="<%= email %>">
     </label>
-    <label class="field">Password
+    <label class="field"><%= t("auth.password") %>
       <input id="password" name="password" type="password" required autocomplete="current-password">
     </label>
     <div class="auth-row">
-      <label class="check"><input type="checkbox" name="remember_me" value="1"> Remember me</label>
-      <a href="<%= password_reset_path() %>">Forgot your password?</a>
+      <label class="check"><input type="checkbox" name="remember_me" value="1"> <%= t("auth.remember") %></label>
+      <a href="<%= lp(password_reset_path()) %>"><%= t("auth.forgot") %></a>
     </div>
-    <button type="submit" class="btn btn-primary">Sign in</button>
+    <button type="submit" class="btn btn-primary"><%= t("auth.sign_in") %></button>
   </form>
-  <p class="auth-alt">No account yet? <a href="<%= signup_path() %>">Create one</a></p>
+  <p class="auth-alt"><%= t("auth.no_account") %> <a href="<%= lp(signup_path()) %>"><%= t("auth.create_one") %></a></p>
 </section>

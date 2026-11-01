@@ -1,0 +1,280 @@
+<div class="wrap">
+  <header class="page-head">
+    <span class="eyebrow">Intégrer</span>
+    <h1>Des partitions sur n'importe quel site</h1>
+    <p class="lead">
+      eui-score existe aussi en <strong>WebAssembly</strong> : le même graveur, compilé pour le navigateur. Une
+      balise <code>&lt;script&gt;</code>, une balise <code>&lt;eui-score&gt;</code>, et votre page grave le LilyPond
+      toute seule — sans serveur, sans compte, rien à installer. Chaque partition de cette page est gravée ainsi, dans
+      votre navigateur.
+    </p>
+  </header>
+
+  <div class="doc-layout">
+    <aside class="toc" aria-label="Sommaire">
+      <p class="toc-title">Sur cette page</p>
+      <ol>
+        <li><a href="#start">En deux balises</a></li>
+        <li><a href="#why-script">Pourquoi un &lt;script&gt;</a></li>
+        <li><a href="#file">Depuis un fichier .ly</a></li>
+        <li><a href="#size">Taille et largeur</a></li>
+        <li><a href="#colour">Couleur</a></li>
+        <li><a href="#api">L'API JavaScript</a></li>
+        <li><a href="#events">Événements</a></li>
+        <li><a href="#editor">Une partition modifiable</a></li>
+        <li><a href="#frameworks">React, Vue, Svelte…</a></li>
+        <li><a href="#self-host">L'héberger vous-même</a></li>
+        <li><a href="#server">Ou sur le serveur</a></li>
+      </ol>
+    </aside>
+
+    <div class="prose">
+      <section class="doc-section" id="start">
+        <h2>En deux balises<a class="anchor" href="#start">#</a></h2>
+        <p>Chargez le module une fois, n'importe où dans la page :</p>
+<pre class="code-block"><code>&lt;script type="module" src="https://score.solisoft.net/eui-score.js"&gt;&lt;/script&gt;</code></pre>
+        <p>Puis placez une partition là où elle doit apparaître :</p>
+<pre class="code-block"><code>&lt;eui-score&gt;
+  &lt;script type="text/x-lilypond"&gt;
+    \header { title = "Minuet" composer = "J. S. Bach" }
+    \relative c'' { \key g \major \time 3/4
+      d4( g,8 a b c | d4) g,-. g-. | e'4( c8 d e fis | g4) g,-. g-. \bar "|." }
+  &lt;/script&gt;
+&lt;/eui-score&gt;</code></pre>
+        <p>Ce qui donne, gravé à l'instant par votre navigateur :</p>
+        <div class="score-sheet">
+          <eui-score>
+            <script type="text/x-lilypond">
+              \header { title = "Minuet" composer = "J. S. Bach" }
+              \relative c'' { \key g \major \time 3/4
+                d4( g,8 a b c | d4) g,-. g-. | e'4( c8 d e fis | g4) g,-. g-. \bar "|." }
+            </script>
+          </eui-score>
+        </div>
+        <p>
+          Le module pèse 26 Ko de JavaScript ; le graveur, <strong>826 Ko de WebAssembly (290 Ko compressé en gzip)</strong>,
+          est téléchargé une fois puis mis en cache, quel que soit le nombre de partitions de la page.
+        </p>
+      </section>
+
+      <section class="doc-section" id="why-script">
+        <h2>Pourquoi un &lt;script type="text/x-lilypond"&gt;<a class="anchor" href="#why-script">#</a></h2>
+        <p>
+          LilyPond regorge de chevrons : <code>&lt;c e g&gt;</code> est un accord, <code>&lt;&lt; … &gt;&gt;</code>
+          réunit des portées. Écrits tels quels dans une page, le navigateur les lirait comme des balises HTML et la
+          source arriverait abîmée. Le contenu d'un <code>&lt;script&gt;</code> de type inconnu n'est ni exécuté ni
+          analysé : il arrive intact. Une source sans chevrons peut aussi être le texte même de l'élément.
+        </p>
+<pre class="code-block"><code>&lt;eui-score&gt;\relative c' { c4 d e f | g1 \bar "|." }&lt;/eui-score&gt;</code></pre>
+        <div class="score-sheet"><eui-score>\relative c' { c4 d e f | g1 \bar "|." }</eui-score></div>
+      </section>
+
+      <section class="doc-section" id="file">
+        <h2>Depuis un fichier .ly<a class="anchor" href="#file">#</a></h2>
+        <p>
+          <code>src</code> va chercher la source : un fichier de votre site, ou toute adresse qui autorise les lectures
+          cross-origin. Les pièces de la galerie sont servies ainsi, à
+          <code>/examples/&lt;family&gt;/&lt;piece&gt;/source.ly</code> :
+        </p>
+<pre class="code-block"><code>&lt;eui-score src="https://score.solisoft.net/examples/ensembles/string-quartet/source.ly"&gt;&lt;/eui-score&gt;</code></pre>
+        <div class="score-sheet"><eui-score src="<%= example_source_path("ensembles", "string-quartet") %>"></eui-score></div>
+      </section>
+
+      <section class="doc-section" id="size">
+        <h2>Taille et largeur<a class="anchor" href="#size">#</a></h2>
+        <p>
+          Par défaut, la partition prend la largeur de son élément, et elle est regravée quand celle-ci change : les
+          mesures sont réparties en systèmes qui tiennent. <code>staff-space</code> règle la taille (en px entre deux
+          lignes de portée, 7 par défaut) ; <code>width</code> fixe une largeur en px.
+        </p>
+<pre class="code-block"><code>&lt;eui-score staff-space="10" src="…"&gt;&lt;/eui-score&gt;
+&lt;eui-score width="420" src="…"&gt;&lt;/eui-score&gt;</code></pre>
+        <p>
+          <label for="embed-size">staff-space : <strong id="embed-size-value">7</strong> px</label><br>
+          <input id="embed-size" type="range" min="4" max="14" step="0.5" value="7" style="width: 100%; max-width: 360px">
+        </p>
+        <div class="score-sheet"><eui-score id="embed-sized" src="<%= example_source_path("piano", "minuet-in-g") %>"></eui-score></div>
+      </section>
+
+      <section class="doc-section" id="colour">
+        <h2>Couleur<a class="anchor" href="#colour">#</a></h2>
+        <p>
+          L'encre est <code>currentColor</code> : la partition prend la couleur du texte qui l'entoure, et suit donc un
+          thème clair ou sombre sans rien faire.
+        </p>
+<pre class="code-block"><code>&lt;eui-score style="color: #8b2b2c"&gt;…&lt;/eui-score&gt;</code></pre>
+        <div class="score-sheet" style="color: #8b2b2c">
+          <eui-score><script type="text/x-lilypond">\relative c'' { \key d \major fis4\mf fis g a | a g fis e | d d e fis | e4. d8 d2 \bar "|." }</script></eui-score>
+        </div>
+        <div class="score-sheet" style="background: #1d1914; color: #f3efe6; margin-top: 12px">
+          <eui-score><script type="text/x-lilypond">\relative c'' { \key d \major fis4\mf fis g a | a g fis e | d d e fis | e4. d8 d2 \bar "|." }</script></eui-score>
+        </div>
+      </section>
+
+      <section class="doc-section" id="api">
+        <h2>L'API JavaScript<a class="anchor" href="#api">#</a></h2>
+        <p>Pour piloter la gravure depuis votre propre code, le module exporte ses fonctions :</p>
+<pre class="code-block"><code>import { render, toMidi, toPdf, check, download }
+  from "https://score.solisoft.net/eui-score.js";
+
+const svg = await render(source, { width: 640, staffSpace: 7, marks: { "2": "crimson" } });
+element.innerHTML = svg;                          // an SVG string
+
+const midi = await toMidi(source, { bpm: 96 });   // a Uint8Array, a Standard MIDI File
+download(midi, "minuet.mid", "audio/midi");
+
+const pdf = await toPdf(source, "Minuet");        // the A4 pages, as a PDF
+download(pdf, "minuet.pdf", "application/pdf");
+
+await check("{ c'64 }");   // "score: the duration 64 is not one this draws (…) (at character 5)"</code></pre>
+        <div class="table-scroll">
+          <table class="ref-table">
+            <thead><tr><th>Fonction</th><th>Renvoie</th></tr></thead>
+            <tbody>
+              <tr><td><code>render(src, opts)</code></td><td>Le SVG. <code>width</code>, <code>staffSpace</code>, et <code>marks</code> : numéro d'élément (notes et silences, à partir de 0) → une couleur CSS. Rejette avec le refus du graveur.</td></tr>
+              <tr><td><code>toMidi(src, opts)</code></td><td>Le fichier MIDI, joué comme l'éditeur le joue : chaque reprise jouée en entier, ses fins tour à tour, D.S. et D.C. pris en compte (pour une source que l'éditeur sait ouvrir ; une autre est jouée telle qu'écrite). <code>bpm</code> et <code>beat</code> pour une source sans tempo (100 à la noire par défaut), <code>program</code> pour une portée sans instrument, <code>unfold: false</code> pour la jouer telle qu'écrite.</td></tr>
+              <tr><td><code>toPdf(src, title)</code></td><td>Le PDF A4 vectoriel, sous forme de chaîne.</td></tr>
+              <tr><td><code>check(src)</code></td><td>Le refus, ou <code>""</code> quand la source peut être gravée.</td></tr>
+              <tr><td><code>download(data, name, type)</code></td><td>Propose un fichier à enregistrer.</td></tr>
+              <tr><td><code>loaded()</code></td><td>Une promesse résolue dès que le WebAssembly est prêt.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Essayez : <button type="button" class="score-btn" id="embed-pdf">le PDF du menuet, fabriqué ici</button>
+          <button type="button" class="score-btn" id="embed-midi">son MIDI</button>
+        </p>
+      </section>
+
+      <section class="doc-section" id="events">
+        <h2>Événements<a class="anchor" href="#events">#</a></h2>
+        <p>
+          L'élément émet <code>render</code> après chaque gravure (<code>detail.width</code>, et
+          <code>detail.ms</code> qu'elle a pris) et <code>refuse</code> quand la source est refusée (<code>detail</code> :
+          le message, qui s'affiche aussi à la place de la partition). Sa propriété <code>source</code> lit et
+          remplace le LilyPond : c'est tout ce qu'il faut à un éditeur en direct, comme le <a href="<%= playground_path() %>">bac à sable</a>.
+        </p>
+<pre class="code-block"><code>const score = document.querySelector("eui-score");
+textarea.addEventListener("input", () =&gt; { score.source = textarea.value; });
+score.addEventListener("refuse", (event) =&gt; console.warn(event.detail));</code></pre>
+        <div class="score-sheet score-sheet-refused">
+          <eui-score><script type="text/x-lilypond">{ c'4 d'4 \glissando e'4 }</script></eui-score>
+        </div>
+      </section>
+
+      <section class="doc-section" id="editor">
+        <h2>Une partition modifiable<a class="anchor" href="#editor">#</a></h2>
+        <p>
+          <code>&lt;eui-score-editor&gt;</code> est la même partition, modifiable à la souris et au clavier. Cliquez sur
+          une note — celle-ci est active :
+        </p>
+<pre class="code-block"><code>&lt;script type="module" src="https://score.solisoft.net/eui-score-editor.js"&gt;&lt;/script&gt;
+
+&lt;eui-score-editor&gt;
+  &lt;script type="text/x-lilypond"&gt;{ \key g \major \time 3/4 g'4 a' b' | d''2 r4 | &lt;g' b'&gt;2. \bar "|." }&lt;/script&gt;
+&lt;/eui-score-editor&gt;</code></pre>
+        <div class="score-sheet">
+          <eui-score-editor id="embed-editor"><script type="text/x-lilypond">{ \key g \major \time 3/4 g'4 a' b' | d''2 r4 | <g' b'>2. \bar "|." }</script></eui-score-editor>
+        </div>
+        <div class="table-scroll">
+          <table class="ref-table">
+            <thead><tr><th>Faire</th><th>Pour</th></tr></thead>
+            <tbody>
+              <tr><td>Clic, <code>←</code> <code>→</code></td><td>Sélectionner une note ou un silence. <code>Alt+↑</code> <code>Alt+↓</code> choisissent une note d'un accord.</td></tr>
+              <tr><td><code>↑</code> <code>↓</code>, ou glisser</td><td>Déplacer la note d'un degré dans la tonalité ; avec <code>Shift</code> d'un demi-ton, avec <code>Ctrl</code> d'une octave.</td></tr>
+              <tr><td><code>A</code>–<code>G</code></td><td>Écrire cette note à la place de la sélection : un silence devient une note de même durée.</td></tr>
+              <tr><td><code>Shift</code>+<code>A</code>–<code>G</code></td><td>Ajouter cette note au-dessus de l'accord.</td></tr>
+              <tr><td><code>R</code>, <code>Delete</code></td><td>La note devient un silence ; la note sélectionnée d'un accord quitte l'accord.</td></tr>
+              <tr><td><code>+</code> <code>−</code> <code>=</code></td><td>Dièse, bémol, bécarre.</td></tr>
+              <tr><td><code>Ctrl+Z</code>, <code>Ctrl+Y</code></td><td>Annuler, rétablir. <strong>+ Bar</strong> ajoute une mesure de silences à la fin, pour y écrire.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Le texte LilyPond reste le seul état. Chaque modification passe par les fonctions d'édition d'eui-score —
+          celles qu'utilise l'éditeur de partitions d'EUI —, qui ne réécrivent que les caractères qui écrivent une note,
+          et chaque résultat est gravé avant d'être conservé : une modification que le graveur refuserait est refusée,
+          avec sa raison. Les notes s'écrivent à la place des silences, comme dans MuseScore, si bien qu'une mesure ne
+          déborde jamais. Une source en <code>\relative</code> est réécrite en hauteurs absolues à sa première
+          modification, puisqu'une hauteur relative dépend des notes qui la précèdent.
+        </p>
+<pre class="code-block"><code>const editor = document.querySelector("eui-score-editor");
+editor.addEventListener("change", (event) =&gt; save(event.detail.source));
+editor.source = "{ c'4 d' e' f' }";       // replace the music
+editor.edit({ op: "move", item: 0, how: "step", by: 1 });   // or edit it from code</code></pre>
+      </section>
+
+      <section class="doc-section" id="frameworks">
+        <h2>React, Vue, Svelte…<a class="anchor" href="#frameworks">#</a></h2>
+        <p>
+          <code>&lt;eui-score&gt;</code> est un élément HTML standard (un <em>custom element</em>) : tout framework
+          capable d'écrire du HTML peut s'en servir. Passez la source par la propriété <code>source</code>, ou appelez
+          <code>render()</code> et placez le SVG vous-même.
+        </p>
+<pre class="code-block"><code>// React
+function Score({ source }) {
+  const ref = useRef(null);
+  useEffect(() =&gt; { ref.current.source = source; }, [source]);
+  return &lt;eui-score ref={ref} /&gt;;
+}</code></pre>
+      </section>
+
+      <section class="doc-section" id="self-host">
+        <h2>L'héberger vous-même<a class="anchor" href="#self-host">#</a></h2>
+        <p>
+          Les fichiers, côte à côte dans n'importe quel dossier statique ; le module trouve les autres à côté de lui,
+          sous la version avec laquelle il a été chargé (<code>?v=…</code>), si bien qu'un cache ne mélange jamais deux versions :
+        </p>
+        <ul>
+          <li><a href="/eui-score/eui-score.js?v=<%= eui_version %>" download>eui-score.js</a> — l'élément et l'API ;</li>
+          <li><a href="/eui-score/eui-score-editor.js?v=<%= eui_version %>" download>eui-score-editor.js</a> — la partition modifiable, facultatif ;</li>
+          <li><a href="/eui-score/score-model.js?v=<%= eui_version %>" download>score-model.js</a> — déplie les reprises dans le MIDI, chargé seulement pour une pièce qui en a ; facultatif ;</li>
+          <li><a href="/eui-score/eui_score_web.js?v=<%= eui_version %>" download>eui_score_web.js</a> — la liaison générée par wasm-bindgen ;</li>
+          <li><a href="/eui-score/eui_score_web_bg.wasm?v=<%= eui_version %>" download>eui_score_web_bg.wasm</a> — le graveur.</li>
+        </ul>
+        <p>
+          Servez le <code>.wasm</code> en <code>application/wasm</code> (presque tous les serveurs le font). Depuis une
+          autre origine que la vôtre, les fichiers ont besoin d'un en-tête <code>Access-Control-Allow-Origin</code> :
+          score.solisoft.net en envoie un pour eux et pour les sources de la galerie. Ses adresses <code>/eui-score.js</code> et
+          <code>/eui-score-editor.js</code> chargent toujours la version courante, et sont mises en cache cinq minutes.
+        </p>
+        <p>
+          Le module est construit à partir de la crate <code>eui-score</code> par <code>wasm/build.sh</code>
+          (<code>wasm-bindgen</code>, cible <code>wasm32-unknown-unknown</code>) : le même code qu'appellent le widget
+          <code>score()</code> d'EUI et les fonctions natives de Soli.
+        </p>
+      </section>
+
+      <section class="doc-section" id="server">
+        <h2>Ou sur le serveur<a class="anchor" href="#server">#</a></h2>
+        <p>
+          Graver dans le navigateur, c'est télécharger le graveur. Pour une page qui doit s'afficher sans JavaScript ou
+          être indexée — comme la <a href="<%= lp(examples_path()) %>">galerie</a> de ce site —, une application Soli grave
+          sur le serveur avec <code>eui_score_layout</code> et <code>eui_score_bands</code> (voir le
+          <a href="<%= lp(guide_path()) %>#server">guide</a>). Le dessin est identique au pixel près : c'est le même
+          graveur.
+        </p>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  const { toPdf, toMidi, download } = await import("/eui-score/eui-score.js?v=<%= eui_version %>");
+  await import("/eui-score/eui-score-editor.js?v=<%= eui_version %>");
+
+  const slider = document.getElementById("embed-size");
+  const sized = document.getElementById("embed-sized");
+  slider.addEventListener("input", () => {
+    document.getElementById("embed-size-value").textContent = slider.value;
+    sized.setAttribute("staff-space", slider.value);
+  });
+
+  const minuet = () => document.getElementById("embed-sized").source;
+  document.getElementById("embed-pdf").addEventListener("click", async () => {
+    download(await toPdf(minuet(), "Minuet"), "minuet.pdf", "application/pdf");
+  });
+  document.getElementById("embed-midi").addEventListener("click", async () => {
+    download(await toMidi(minuet()), "minuet.mid", "audio/midi");
+  });
+</script>

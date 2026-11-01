@@ -1,13 +1,9 @@
 <div class="wrap">
   <header class="page-head">
-    <span class="eyebrow">Gallery</span>
-    <h1>Engraved examples</h1>
-    <p class="lead">
-      Scores for one instrument, for voice, piano, guitar, drums and ensembles. Each one is engraved on demand by
-      eui-score; open it to listen, read its LilyPond source, download its MIDI and PDF, or edit it in the
-      playground.
-    </p>
-    <nav class="pills" aria-label="Families" style="margin-top: 24px">
+    <span class="eyebrow"><%= t("examples.eyebrow") %></span>
+    <h1><%= t("examples.title") %></h1>
+    <p class="lead"><%= t("examples.lead") %></p>
+    <nav class="pills" aria-label="<%= t("examples.families") %>" style="margin-top: 24px">
       <% for section in sections %>
         <a class="pill" href="#<%= section["slug"] %>"><%= section["title"] %></a>
       <% end %>
@@ -17,7 +13,7 @@
   <% for section in sections %>
     <section class="gallery-section" id="<%= section["slug"] %>">
       <header>
-        <h2><a href="<%= example_category_path(section["slug"]) %>" style="color: inherit"><%= section["title"] %></a></h2>
+        <h2><a href="<%= lp(example_category_path(section["slug"])) %>" style="color: inherit"><%= section["title"] %></a></h2>
         <p><%= section["lead"] %></p>
       </header>
       <div class="example-grid">

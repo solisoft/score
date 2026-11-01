@@ -20,7 +20,7 @@ class SessionsController < Controller
     render(
       "sessions/new",
       {
-        "title": "Sign in",
+        "title": SiteText.t("auth.sign_in"),
         "error": "",
         "email": "",
         "return_to": @_return_to
@@ -38,7 +38,7 @@ class SessionsController < Controller
     # each against thousands of accounts) and it is itself abusable as a
     # denial of service against a known address. This closes both.
     limiter = rate_limiter_from_ip(req, AUTH_ATTEMPTS_PER_IP, AUTH_IP_WINDOW_SECONDS)
-    return this._reject("Too many sign-in attempts. Try again in a few minutes.", email, 429) unless limiter.allowed()
+    return this._reject(SiteText.t("auth.too_many_signins"), email, 429) unless limiter.allowed()
 
     user = User.find_by("email", email)
 
@@ -61,7 +61,7 @@ class SessionsController < Controller
     # from this response.
     if !user.nil? && user.locked?()
       User.burn_password_work(password)
-      return this._reject("Invalid email or password", email, 401)
+      return this._reject(SiteText.t("auth.invalid"), email, 401)
     end
 
     # Both branches must cost the same. `authenticate` runs Argon2id (~100ms);
@@ -72,13 +72,13 @@ class SessionsController < Controller
 
     unless authenticated
       user.register_failed_attempt() unless user.nil?
-      return this._reject("Invalid email or password", email, 401)
+      return this._reject(SiteText.t("auth.invalid"), email, 401)
     end
 
     if auth_require_confirmed_email() && !user.confirmed?()
       return render("sessions/new", {
-        "title": "Sign in",
-        "error": "Please confirm your email address first: open the link we sent you, or ask for a new one.",
+        "title": SiteText.t("auth.sign_in"),
+        "error": SiteText.t("auth.confirm_first"),
         "email": email,
         "return_to": @_return_to,
         "unconfirmed": true
@@ -97,7 +97,7 @@ class SessionsController < Controller
       session_set("two_step_tries", 0)
       session_set("two_step_remember", remember)
       session_set("two_step_return", @_return_to)
-      return redirect(login_code_path())
+      return redirect(SiteLocale.path(login_code_path()))
     end
 
     @_finish_sign_in(user, remember)
@@ -132,7 +132,7 @@ class SessionsController < Controller
   # leaking more than the others.
   def _reject(message, email, status)
     return render("sessions/new", {
-      "title": "Sign in",
+      "title": SiteText.t("auth.sign_in"),
       "error": message,
       "email": email,
       "return_to": @_return_to
@@ -176,7 +176,10 @@ class SessionsController < Controller
     session_regenerate()
     # The layout, seeing it, clears the app's pages this browser kept for
     # offline use and the editor's unsent text: the computer may be shared.
-    flash("signed_out", "You are signed out.")
-    redirect("/login")
+    # Signed out from the app (English): back to the sign-in page in the
+    # language last read on the site (#471).
+    locale = cookies["locale"] == "fr" ? "fr" : "en"
+    flash("signed_out", SiteText.t("auth.signed_out", {}, locale))
+    redirect(SiteLocale.localize("/login", locale))
   end
 end

@@ -163,10 +163,10 @@ class User < Model
   # cost of an offline attack against the Argon2id digest.
   def password_error(plaintext)
     value = plaintext.to_s
-    return "Password is required" if value.blank?
+    return SiteText.t("auth.password_required") if value.blank?
 
     if value.length() < AUTH_MIN_PASSWORD_LENGTH
-      return "Password must be at least #{AUTH_MIN_PASSWORD_LENGTH} characters"
+      return SiteText.t("auth.password_short", {"n": AUTH_MIN_PASSWORD_LENGTH})
     end
 
     null

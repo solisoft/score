@@ -97,6 +97,9 @@
   .nav-account .nav-cta { margin-left: 0; }
   .nav-signin { color: var(--ink-soft); font-size: 15px; font-weight: 500; padding: 8px 12px; border-radius: 999px; white-space: nowrap; }
   .nav-signin:hover { background: var(--paper-deep); color: var(--ink); text-decoration: none; }
+  /* The other language (#471): a small outlined chip, FR or EN. */
+  .nav-lang { color: var(--ink-soft); font: 600 12px/1 var(--font-sans); letter-spacing: 0.04em; padding: 6px 8px; border: 1px solid var(--line-strong); border-radius: 999px; white-space: nowrap; }
+  .nav-lang:hover { background: var(--paper-deep); color: var(--ink); text-decoration: none; }
   .footer-nav { flex: 1 0 100%; display: flex; flex-wrap: wrap; gap: 4px 18px; }
   .footer-nav a { color: var(--ink-soft); font-weight: 500; }
 

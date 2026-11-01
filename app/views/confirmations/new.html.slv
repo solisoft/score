@@ -6,12 +6,12 @@
   <% if error.present? %>
     <p class="form-error" role="alert"><%= error %></p>
   <% end %>
-  <form action="<%= confirmation_resend_path() %>" method="POST" class="auth-form">
+  <form action="<%= lp(confirmation_resend_path()) %>" method="POST" class="auth-form">
     <%- csrf_field() %>
-    <label class="field">Email
+    <label class="field"><%= t("auth.email") %>
       <input id="email" name="email" type="email" required autocomplete="email" value="<%= locals["email"].to_s %>">
     </label>
-    <button type="submit" class="btn btn-primary">Send a new confirmation link</button>
+    <button type="submit" class="btn btn-primary"><%= t("auth.send_confirmation") %></button>
   </form>
-  <p class="auth-alt"><a href="<%= login_path() %>">Sign in</a></p>
+  <p class="auth-alt"><a href="<%= lp(login_path()) %>"><%= t("auth.sign_in") %></a></p>
 </section>

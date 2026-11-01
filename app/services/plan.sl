@@ -99,8 +99,8 @@ class Plan
       "name": name,
       "slug": limits["plan"],
       "ai": Plan.ai_text(limits["own_key_ai"]),
-      "tracks": limits["take_tracks"] == 1 ? "1 audio track a score" : "#{limits["take_tracks"]} audio tracks a score",
-      "storage": "#{Plan.size_text(limits["take_bytes"])} of audio takes",
+      "tracks": Plan.said(limits["take_tracks"] == 1 ? "plan.one_track" : "plan.tracks", limits["take_tracks"]),
+      "storage": Plan.said("plan.storage", Plan.size_text(limits["take_bytes"])),
       "people": Plan.people_text(limits["people_per_score"])
     }
   end
@@ -110,19 +110,24 @@ class Plan
   static def ai_note(open)
     return nil if open
 
-    "Until payments open, anyone signed in can use the AI with their own key."
+    SiteText.t("plan.ai_note")
   end
 
   static def ai_text(own_key_ai)
-    return "No AI" unless own_key_ai
+    return SiteText.t("plan.no_ai") unless own_key_ai
 
-    "AI (photo reading, assistant) with your own key from Anthropic, OpenAI, Gemini, Mistral, DeepSeek, Kimi…"
+    SiteText.t("plan.ai")
   end
 
   static def people_text(most)
-    return "Share a score with as many people as you like" if most.nil?
+    return SiteText.t("plan.people_any") if most.nil?
 
-    "Share a score with up to #{most} people"
+    Plan.said("plan.people", most)
+  end
+
+  # The text of `key` in the request's language (#471), its {n} said `value`.
+  static def said(key, value)
+    SiteText.t(key, {"n": value})
   end
 
   # `bytes` as "50 MB" or "2 GB".

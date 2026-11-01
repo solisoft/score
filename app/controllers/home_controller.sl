@@ -3,9 +3,8 @@ class HomeController < Controller
   # GET / — the app and what it does, section by section (HOME_FEATURES),
   # then the engraver for developers and the plans
   def index
-    @title = "Write, play and share scores, together"
-    @description = "Score is a score editor in the browser: write with the mouse or the keyboard, play it, "
-    + "edit it together live, practise with the microphone, and share it. Free to start."
+    @title = SiteText.t("home.title")
+    @description = SiteText.t("home.description")
     @app_open = AppSetup.ready?
     @features = HomeFeatures.all.map do |feature|
       feature.merge({"href": @_href(feature["link"], @app_open)})
@@ -42,8 +41,8 @@ class HomeController < Controller
   # Where a feature's link goes: "pricing", "signup" (the playground where
   # the app is not open: there is no account to make) or "playground".
   def _href(link, open)
-    return pricing_path() if link == "pricing"
-    return signup_path() if link == "signup" && open
+    return SiteLocale.path(pricing_path()) if link == "pricing"
+    return SiteLocale.path(signup_path()) if link == "signup" && open
 
     playground_path()
   end

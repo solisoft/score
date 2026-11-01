@@ -21,9 +21,9 @@ class ConfirmationsController < Controller
       return render(
         "confirmations/new",
         {
-          "title": "Confirm your email",
+          "title": SiteText.t("auth.confirm_title"),
           "notice": "",
-          "error": "That confirmation link is invalid or was already used. Enter your email to get a fresh one."
+          "error": SiteText.t("auth.confirm_bad_link")
         }
       )
     end
@@ -40,8 +40,8 @@ class ConfirmationsController < Controller
     return render(
       "confirmations/new",
       {
-        "title": "Email confirmed",
-        "notice": "Your email address is confirmed. Sign in to continue.",
+        "title": SiteText.t("auth.confirmed_title"),
+        "notice": SiteText.t("auth.confirmed"),
         "error": ""
       }
     )
@@ -52,7 +52,7 @@ class ConfirmationsController < Controller
     render(
       "confirmations/new",
       {
-        "title": "Confirm your email",
+        "title": SiteText.t("auth.confirm_title"),
         "notice": "",
         "error": ""
       }
@@ -64,7 +64,7 @@ class ConfirmationsController < Controller
     email = params["email"].to_s.trim().downcase()
     unless User.account_email_allowed?(email, client_ip(req))
       return render("confirmations/new", {
-        "title": "Confirm your email",
+        "title": SiteText.t("auth.confirm_title"),
         "notice": "",
         "error": AUTH_EMAILS_REFUSED
       }, {"status": 429})
@@ -79,8 +79,8 @@ class ConfirmationsController < Controller
     return render(
       "confirmations/new",
       {
-        "title": "Confirm your email",
-        "notice": "If that email needs confirming, a fresh link is on its way.",
+        "title": SiteText.t("auth.confirm_title"),
+        "notice": SiteText.t("auth.confirm_sent"),
         "error": ""
       }
     )

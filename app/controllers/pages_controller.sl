@@ -3,8 +3,7 @@
 class PagesController < Controller
   # GET /guide — score(), the native builtins, MIDI and PDF
   def guide
-    @title = "Guide"
-    @description = "eui-score, EUI's engraver: show a score with score(), export it as MIDI and PDF."
+    @_page_texts("guide")
     hello = ScoreLibrary.source_named("syntax/hello")
     @hello = ScoreSvg.figure(hello, 640, 9)
     @marked = ScoreSvg.marked_figure(hello, 640, 9, {
@@ -14,20 +13,21 @@ class PagesController < Controller
     waltz = ScoreLibrary.source_named("piano/waltz")
     @narrow = ScoreSvg.figure(waltz, 440, 5.5)
     @wide = ScoreSvg.figure(waltz, 1000, 6.5)
+    @_in_language("guide")
   end
 
   # GET /syntax — the LilyPond subset, one engraved snippet per construct
   def syntax
-    @title = "Syntax"
-    @description = "The LilyPond subset eui-score reads, construct by construct, every example engraved."
+    @_page_texts("syntax")
     @figures = ScoreSvg.figures(ScoreLibrary.snippets, 700, 7)
+    @_in_language("syntax")
   end
 
   # GET /embed — eui-score in the browser, on any site
   def embed
     @eui_version = ScoreAssets.version
-    @title = "Embed"
-    @description = "Scores on any website: one script, one <eui-score> tag, nothing to install."
+    @_page_texts("embed")
+    @_in_language("embed")
   end
 
   # GET /claude — Score in Claude: the MCP server, installed in Claude Code,
@@ -37,41 +37,41 @@ class PagesController < Controller
     @mcp_url = base + "/mcp"
     @skill_install = ScoreMcp.skill_install_command(base)
     @skill_url = base + "/skills/transcribe-score/SKILL.md"
-    @title = "Score in Claude"
-    @description = "Connect Claude to Score: it writes, reads and changes your scores, and reads photos of scores."
+    @_page_texts("claude")
+    @_in_language("claude")
   end
 
   # GET /limits — what the engraver refuses, with its own messages
   def limits
-    @title = "Limits"
-    @description = "What eui-score does not engrave, and the exact message it answers."
+    @_page_texts("limits")
     @refusals = ScoreLibrary.refusals.map do |refusal|
       laid = eui_score_layout(refusal["src"], 100, {})
       refusal.merge({"message": laid["error"]})
     end
+    @_in_language("limits")
   end
 
   # GET /pricing — the plans, Free and Pro (#393), each limit read from Plan
   def pricing
     @monthly = Plan.price("monthly")
-    @title = "Pricing"
-    @description = "Score is free to write with. Pro, #{this.monthly["label"]} a month, records more audio, "
-    + "runs the AI on your own key and shares with anyone."
+    @_page_texts("pricing")
+    @description = @description.replace("{price}", @monthly["label"])
     @plans = Plan.catalog
     @annual = Plan.price("annual")
     @payments_open = Stripe.configured?
     @ai_note = Plan.ai_note(@payments_open)
+    @_in_language("pricing")
   end
 
   # GET /changelog — what changed lately, on the site and in the engraver
   def changelog
-    @title = "Changelog"
-    @description = "What is new in eui-score: the site and its score editor, and the engraver that draws every score."
+    @_page_texts("changelog")
     pages = {
       "playground": playground_path(),
-      "limits": limits_path(),
-      "pricing": pricing_path(),
-      "claude": claude_path(),
+      "limits": SiteLocale.path(limits_path()),
+      "pricing": SiteLocale.path(pricing_path()),
+      "claude": SiteLocale.path(claude_path()),
+      "home": SiteLocale.path(root_path()),
       "app": app_home_path()
     }
     @days = Changelog.shown(AppSetup.ready?).map do |day|
@@ -82,7 +82,23 @@ class PagesController < Controller
           "sample": Changelog.sample(entry["sample"])
         })
       end
-      day.merge({"entries": entries, "heading": DateTime.parse(day["date"]).format("%A, %B %-d, %Y")})
+      day.merge({"entries": entries, "heading": Changelog.day_heading(day["date"], I18n.locale())})
     end
+  end
+
+  private
+
+  # The page's @title and @description in the request's language (#471).
+  def _page_texts(page)
+    @title = SiteText.t("pages.#{page}.title")
+    @description = SiteText.t("pages.#{page}.description")
+  end
+
+  # In French, the page's French template (app/views/pages/fr/), else the
+  # English one by convention (#471): a page of prose is translated whole.
+  def _in_language(page)
+    return nil unless I18n.locale() == "fr"
+
+    render("pages/fr/#{page}")
   end
 end

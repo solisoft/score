@@ -1,4 +1,4 @@
-<a class="example-card" href="<%= example_path(example["category"], example["slug"]) %>">
+<a class="example-card" href="<%= lp(example_path(example["category"], example["slug"])) %>">
   <div class="example-preview"><img src="<%= example_preview_path(example["category"], example["slug"]) %>" alt="" loading="lazy" decoding="async"></div>
   <div class="example-body">
     <h3><%= example["title"] %></h3>

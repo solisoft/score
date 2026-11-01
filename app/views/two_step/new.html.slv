@@ -1,15 +1,15 @@
 <section class="auth">
-  <h1>Two-step sign-in</h1>
-  <p class="muted">Type the six-digit code your authenticator app shows for Score — or one of your backup codes.</p>
+  <h1><%= t("auth.two_step_title") %></h1>
+  <p class="muted"><%= t("auth.two_step_lead") %></p>
   <% if error.present? %>
     <p class="form-error" role="alert"><%= error %></p>
   <% end %>
-  <form action="<%= login_code_path() %>" method="POST" class="auth-form">
+  <form action="<%= lp(login_code_path()) %>" method="POST" class="auth-form">
     <%- csrf_field() %>
-    <label class="field">Code
+    <label class="field"><%= t("auth.code") %>
       <input id="code" name="code" type="text" required autofocus autocomplete="one-time-code" inputmode="text" maxlength="12" spellcheck="false">
     </label>
-    <button type="submit" class="btn btn-primary">Sign in</button>
+    <button type="submit" class="btn btn-primary"><%= t("auth.sign_in") %></button>
   </form>
-  <p class="auth-alt"><a href="<%= login_path() %>">Start again</a></p>
+  <p class="auth-alt"><a href="<%= lp(login_path()) %>"><%= t("auth.start_again") %></a></p>
 </section>

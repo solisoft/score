@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<%= I18n.locale() %>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -17,6 +17,14 @@
     <meta name="robots" content="noindex">
     <% end %>
     <link rel="canonical" href="<%= share_url %>">
+    <%# The page in each language (#471): what a search engine shows to whom. %>
+    <% other_path = other_language_path(current_path) %>
+    <% unless other_path.nil? %>
+    <% english_path = I18n.locale() == "fr" ? other_path : current_path %>
+    <link rel="alternate" hreflang="en" href="<%= absolute_url(english_path) %>">
+    <link rel="alternate" hreflang="fr" href="<%= absolute_url(I18n.locale() == "fr" ? current_path : other_path) %>">
+    <link rel="alternate" hreflang="x-default" href="<%= absolute_url(english_path) %>">
+    <% end %>
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Score">
     <meta property="og:title" content="<%= title %> · Score">
@@ -39,19 +47,20 @@
         the engraver's own pages (Syntax, Examples, Embed, Limits) are under
         Guide and in the footer. An item is [label, path, the paths it covers]. %>
     <% app_path = app_open?() ? app_home_path() : playground_path() %>
-    <% nav_items = [["App", app_path, [app_path]], ["Sections", sections_path(), [sections_path()]],
-                    ["Pricing", pricing_path(), [pricing_path()]],
-                    ["Guide", guide_path(), [guide_path(), syntax_path(), embed_path(), limits_path(), claude_path()]],
-                    ["Changelog", changelog_path(), [changelog_path()]]] %>
+    <% nav_items = [[t("nav.app"), app_path, [app_path]], [t("nav.sections"), sections_path(), [sections_path()]],
+                    [t("nav.pricing"), lp(pricing_path()), [lp(pricing_path())]],
+                    [t("nav.guide"), lp(guide_path()),
+                     [lp(guide_path()), lp(syntax_path()), lp(embed_path()), lp(limits_path()), lp(claude_path())]],
+                    [t("nav.changelog"), lp(changelog_path()), [lp(changelog_path())]]] %>
     <header class="site-header">
         <div class="wrap">
-            <a class="brand" href="<%= root_path() %>" aria-label="Score, home">
+            <a class="brand" href="<%= lp(root_path()) %>" aria-label="<%= t("nav.home_label") %>">
                 <span class="brand-mark" aria-hidden="true">
                     <svg width="16" height="18" viewBox="0 0 16 18" fill="currentColor"><path d="M6 1.5 15 0v12.2a2.8 2.3 0 1 1-1.6-2.1V3.4L7.6 4.3v9.9A2.8 2.3 0 1 1 6 12.1Z"/></svg>
                 </span>
                 <span><em>Score</em></span>
             </a>
-            <nav class="site-nav" aria-label="Main navigation">
+            <nav class="site-nav" aria-label="<%= t("nav.main_label") %>">
                 <% for item in nav_items %>
                     <% here = item[2].includes?(current_path) || current_path.starts_with?(item[1] + "/") %>
                     <a href="<%= item[1] %>"<%- here ? " aria-current=\"page\"" : "" %>><%= item[0] %></a>
@@ -59,13 +68,16 @@
             </nav>
             <%# Outside the links' row: on a phone it stays beside the brand while the links wrap below. %>
             <div class="nav-account">
+                <% unless other_path.nil? %>
+                    <a class="nav-lang" data-no-nav href="<%= other_path %>" hreflang="<%= I18n.locale() == "fr" ? "en" : "fr" %>" lang="<%= I18n.locale() == "fr" ? "en" : "fr" %>" title="<%= t("nav.other_language") %>"><%= I18n.locale() == "fr" ? "EN" : "FR" %></a>
+                <% end %>
                 <% if !app_open?() %>
-                    <a class="nav-cta" href="<%= playground_path() %>">Playground</a>
+                    <a class="nav-cta" href="<%= playground_path() %>"><%= t("nav.playground") %></a>
                 <% elsif signed_in?() %>
-                    <a class="nav-cta" href="<%= app_home_path() %>">Open the app</a>
+                    <a class="nav-cta" href="<%= app_home_path() %>"><%= t("nav.open_app") %></a>
                 <% else %>
-                    <a class="nav-signin" href="<%= login_path() %>">Sign in</a>
-                    <a class="nav-cta" href="<%= signup_path() %>">Start free</a>
+                    <a class="nav-signin" href="<%= lp(login_path()) %>"><%= t("nav.sign_in") %></a>
+                    <a class="nav-cta" href="<%= lp(signup_path()) %>"><%= t("nav.start_free") %></a>
                 <% end %>
             </div>
         </div>
@@ -77,30 +89,20 @@
 
     <footer class="site-footer">
         <div class="wrap">
-            <nav class="footer-nav" aria-label="The site">
-                <a href="<%= app_path %>">App</a>
-                <a href="<%= playground_path() %>">Playground</a>
-                <a href="<%= pricing_path() %>">Pricing</a>
-                <a href="<%= changelog_path() %>">Changelog</a>
-                <a href="<%= guide_path() %>">Guide</a>
-                <a href="<%= syntax_path() %>">Syntax</a>
-                <a href="<%= examples_path() %>">Examples</a>
-                <a href="<%= embed_path() %>">Embed</a>
-                <a href="<%= limits_path() %>">Limits</a>
-                <a href="<%= claude_path() %>">Score in Claude</a>
+            <nav class="footer-nav" aria-label="<%= t("footer.label") %>">
+                <a href="<%= app_path %>"><%= t("nav.app") %></a>
+                <a href="<%= playground_path() %>"><%= t("nav.playground") %></a>
+                <a href="<%= lp(pricing_path()) %>"><%= t("nav.pricing") %></a>
+                <a href="<%= lp(changelog_path()) %>"><%= t("nav.changelog") %></a>
+                <a href="<%= lp(guide_path()) %>"><%= t("nav.guide") %></a>
+                <a href="<%= lp(syntax_path()) %>"><%= t("nav.syntax") %></a>
+                <a href="<%= lp(examples_path()) %>"><%= t("nav.examples") %></a>
+                <a href="<%= lp(embed_path()) %>"><%= t("nav.embed") %></a>
+                <a href="<%= lp(limits_path()) %>"><%= t("nav.limits") %></a>
+                <a href="<%= lp(claude_path()) %>"><%= t("nav.claude") %></a>
             </nav>
-            <p>
-                <strong>Score</strong> writes, plays and shares scores in the browser. Its engraver,
-                <strong>eui-score</strong>, is the engraver of <a href="https://eui.solisoft.net">EUI</a>: the
-                LilyPond subset it reads is engraved into paths, played as MIDI and printed as PDF. Every score on
-                this site is engraved on the fly by it — on the server, or in your browser.
-            </p>
-            <p>
-                Music glyphs: Emmentaler (OFL). Score text: TeX Gyre Schola (GUST Font License).
-                Sounds: <a href="/soundfonts/MuseScore_General_License.txt">MuseScore_General</a> (MIT), played by
-                <a href="https://github.com/spessasus/spessasynth_lib">SpessaSynth</a> (Apache 2.0).
-                Built with <a href="https://solisoft.net">Soli</a>.
-            </p>
+            <p><%- t("footer.about") %></p>
+            <p><%- t("footer.credits") %></p>
         </div>
     </footer>
 

@@ -6,38 +6,15 @@
 # never pick the path.
 class ScoreLibrary
   static def categories
-    [
+
+    # Their titles and leads are the locale files' (examples.categories.*, #471).
+    ["solos", "voice", "piano", "guitar", "drums", "ensembles"].map do |slug|
       {
-        "slug": "solos",
-        "title": "Solos",
-        "lead": "One staff, one instrument: dynamics, articulations, triplets, alto and bass clefs."
-      },
-      {
-        "slug": "voice",
-        "title": "Voice & Choir",
-        "lead": "Lyrics under the notes, rounds, a four-part choir, voice with piano."
-      },
-      {
-        "slug": "piano",
-        "title": "Piano",
-        "lead": "Grand staff with a brace, chords, two voices on one staff, long slurs."
-      },
-      {
-        "slug": "guitar",
-        "title": "Guitar",
-        "lead": "Arpeggios, block chords, chord names as text, repeats with alternative endings."
-      },
-      {
-        "slug": "drums",
-        "title": "Drums & Percussion",
-        "lead": "Two-voice grooves, timpani in the bass clef, a percussion ensemble."
-      },
-      {
-        "slug": "ensembles",
-        "title": "Ensembles",
-        "lead": "Quartet, quintet, jazz trio, orchestra: brackets, nested groups, short names."
+        "slug": slug,
+        "title": SiteText.t("examples.categories.#{slug}.title"),
+        "lead": SiteText.t("examples.categories.#{slug}.lead")
       }
-    ]
+    end
   end
 
   static def examples

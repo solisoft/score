@@ -108,8 +108,9 @@ def score_figure(figure, opts)
   source_mode = opts["source"] ?? "open"
   unless source_mode == "none"
     open_attr = source_mode == "open" ? " open" : ""
-    html.push("<details class=\"score-source\"#{open_attr}><summary>LilyPond source</summary>")
-    html.push("<div class=\"score-code\"><button type=\"button\" class=\"score-copy\" data-score-copy>Copy</button>")
+    html.push("<details class=\"score-source\"#{open_attr}><summary>#{I18n.translate("score.source")}</summary>")
+    copy = I18n.translate("score.copy")
+    html.push("<div class=\"score-code\"><button type=\"button\" class=\"score-copy\" data-score-copy>#{copy}</button>")
     html.push("<pre><code>#{score_highlight(figure["src"])}</code></pre></div></details>")
   end
   html.push("</figure>")
@@ -131,7 +132,7 @@ def _score_actions(figure, opts)
     looped = " data-section=\"#{html_escape(opts["section"])}\" data-loop"
     play_attrs = play_attrs + looped unless opts["section"].blank?
     buttons.push("<button type=\"button\" class=\"score-btn score-btn-play\" #{play_attrs}>"
-    + "<span aria-hidden=\"true\">▶</span> Play</button>")
+    + "<span aria-hidden=\"true\">▶</span> #{I18n.translate("score.play")}</button>")
     # The MIDI link saves the file as Play plays it (score.js), repeats and all.
     midi_attrs = "data-score-midi href=\"#{midi}\" download=\"#{html_escape(file_name)}.mid\""
     buttons.push("<a class=\"score-btn\" #{midi_attrs}>MIDI</a>")

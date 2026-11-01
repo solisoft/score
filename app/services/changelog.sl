@@ -10,14 +10,24 @@
 class Changelog
   static def days
     [
-      {"date": "2026-11-01", "entries": [{
-        "area": "engine",
-        "title": "A PDF a page shorter when a little smaller fits",
-        "text": "When the last page of a PDF would hold a line or two, the score is now set a little smaller, down "
-        + "to 85 % at most, so that everything fits on a page fewer; Tonnerre et Éclairs comes back to one page at "
-        + "18.5 pt. A score that sets its own staff size (set-global-staff-size) keeps it, and the screen does not "
-        + "change."
-      }]},
+      {"date": "2026-11-01", "entries": [
+        {
+          "area": "site",
+          "title": "The site in French",
+          "text": "Every page of the site, the guide and the sign-in pages now read in French at /fr: a French "
+          + "browser goes there on its first visit, and FR / EN in the header switches, remembered. The e-mails "
+          + "of an account are sent in the language it was made in. The app itself is still in English.",
+          "link": "home"
+        },
+        {
+          "area": "engine",
+          "title": "A PDF a page shorter when a little smaller fits",
+          "text": "When the last page of a PDF would hold a line or two, the score is now set a little smaller, down "
+          + "to 85 % at most, so that everything fits on a page fewer; Tonnerre et Éclairs comes back to one page at "
+          + "18.5 pt. A score that sets its own staff size (set-global-staff-size) keeps it, and the screen does not "
+          + "change."
+        }
+      ]},
       {"date": "2026-10-31", "entries": [
         {
           "area": "editor",
@@ -1537,8 +1547,22 @@ class Changelog
     File.exists(path) ? File.read(path) : nil
   end
 
-  # The label a reader sees for an entry's area.
+  # The label a reader sees for an entry's area, in the request's language (#471).
   static def area_label(area)
-    area == "engine" ? "Engraver" : "Site & editor"
+    SiteText.t(area == "engine" ? "changelog.engine" : "changelog.site")
+  end
+
+  # A day's heading in `locale` (#471): its words and their order are the
+  # locale file's (date.*) — "Saturday, October 31, 2026", "samedi 31 octobre 2026".
+  static def day_heading(date, locale)
+    day = DateTime.parse(date)
+    name = SiteText.t("date.days.#{day.format("%A").downcase}", {}, locale)
+    month = SiteText.t("date.months.m#{day.format("%m").to_i}", {}, locale)
+    SiteText.t("date.heading", {
+      "day": name,
+      "d": day.format("%-d"),
+      "month": month,
+      "year": day.format("%Y")
+    }, locale)
   end
 end

@@ -1,0 +1,66 @@
+<div class="wrap-narrow">
+  <header class="page-head">
+    <span class="eyebrow">Tarifs</span>
+    <h1>Gratuit pour écrire. Pro pour aller plus loin.</h1>
+    <p class="lead">
+      Tout ce que fait Score est dans Free : l'éditeur, la lecture, le PDF et le MIDI, les versions, les commentaires,
+      le partage. Pro enregistre plus d'audio, partage une partition avec tout le monde, et fait tourner l'IA (lecture
+      de photos, assistant) avec votre propre clé : c'est votre fournisseur qui vous la facture, le site n'a pas d'IA à
+      lui.
+    </p>
+    <% unless ai_note.nil? %>
+      <p class="muted" data-ai-today><%= ai_note %></p>
+    <% end %>
+  </header>
+
+  <div class="pricing-grid">
+    <% for plan in plans %>
+      <section class="pricing-plan<%= plan["slug"] == "pro" ? " pricing-pro" : "" %>" data-plan="<%= plan["slug"] %>">
+        <h2><%= plan["name"] %></h2>
+        <% if plan["slug"] == "pro" %>
+          <p class="pricing-price"><%= monthly["label"] %> <small>par mois</small></p>
+          <p class="muted">ou <%= annual["label"] %> par an, deux mois offerts.</p>
+        <% else %>
+          <p class="pricing-price">0 € <small>pour toujours</small></p>
+          <p class="muted">Sans carte, sans limite de durée.</p>
+        <% end %>
+        <ul>
+          <li data-plan-ai><%= plan["ai"] %></li>
+          <li><%= plan["tracks"] %></li>
+          <li><%= plan["storage"] %></li>
+          <li><%= plan["people"] %></li>
+        </ul>
+        <div class="pricing-actions">
+          <% if plan["slug"] == "pro" %>
+            <% if payments_open %>
+              <a class="btn btn-primary" href="<%= app_account_path() %>#plan">Passer à Pro depuis votre compte</a>
+            <% else %>
+              <p class="muted" data-payments-closed>Les paiements ne sont pas encore ouverts : Pro sera bientôt en vente. D'ici là, chacun garde ce que le site permet aujourd'hui, toutes les pistes audio, autant de personnes que vous voulez et l'IA avec votre propre clé compris.</p>
+            <% end %>
+          <% elsif app_open?() %>
+            <a class="btn btn-ghost" href="<%= lp(signup_path()) %>">Commencer gratuitement</a>
+          <% else %>
+            <a class="btn btn-ghost" href="<%= playground_path() %>">Essayer le bac à sable</a>
+          <% end %>
+        </div>
+      </section>
+    <% end %>
+  </div>
+
+  <div class="prose">
+    <h2>Questions</h2>
+    <h3>Qu'advient-il de mon travail si j'arrête de payer ?</h3>
+    <p>Rien n'est supprimé. Vos partitions, enregistrements audio et partages restent tels quels ; au-delà d'une limite
+      de Free, vous pouvez toujours tout ouvrir, jouer et écouter, et seuls les nouveaux enregistrements, les nouvelles
+      invitations et l'IA attendent Pro. Votre clé d'IA reste conservée, inutilisée, jusque-là ; vous pouvez la retirer
+      de votre compte.</p>
+    <h3>Pourquoi l'IA demande-t-elle ma propre clé ?</h3>
+    <p>Lire une photo avec un modèle comme Claude Opus coûte environ 0,20 à 0,40 $, alors le site ne fait plus tourner
+      d'IA à lui. Ajoutez une clé Anthropic, OpenAI, Google (Gemini), Mistral, DeepSeek, Moonshot (Kimi) ou OpenRouter
+      sur la page de votre compte : vos requêtes vont à ce fournisseur, qui vous les facture directement.</p>
+    <h3>Comment paie-t-on ?</h3>
+    <p>Par carte, via Stripe : le site ne voit jamais votre carte. « Gérer la facturation », sur la page de votre compte,
+      change la carte, passe du mensuel à l'annuel ou résilie ; une offre résiliée court jusqu'à la fin de la période
+      payée.</p>
+  </div>
+</div>

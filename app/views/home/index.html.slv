@@ -1,35 +1,32 @@
 <%# The home page (#397): the app first, feature by feature, each with a
     screenshot of the real app (public/images/home/, HomeFeatures); then
     the engraver for developers, and the plans. No script of its own. %>
-<% start_href = app_open ? signup_path() : playground_path() %>
+<% start_href = app_open ? lp(signup_path()) : playground_path() %>
 <div class="wrap">
   <section class="hero hero-app">
     <div class="hero-copy">
-      <span class="eyebrow">A score editor in your browser</span>
-      <h1>Write, play and share scores, <em>together</em>, in the browser.</h1>
-      <p class="lead">
-        Score is where you write music: with the mouse or the keyboard, heard as you go, practised with your
-        microphone, and worked on with others, live. Nothing to install.
-      </p>
+      <span class="eyebrow"><%= t("home.eyebrow") %></span>
+      <h1><%- t("home.headline") %></h1>
+      <p class="lead"><%= t("home.lead") %></p>
       <div class="hero-actions">
         <% if app_open %>
-          <a class="btn btn-primary" href="<%= signup_path() %>" data-home-start>Start for free</a>
+          <a class="btn btn-primary" href="<%= lp(signup_path()) %>" data-home-start><%= t("home.start") %></a>
         <% end %>
-        <a class="btn btn-ghost" href="<%= playground_path() %>">Open the playground</a>
+        <a class="btn btn-ghost" href="<%= playground_path() %>"><%= t("home.playground") %></a>
       </div>
-      <p class="hero-note">Free to write with, no card. <a href="<%= pricing_path() %>">Pro</a> adds AI on your own key, more audio, and sharing with anyone.</p>
+      <p class="hero-note"><%- t("home.note", {"pricing": lp(pricing_path())}) %></p>
     </div>
     <figure class="app-shot app-shot-hero">
       <img src="<%= public_path("images/home/hero-editor.jpg") %>" width="<%= shot_width %>" height="<%= shot_height %>" fetchpriority="high"
-        alt="The Score editor: Au clair de la lune for voice and piano, with chord names and lyrics.">
+        alt="<%= t("home.hero_alt") %>">
     </figure>
   </section>
 
-  <nav class="feature-index" aria-label="What the app does">
+  <nav class="feature-index" aria-label="<%= t("home.index_label") %>">
     <% for feature in features %>
       <a href="#<%= feature["id"] %>"><%= feature["eyebrow"] %></a>
     <% end %>
-    <a href="#developers">For developers</a>
+    <a href="#developers"><%= t("home.developers") %></a>
   </nav>
 
   <% for feature, index in features %>
@@ -43,7 +40,7 @@
           <% end %>
         </ul>
         <% label = feature["label"] %>
-        <% label = "Try the playground" if feature["link"] == "signup" && !app_open %>
+        <% label = t("home.try_playground") if feature["link"] == "signup" && !app_open %>
         <a class="feature-link" href="<%= feature["href"] %>"><%= label %> →</a>
       </div>
       <figure class="app-shot">
@@ -55,20 +52,16 @@
 
   <section class="section dev" id="developers">
     <div class="dev-copy">
-      <span class="eyebrow">For developers</span>
-      <h2>The engraver inside, yours to embed.</h2>
-      <p class="lead">
-        Every score here is drawn by <strong>eui-score</strong>, the engraver of EUI: it reads LilyPond and
-        engraves it into vector paths, plays it as MIDI and prints it as PDF. Compiled to WebAssembly, it runs
-        on any page with two tags.
-      </p>
+      <span class="eyebrow"><%= t("home.developers") %></span>
+      <h2><%= t("home.dev_title") %></h2>
+      <p class="lead"><%- t("home.dev_lead") %></p>
 <pre class="code-block"><code>&lt;script type="module" src="https://score.solisoft.net/eui-score.js"&gt;&lt;/script&gt;
 &lt;eui-score src="my-piece.ly"&gt;&lt;/eui-score&gt;</code></pre>
       <div class="dev-links">
-        <a class="btn btn-ghost" href="<%= guide_path() %>">The guide</a>
-        <a class="btn btn-ghost" href="<%= syntax_path() %>">The syntax</a>
-        <a class="btn btn-ghost" href="<%= embed_path() %>">Embed it</a>
-        <a class="dev-more" href="<%= examples_path() %>">The <%= example_count %> examples →</a>
+        <a class="btn btn-ghost" href="<%= lp(guide_path()) %>"><%= t("home.the_guide") %></a>
+        <a class="btn btn-ghost" href="<%= lp(syntax_path()) %>"><%= t("home.the_syntax") %></a>
+        <a class="btn btn-ghost" href="<%= lp(embed_path()) %>"><%= t("home.embed_it") %></a>
+        <a class="dev-more" href="<%= lp(examples_path()) %>"><%= t("home.examples", {"n": example_count}) %> →</a>
       </div>
     </div>
     <div class="hero-sheet">
@@ -78,29 +71,29 @@
 
   <section class="section" id="plans">
     <div class="section-head">
-      <span class="eyebrow">Plans</span>
-      <h2>Free to write with. Pro for more.</h2>
+      <span class="eyebrow"><%= t("home.plans") %></span>
+      <h2><%= t("home.plans_title") %></h2>
     </div>
     <div class="plans-teaser">
       <div class="plan-teaser">
         <h3>Free</h3>
-        <p class="plan-teaser-price">0 € <small>for good</small></p>
-        <p>The editor, playback, PDF and MIDI, versions, comments and sharing. No card.</p>
+        <p class="plan-teaser-price">0 € <small><%= t("home.for_good") %></small></p>
+        <p><%= t("home.free_text") %></p>
       </div>
       <div class="plan-teaser plan-teaser-pro">
         <h3>Pro</h3>
-        <p class="plan-teaser-price"><%= pro_price["label"] %> <small>a <%= pro_price["per"] %></small></p>
-        <p>AI on your own key, every audio track and more room for takes, a score shared with anyone.</p>
+        <p class="plan-teaser-price"><%= pro_price["label"] %> <small><%= t("home.per_month") %></small></p>
+        <p><%= t("home.pro_text") %></p>
       </div>
     </div>
-    <p><a class="btn btn-ghost" href="<%= pricing_path() %>" data-home-pricing>Compare the plans</a></p>
+    <p><a class="btn btn-ghost" href="<%= lp(pricing_path()) %>" data-home-pricing><%= t("home.compare") %></a></p>
   </section>
 
   <section class="cta-band">
-    <h2>Your next score starts here.</h2>
+    <h2><%= t("home.cta") %></h2>
     <div class="hero-actions">
-      <a class="btn btn-primary" href="<%= start_href %>"><%= app_open ? "Start for free" : "Open the playground" %></a>
-      <a class="btn btn-ghost" href="<%= pricing_path() %>">See pricing</a>
+      <a class="btn btn-primary" href="<%= start_href %>"><%= app_open ? t("home.start") : t("home.playground") %></a>
+      <a class="btn btn-ghost" href="<%= lp(pricing_path()) %>"><%= t("home.see_pricing") %></a>
     </div>
   </section>
 </div>

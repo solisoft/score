@@ -1,14 +1,14 @@
 <div class="wrap-narrow">
   <header class="page-head">
-    <span class="eyebrow">Changelog</span>
-    <h1>What is new</h1>
-    <p class="lead">
-      The latest changes, newest first: to this site and its score editor, and to the engraver that draws every
-      score on it.
-    </p>
+    <span class="eyebrow"><%= t("nav.changelog") %></span>
+    <h1><%= t("changelog.title") %></h1>
+    <p class="lead"><%= t("changelog.lead") %></p>
+    <% if I18n.locale() == "fr" %>
+      <p class="muted"><%= t("changelog.in_english") %></p>
+    <% end %>
     <p class="changelog-legend">
-      <span class="change-tag change-tag-site">Site &amp; editor</span>
-      <span class="change-tag change-tag-engine">Engraver</span>
+      <span class="change-tag change-tag-site"><%= t("changelog.site") %></span>
+      <span class="change-tag change-tag-engine"><%= t("changelog.engine") %></span>
     </p>
   </header>
 
@@ -26,16 +26,16 @@
                 <figure class="changelog-sample">
                   <eui-score staff-space="6"><script type="text/x-lilypond"><%- entry["sample"] %></script></eui-score>
                   <details class="score-source">
-                    <summary>LilyPond source</summary>
+                    <summary><%= t("score.source") %></summary>
                     <div class="score-code">
-                      <button type="button" class="score-copy" data-score-copy>Copy</button>
+                      <button type="button" class="score-copy" data-score-copy><%= t("score.copy") %></button>
                       <pre><code><%- score_highlight(entry["sample"]) %></code></pre>
                     </div>
                   </details>
                 </figure>
               <% end %>
               <% unless entry["href"].nil? %>
-                <a class="changelog-try" href="<%= entry["href"] %>">Try it →</a>
+                <a class="changelog-try" href="<%= entry["href"] %>"><%= t("changelog.try") %> →</a>
               <% end %>
             </li>
           <% end %>

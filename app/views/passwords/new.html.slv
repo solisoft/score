@@ -1,18 +1,18 @@
 <section class="auth">
-  <h1>Reset your password</h1>
-  <p class="muted">We send a link to the address of your account.</p>
+  <h1><%= t("auth.reset_title") %></h1>
+  <p class="muted"><%= t("auth.reset_lead") %></p>
   <% if notice.present? %>
     <p class="form-notice" role="status"><%= notice %></p>
   <% end %>
   <% if error.present? %>
     <p class="form-error" role="alert"><%= error %></p>
   <% end %>
-  <form action="<%= password_reset_path() %>" method="POST" class="auth-form">
+  <form action="<%= lp(password_reset_path()) %>" method="POST" class="auth-form">
     <%- csrf_field() %>
-    <label class="field">Email
+    <label class="field"><%= t("auth.email") %>
       <input id="email" name="email" type="email" required autofocus autocomplete="email">
     </label>
-    <button type="submit" class="btn btn-primary">Send the link</button>
+    <button type="submit" class="btn btn-primary"><%= t("auth.send_link") %></button>
   </form>
-  <p class="auth-alt"><a href="<%= login_path() %>">Back to sign in</a></p>
+  <p class="auth-alt"><a href="<%= lp(login_path()) %>"><%= t("auth.back_sign_in") %></a></p>
 </section>

@@ -1,0 +1,133 @@
+<%# Score in Claude (#464): the MCP server, installed in each Claude. %>
+<div class="wrap">
+  <header class="page-head">
+    <span class="eyebrow">Score dans Claude</span>
+    <h1>Écrire des partitions avec Claude</h1>
+    <p class="lead">
+      Connectez Claude à votre compte Score et demandez-lui de la musique avec vos mots : il écrit la partition, la
+      vérifie avec le graveur de Score jusqu'à ce qu'elle se grave, et l'enregistre dans vos partitions. Il lit et
+      modifie les partitions que vous avez, et transforme une photo ou un scan de partition en partition Score.
+    </p>
+  </header>
+
+  <div class="doc-layout">
+    <aside class="toc" aria-label="Sommaire">
+      <p class="toc-title">Sur cette page</p>
+      <ol>
+        <li><a href="#claude-code">Claude Code</a></li>
+        <li><a href="#claude-ai">claude.ai et Claude Desktop</a></li>
+        <li><a href="#others">Autres clients MCP</a></li>
+        <li><a href="#ask">Que demander</a></li>
+        <li><a href="#photos">Photos de partitions</a></li>
+        <li><a href="#tools">Ce que Claude peut faire</a></li>
+        <li><a href="#disconnect">Se déconnecter</a></li>
+        <li><a href="#trouble">En cas de problème</a></li>
+      </ol>
+    </aside>
+
+    <div class="prose">
+      <section class="doc-section" id="claude-code">
+        <h2>Claude Code<a class="anchor" href="#claude-code">#</a></h2>
+        <p>Dans un terminal, une seule fois :</p>
+        <div class="score-code command-box"><button type="button" class="score-copy" data-score-copy>Copier</button>
+<pre><code>claude mcp add --transport http score <%= mcp_url %></code></pre></div>
+        <p>Ajoutez <code>--scope user</code> pour avoir Score dans tous vos projets, pas seulement celui où vous êtes.</p>
+        <p>La première fois que Claude Code s'en sert — ou quand vous tapez <code>/mcp</code> et choisissez <em>score</em> —,
+          votre navigateur ouvre Score : connectez-vous, puis <strong>Allow</strong> (Autoriser). C'est tout : rien à
+          copier, et Claude Code garde la connexion, qu'il renouvelle tout seul.</p>
+      </section>
+
+      <section class="doc-section" id="claude-ai">
+        <h2>claude.ai et Claude Desktop<a class="anchor" href="#claude-ai">#</a></h2>
+        <ol>
+          <li>Ouvrez <strong>Settings › Connectors</strong> (Paramètres › Connecteurs), puis <strong>Add custom connector</strong> (Ajouter un connecteur personnalisé).</li>
+          <li>Nommez-le <em>Score</em>, et donnez-lui cette adresse :
+            <div class="score-code command-box"><button type="button" class="score-copy" data-score-copy>Copier</button>
+<pre><code><%= mcp_url %></code></pre></div></li>
+          <li>Choisissez <strong>Connect</strong> (Connecter) : Score s'ouvre ; connectez-vous, puis <strong>Allow</strong> (Autoriser).</li>
+        </ol>
+        <p>Dans une conversation, activez Score depuis le menu des outils. Les connecteurs personnalisés sont inclus dans
+          les offres payantes de Claude ; sur une offre Team ou Enterprise, un propriétaire devra peut-être l'ajouter d'abord.</p>
+      </section>
+
+      <section class="doc-section" id="others">
+        <h2>Autres clients MCP<a class="anchor" href="#others">#</a></h2>
+        <p>Tout client qui parle MCP sur HTTP se connecte à <code><%= mcp_url %></code> de la même façon : il vous demande
+          de vous connecter à Score et de l'autoriser. Pour un client qui ne sait pas se connecter, créez un jeton dans
+          <a href="<%= app_account_path() %>#tokens">Account › Access tokens</a> (Compte › Jetons d'accès) et
+          donnez-le-lui comme en-tête :</p>
+        <div class="score-code command-box"><button type="button" class="score-copy" data-score-copy>Copier</button>
+<pre><code>Authorization: Bearer score_…</code></pre></div>
+      </section>
+
+      <section class="doc-section" id="ask">
+        <h2>Que demander<a class="anchor" href="#ask">#</a></h2>
+        <ul>
+          <li>« Écris un blues de 16 mesures en sol pour piano, avec les chiffrages d'accords, et enregistre-le dans Score. »</li>
+          <li>« Ouvre ma partition <em>Petite valse</em> et ajoute un second violon une tierce en dessous. »</li>
+          <li>« Transpose <em>Ave Maria</em> un ton plus bas pour alto. »</li>
+          <li>« Liste mes partitions de cette semaine. »</li>
+          <li>« Transcris cette photo dans Score » — avec la photo jointe, ou le nom de son fichier.</li>
+        </ul>
+        <p>Claude répond avec l'adresse de la partition : ouvrez-la pour la jouer, la corriger dans l'éditeur, la partager.</p>
+      </section>
+
+      <section class="doc-section" id="photos">
+        <h2>Photos de partitions<a class="anchor" href="#photos">#</a></h2>
+        <p>Claude lit la photo que vous lui donnez, écrit la partition, et la vérifie avec le graveur avant de l'enregistrer.
+          Il peut aussi confier la photo au lecteur de Score lui-même — celui de <em>From a photo</em> —, qui utilise la
+          clé d'IA de votre compte (<a href="<%= app_account_path() %>#ai">Account › AI</a>) ; la lecture apparaît alors
+          dans Photo imports, où vous pouvez la suivre.</p>
+        <h3 id="photos-exact">Pas une fausse note, pas une indication oubliée</h3>
+        <p>Lue à l'œil, une photo donne des notes décalées d'un degré et perd les soufflets et les <em>fp</em>. Demandez à
+          Claude le prompt <strong>transcribe_photo</strong> — dans Claude Code, tapez <code>/mcp__score__transcribe_photo</code>
+          avec la photo jointe — et il suit une méthode plus stricte : il mesure les lignes de portée et les têtes de
+          notes sur la photo avec deux petits scripts Python, lit les nuances, les liaisons et les accents dans une passe
+          à part, relit le tout deux fois, et termine sur une page d'épreuve qui place chaque ligne de votre photo
+          au-dessus de ce qu'il a écrit. Comparez une fois cette page à l'original avant de jouer d'après elle.</p>
+        <p>Dans Claude Code, la même méthode s'installe comme un skill, utilisé tout seul dès que vous donnez une photo de
+          partition :</p>
+        <div class="score-code command-box"><button type="button" class="score-copy" data-score-copy>Copier</button>
+<pre><code><%= skill_install %></code></pre></div>
+        <p>Il faut Python 3 : Claude installe Pillow et numpy dans un dossier jetable, jamais dans votre projet. Lire la méthode :
+          <a href="<%= skill_url %>">SKILL.md</a>.</p>
+      </section>
+
+      <section class="doc-section" id="tools">
+        <h2>Ce que Claude peut faire<a class="anchor" href="#tools">#</a></h2>
+        <ul>
+          <li><strong>list_scores</strong>, <strong>get_score</strong> : lister et lire vos partitions — jamais celles des autres.</li>
+          <li><strong>check_source</strong> : demander au graveur si un LilyPond se grave, et pourquoi pas.</li>
+          <li><strong>create_score</strong>, <strong>update_score</strong> : créer une partition, ou en modifier une. Une
+            modification faite pendant que quelqu'un d'autre modifiait la partition est refusée, et la version précédente
+            est gardée dans son historique.</li>
+          <li><strong>transcribe_image</strong>, <strong>get_transcription</strong> : faire lire une photo par Score, et
+            suivre la lecture.</li>
+          <li><strong>transcribe_photo</strong> (un prompt) : la méthode pour transcrire une photo avec des hauteurs mesurées
+            et toutes les indications.</li>
+        </ul>
+        <p>Tout ce qu'il fait, il le fait en votre nom, sur votre compte seulement.</p>
+      </section>
+
+      <section class="doc-section" id="disconnect">
+        <h2>Se déconnecter<a class="anchor" href="#disconnect">#</a></h2>
+        <p>Chaque connexion figure dans <a href="<%= app_account_path() %>#tokens">Account › Access tokens</a>,
+          sous le nom de l'application : <strong>Revoke</strong> (Révoquer) y met fin aussitôt. Dans Claude Code,
+          <code>claude mcp remove score</code> lui retire Score.</p>
+      </section>
+
+      <section class="doc-section" id="trouble">
+        <h2>En cas de problème<a class="anchor" href="#trouble">#</a></h2>
+        <ul>
+          <li><strong>Le navigateur ne s'ouvre pas</strong> : dans Claude Code, tapez <code>/mcp</code>, choisissez
+            <em>score</em>, puis <em>Authenticate</em>.</li>
+          <li><strong>« Le graveur ne le lit pas »</strong> : Claude a reçu la raison et l'endroit ; demandez-lui de corriger
+            le LilyPond et de le vérifier à nouveau.</li>
+          <li><strong>« Trop d'appels »</strong> : 120 par minute au plus ; attendez une minute.</li>
+          <li><strong>Une photo est refusée</strong> : le lecteur de Score a besoin d'une clé d'IA dans votre compte ; ou
+            laissez Claude lire la photo lui-même.</li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</div>

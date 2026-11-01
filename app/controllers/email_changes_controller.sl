@@ -53,8 +53,8 @@ class EmailChangesController < Controller
     @token = params["token"].to_s
     @new_email = address ?? user&.email_change_to ?? user&.email
     @stays_signed_in ||= false
-    @title = state == "changed" ? "Address changed" : "Change of email address"
-    @description = "Confirm the new address of an Score account."
+    @title = SiteText.t(state == "changed" ? "email_change.title_changed" : "email_change.title")
+    @description = SiteText.t("email_change.description")
     render("email_changes/show", {}, {"status": statuses[state]})
   end
 end

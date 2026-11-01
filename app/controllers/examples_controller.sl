@@ -2,8 +2,8 @@
 class ExamplesController < Controller
   # GET /examples — every family, every piece
   def index
-    @title = "Examples"
-    @description = "Solos, voice, piano, guitar, drums and ensembles: scores engraved by eui-score."
+    @title = SiteText.t("examples.examples")
+    @description = SiteText.t("examples.description")
     @sections = ScoreLibrary.categories.map do |cat|
       cat.merge({"examples": ScoreLibrary.examples_in(cat["slug"])})
     end

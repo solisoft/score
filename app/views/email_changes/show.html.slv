@@ -1,43 +1,40 @@
 <section class="auth">
   <h1><%= title %></h1>
   <% if state == "ready" %>
-    <p>Your Score account will use <strong><%= new_email %></strong> from now on: you sign in with it, and the
-      scores shared with your old address follow it. Every browser signed in to the account is signed out.</p>
-    <form action="<%= confirm_email_change_path() %>" method="POST" class="auth-form">
+    <p><%- t("email_change.ready", {"email": h(new_email)}) %></p>
+    <form action="<%= lp(confirm_email_change_path()) %>" method="POST" class="auth-form">
       <%- csrf_field() %>
       <input type="hidden" name="token" value="<%= token %>">
-      <button type="submit" class="btn btn-primary">Use <%= new_email %></button>
+      <button type="submit" class="btn btn-primary"><%= t("email_change.use", {"email": new_email}) %></button>
     </form>
   <% end %>
   <% if state == "changed" %>
-    <p class="form-notice" role="status">Your account now uses <strong><%= new_email %></strong>.</p>
+    <p class="form-notice" role="status"><%- t("email_change.changed", {"email": h(new_email)}) %></p>
     <% if stays_signed_in %>
-      <p>You are still signed in here; every other browser was signed out.</p>
-      <p class="auth-alt"><a href="<%= app_account_path() %>">Back to your account</a></p>
+      <p><%= t("email_change.still_signed_in") %></p>
+      <p class="auth-alt"><a href="<%= app_account_path() %>"><%= t("email_change.back_account") %></a></p>
     <% else %>
-      <p>Every browser signed in to the account was signed out: sign in with your new address.</p>
-      <p class="auth-alt"><a href="<%= login_path() %>">Sign in</a></p>
+      <p><%= t("email_change.signed_out") %></p>
+      <p class="auth-alt"><a href="<%= lp(login_path()) %>"><%= t("auth.sign_in") %></a></p>
     <% end %>
   <% end %>
   <% if state == "done" %>
-    <p class="form-notice" role="status">This link was used already: the account uses <strong><%= new_email %></strong>.</p>
-    <p class="auth-alt"><a href="<%= login_path() %>">Sign in</a></p>
+    <p class="form-notice" role="status"><%- t("email_change.done", {"email": h(new_email)}) %></p>
+    <p class="auth-alt"><a href="<%= lp(login_path()) %>"><%= t("auth.sign_in") %></a></p>
   <% end %>
   <% if state == "expired" %>
-    <p class="form-error" role="alert">This link has expired: the address is unchanged. Ask for the change again
-      from your account page, and follow the new link within a day.</p>
-    <p class="auth-alt"><a href="<%= app_account_path() %>">Your account</a></p>
+    <p class="form-error" role="alert"><%= t("email_change.expired") %></p>
+    <p class="auth-alt"><a href="<%= app_account_path() %>"><%= t("email_change.your_account") %></a></p>
   <% end %>
   <% if state == "taken" %>
-    <p class="form-error" role="alert"><%= new_email %> now belongs to another account: the address is unchanged.</p>
-    <p class="auth-alt"><a href="<%= app_account_path() %>">Your account</a></p>
+    <p class="form-error" role="alert"><%= t("email_change.taken", {"email": new_email}) %></p>
+    <p class="auth-alt"><a href="<%= app_account_path() %>"><%= t("email_change.your_account") %></a></p>
   <% end %>
   <% if state == "busy" %>
-    <p class="form-error" role="alert">Too many tries from here: wait a few minutes, then follow the link again.</p>
+    <p class="form-error" role="alert"><%= t("email_change.busy") %></p>
   <% end %>
   <% if state == "unknown" %>
-    <p class="form-error" role="alert">This link is not one of ours, or the change it was for was cancelled.
-      Ask for the change again from your account page.</p>
-    <p class="auth-alt"><a href="<%= app_account_path() %>">Your account</a></p>
+    <p class="form-error" role="alert"><%= t("email_change.unknown") %></p>
+    <p class="auth-alt"><a href="<%= app_account_path() %>"><%= t("email_change.your_account") %></a></p>
   <% end %>
 </section>

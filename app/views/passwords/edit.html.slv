@@ -1,17 +1,17 @@
 <section class="auth">
-  <h1>Choose a new password</h1>
+  <h1><%= t("auth.new_password_title") %></h1>
   <% if error.present? %>
     <p class="form-error" role="alert"><%= error %></p>
   <% end %>
-  <form action="/password/update" method="POST" class="auth-form">
+  <form action="<%= lp("/password/update") %>" method="POST" class="auth-form">
     <%- csrf_field() %>
     <input type="hidden" name="token" value="<%= token %>">
-    <label class="field"><span>New password <span class="muted">— 12 characters or more</span></span>
+    <label class="field"><span><%= t("auth.new_password") %> <span class="muted">— <%= t("auth.twelve") %></span></span>
       <input id="password" name="password" type="password" required autofocus minlength="12" autocomplete="new-password">
     </label>
-    <label class="field">The same again
+    <label class="field"><%= t("auth.same_again") %>
       <input id="password_confirmation" name="password_confirmation" type="password" required minlength="12" autocomplete="new-password">
     </label>
-    <button type="submit" class="btn btn-primary">Save the password</button>
+    <button type="submit" class="btn btn-primary"><%= t("auth.save_password") %></button>
   </form>
 </section>

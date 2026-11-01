@@ -18,8 +18,22 @@
   var MUSICXML_SRC = (script && script.getAttribute("data-musicxml")) || "/eui-score/musicxml.js";
   var FEEL_SRC = (script && script.getAttribute("data-feel")) || "/eui-score/feel.js";
   var VELOCITY_SRC = (script && script.getAttribute("data-velocity")) || "/eui-score/velocity.js";
-  var PLAY_LABEL = '<span aria-hidden="true">▶</span> Play';
-  var STOP_LABEL = '<span aria-hidden="true">■</span> Stop';
+  // The words of the buttons, in the page's language (#471): read from
+  // <html lang> when they are shown, the page being English or French.
+  var WORDS = {
+    en: { play: "Play", stop: "Stop", copy: "Copy", copied: "Copied ✓", selected: "Selected: ⌘C / Ctrl+C",
+      loading: "Loading the player…", sounds: "Loading the sounds…", once: "(38 MB, once)",
+      failed: "The player could not be loaded." },
+    fr: { play: "Lecture", stop: "Stop", copy: "Copier", copied: "Copié ✓", selected: "Sélectionné : ⌘C / Ctrl+C",
+      loading: "Chargement du lecteur…", sounds: "Chargement des sons…", once: "(38 Mo, une fois)",
+      failed: "Le lecteur n'a pas pu être chargé." }
+  };
+  function word(key) {
+    var lang = (document.documentElement.lang || "en").slice(0, 2);
+    return (WORDS[lang] || WORDS.en)[key];
+  }
+  function playLabel() { return '<span aria-hidden="true">▶</span> ' + word("play"); }
+  function stopLabel() { return '<span aria-hidden="true">■</span> ' + word("stop"); }
   var player = null;
   var playing = null; // { button, slot, handle, timer }
 
@@ -362,7 +376,7 @@
   function reset(state) {
     clearInterval(state.timer);
     state.button.disabled = false;
-    state.button.innerHTML = PLAY_LABEL;
+    state.button.innerHTML = playLabel();
     state.slot.innerHTML = "";
     if (playing === state) playing = null;
   }
@@ -391,8 +405,8 @@
     // A context made inside the click may play; one made after a download may
     // not: the player is given this one.
     var context = window.AudioContext ? new AudioContext() : null;
-    button.innerHTML = STOP_LABEL;
-    slot.innerHTML = '<span class="score-player-note">Loading the player…</span>';
+    button.innerHTML = stopLabel();
+    slot.innerHTML = '<span class="score-player-note">' + word("loading") + "</span>";
     Promise.all([loadPlayer(), midiOf(button)])
       .then(function (both) {
         state.turns = both[1].turns;
@@ -403,11 +417,11 @@
           return null;
         }
         p.unlock(context || undefined);
-        if (!p.isReady()) slot.innerHTML = '<span class="score-player-note">Loading the sounds… (38 MB, once)</span>';
+        if (!p.isReady()) slot.innerHTML = '<span class="score-player-note">' + word("sounds") + " " + word("once") + "</span>";
         return p.play(both[1], {
           onStop: function () { reset(state); },
           onProgress: function (f) {
-            if (playing === state) slot.innerHTML = '<span class="score-player-note">Loading the sounds… ' + Math.round(100 * f) + " % (38 MB, once)</span>";
+            if (playing === state) slot.innerHTML = '<span class="score-player-note">' + word("sounds") + " " + Math.round(100 * f) + " % " + word("once") + "</span>";
           },
         });
       })
@@ -419,8 +433,8 @@
       })
       .catch(function () {
         reset(state);
-        button.title = "The player could not be loaded.";
-        slot.innerHTML = '<span class="score-player-note">The player could not be loaded.</span>';
+        button.title = word("failed");
+        slot.innerHTML = '<span class="score-player-note">' + word("failed") + "</span>";
       });
   }
 
@@ -428,9 +442,9 @@
     var code = button.parentElement.querySelector("code");
     if (!code || !navigator.clipboard) return;
     navigator.clipboard.writeText(code.textContent).then(function () {
-      button.textContent = "Copied ✓";
+      button.textContent = word("copied");
       setTimeout(function () {
-        button.textContent = "Copy";
+        button.textContent = word("copy");
       }, 1600);
     }).catch(function () {
       // The browser keeps the clipboard to itself: the text selected, to copy by hand (#464).
@@ -439,9 +453,9 @@
       var selection = window.getSelection();
       selection.removeAllRanges();
       selection.addRange(range);
-      button.textContent = "Selected: ⌘C / Ctrl+C";
+      button.textContent = word("selected");
       setTimeout(function () {
-        button.textContent = "Copy";
+        button.textContent = word("copy");
       }, 2400);
     });
   }
