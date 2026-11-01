@@ -12,6 +12,15 @@ class Changelog
     [
       {"date": "2026-11-01", "entries": [
         {
+          "area": "engine",
+          "title": "A score cannot balloon any more",
+          "text": "A few lines of LilyPond could write out to millions of notes and tie up the engraver for minutes. "
+          + "The engraver now stops a score past 20,000 written-out notes or 40,000 characters of words, nested too "
+          + "deep or drawing too much, in a few milliseconds and with the reason; every real score is far below. "
+          + "Shared PDFs and MIDI are kept once made, and making them is rate-limited.",
+          "app": true
+        },
+        {
           "area": "editor",
           "title": "French labels that fit their buttons",
           "text": "In the French editor, « Liaison de prolongation » ran out of its button: it reads « Lier », "
