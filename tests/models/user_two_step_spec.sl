@@ -125,14 +125,103 @@ describe("User two-step sign-in") do
     assert_null(on.remember_token_digest)
   end
 
-  test("wrong codes lock the account as wrong passwords do") do
+  test("two requests with one code of the app: the one whose write comes second passes nothing") do
     user = two_step_user()
-    (1 .. AUTH_MAX_FAILED_ATTEMPTS).each do |_|
-      User.find(user._key).register_failed_attempt(true)
+    secret = user.start_two_step
+    User.find(user._key).confirm_two_step(app_code(secret, 0))
+    code = app_code(secret, 1)
+    step = User.totp_step(secret, code, DateTime.utc.to_unix)
+    # Both read the guard row before either wrote it; the first spends the code.
+    seen = TwoStepGuard.of(user)
+    assert(User.find(user._key).second_step?(code))
+    # The second, from its stale read: the compare-and-set refuses its write,
+    # and the row read again has the step spent.
+    assert_not(TwoStepGuard.spend_step(seen, step, nil), "the same step from a stale read")
+    assert_eq(TwoStepGuard.of(user).last_step, step)
+  end
+
+  test("two requests with one backup code: the one whose write comes second passes nothing") do
+    user = two_step_user()
+    secret = user.start_two_step
+    codes = User.find(user._key).confirm_two_step(app_code(secret, 0))
+    valid = User.find(user._key).totp_backup
+    digest = Crypto.sha256(User.backup_digest_text(codes[2]))
+    seen = TwoStepGuard.of(user)
+    assert(User.find(user._key).second_step?(codes[2]))
+    assert_not(TwoStepGuard.spend_backup(seen, digest, valid), "the same code from a stale read")
+    assert_eq(TwoStepGuard.of(user).spent, [digest])
+    # Another code from the same stale read: written, once read again.
+    other = Crypto.sha256(User.backup_digest_text(codes[3]))
+    assert(TwoStepGuard.spend_backup(seen, other, valid))
+    assert_eq(TwoStepGuard.of(user).spent.length, 2)
+    assert_not(User.find(user._key).second_step?(codes[3]))
+  end
+
+  test("wrong codes pause the code step, apart from the password's lock, and a reset keeps them") do
+    user = two_step_user()
+    secret = user.start_two_step
+    codes = User.find(user._key).confirm_two_step(app_code(secret, 0))
+    (1 .. TWO_STEP_MAX_WRONG).each do |_|
+      assert_not(User.find(user._key).second_step_counted?("000000"))
     end
-    assert_not(User.find(user._key).locked?, "one short of the limit")
-    User.find(user._key).register_failed_attempt(true)
-    assert(User.find(user._key).locked?)
+    assert_not(User.find(user._key).codes_locked?, "one short of the limit")
+    # A reset does not give them back.
+    User.find(user._key).finish_password_reset("a brand new password")
+    assert_eq(TwoStepGuard.of(user).wrong, TWO_STEP_MAX_WRONG - 1)
+    assert_not(User.find(user._key).second_step_counted?("000000"))
+    stored = User.find(user._key)
+    assert(stored.codes_locked?)
+    assert_not(stored.locked?, "the password step's locks are not touched")
+    assert_not(stored.locked_for?("127.0.0.1"))
+    # Paused: the right code is not even looked at.
+    assert_not(stored.second_step_counted?(codes[0]))
+    assert_eq(User.find(user._key).backup_codes_left, 10, "not spent")
+  end
+
+  test("the pause runs out on schedule, and the count starts again; a right code clears it") do
+    user = two_step_user()
+    secret = user.start_two_step
+    codes = User.find(user._key).confirm_two_step(app_code(secret, 0))
+    (0 .. TWO_STEP_MAX_WRONG).each do |_|
+      User.find(user._key).count_wrong_code
+    end
+    assert(User.find(user._key).codes_locked?)
+    row = TwoStepGuard.of(user)
+    long_ago = DateTime.utc.to_unix - TWO_STEP_LOCK_SECONDS - 1
+    row.locked_at = long_ago
+    row.wrong_at = long_ago
+    row.save
+    assert_not(User.find(user._key).codes_locked?, "run out")
+    assert_not(User.find(user._key).count_wrong_code, "one wrong code does not pause it again")
+    assert_eq(TwoStepGuard.of(user).wrong, 1, "the count started again")
+    assert(User.find(user._key).second_step_counted?(codes[0]))
+    assert_eq(TwoStepGuard.of(user).wrong, 0)
+  end
+
+  test("an admin's unlock lifts the code step's pause too") do
+    user = two_step_user()
+    (0 .. TWO_STEP_MAX_WRONG).each do |_|
+      User.find(user._key).count_wrong_code
+    end
+    assert(User.find(user._key).codes_locked?)
+    User.find(user._key).unlock
+    assert_not(User.find(user._key).codes_locked?)
+  end
+
+  test("a mail sent from a copy read before a failed sign-in does not put the count back") do
+    user = two_step_user()
+    # The mail job read the account first…
+    stale = User.find(user._key)
+    # …then a wrong password was counted…
+    User.find(user._key).register_failed_attempt("198.51.100.4")
+    User.find(user._key).register_failed_attempt("198.51.100.4")
+    # …and the job makes its link from its copy.
+    stale.start_email_confirmation
+    stale.start_password_reset
+    stored = User.find(user._key)
+    assert_eq(stored.sign_in_failures.values()[0]["count"], 2)
+    assert_not_null(stored.confirmation_token_digest)
+    assert_not_null(stored.reset_token_digest)
   end
 
   test("the server offers it only with a key to encrypt the secrets") do

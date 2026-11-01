@@ -3,7 +3,9 @@
   <% if error.present? %>
     <p class="form-error" role="alert"><%= error %></p>
   <% end %>
-  <% if locals["unconfirmed"] == true %>
+  <%# Under every refused sign-in alike (#539): an account not confirmed yet is refused as a wrong password is. %>
+  <% if locals["confirm_hint"] == true %>
+    <p class="auth-hint"><%= t("security_539.unconfirmed_hint") %></p>
     <form action="<%= lp(confirmation_resend_path()) %>" method="POST" class="auth-resend">
       <%- csrf_field() %>
       <input type="hidden" name="email" value="<%= email %>">

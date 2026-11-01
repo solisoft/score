@@ -83,7 +83,10 @@ describe("The account in French") do
   test("a refused token and a refused AI key are in French, and nothing is kept") do
     user = fr_account_user()
     fr_account_sign_in(user, "fr")
-    token = post("/app/account/tokens", {"name": ""})
+    token = post(
+      "/app/account/tokens",
+      {"name": "", "password": FR_ACCOUNT_PASSWORD}
+    )
     assert_eq(res_status(token), 422)
     assert_contains(res_body(token), "Donnez un nom au jeton")
     assert_eq(AccessToken.of(user).length, 0)

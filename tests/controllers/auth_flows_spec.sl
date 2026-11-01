@@ -3,6 +3,18 @@
 
 const FLOW_PASSWORD = "correct horse battery"
 
+# The page `response` shows, `address` taken out, and the time it was
+# rendered at (the form's signed `_soli_ts`, csrf_field): two pages rendered
+# a second apart differ there and nowhere else, which is not an answer
+# telling one address from another.
+def flow_page(response, address)
+  Regex.replace_all(
+    "name=\"_soli_ts\" value=\"[^\"]*\"",
+    res_body(response).replace(address, ""),
+    "name=\"_soli_ts\""
+  )
+end
+
 def flow_user(confirmed = true)
   user = User.new()
   user.email = "flow-#{uuid_v4}@example.com"
@@ -23,6 +35,24 @@ def flow_ask_emails(email, times)
     path = i % 2 == 0 ? "/confirmation/resend" : "/password/reset"
     res_status(post(path, {"email": email}))
   end
+end
+
+# The AuthMailJob rows queued for `email` all run (#539: the test server
+# runs the queue), so what they write is written.
+def flow_mail_jobs_waiting(email)
+  Job.list().filter do |job|
+    waiting = ["pending", "running", "scheduled"].includes?(job["state"].to_s)
+    waiting && str(job["handler"]).contains("AuthMailJob") && str(job["args"]).contains(email)
+  end.length
+end
+
+def flow_mail_jobs_settle(email)
+  waited = 0
+  while waited < 40 && flow_mail_jobs_waiting(email) > 0
+    sleep(0.25)
+    waited += 1
+  end
+  true
 end
 
 describe("Account flows") do
@@ -176,19 +206,21 @@ describe("Account flows") do
       assert_eq(flow_ask_emails(nobody, AUTH_EMAILS_PER_ADDRESS), (0 .. AUTH_EMAILS_PER_ADDRESS).map(&{ |_|
         200
       }))
+      flow_mail_jobs_settle(user.email)
       digest = User.find(user._key).confirmation_token_digest
       reset_digest = User.find(user._key).reset_token_digest
       known = post("/confirmation/resend", {"email": " #{user.email.upcase} "})
       unknown = post("/confirmation/resend", {"email": nobody})
       assert_eq(res_status(known), 429)
       assert_eq(res_status(unknown), 429)
-      assert_eq(res_body(known).replace(user.email.upcase, ""), res_body(unknown).replace(nobody, ""))
+      assert_eq(flow_page(known, user.email.upcase), flow_page(unknown, nobody))
       assert_contains(res_body(known), "Too many emails asked for: try again in an hour.")
       assert_not(res_body(known).contains("on its way"))
-      assert_eq(User.find(user._key).confirmation_token_digest, digest, "no new link made")
       reset = post("/password/reset", {"email": user.email})
       assert_eq(res_status(reset), 429)
       assert_contains(res_body(reset), "Too many emails asked for")
+      flow_mail_jobs_settle(user.email)
+      assert_eq(User.find(user._key).confirmation_token_digest, digest, "no new link made")
       assert_eq(User.find(user._key).reset_token_digest, reset_digest, "no reset link made")
       # Another address is not held up.
       assert_contains(res_body(post("/confirmation/resend", {"email": "other-#{uuid_v4}@example.com"})), "on its way")
@@ -218,7 +250,7 @@ describe("Account flows") do
   end
 
   describe("a locked account") do
-    test("ten wrong passwords lock it: then even the right one is refused, until the lock runs out") do
+    test("ten wrong passwords lock it from that address: then even the right one is refused there") do
       user = flow_user()
       (0 .. AUTH_MAX_FAILED_ATTEMPTS).each do |i|
         post(
@@ -228,11 +260,19 @@ describe("Account flows") do
       end
       assert(User.find(user._key).locked?)
       assert_eq(res_status(flow_sign_in(user)), 401)
-      expired = User.find(user._key)
+      # The lock is that address's (#539): the whole account's, from before,
+      # is still honoured until it runs out, and then lifted.
+      old_lock = flow_user()
+      locked = User.find(old_lock._key)
+      locked.locked_at = DateTime.utc.to_unix
+      locked.failed_attempts = AUTH_MAX_FAILED_ATTEMPTS
+      locked.update
+      assert_eq(res_status(flow_sign_in(old_lock)), 401)
+      expired = User.find(old_lock._key)
       expired.locked_at = DateTime.utc.to_unix - AUTH_LOCKOUT_SECONDS - 60
       expired.update
-      assert_eq(res_status(flow_sign_in(user)), 302)
-      assert_eq(User.find(user._key).failed_attempts, 0)
+      assert_eq(res_status(flow_sign_in(old_lock)), 302)
+      assert_eq(User.find(old_lock._key).failed_attempts, 0)
     end
   end
 

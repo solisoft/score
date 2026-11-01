@@ -12,6 +12,62 @@ class Changelog
     [
       {"date": "2026-11-01", "entries": [
         {
+          "area": "editor",
+          "title": "French labels that fit their buttons",
+          "text": "In the French editor, « Liaison de prolongation » ran out of its button: it reads « Lier », "
+          + "the full name in its tip, and the turn is « Doublé », as French musicians call it.",
+          "app": true
+        },
+        {
+          "area": "site",
+          "title": "An account harder to guess into",
+          "text": "A new password or address now closes every app connection made before. Wrong passwords lock the "
+          + "network that tried them, and too many from anywhere lock the account for new browsers while yours, "
+          + "already signed in, still get in. The reset and sign-up pages no longer tell whether an address has "
+          + "an account, and the account pages ask for your password a few times only.",
+          "app": true
+        },
+        {
+          "area": "site",
+          "title": "Pages that run only their own scripts",
+          "text": "Every page now tells the browser exactly which of its scripts may run, so a script slipped into a "
+          + "page is refused. The administration asks for a two-step code in the same session and keeps a log of "
+          + "every change it makes.",
+          "app": true
+        },
+        {
+          "area": "site",
+          "title": "Push, recordings and exports kept in bounds",
+          "text": "Push notifications go only to the browsers' own push services, and the test message is sent in the "
+          + "background, a few an hour. Audio takes keep at most 2 GB an account while Pro is not on sale. The data "
+          + "export splits a score's versions across its zips, each version named by when it was kept.",
+          "app": true
+        },
+        {
+          "area": "site",
+          "title": "Sharing that stops when you say so",
+          "text": "Readers of a shared link now show as « A reader », never by their address. A new link, a score "
+          + "made private, someone uninvited or a score put in the trash now closes at once the live view of those "
+          + "who may no longer read it, and a score in the trash can no longer be changed by its collaborators.",
+          "app": true
+        },
+        {
+          "area": "site",
+          "title": "Connecting an app is safer",
+          "text": "The page that lets an app such as Claude reach your scores now names where the answer goes, not "
+          + "just the name the app gives itself, and it approves only the request it showed. A connection whose "
+          + "renewal is replayed is closed, and the connection endpoints are rate-limited.",
+          "app": true
+        },
+        {
+          "area": "editor",
+          "title": "A score cannot hide a script any more",
+          "text": "A score's hidden settings line (note velocities, controller curves) could carry code that ran when "
+          + "someone opened the MIDI view. They are now read as numbers only, and what is drawn is escaped. A synth "
+          + "preset or reverb room named after a JavaScript property no longer breaks the panels.",
+          "app": true
+        },
+        {
           "area": "engine",
           "title": "Instrument and composer apart on a phone",
           "text": "On a narrow page, a score's instrument (centred) and its composer (on the right) ran into each "

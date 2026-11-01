@@ -38,6 +38,9 @@ def load_current_user(req)
       session_regenerate()
       session_set("user_id", user["_key"])
       session_set("session_version", user.current_session_version())
+      # The cookie proves a full sign-in made earlier in this browser
+      # (#539): it is one the account knows, the account-wide lock aside.
+      set_cookie("device", user.device_cookie, User.device_cookie_options)
       req["current_user"] = user
     end
   end

@@ -26,13 +26,11 @@ class TwoStepPending
     session_set("two_step_tries", 0)
     session_set("two_step_remember", remember)
     session_set("two_step_return", back)
-    true
   end
 
   static def forget
     TWO_STEP_PENDING_KEYS.each do |name|
       session_delete(name)
     end
-    true
   end
 end

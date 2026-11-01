@@ -27,10 +27,36 @@ def push_spec_sign_in(user)
 end
 
 def push_spec_raw(name = nil)
-  {"endpoint": "https://push.example.com/send/#{name ?? uuid_v4}", "keys": {
+  {"endpoint": "https://fcm.googleapis.com/fcm/send/#{name ?? uuid_v4}", "keys": {
     "p256dh": "BC4Qx_y-z0123456789",
     "auth": "qZQ-abc_123"
   }}
+end
+
+# A subscription to `endpoint`, as a browser would send it.
+def push_spec_raw_at(endpoint)
+  {"endpoint": endpoint, "keys": {
+    "p256dh": "BC4Qx_y-z0123456789",
+    "auth": "qZQ-abc_123"
+  }}
+end
+
+# The rows of the job queue for `job` naming `key` in its arguments.
+def push_spec_jobs(job, key)
+  Job.list().filter do |row|
+    row.to_json.contains(job) && row.to_json.contains(key)
+  end
+end
+
+# A row kept before #543 checked the host: on an address a person chose.
+def push_spec_stray(user, name)
+  PushSubscription.create({
+    "user_id": user._key,
+    "endpoint": "https://evil.example/#{name}-#{user._key}",
+    "p256dh": "BC4Qx_y-z0123456789",
+    "auth": "qZQ-abc_123",
+    "failures": 0
+  })
 end
 
 def push_spec_device(user, name = nil)
@@ -102,6 +128,40 @@ describe("Push notifications") do
       assert_eq(PushSubscription.count_of(user), 0)
     end
 
+    test("refuses an endpoint on a host that is not a browser's push service, and keeps nothing") do
+      user = push_spec_user()
+      [
+        "https://evil.example/push",
+        "https://evil.example/fcm.googleapis.com/x",
+        "https://fcm.googleapis.com.evil.example/x",
+        "https://fcm.googleapis.com@evil.example/x",
+        "https://fcm.googleapis.com:8443/x",
+        "https://evilfcm.googleapis.com/x",
+        "https://10.0.0.1/x",
+        "https://api.push.apple.com/x",
+        "https://fcm.googleapis.com"
+      ].each do |endpoint|
+        refused = PushSubscription.keep(user, push_spec_raw_at(endpoint), "")
+        assert_contains(refused["error"].to_s, "not a push subscription", endpoint)
+      end
+      assert_eq(PushSubscription.count_of(user), 0)
+      assert_eq(PushSubscription.where({"endpoint": "https://evil.example/push"}).count, 0)
+    end
+
+    test("keeps an endpoint on each browser's push service") do
+      user = push_spec_user()
+      [
+        "https://fcm.googleapis.com/fcm/send/abc",
+        "https://updates.push.services.mozilla.com/wpush/v2/abc",
+        "https://web.push.apple.com/QGx",
+        "https://wns2-par02p.notify.windows.com/w/?token=abc"
+      ].each do |endpoint|
+        kept = PushSubscription.keep(user, push_spec_raw_at("#{endpoint}#{user._key}"), "")
+        assert(kept["error"].nil?, endpoint)
+      end
+      assert_eq(PushSubscription.count_of(user), 4)
+    end
+
     test("someone else subscribing the same browser takes it over; one forgets only their own") do
       first = push_spec_user()
       second = push_spec_user()
@@ -114,6 +174,28 @@ describe("Push notifications") do
       assert_eq(PushSubscription.count_of(second), 1)
       assert(PushSubscription.forget(second, endpoint))
       assert_eq(PushSubscription.count_of(second), 0)
+    end
+
+    test("another account's endpoint with other keys is refused, and the row stays theirs (#542)") do
+      first = push_spec_user()
+      second = push_spec_user()
+      device = push_spec_device(first, "taken-#{first._key}")
+      forged = push_spec_raw("taken-#{first._key}")
+      forged["keys"] = {"p256dh": "BAttacker_key_0123", "auth": "attacker-auth"}
+      refused = PushSubscription.keep(second, forged, "Attacker")
+      assert_eq(refused["error"], SiteText.t("security_542.push_taken"))
+      assert_not(refused["error"].contains("security_542"), "a sentence, not its key")
+      assert_null(refused["subscription"])
+      stored = PushSubscription.find(device._key)
+      assert_eq(stored.user_id, first._key)
+      assert_eq(stored.p256dh, "BC4Qx_y-z0123456789")
+      assert_eq(stored.auth, "qZQ-abc_123")
+      assert_eq(stored.label, "Spec browser")
+      assert_eq(PushSubscription.count_of(second), 0)
+      # Its own person may change its keys (a browser that subscribed anew).
+      renewed = PushSubscription.keep(first, forged, "Spec browser")
+      assert_null(renewed["error"])
+      assert_eq(PushSubscription.find(device._key).auth, "attacker-auth")
     end
 
     test("a person has at most PUSH_DEVICES_MAX devices") do
@@ -178,13 +260,64 @@ describe("Push notifications") do
       assert_eq(PushSubscription.count_of(owner), 0)
     end
 
-    test("a test with no device sends nothing") do
+    test("a test with no device queues nothing") do
       user = push_spec_user()
       push_spec_sign_in(user)
       set_header("Accept", "application/json")
       answer = post("/app/push/test", {})
       assert_eq(res_status(answer), 200)
-      assert_contains(res_body(answer), "\"sent\":0")
+      assert_eq(res_json(answer)["devices"], 0)
+      assert_eq(res_json(answer)["queued"], false)
+      assert_eq(push_spec_jobs("PushTestJob", user._key).length, 0)
+    end
+
+    test("without the private key a test queues nothing, and says push is not available") do
+      user = push_spec_user()
+      device = push_spec_device(user)
+      push_spec_sign_in(user)
+      set_header("Accept", "application/json")
+      answer = post("/app/push/test", {})
+      assert_eq(res_status(answer), 200)
+      assert_eq(res_json(answer)["devices"], 1)
+      assert_eq(res_json(answer)["queued"], false)
+      assert_eq(res_json(answer)["unavailable"], true)
+      assert_eq(push_spec_jobs("PushTestJob", user._key).length, 0)
+      assert_eq(PushSubscription.find(device._key).failures, 0)
+    end
+
+    test("a test is queued for a job and answered at once: no push service is called in the request") do
+      user = push_spec_user()
+      device = push_spec_device(user)
+      queued = WebPush.queue_test_job(user)
+      assert_eq(queued["devices"], 1)
+      assert_eq(queued["queued"], true)
+      assert_eq(push_spec_jobs("PushTestJob", user._key).length, 1)
+      # A send would have counted a failure (no VAPID key here) or a success.
+      stored = PushSubscription.find(device._key)
+      assert_eq(stored.failures, 0)
+      assert_null(stored.last_sent_at)
+    end
+
+    test("tests are limited to PUSH_TESTS_PER_HOUR an hour, each person their own") do
+      user = push_spec_user()
+      push_spec_device(user)
+      push_spec_sign_in(user)
+      set_header("Accept", "application/json")
+      (0 .. PUSH_TESTS_PER_HOUR).each do |i|
+        assert_eq(res_status(post("/app/push/test", {})), 200)
+      end
+      refused = post("/app/push/test", {})
+      assert_eq(res_status(refused), 429)
+      assert_contains(res_json(refused)["error"], "Too many test messages")
+      # No VAPID key here: the ones allowed answered "not available", none queued.
+      assert_eq(push_spec_jobs("PushTestJob", user._key).length, 0)
+
+      other = push_spec_user()
+      push_spec_device(other)
+      clear_headers()
+      push_spec_sign_in(other)
+      set_header("Accept", "application/json")
+      assert_eq(res_status(post("/app/push/test", {})), 200)
     end
 
     test("keeps the kinds chosen, the others off") do
@@ -266,6 +399,69 @@ describe("Push notifications") do
       sent = []
       assert_eq(WebPush.test(user, push_spec_transport(201, sent))["sent"], 1)
       assert_contains(sent[0]["payload"], "Push notifications work")
+    end
+
+    test("the test job sends nothing without VAPID keys, nor for someone gone") do
+      user = push_spec_user()
+      device = push_spec_device(user)
+      assert_eq(PushTestJob.perform({"user_id": user._key})["off"], 1)
+      assert_eq(PushTestJob.perform({"user_id": "no-such-user"})["off"], 1)
+      assert_eq(PushSubscription.find(device._key).failures, 0)
+    end
+
+    test("a device kept on another host before #543 is not counted, and is deleted at a send or a test") do
+      user = push_spec_user()
+      push_spec_device(user, "good-#{user._key}")
+      push_spec_stray(user, "relay")
+      assert_eq(PushSubscription.count_of(user), 1)
+      assert_eq(user.push_setup["devices"], 1)
+      sent = []
+      done = WebPush.deliver(push_spec_notification(user), push_spec_transport(201, sent))
+      assert_eq(done["sent"], 1)
+      assert_eq(sent.length, 1)
+      assert(sent[0]["endpoint"].starts_with?("https://fcm.googleapis.com/"), sent[0]["endpoint"])
+      assert_eq(PushSubscription.where({"user_id": user._key}).count, 1)
+
+      other = push_spec_user()
+      push_spec_device(other, "good-#{other._key}")
+      push_spec_stray(other, "test")
+      WebPush.test(other, push_spec_transport(201, sent))
+      assert_eq(sent.length, 2)
+      assert(sent[1]["endpoint"].starts_with?("https://fcm.googleapis.com/"), sent[1]["endpoint"])
+      assert_eq(PushSubscription.where({"user_id": other._key}).count, 1)
+    end
+
+    test("someone whose only devices are on another host has none: nothing queued, room to keep one") do
+      user = push_spec_user()
+      (0 .. PUSH_DEVICES_MAX).each do |i|
+        push_spec_stray(user, "only-#{i}")
+      end
+      assert_eq(PushSubscription.count_of(user), 0)
+      assert_eq(PushSubscription.of(user).length, 0)
+      notification = push_spec_notification(user)
+      assert_not(WebPush.queue_job(notification))
+      assert_eq(push_spec_jobs("PushNotificationJob", notification._key).length, 0)
+      assert_eq(WebPush.queue_test_job(user)["queued"], false)
+      assert_eq(push_spec_jobs("PushTestJob", user._key).length, 0)
+      kept = PushSubscription.keep(user, push_spec_raw("real-#{user._key}"), "")
+      assert(kept["error"].nil?, kept["error"].to_s)
+      assert_eq(PushSubscription.count_of(user), 1)
+      later = push_spec_notification(user)
+      assert(WebPush.queue_job(later))
+      assert_eq(push_spec_jobs("PushNotificationJob", later._key).length, 1)
+
+      sent = []
+      assert_eq(WebPush.test(user, push_spec_transport(201, sent))["sent"], 1)
+      assert_eq(PushSubscription.where({"user_id": user._key}).count, 1)
+    end
+
+    test("the stored devices on another host are let go everywhere at once (the migration)") do
+      user = push_spec_user()
+      push_spec_device(user, "kept-#{user._key}")
+      push_spec_stray(user, "everywhere")
+      assert_gt(PushSubscription.prune_unreachable_all, 0)
+      assert_eq(PushSubscription.where({"user_id": user._key}).count, 1)
+      assert_eq(PushSubscription.prune_unreachable_all, 0)
     end
 
     test("without VAPID keys nothing is queued, and the subject falls back to the site") do

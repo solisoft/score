@@ -148,3 +148,24 @@ test("a section played in a loop (#457): its bars back to back, each turn a whol
   assert.ok(end.every((ev) => ev.data[1] === 0x2f && ev.tick === 3 * turn), "the file ends with the third turn's last bar, silent beat and all");
   assert.equal(F.barTicks("6/8", 480), 1440);
 });
+
+test("a shared section's meta line is read as numbers: a force that is no number stays out (#537)", async () => {
+  const { shareable } = await import("../../public/eui-score/section-library.js");
+  const G = await import("../../public/eui-score/patterns.js");
+  const D = await import("../../public/eui-score/drums.js");
+  const kit = read(String.raw`\new DrumStaff \with { instrumentName = "Drums" } \drummode { \time 4/4 r1 | r | r | r }`);
+  G.writeGroove(kit, 0, 0, 3, D.grooveOf("funk"), { feel: true });
+  const shared = shareable(kit, [0], 1, 2, "Funk");
+  const meta = M.readMeta(shared.source);
+  const [first, second, ...others] = Object.keys(meta.velocity);
+  const velocity = { ...meta.velocity, [first]: "<img src=x onerror=alert(1)>", [second]: 900 };
+  const humanize = { time: "<img src=x onerror=alert(1)>", velocity: 6, seed: 455 };
+  const source = M.writeMeta(shared.source, { velocity, humanize });
+  const score = read(String.raw`\new Staff \with { instrumentName = "Voice" } { \time 4/4 c'1 | d'1 }`);
+  importSection(score, { title: "Funk", ...shared, source }, score_json);
+  const kept = Object.values(score.meta.velocity);
+  assert.equal(kept.length, others.length + 1, "the force that is no number left out");
+  assert.ok(kept.every((v) => Number.isInteger(v) && v >= 1 && v <= 127), "every force a number, in range");
+  assert.ok(kept.includes(127), "the one too loud clamped");
+  assert.deepEqual(score.meta.humanize, { time: 0, velocity: 6, seed: 455 });
+});

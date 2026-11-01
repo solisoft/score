@@ -147,14 +147,24 @@
 
   <%# The editor's modules imported below (score-photo.js, score-model.js…) in
       the app's language (#508), as on the editor's page; none in English. %>
-  <script>window.EUI_WORDS = <%- editor_words.length > 0 ? editor_words.to_json : "null" %>; window.EUI_WORDS_LOCALE = "<%= I18n.locale() %>";</script>
+  <%# What the scripts below need comes in JSON blocks: an inline script's
+      text never changes, its hash is in the Content-Security-Policy (#544). %>
+  <%- page_data("eui-words", {"words": editor_words.length > 0 ? editor_words : nil, "locale": I18n.locale()}) %>
+  <script>({ words: window.EUI_WORDS, locale: window.EUI_WORDS_LOCALE } = JSON.parse(document.getElementById("eui-words").textContent));</script>
+  <% script_words = {"untitled": t("app.home.untitled"), "left_out": t("app.home.left_out")} %>
+  <% script_words["sending"] = t("app.home.sending_photo") %>
+  <% script_words["see_plans"] = t("app.home.see_plans") %>
+  <% script_words["done"] = t("app.home.reading_done") %>
+  <% script_words["templates"] = template_words %>
+  <%- page_data("home-data", {
+    "words": script_words,
+    "v": eui_version,
+    "readings": app_readings_path(),
+    "imports": app_imports_path()
+  }) %>
   <script type="module">
-    <% script_words = {"untitled": t("app.home.untitled"), "left_out": t("app.home.left_out")} %>
-    <% script_words["sending"] = t("app.home.sending_photo") %>
-    <% script_words["see_plans"] = t("app.home.see_plans") %>
-    <% script_words["done"] = t("app.home.reading_done") %>
-    <% script_words["templates"] = template_words %>
-    const words = <%- script_words.to_json %>;
+    const page = JSON.parse(document.getElementById("home-data").textContent);
+    const words = page.words;
     const startForm = document.getElementById("start-form");
     const begin = (source, title = "") => {
       document.getElementById("start-source").value = source;
@@ -180,10 +190,10 @@
       try {
         let read;
         if (midi) {
-          const I = await import("/eui-score/midi-import.js?v=<%= eui_version %>");
+          const I = await import(`/eui-score/midi-import.js?v=${page.v}`);
           read = I.fromMidi(new Uint8Array(await file.arrayBuffer()), { title: name });
         } else {
-          const X = await import("/eui-score/musicxml.js?v=<%= eui_version %>");
+          const X = await import(`/eui-score/musicxml.js?v=${page.v}`);
           read = X.fromMusicXML(await X.musicXmlOf(file));
         }
         const { source, warnings } = read;
@@ -199,7 +209,7 @@
     });
     importInput.dataset.ready = "";
 
-    const M = await import("/eui-score/score-model.js?v=<%= eui_version %>");
+    const M = await import(`/eui-score/score-model.js?v=${page.v}`);
 
     // New: a template, its settings, the model's LilyPond.
     const box = document.querySelector("[data-templates]");
@@ -235,7 +245,7 @@
     // A photo: sent to be read, asked after until it is, shown beside what was read.
     const photoInput = document.querySelector("[data-photo]");
     const reading = document.querySelector("[data-reading]");
-    const { readPhoto, readingSays } = await import("/js/score-photo.js?v=<%= eui_version %>");
+    const { readPhoto, readingSays } = await import(`/js/score-photo.js?v=${page.v}`);
     photoInput?.addEventListener("change", async (event) => {
       const file = event.target.files[0];
       if (!file) return;
@@ -263,14 +273,14 @@
       };
       try {
         const answer = await readPhoto(file, {
-          readings: "<%= app_readings_path() %>",
+          readings: page.readings,
           started: (id) => {
             const left = document.querySelector("[data-photos-left]");
             left.textContent = Math.max(0, Number(left.textContent) - 1);
             status.textContent = readingSays({ phase: "waiting", seconds: 0 });
             // It goes on without this page (#465): where to find it again.
             const away = reading.querySelector("[data-reading-away]");
-            away.querySelector("a").href = "<%= app_imports_path() %>/" + id;
+            away.querySelector("a").href = page.imports + "/" + id;
             away.hidden = false;
           },
           // How it goes (#435): the time, then the LilyPond as the AI writes it.

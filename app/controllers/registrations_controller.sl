@@ -55,27 +55,29 @@ class RegistrationsController < Controller
     password_error = user.password_error(params["password"])
     return this._reject(user, password_error, 422) unless password_error.nil?
 
+    # An address that has an account already is answered as a new one is
+    # (#539), with the same Argon2id work: the page must not say who has an
+    # account. Its owner is told by mail, as often as account e-mails go (an
+    # account not confirmed yet gets its link again, AuthMailJob.due).
+    user.email = user.email.to_s.trim.downcase
+    unless User.find_by("email", user.email).nil?
+      User.burn_password_work(params["password"])
+      AuthMailJob.ask("signup_taken", user.email) if User.account_email_allowed?(user.email, client_ip(req))
+      return @_check_inbox(user)
+    end
+
     user.set_password(params["password"].to_s)
     user.save()
     return this._reject(user, SiteText.t("auth.not_created"), 422) if user._errors
 
-    # Send the confirmation link. A failure is logged, not raised, so signup
-    # works before SMTP is configured (set SOLI_MAIL_DELIVERY_METHOD=logger in
-    # dev to see the email in the console instead).
-    token = user.start_email_confirmation()
-    MailDelivery.attempt("confirmation", fn() { AuthMailer.confirm_email(user, token) })
+    # The confirmation link, queued (AuthMailJob): a failure is logged, not
+    # raised, so signup works before SMTP is configured (set
+    # SOLI_MAIL_DELIVERY_METHOD=logger in dev to see the email in the console).
+    # It spends the address's mail budget as a taken address's note does
+    # (#539): a reset asked next must not find one budget fuller than the other.
+    AuthMailJob.ask("confirm", user.email) if User.account_email_allowed?(user.email, client_ip(req))
 
-    if auth_require_confirmed_email()
-      return render(
-        "confirmations/new",
-        {
-          "title": SiteText.t("auth.check_inbox"),
-          "notice": SiteText.t("auth.created", {"email": user.email}),
-          "error": "",
-          "email": user.email
-        }
-      )
-    end
+    return @_check_inbox(user) if auth_require_confirmed_email()
 
     session_regenerate()
     session_set("user_id", user["_key"])
@@ -97,6 +99,12 @@ class RegistrationsController < Controller
     return this._reject(user, SiteText.t("auth.too_many_from_here"), 429) if reason == "rate"
     return this._reject(user, SiteText.t("auth.form_refused"), 422) if refused["show"]
 
+    @_check_inbox(user)
+  end
+
+  # What a sign-up answers: the link is on its way to `user`'s address. A
+  # new account, an address that has one and a bot all read this.
+  def _check_inbox(user)
     render(
       "confirmations/new",
       {

@@ -10,6 +10,10 @@
 const AUTH_RESET_TOKEN_TTL = 7200  # password-reset links live 2 hours
 const AUTH_MAX_FAILED_ATTEMPTS = 10  # failed logins before lockout
 const AUTH_LOCKOUT_SECONDS = 1800  # auto-unlock after 30 minutes
+# Wrong two-step codes that pause the code step, and for how long (#538,
+# TwoStepGuard): as many as wrong passwords, apart from them.
+const TWO_STEP_MAX_WRONG = AUTH_MAX_FAILED_ATTEMPTS
+const TWO_STEP_LOCK_SECONDS = AUTH_LOCKOUT_SECONDS
 const AUTH_CONFIRMATION_TOKEN_TTL = 172800  # confirmation links last 48 hours
 const AUTH_REMEMBER_DAYS = 30  # remember-me cookie lifetime
 const AUTH_MIN_PASSWORD_LENGTH = 12  # shortest password accepted at sign-up
@@ -21,6 +25,23 @@ const EMAIL_CHANGE_TTL = 86400
 # Changes of address one person may ask for in an hour, right or wrong
 # password: the form must not become a way to guess it.
 const EMAIL_CHANGES_PER_HOUR = 5
+# Wrong passwords the signed-in pages that ask for it (a new password,
+# two-step sign-in turned off, the account deleted, an access token made)
+# take from one account in ACCOUNT_PASSWORD_WINDOW seconds, before even the
+# right one is refused (#539): a stolen session must not become a way to
+# guess the password at leisure. Only wrong ones count.
+const ACCOUNT_PASSWORD_TRIES = 5
+const ACCOUNT_PASSWORD_WINDOW = 900
+# The source networks an account keeps a count of failed sign-ins for (#539),
+# locked ones aside: those are kept until their lock runs out.
+const AUTH_LOCK_SOURCES = 50
+# Wrong passwords at one account, from however many networks, within
+# AUTH_ACCOUNT_WINDOW seconds before it refuses every browser it does not
+# know for AUTH_ACCOUNT_WINDOW (#539): what bounds a botnet's guesses.
+const AUTH_ACCOUNT_MAX_FAILURES = 100
+const AUTH_ACCOUNT_WINDOW = 3600
+# How long a browser that signed in stays one the account knows.
+const AUTH_DEVICE_DAYS = 365
 
 # Per-IP throttle on the credential endpoints (login, sign-up, reset). The
 # per-account lockout above cannot see these two attacks: credential stuffing
@@ -179,6 +200,74 @@ class User < Model
     Crypto.password_verify(plaintext, this.password_digest)
   end
 
+  # The count of passwords typed on the signed-in pages (#539), the
+  # current round's: a right one starts a new round (`limiter.reset()` does
+  # not empty a count, so a fresh key does it).
+  def _password_tries
+    RateLimiter(
+      "password-check:#{this._key}:#{this._password_round}",
+      ACCOUNT_PASSWORD_TRIES,
+      ACCOUNT_PASSWORD_WINDOW
+    )
+  end
+
+  def _password_round
+    @password_round.to_s.to_i
+  end
+
+  # A new round, written alone (`_patch_stored`): nothing else of the
+  # account is saved from this copy.
+  def _next_password_round
+    round = @_password_round + 1
+    @_patch_stored({"password_round": round})
+    @password_round = round
+  end
+
+  # Whether the signed-in pages have had ACCOUNT_PASSWORD_TRIES wrong
+  # passwords lately: they then check none, the right one included.
+  def password_tries_spent?
+    @_password_tries.throttle() > 0
+  end
+
+  # Whether `plaintext` is the password, asked by a signed-in page: false,
+  # without checking, once the tries are spent. The try is counted before
+  # the ~100ms check, not after it: parallel requests would otherwise all
+  # pass the count before any of them added to it. A right one starts the
+  # count again — unless `new_round` is false: a page that asks for a
+  # two-step code too starts it only once the code is right as well
+  # (`passed_confirmation`, #538). Started on the password alone, a wrong
+  # code after the right password cost no try, and the codes could be
+  # guessed there without end.
+  def confirms_password?(plaintext, new_round = true)
+    tries = @_password_tries
+    return false unless tries.allowed()
+    return false unless @authenticate(plaintext.to_s)
+
+    @_next_password_round if new_round
+    true
+  end
+
+  # The password and the code of a signed-in page both right (#538): the
+  # tries start again.
+  def passed_confirmation
+    @_next_password_round
+    true
+  end
+
+  # Whether the password and, with two-step sign-in on, a code confirm a
+  # change from a signed-in page: the password's try counted (above), each
+  # wrong code counted at the second step (`second_step_counted?`), the
+  # tries started again only once both are right. The code is not looked at
+  # when the password is wrong.
+  def confirms_with_code?(password, code)
+    return @confirms_password?(password) unless @two_step?
+
+    return false unless @confirms_password?(password, false)
+    return false unless @second_step_counted?(code)
+
+    @passed_confirmation
+  end
+
   # Spend the same Argon2id work as a real `authenticate` without having an
   # account to check against. Sign-in calls this when no user matches the
   # submitted email: verifying costs ~100ms and returning early costs none, so
@@ -272,11 +361,16 @@ class User < Model
 
   # Issue a reset token: returns the plaintext token (goes into the email);
   # only its digest is stored.
+  #
+  # Written alone (`_patch_stored`): the copy asking may be older than the
+  # account's lockout counts (the mail job reads it), and saving it whole
+  # would put them back as they were then.
   def start_password_reset
     token = uuid_v4()
+    sent_at = DateTime.utc().to_unix()
+    @_patch_stored({"reset_token_digest": Crypto.sha256(token), "reset_sent_at": sent_at})
     this.reset_token_digest = Crypto.sha256(token)
-    this.reset_sent_at = DateTime.utc().to_unix()
-    this.update()
+    this.reset_sent_at = sent_at
     token
   end
 
@@ -302,6 +396,10 @@ class User < Model
     this.forget_email_change()
     this.failed_attempts = 0
     this.locked_at = null
+    # Guesses at the old password count for nothing against the new one.
+    this.sign_in_failures = null
+    this.account_failures = null
+    this.account_locked_at = null
     # Invalidate every session opened before this moment.
     #
     # Sessions are not indexed by user, so there is nothing to delete; instead
@@ -311,12 +409,24 @@ class User < Model
     # which is the one thing a password reset is supposed to stop.
     this.session_version = (this.session_version ?? 0) + 1
     this.update()
+    # The access tokens too (#539): the MCP clients and the apps connected
+    # by OAuth would otherwise keep acting as the account, sessions or not.
+    @_revoke_access
+  end
+
+  # Every access token of the account's deleted, and every authorization
+  # code not yet exchanged for one (#539): a code issued before a reset
+  # would otherwise become a token after it.
+  def _revoke_access
+    AccessToken.delete_all_of(this)
+    OauthCode.where({"user_id": this._key}).delete_all
+    true
   end
 
   # Why the password cannot become `new_password`, or nil: the current one
   # must be right, the new one acceptable, and typed the same twice.
   def password_change_error(current, new_password, confirmation)
-    return SiteText.t("app.account.not_current_password") unless this.authenticate(current.to_s)
+    return SiteText.t("app.account.not_current_password") unless this.confirms_password?(current)
 
     error = this.password_error(new_password)
     return error unless error.nil?
@@ -326,13 +436,25 @@ class User < Model
   end
 
   # A new password, and every other session and remembered browser signed
-  # out, as after a reset.
+  # out, every access token revoked and any reset link sent dead, as after
+  # a reset.
   def change_password(plaintext)
     this.set_password(plaintext)
     this.remember_token_digest = null
     this.forget_email_change()
+    this.forget_password_reset()
     this.session_version = (this.session_version ?? 0) + 1
     this.update()
+    @_revoke_access
+  end
+
+  # A reset link sent and not followed made useless (#539: not saved, the
+  # caller saves): after a new password or a new address, the link in an
+  # old mailbox must not choose another.
+  def forget_password_reset
+    this.reset_token_digest = null
+    this.reset_sent_at = null
+    true
   end
 
   # Bumped whenever every existing session must be invalidated (a password
@@ -342,11 +464,15 @@ class User < Model
   end
 
   # --- Email confirmation -----------------------------------------------------
+  # Written alone, as `start_password_reset` is: the mail job's copy of the
+  # account is read before the sign-ins counted since — saved whole, it
+  # wrote their failures back to what it had read.
   def start_email_confirmation
     token = uuid_v4()
+    sent_at = DateTime.utc().to_unix()
+    @_patch_stored({"confirmation_token_digest": Crypto.sha256(token), "confirmation_sent_at": sent_at})
     this.confirmation_token_digest = Crypto.sha256(token)
-    this.confirmation_sent_at = DateTime.utc().to_unix()
-    this.update()
+    this.confirmation_sent_at = sent_at
     token
   end
 
@@ -384,8 +510,10 @@ class User < Model
   # this account's, and not another account's.
   def email_change_error(new_email, password, code)
     address = new_email.to_s.trim.downcase
-    return SiteText.t("app.account.email_wrong_password") unless this.authenticate(password.to_s)
-    return SiteText.t("app.account.email_wrong_code") if this.two_step?() && !this.second_step?(code)
+    return SiteText.t("app.account.email_wrong_password") unless this.confirms_password?(password, !this.two_step?())
+    return SiteText.t("app.account.email_wrong_code") if this.two_step?() && !this.second_step_counted?(code)
+
+    this.passed_confirmation() if this.two_step?()
 
     return SiteText.t("app.account.email_invalid") unless Regex.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", address)
     return SiteText.t("app.account.email_same") if address == this.email
@@ -449,7 +577,8 @@ class User < Model
 
   # The change confirmed: the account takes the new address (confirmed, as
   # the link proves it is theirs), the shares made to the old one move with
-  # it, and every session and remembered browser is signed out. The old
+  # it, every session, remembered browser and access token is signed out,
+  # and a reset link sent to the old address dies. The old
   # address, or nil when the new one has meanwhile become another
   # account's: the change is then dropped, and nothing else changes.
   def finish_email_change
@@ -465,9 +594,11 @@ class User < Model
     this.confirmed_at = DateTime.utc.to_unix
     this.email_changed_digest = this.email_change_digest
     this.forget_email_change()
+    this.forget_password_reset()
     this.remember_token_digest = null
     this.session_version = (this.session_version ?? 0) + 1
     this.update()
+    @_revoke_access
     ScoreShare.move_address(old, address, this)
     old
   end
@@ -500,63 +631,325 @@ class User < Model
   end
 
   # --- Account lockout --------------------------------------------------------
+  #
+  # Two counts (#539). Per account AND source network: AUTH_MAX_FAILED_ATTEMPTS
+  # wrong passwords from one network (an IPv4 address; an IPv6 /64, which one
+  # host holds whole and moves about in at will) lock the account for that
+  # network, for AUTH_LOCKOUT_SECONDS. Whoever guesses at a known address
+  # locks themselves out, not its owner, who signs in from elsewhere as usual
+  # — a lock of the whole account was one anybody could keep on for ever.
+  # And per account: AUTH_ACCOUNT_MAX_FAILURES wrong passwords within
+  # AUTH_ACCOUNT_WINDOW, from however many networks (a botnet), lock it for
+  # AUTH_ACCOUNT_WINDOW for every browser it does not know. A browser that
+  # signed in to it before carries its `device` cookie (`device_cookie`) and
+  # still signs in, its network's count and the per-IP throttle still on it.
+  #
+  # `sign_in_failures` keeps, per network (a keyed digest of it, never the
+  # address), {"count", "at" (the last failure), "locked_at"};
+  # `account_failures` {"count", "since"}; `account_locked_at`.
+  # `locked_at` / `failed_attempts` are the whole account's lock from
+  # before, still honoured until it runs out.
+  #
+  # They are written field by field (`_patch_stored`), from the stored
+  # account read again, never by saving the copy a sign-in read: that copy
+  # is ~100ms of Argon2id old, and parallel guesses saving it would each
+  # undo the others' counts and locks.
+  #
+  # The calls the sign-in pages make (kept for #538's rebase):
+  # register_failed_attempt(ip = nil, by_code = false, trusted = false),
+  # clear_failed_attempts(ip = nil), locked_for?(ip, trusted = false) —
+  # `trusted` the browser's device cookie, checked (`trusts_device?`).
+
+  # The network failures from `ip` are counted under: an IPv4 address
+  # itself (an IPv4-mapped IPv6 address is its IPv4 one), an IPv6 address's
+  # /64, in one spelling whichever it came in.
+  static def failure_network(ip)
+    address = ip.to_s.trim.downcase.replace("[", "").replace("]", "").split("%")[0].to_s
+    address = address.substring(7, address.length) if address.starts_with?("::ffff:") && address.includes?(".")
+    return address unless address.includes?(":")
+
+    halves = address.split("::")
+    head = halves[0].to_s.blank? ? [] : halves[0].split(":")
+    tail = []
+    tail = halves[1].split(":") if halves.length > 1 && halves[1].present?
+    filler = []
+    (0 .. 8 - head.length - tail.length).each do |_|
+      filler.push("0")
+    end
+    prefix = (head + filler + tail).slice(0, 4).map do |group|
+      User._hex_group(group)
+    end
+    prefix.join(":") + "::/64"
+  end
+
+  # An IPv6 group without its leading zeros ("0db8" is "db8", "0000" is "0").
+  static def _hex_group(group)
+    text = group.to_s
+    while text.length > 1 && text.starts_with?("0")
+      text = text.substring(1, text.length)
+    end
+    text.blank? ? "0" : text
+  end
+
+  # The key failures from `ip` are counted under: its network, keyed with
+  # the server's secret, so that the keys stored cannot be turned back into
+  # addresses by hashing all 2^32 IPv4 ones.
+  static def failure_source(ip)
+    Crypto.hmac("sign-in:#{User.failure_network(ip)}", User.auth_key("sign-in")).substring(0, 24)
+  end
+
+  # The server's own secret (the one the live room's tickets are signed
+  # with, ScoreRoom): what sign-in records are keyed with and device cookies
+  # signed with.
+  static def auth_secret
+    ScoreRoom.secret_from(getenv("SOLI_SESSION_SECRET"), getenv("APP_SECRET"))
+  end
+
+  # The key of one `purpose` ("sign-in", "device"), derived from the
+  # server's secret: none of them is the secret itself, nor another's.
+  static def auth_key(purpose)
+    Crypto.hmac(purpose, User.auth_secret)
+  end
+
+  # A new `device` cookie, for a browser that has just proved itself to this
+  # account (a sign-in, a reset link followed, a remember-me cookie, a new
+  # password or address while signed in): "<id>.<mac>", the mac the server's
+  # over the account, its session version and the id. Nothing is stored:
+  # `trusts_device?` checks the mac. A reset, a new password or a new address
+  # bump the session version, which voids every device given before.
+  def device_cookie
+    id = Crypto.random_token(16)
+    "#{id}.#{this._device_mac(id)}"
+  end
+
+  # How the `device` cookie is set: a year, HttpOnly, Secure, SameSite=Lax.
+  static def device_cookie_options
+    {
+      "max_age": AUTH_DEVICE_DAYS * 86400,
+      "http_only": true,
+      "same_site": "Lax",
+      "secure": true
+    }
+  end
+
+  # Whether `value` (a browser's `device` cookie) is one this account gave.
+  def trusts_device?(value)
+    parts = value.to_s.split(".")
+    return false if parts.length != 2 || parts[0].blank?
+
+    Crypto.secure_compare(@_device_mac(parts[0]), parts[1])
+  end
+
+  def _device_mac(id)
+    Crypto.hmac("device:#{this._key}:#{this.current_session_version}:#{id}", User.auth_key("device"))
+  end
+
+  # Whether signing in is locked for whoever comes from `ip`, in a browser
+  # the account knows (`trusted`) or not.
+  def locked_for?(ip, trusted = false)
+    return true if @_account_locked?
+    return true if @account_locked? && !trusted
+
+    entry = (@sign_in_failures ?? {})[User.failure_source(ip)]
+    @_entry_locked?(entry, DateTime.utc.to_unix)
+  end
+
+  # Whether the account-wide lock is on: every browser the account does not
+  # know is refused.
+  def account_locked?
+    return false if @account_locked_at.nil?
+
+    DateTime.utc.to_unix - @account_locked_at.to_s.to_i <= AUTH_ACCOUNT_WINDOW
+  end
+
+  # How many networks signing in is locked from now.
+  def locked_sources
+    now = DateTime.utc.to_unix
+    failures = @sign_in_failures ?? {}
+    locked = failures.keys.filter do |source|
+      @_entry_locked?(failures[source], now)
+    end
+    locked.length
+  end
+
+  # Whether signing in is locked from somewhere (what the admin pages show,
+  # and lift with `unlock`).
   def locked?
+    @_account_locked? || @account_locked? || @locked_sources > 0
+  end
+
+  def _entry_locked?(entry, now)
+    return false if entry.nil? || entry["locked_at"].nil?
+
+    now - entry["locked_at"].to_s.to_i <= AUTH_LOCKOUT_SECONDS
+  end
+
+  # The whole account's lock from before #539; once run out, cleared.
+  def _account_locked?
     return false if this.locked_at.nil?
 
     if DateTime.utc().to_unix() - this.locked_at > AUTH_LOCKOUT_SECONDS
-      # The lockout window has passed — auto-unlock.
-      this.locked_at = null
-      this.failed_attempts = 0
-      this.update()
+      @_patch_stored({"locked_at": nil, "failed_attempts": 0})
       return false
     end
     true
   end
 
-  # A wrong password, or with `by_code` a wrong second-step code (#538):
-  # both count towards the same lock, so that the codes cannot be guessed
-  # by opening sign-in after sign-in with a password already known.
-  def register_failed_attempt(by_code = false)
+  # The failures still counted at `now`: a network's are forgotten once it
+  # has been quiet for AUTH_LOCKOUT_SECONDS (a lock trips at its last
+  # failure, so its lock has run out too). Of the open ones, only the
+  # AUTH_LOCK_SOURCES - 1 latest are kept, room for the one being counted;
+  # a locked one is never dropped to make room: a lock lasts its time.
+  def _live_failures(now)
+    failures = @sign_in_failures ?? {}
+    live = {}
+    unlocked = []
+    failures.keys.each do |source|
+      entry = failures[source]
+      next if entry.nil? || now - entry["at"].to_s.to_i > AUTH_LOCKOUT_SECONDS
 
-    # Don't re-stamp `locked_at` on an account that is *currently* locked:
-    # doing so slides the 30-minute window forward on every further guess, so
-    # an attacker who keeps knocking keeps the owner locked out indefinitely.
-    # The lockout should expire on schedule no matter how loud the attack is.
-    #
-    # Ask `locked?()` rather than testing `locked_at` directly — it is what
-    # clears an expired stamp. Testing the raw field meant that once the first
-    # lockout landed, nothing on the failure path ever cleared it, so
-    # `failed_attempts` froze and the account could never lock a second time:
-    # after the first window elapsed the attacker guessed at full rate forever.
-    return true if this.locked?()
-
-    this.failed_attempts = (this.failed_attempts ?? 0) + 1
-    just_locked = this.failed_attempts >= AUTH_MAX_FAILED_ATTEMPTS
-    this.locked_at = DateTime.utc().to_unix() if just_locked
-    this.update()
-
-    # Tell the owner once, when the lock trips. The sign-in response says only
-    # "Invalid email or password" whether or not the account is locked, because
-    # a distinct "locked" reply during the lockout tells an attacker which guess
-    # was the right one. Delivery failures must not break sign-in.
-    if just_locked
-      try
-        AuthMailer.account_locked(this, AUTH_LOCKOUT_SECONDS / 60, by_code).deliver()
-      catch error
-        Logger.warn("account-locked notification failed: " + str(error))
+      if @_entry_locked?(entry, now)
+        live[source] = entry
+      else
+        unlocked.push(source)
       end
     end
+    latest = unlocked.sort_by do |source|
+      0 - failures[source]["at"].to_s.to_i
+    end
+    latest.slice(0, AUTH_LOCK_SOURCES - 1).each do |source|
+      live[source] = failures[source]
+    end
+    live
+  end
 
+  # A wrong password (or, `by_code`, a wrong two-step code) from `ip`, in a
+  # browser the account knows (`trusted`) or not: counted for its network
+  # and for the account, on the stored account read again now.
+  def register_failed_attempt(ip = nil, by_code = false, trusted = false)
+    stored = User.find_by("_key", this._key)
+    return true if stored.nil?
+
+    # Don't count guesses from an address that is *currently* locked: doing
+    # so would slide its window forward on every further guess. The lock
+    # runs out on schedule no matter how loud the attack is.
+    return true if stored.locked_for?(ip, trusted)
+
+    now = DateTime.utc.to_unix
+    live = stored._live_failures(now)
+    # The entries to drop (quiet, or the oldest open ones): those still open
+    # when the statement runs go.
+    dropped = (stored.sign_in_failures ?? {}).keys.filter do |key|
+      !live.has_key(key)
+    end
+    counted = User.count_failure(this._key, User.failure_source(ip), now, dropped)
+    return true if counted.nil?
+
+    @_read_lock_fields(User.find_by("_key", this._key))
+    # The sign-in response says only "Invalid email or password" whether or
+    # not the address is locked, because a distinct "locked" reply during the
+    # lockout tells an attacker which guess was the right one. The mail is
+    # queued: its sending, or failing, is not the request's.
+    if counted["told"]
+      AuthMailJob.ask("account_locked", @email, {
+        "lock": counted["account_locked"] ? "account" : "source",
+        "by_code": by_code
+      })
+    end
     true
   end
 
-  def clear_failed_attempts
-    attempts = this.failed_attempts ?? 0
-    return if attempts == 0 && this.locked_at.nil?
+  # One more failure from network `source` at the account of key `key`, at
+  # `now`, counted by the database in the one statement that writes it: the
+  # +1 and whether it trips a lock are decided from the stored values, so
+  # two failures at once count two, whatever copies their requests read.
+  # The networks in `dropped` go unless they are locked by then; the
+  # account's own count is not counted while its lock is on (a browser it
+  # knows is still guessing: the lock runs out on schedule). The owner is
+  # told when a network's lock trips, once a window however many lock (a
+  # mail per network would be a way to flood them), and when the account's
+  # trips, which is once a window at most. Answers {"source_locked",
+  # "account_locked" (tripped by this one), "told"}, or nil (no account).
+  static def count_failure(key, source, now, dropped = [])
+    lockout = AUTH_LOCKOUT_SECONDS
+    max_failures = AUTH_MAX_FAILED_ATTEMPTS
+    account_window = AUTH_ACCOUNT_WINDOW
+    account_max = AUTH_ACCOUNT_MAX_FAILURES
+    rows = @sdbql{
+      FOR u IN users
+      FILTER u._key == #{key}
+      LET old_entries = u.sign_in_failures == null ? {} : u.sign_in_failures
+      LET gone_keys = (FOR k IN #{dropped} FILTER old_entries[k] == null || old_entries[k].locked_at == null RETURN k)
+      LET old_entry = old_entries[#{source}]
+      LET is_recent = old_entry != null && #{now} - old_entry.at <= #{lockout}
+      LET source_count = (is_recent ? old_entry.count : 0) + 1
+      LET source_trips = source_count >= #{max_failures}
+      LET is_open = u.account_locked_at == null || #{now} - u.account_locked_at > #{account_window}
+      LET in_window = u.account_failures != null && #{now} - u.account_failures.since <= #{account_window}
+      LET account_total = (in_window ? u.account_failures.count : 0) + 1
+      LET account_trips = is_open && account_total >= #{account_max}
+      LET source_tells = source_trips && (u.lock_told_at == null || #{now} - u.lock_told_at > #{lockout})
+      LET tells = account_trips || source_tells
+      LET source_entry = {count: source_count, at: #{now}, locked_at: source_trips ? #{now} : null}
+      LET window_since = in_window ? u.account_failures.since : #{now}
+      LET account_doc = account_trips ? null : {count: account_total, since: window_since}
+      UPDATE u WITH {
+        sign_in_failures: MERGE(UNSET(old_entries, gone_keys), ZIP([#{source}], [source_entry])),
+        account_failures: is_open ? account_doc : u.account_failures,
+        account_locked_at: account_trips ? #{now} : u.account_locked_at,
+        lock_told_at: tells ? #{now} : u.lock_told_at
+      } IN users
+      RETURN {source_locked: source_trips, account_locked: account_trips, told: tells}
+    }
+    # An @sdbql block answers a refused query with its error, as a string.
+    throw "User.count_failure: #{rows}" if type(rows) == "string"
+    return nil if rows.length == 0
 
-    this.failed_attempts = 0
-    this.locked_at = null
-    this.update()
+    rows[0]
+  end
+
+  # A right password from `ip`: its network's count starts again. Another
+  # network's does not, nor the account's: a sign-in by the owner does not
+  # lift an attacker's lock.
+  def clear_failed_attempts(ip = nil)
+    source = User.failure_source(ip)
+    return true unless (@sign_in_failures ?? {}).has_key(source)
+
+    @_patch_stored({}, {}, [source])
+  end
+
+  # `patch` written into the stored account, the fields it names only, and
+  # in `sign_in_failures` the networks `entries` names written, those
+  # `dropped` names removed, the others' left as the database has them — in
+  # one statement, from the document it updates. Then this copy's lockout
+  # fields read back.
+  def _patch_stored(patch, entries = {}, dropped = [])
+    key = this._key
+    written = @sdbql{
+      FOR u IN users
+      FILTER u._key == #{key}
+      LET kept = UNSET(u.sign_in_failures == null ? {} : u.sign_in_failures, #{dropped})
+      UPDATE u WITH MERGE(#{patch}, {sign_in_failures: MERGE(kept, #{entries})}) IN users
+      RETURN NEW._key
+    }
+    # An @sdbql block answers a refused query with its error, as a string.
+    throw "User#_patch_stored: #{written}" if type(written) == "string"
+
+    @_read_lock_fields(User.find_by("_key", this._key))
+  end
+
+  # This copy's lockout fields, as `stored` (the account read again) has them.
+  def _read_lock_fields(stored)
+    return true if stored.nil?
+
+    @sign_in_failures = stored.sign_in_failures
+    @account_failures = stored.account_failures
+    @account_locked_at = stored.account_locked_at
+    @lock_told_at = stored.lock_told_at
+    @locked_at = stored.locked_at
+    @failed_attempts = stored.failed_attempts
+    @password_round = stored.password_round
+    true
   end
 
   # --- Two-step sign-in (TOTP) -------------------------------------------------
@@ -636,64 +1029,87 @@ class User < Model
   # Whether `code` passes the second step: a code of the app not used
   # before, or a backup code not used before — which is then spent.
   #
-  # Spent in one conditional statement each (#538): reading the account,
-  # then writing it, let two requests sent together both pass with the same
-  # code, each having read it unused. The statement matches only while the
-  # code is still unused and the same secret still on; matching nothing is a
-  # refusal.
+  # Spent as a compare-and-set on the account's TwoStepGuard row (#538):
+  # reading the account, then writing it, let two requests sent together
+  # both pass with the same code, each having read it unused. The account
+  # read again must still have this secret on: a copy read before two-step
+  # was turned off passes nothing.
   def second_step?(code)
     return false unless this.two_step?()
 
+    stored = User.find_by("_key", this._key)
+    return false if stored.nil? || stored.totp_secret != this.totp_secret
+
+    guard = TwoStepGuard.of(this)
     text = code.to_s.replace(" ", "")
     if Regex.matches("^[0-9]{6}$", text)
       secret = Crypto.decrypt(this.totp_secret, getenv("SOLI_ENCRYPTION_KEY"))
       step = User.totp_step(secret, text, DateTime.utc().to_unix())
-      return false if step.nil? || step <= (this.totp_last_step ?? -1)
+      return false if step.nil?
 
-      return this._spend_step(step)
+      return this._spent_step(guard, step, stored.totp_last_step)
     end
     digest = Crypto.sha256(User.backup_digest_text(text))
-    left = this.totp_backup ?? []
-    return false unless left.includes?(digest)
-
-    this._spend_backup(digest)
+    this._spent_backup(guard, digest, stored.totp_backup ?? [])
   end
 
-  # `step` kept as the last one used, unless a code of it or of a later one
-  # was used meanwhile: whether it was.
-  def _spend_step(step)
-    user_key = this._key
-    secret = this.totp_secret
-    written = @sdbql{
-      FOR u IN users
-      FILTER u._key == #{user_key} AND u.totp_secret == #{secret}
-      FILTER u.totp_last_step == null OR u.totp_last_step < #{step}
-      UPDATE u WITH { totp_last_step: #{step} } IN users
-      RETURN NEW
-    }
-    raise("The code could not be spent: #{written}") if type(written) == "string"
-    return false if written.length == 0
+  # The code of time step `step` spent from `guard` (the account's
+  # TwoStepGuard row, as read): whether it was. The account keeps the step
+  # too, written alone, for what it shows.
+  def _spent_step(guard, step, floor)
+    return false unless TwoStepGuard.spend_step(guard, step, floor)
 
+    @_patch_stored({"totp_last_step": step})
     this.totp_last_step = step
     true
   end
 
-  # The backup code of `digest` taken off the list, unless it was meanwhile:
-  # whether it was.
-  def _spend_backup(digest)
-    user_key = this._key
-    secret = this.totp_secret
-    written = @sdbql{
-      FOR u IN users
-      FILTER u._key == #{user_key} AND u.totp_secret == #{secret} AND POSITION(u.totp_backup, #{digest})
-      UPDATE u WITH { totp_backup: (FOR d IN u.totp_backup FILTER d != #{digest} RETURN d) } IN users
-      RETURN NEW
-    }
-    raise("The code could not be spent: #{written}") if type(written) == "string"
-    return false if written.length == 0
+  # The backup code of `digest` spent from `guard`, if it is one of
+  # `valid` (the account's): whether it was. The account's list loses it
+  # too, for the count it shows.
+  def _spent_backup(guard, digest, valid)
+    return false unless TwoStepGuard.spend_backup(guard, digest, valid)
 
-    this.totp_backup = written[0]["totp_backup"]
+    left = valid.filter do |d|
+      d != digest
+    end
+    @_patch_stored({"totp_backup": left})
+    this.totp_backup = left
     true
+  end
+
+  # Whether `code` passes the second step, counted (#538): while the code
+  # step is paused (TwoStepGuard) no code is looked at, the right one
+  # included; a wrong one counts towards the pause, wherever it is typed —
+  # signing in, turning two-step off, a new address, deleting the account;
+  # a right one clears the count.
+  def second_step_counted?(code)
+    return false if this.codes_locked?()
+
+    if this.second_step?(code)
+      TwoStepGuard.clear_wrong(this)
+      return true
+    end
+    this.count_wrong_code()
+    false
+  end
+
+  # Whether the code step is paused, after too many wrong codes.
+  def codes_locked?
+    TwoStepGuard.locked?(this)
+  end
+
+  # One more wrong code: when it pauses the code step, the owner is told
+  # (queued, AuthMailJob), once a pause.
+  def count_wrong_code
+    paused = TwoStepGuard.count_wrong(this)
+    if paused
+      AuthMailJob.ask("account_locked", @email, {
+        "lock": "code",
+        "by_code": true
+      })
+    end
+    paused
   end
 
   def backup_codes_left
@@ -885,10 +1301,17 @@ class User < Model
     nil
   end
 
-  # Signing in allowed again after too many wrong passwords.
+  # Signing in allowed again after too many wrong passwords, from every
+  # address.
   def unlock
+
+    # The code step's pause too (#538): an admin lifts the lock whole.
+    TwoStepGuard.clear_wrong(this)
     @locked_at = nil
     @failed_attempts = 0
+    @sign_in_failures = nil
+    @account_failures = nil
+    @account_locked_at = nil
     @update()
   end
 
@@ -962,6 +1385,7 @@ class User < Model
     UserNotification.delete_all_of(this)
     PushSubscription.delete_all_of(this)
     AccessToken.delete_all_of(this)
+    TwoStepGuard.delete_of(this)
     @delete
   end
 

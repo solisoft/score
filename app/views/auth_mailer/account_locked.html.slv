@@ -1,17 +1,16 @@
-<%# The words of the e-mail in the language of the request that sent it (#471); the addresses escaped: they go in as HTML. %>
+<%# The words of the e-mail in the language of the request that sent it (#471); the addresses escaped: they go in as HTML. A network's lock or the account's (#539): either way, the browser the owner usually signs in from still does. %>
+<%# The code step's pause (#538): after a right password, so its own words. %>
+<% which = ["account", "code"].includes?(locals["lock"]) ? locals["lock"] : "source" %>
+<% scope = which == "code" ? "security_538.account_locked" : "security_539.account_locked" %>
 <% words = {"email": h(user.email), "new_email": h(locals["new_email"].to_s)} %>
 <% words = words.merge({"hours": locals["hours"].to_s, "minutes": locals["lock_minutes"].to_s}) %>
 <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
   <h1 style="font-size: 20px;"><%- t("mail.account_locked.title", words) %></h1>
   <p>
-    <%- t("mail.account_locked.body", words) %>
+    <%- t("#{scope}.#{which}_body", words) %>
   </p>
   <p style="color: #666; font-size: 13px;">
-    <% if locals["by_code"] == true %>
-      <%- t("security_538.locked_by_code", words) %>
-    <% else %>
-      <%- t("mail.account_locked.advice", words) %>
-    <% end %>
+    <%- t("#{scope}.#{which}_advice", words) %>
   </p>
   <p style="margin: 24px 0;">
     <a href="<%= reset_url %>"

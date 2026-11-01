@@ -26,8 +26,26 @@ cat > .env <<'ENV'
 APP_ENV=production
 APP_URL=https://score.solisoft.net
 SOLI_APP_HOSTS=score.solisoft.net
+# Form posts must carry their CSRF token (a missing one is a 403, not only
+# an Origin check), and the session cookie is __Host-session_id, which a
+# subdomain cannot plant (#544).
+SOLI_CSRF_TOKENS=require
+SOLI_SESSION_HOST_PREFIX=1
 ENV
 ```
+
+- On a site made before #544, Actions › production database › `csrf` adds
+  the last two lines to the server's `.env` (the first one it replaced kept
+  as `.env.before-csrf`), restarts, and checks that a token-less sign-in is
+  refused and that `/login` sets `__Host-session_id` — or puts the `.env`
+  back. The cookie's name changes: a session opened before keeps its old
+  cookie until it signs in again or expires.
+- The policy is enforced, and browsers report what it refused to
+  `/csp-report`: each violation is a `csp violation` line in the app's log
+  (page, directive, what was blocked), never a database write.
+- The site's Content-Security-Policy is set by the app
+  (`config/application.sl`, `ContentPolicy`); HSTS comes from soli-proxy
+  (`max-age=63072000; includeSubDomains`), so the app does not send it twice.
 
 - DNS: `score.solisoft.net` → the server (soli-proxy gets the certificate).
 - Soli on the server must be ≥ 2.26.0 (the `eui_score_*` builtins); the
@@ -64,7 +82,11 @@ It is `/health/deep`, not `/health/ready`: soli-proxy answers `/health/ready` it
 ## Client addresses (the per-address limits)
 
 The sign-in, sign-up and reset throttle (`AUTH_ATTEMPTS_PER_IP`, 15 in 5
-minutes) and the account e-mails' limit (`AUTH_EMAILS_PER_IP`, 20 an hour)
+minutes), the account e-mails' limit (`AUTH_EMAILS_PER_IP`, 20 an hour) and
+the OAuth server's open endpoints (`OAUTH_REGISTRATIONS_PER_IP_HOUR`, 600
+registrations an hour; `OAUTH_TOKEN_CALLS_PER_IP_MINUTE`, 600 token calls a
+minute; `OAUTH_REVOCATIONS_PER_IP_MINUTE`, 300 revocations a minute — raise
+them in `.env` if a hosted MCP client is refused with a 429)
 count requests per client address (`client_ip(req)`, the rate limiter). The
 app only sees soli-proxy, on `127.0.0.1`: **without the lines below, every
 visitor is the same address**, and 15 sign-ins or 20 e-mails in the window

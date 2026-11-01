@@ -389,14 +389,16 @@ describe("AppScoresController") do
       assert_contains(page, "data-conflict-theirs")
       assert_contains(page, "data-conflict-copy")
       assert_contains(page, "action=\"/app/scores\" method=\"POST\" data-open-form")
-      assert_contains(page, "let revision = #{score.revision};")
-      assert_contains(page, "shareUrl: \"/app/scores/#{score._key}/share\"")
+      # What its script reads, beside it in a JSON block (#544).
+      assert_contains(page, "\"revision\":#{score.revision},")
+      assert_contains(page, "\"share\":\"/app/scores/#{score._key}/share\"")
+      assert_contains(page, "let revision = page.revision;")
       # The owner shares from the sharing page: File says so.
       assert_contains(page, "data-act=\"share\">Share… <kbd>who may open it</kbd>")
       assert_not(page.contains("Copy a link to this score"))
       assert_contains(page, "data-act=\"properties\"")
       assert_contains(page, "/ws/scores?ticket=")
-      assert_contains(page, "fetch(\"/app/scores/#{score._key}/room_ticket\"")
+      assert_contains(page, "\"ticket\":\"/app/scores/#{score._key}/room_ticket\"")
       assert_contains(page, "data-room")
       assert_contains(page, "href=\"/app/scores/#{score._key}/versions\"")
       # File › Open a photo…: without an AI key of one's own (#396), the way to

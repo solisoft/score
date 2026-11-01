@@ -2,6 +2,7 @@
   <h1><%= title %></h1>
   <% if state == "ready" %>
     <p><%- t("email_change.ready", {"email": h(new_email)}) %></p>
+    <p class="muted"><%= t("security_539.email_change_disconnects") %></p>
     <form action="<%= lp(confirm_email_change_path()) %>" method="POST" class="auth-form">
       <%- csrf_field() %>
       <input type="hidden" name="token" value="<%= token %>">

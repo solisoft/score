@@ -2,7 +2,9 @@
 #
 # Ships with a per-IP throttle (AUTH_ATTEMPTS_PER_IP per
 # AUTH_IP_WINDOW_SECONDS), account lockout (AUTH_MAX_FAILED_ATTEMPTS wrong
-# passwords lock the account for AUTH_LOCKOUT_SECONDS), optional remember-me
+# passwords from one source network lock the account for that network for
+# AUTH_LOCKOUT_SECONDS; AUTH_ACCOUNT_MAX_FAILURES from anywhere lock it for
+# every browser that never signed in to it, #539), optional remember-me
 # (persistent HttpOnly + Secure cookie), and an optional confirmed-email gate
 # (flip `auth_require_confirmed_email` in app/models/user.sl).
 #
@@ -34,9 +36,10 @@ class SessionsController < Controller
     password = params["password"].to_s
 
     # First gate: how many sign-in attempts this source address gets. The
-    # per-account lockout below is blind to credential stuffing (one guess
-    # each against thousands of accounts) and it is itself abusable as a
-    # denial of service against a known address. This closes both.
+    # lockout below is blind to credential stuffing (one guess each against
+    # thousands of accounts), which this closes. It does not stop one
+    # address locking a known account: the lockout itself is counted per
+    # account and address (#539), so that address locks only itself out.
     limiter = rate_limiter_from_ip(req, AUTH_ATTEMPTS_PER_IP, AUTH_IP_WINDOW_SECONDS)
     return this._reject(SiteText.t("auth.too_many_signins"), email, 429) unless limiter.allowed()
 
@@ -59,7 +62,13 @@ class SessionsController < Controller
     # from an address that was never registered. The owner learns about the lock
     # from the notification `register_failed_attempt` sends when it trips, not
     # from this response.
-    if !user.nil? && user.locked?()
+    #
+    # A browser that signed in to the account before (its `device` cookie)
+    # is not held by the account-wide lock: the owner's own, while a botnet
+    # guesses from everywhere else.
+    ip = client_ip(req)
+    trusted = !user.nil? && user.trusts_device?(@_device_cookie)
+    if !user.nil? && user.locked_for?(ip, trusted)
       User.burn_password_work(password)
       return this._reject(SiteText.t("auth.invalid"), email, 401)
     end
@@ -71,31 +80,35 @@ class SessionsController < Controller
     authenticated = user.nil? ? User.burn_password_work(password) : user.authenticate(password)
 
     unless authenticated
-      user.register_failed_attempt() unless user.nil?
+      user.register_failed_attempt(ip, false, trusted) unless user.nil?
       return this._reject(SiteText.t("auth.invalid"), email, 401)
     end
 
+    # An account not confirmed yet answers the right password as a wrong
+    # one (#539): "confirm first" told whoever typed it that the address had
+    # just signed up — sign-up's answer says nothing of that, this one must
+    # not either. Every refused sign-in reads how to confirm; the right
+    # password sends the link again, as often as account e-mails go.
+    # It counts as a failure for the network too: a wrong one did, and the
+    # lock must trip at the same guess whichever the last one was.
     if auth_require_confirmed_email() && !user.confirmed?()
-      return render("sessions/new", {
-        "title": SiteText.t("auth.sign_in"),
-        "error": SiteText.t("auth.confirm_first"),
-        "email": email,
-        "return_to": @_return_to,
-        "unconfirmed": true
-      }, {"status": 403})
+      user.register_failed_attempt(ip, false, trusted)
+      AuthMailJob.ask("confirm", email) if User.account_email_allowed?(email, ip)
+      return this._reject(SiteText.t("auth.invalid"), email, 401)
     end
 
     remember = params["remember_me"].to_s == "1"
     # Two-step sign-in: the password is right, the code is still to come
-    # (TwoStepPending). The wrong attempts are cleared only once the code
-    # is right (#538): cleared here, every fresh sign-in gave whoever has
-    # the password a new allowance of codes to guess.
+    # (TwoStepPending, which does not sign in nor mark the browser as one
+    # the account knows). The network's wrong passwords are cleared once
+    # the code is right too (TwoStepController, #538); the wrong codes are
+    # counted apart (TwoStepGuard), and no password clears them.
     if user.two_step?()
       TwoStepPending.start(user, remember, @_return_to)
       return redirect(SiteLocale.path(login_code_path()))
     end
 
-    user.clear_failed_attempts()
+    user.clear_failed_attempts(ip)
     @_finish_sign_in(user, remember)
     redirect(@_after_sign_in)
   end
@@ -107,6 +120,10 @@ class SessionsController < Controller
     session_regenerate()
     session_set("user_id", user["_key"])
     session_set("session_version", user.current_session_version())
+    # A browser the account now knows (#539): the account-wide lock does
+    # not hold it. Signed (the mac in it), not secret: it opens nothing on
+    # its own, the password and the two-step code are still asked.
+    set_cookie("device", user.device_cookie, User.device_cookie_options)
 
     if remember
       token = user.start_remember_me()
@@ -131,8 +148,15 @@ class SessionsController < Controller
       "title": SiteText.t("auth.sign_in"),
       "error": message,
       "email": email,
-      "return_to": @_return_to
+      "return_to": @_return_to,
+      "confirm_hint": status == 401
     }, {"status": status})
+  end
+
+  # The browser's `device` cookie, or "".
+  def _device_cookie
+    device = cookies["device"] rescue nil
+    device.to_s
   end
 
   # Where a sign-in goes: back to the app page that asked for it, never to

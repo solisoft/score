@@ -12,12 +12,15 @@
 <link rel="modulepreload" href="<%= studio_preloads["engine"] %>">
 <%# The editor's words in the app's language (#508): public/eui-score/words.js
     looks its modules' English sentences up in them; none in English. %>
+<%# They come in a JSON block, read by a script whose text never changes:
+    its hash is in the Content-Security-Policy (#544). %>
 <% studio_words = locals["editor_words"] ?? {} %>
 <% if studio_words.length > 0 %>
-<script>window.EUI_WORDS = <%- studio_words.to_json %>; window.EUI_WORDS_LOCALE = "<%= I18n.locale() %>";</script>
+<%- page_data("eui-words", {"words": studio_words, "locale": I18n.locale()}) %>
 <% else %>
-<script>window.EUI_WORDS = null; window.EUI_WORDS_LOCALE = "en";</script>
+<%- page_data("eui-words", {"words": nil, "locale": "en"}) %>
 <% end %>
+<script>({ words: window.EUI_WORDS, locale: window.EUI_WORDS_LOCALE } = JSON.parse(document.getElementById("eui-words").textContent));</script>
 <link rel="preload" href="<%= studio_preloads["wasm"] %>" as="fetch" type="application/wasm" crossorigin>
 <div class="studio" id="studio" data-no-nav>
   <%# The menu bar: menus as an application has them (File, Edit, View,

@@ -344,8 +344,6 @@ fr:
       push_state_off: "Désactivées sur cet appareil."
       push_on_failed: "Impossible de les activer : {error}"
       push_off_failed: "Impossible de les désactiver : {error}"
-      push_sent_one: "Envoyé à {n} appareil."
-      push_sent_other: "Envoyé à {n} appareils."
       push_sent_none: "Rien n'a pu être envoyé : réactivez-les sur cet appareil."
       push_send_failed: "Envoi impossible : {error}"
       plan_on: "Vous êtes sur l'offre <strong>{plan}</strong>."
@@ -801,8 +799,8 @@ fr:
       hairpins: "Soufflets"
       crescendo_over_the_selection: "Crescendo sur la sélection"
       diminuendo_over_the_selection: "Diminuendo sur la sélection"
-      tie_to_the_next_note_t: "Lier à la note suivante (T)"
-      slur_the_selected_notes_s: "Lier les notes choisies (S)"
+      tie_to_the_next_note_t: "Liaison de prolongation : lier à la note suivante (T)"
+      slur_the_selected_notes_s: "Liaison sur les notes choisies (S)"
       phrasing_slur_over_the_selected_notes: "Liaison de phrasé sur les notes choisies (Maj+S)"
       slur_side: "Côté de la liaison"
       a_slur_over_the_selected_notes_or_turn: "Une liaison au-dessus des notes choisies, ou la leur passée dessus ; encore : retour là où les hampes laissent la place"
@@ -832,7 +830,7 @@ fr:
       trill_the_note_and_the_one_above_quickly: "Trille : la note et celle du dessus, vite, tour à tour"
       short_trill_the_note_the_one_above_the: "Trille court : la note, celle du dessus, la note"
       mordent_the_note_the_one_below_the_note: "Mordant : la note, celle du dessous, la note"
-      turn_above_the_note_below_the_note: "Gruppetto : dessus, la note, dessous, la note"
+      turn_above_the_note_below_the_note: "Doublé (gruppetto) : dessus, la note, dessous, la note"
       arpeggio_the_chord_rolled_from_its: "Arpège : l'accord égrené de sa note la plus grave vers le haut"
       glissando_slide_from_this_note_to_the: "Glissando : glisser de cette note à la suivante"
       tremolo: "Trémolo"
@@ -1111,7 +1109,7 @@ fr:
       transpose_score: "Transposer la partition"
       dynamics: "Nuances"
       ties_slurs_8va: "Liaisons et 8va"
-      tie_button: "⁀ Liaison de prolongation"
+      tie_button: "⁀ Lier"
       slur_button: "⌒ Liaison"
       phrase: "⌒ Phrasé"
       above: "⌒ Dessus"
@@ -1132,7 +1130,7 @@ fr:
       tr_trill: "tr Trille"
       short_tr: "Trille court"
       mordent: "Mordant"
-      turn: "Gruppetto"
+      turn: "Doublé"
       arpeggio: "Arpège"
       trem_8: "Trém. 8"
       stems_beams: "Hampes et ligatures"
@@ -1365,8 +1363,6 @@ fr:
       photo_of: "Photo du {when}"
       photo_of_format: "%d/%m/%Y, %H:%M"
     oauth:
-      title: "Connecter {name}"
-      heading: "Connecter {name} ?"
       description: "Une application demande à accéder à vos partitions Score."
       asks_html: "<strong>{name}</strong> demande à accéder à vos partitions sur Score, en tant que <strong>{email}</strong>."
       can_list: "Lister et lire vos partitions"
@@ -1425,20 +1421,69 @@ fr:
   # ---
   # (#538) security: two-step sign-in and resets — keys under `security_538:` right below
   security_538:
-    locked_by_code: "Le mot de passe était bon, mais le code de l'application d'authentification ne l'était pas, trop de fois : quelqu'un a votre mot de passe. Changez-le à la fin du blocage, ou réinitialisez-le dès maintenant avec le bouton ci-dessous."
-    too_many_codes: "Trop de codes erronés pour ce compte : la connexion est suspendue pendant {minutes} minutes."
+    account_locked:
+      code_body: "Le mot de passe de <strong>{email}</strong> a été saisi correctement, mais le code de l'application d'authentification a été faux trop de fois : pendant {minutes} minutes, aucun code n'est accepté et la connexion attend."
+      code_advice: "Si ce n'était pas vous, quelqu'un a votre mot de passe : changez-le dès maintenant (bouton ci-dessous), ou dès que vous serez reconnecté. Un nouveau mot de passe ne raccourcit pas la pause ; les navigateurs déjà connectés le restent."
+    too_many_codes: "Trop de codes erronés pour ce compte : aucun code n'est accepté pendant {minutes} minutes."
     two_step_password: "Ce n'est pas votre mot de passe : la connexion en deux étapes est toujours désactivée."
     delete_wrong_code: "Ce code n'est pas bon, ou il a déjà servi : le compte est toujours là."
   # ---
   # (#539) security: tokens, passwords and accounts — keys under `security_539:` right below
+  security_539:
+    password_changed: "Mot de passe changé. Vos autres navigateurs sont déconnectés, et les applications connectées à votre compte (Claude et les autres clients MCP) ont perdu leur accès : connectez-les de nouveau."
+    reset_disconnects: "Un nouveau mot de passe déconnecte tous les navigateurs et les applications connectées à votre compte (Claude et les autres clients MCP)."
+    email_change_disconnects: "Les applications connectées au compte (Claude et les autres clients MCP) perdent aussi leur accès : connectez-les de nouveau."
+    tries_spent: "Trop de mots de passe erronés : réessayez dans {minutes} minutes."
+    token_password: "Tapez votre mot de passe pour créer un jeton."
+    token_password_label: "Votre mot de passe"
+    signup_taken:
+      title: "Votre adresse a déjà un compte"
+      body: "Quelqu'un a essayé de créer un compte Score avec <strong>{email}</strong>, qui en a déjà un : aucun second compte n'a été créé."
+      sign_in: "Se connecter"
+      forgot: "Mot de passe oublié ?"
+      reset: "En choisir un nouveau"
+      footer: "Si ce n'était pas vous, il n'y a rien à faire : votre compte et son mot de passe n'ont pas changé."
+    account_locked:
+      source_body: "Il y a eu trop de tentatives de connexion échouées pour <strong>{email}</strong> depuis un même réseau : nous avons bloqué la connexion depuis ce réseau pendant {minutes} minutes."
+      source_advice: "La connexion depuis tout autre réseau fonctionne comme d'habitude, depuis votre navigateur habituel aussi. Si c'était vous, attendez la fin du blocage, ou réinitialisez votre mot de passe si vous l'avez oublié. Sinon, quelqu'un essaie de deviner votre mot de passe : les tentatives ont échoué, mais un mot de passe plus solide est une bonne idée."
+      account_body: "Il y a eu trop de tentatives de connexion échouées pour <strong>{email}</strong> depuis de nombreux réseaux : pendant {minutes} minutes, le compte ne se connecte que depuis un navigateur où vous vous êtes déjà connecté."
+      account_advice: "Votre navigateur habituel vous connecte toujours comme avant. Quelqu'un essaie de deviner votre mot de passe depuis de nombreux endroits : les tentatives ont échoué, mais un mot de passe plus solide est une bonne idée, et un nouveau lève le blocage."
+    unconfirmed_hint: "Nouveau compte ? Confirmez d'abord votre adresse avec le lien envoyé par e-mail, ou demandez-en un nouveau."
   # ---
   # (#540) security: engraving limits and MCP batches — keys under `security_540:` right below
   # ---
   # (#541) security: the OAuth server — keys under `security_541:` right below
+  security_541:
+    title: "Connecter {host}"
+    title_local: "Connecter une application de cet ordinateur"
+    heading: "{host} veut accéder à vos partitions, en se présentant comme « {name} »"
+    heading_local: "Une application de cet ordinateur veut accéder à vos partitions, en se présentant comme « {name} »"
+    name_unchecked: "Score ne vérifie pas ce nom : n'autorisez que si vous venez de demander à cette application de se connecter."
+    stale_title: "Cette demande a été remplacée"
+    stale_body: "Une autre demande de connexion a été lancée depuis l'affichage de cette page : rien n'a été autorisé. Recommencez depuis l'application qui demandait à se connecter."
+    outdated_title: "Cette page n'est plus à jour"
+    outdated_body: "Cette page n'est plus à jour : relancez la connexion depuis votre application. Rien n'a été autorisé."
   # ---
   # (#542) security: live sharing and rights — keys under `security_542:` right below
+  security_542:
+    trashed: "Cette partition est dans la corbeille."
+    push_taken: "Les notifications de cet appareil sont celles d'un autre compte : désactivez-les d'abord depuis ce compte."
   # ---
   # (#543) security: push, storage and export — keys under `security_543:` right below
+  security_543:
+    push_test_limited: "Trop de messages de test : réessayez dans une heure."
+    push_queued_one: "En route vers {n} appareil."
+    push_queued_other: "En route vers {n} appareils."
+    take_room_full: "Vos prises dépasseraient les {room} que garde votre offre : supprimez-en d'abord."
   # ---
   # (#544) security: CSP, configuration and admin — keys under `security_544:` right below
+  security_544:
+    admin_two_step_title: "Connexion en deux étapes requise"
+    admin_two_step_description: "L'administration s'ouvre à un administrateur qui se connecte en deux étapes."
+    admin_two_step_lead: "L'administration modifie les comptes des autres : elle ne s'ouvre qu'à un administrateur qui se connecte en deux étapes, pour qu'un mot de passe seul ne suffise jamais."
+    admin_two_step_do: "Activez la connexion en deux étapes dans votre compte pour utiliser l'administration."
+    admin_two_step_button: "Activer la connexion en deux étapes"
+    admin_two_step_unavailable: "Ce serveur ne peut pas encore garder les secrets de la connexion en deux étapes : la personne qui l'administre doit d'abord définir SOLI_ENCRYPTION_KEY."
+    admin_two_step_again: "Cette session a été ouverte sans votre code : avant d'activer la connexion en deux étapes, ou sur un navigateur mémorisé. Déconnectez-vous, puis reconnectez-vous avec le code de votre application d'authentification pour utiliser l'administration."
+    admin_two_step_sign_out: "Se déconnecter"
   # ---

@@ -173,3 +173,40 @@ test("a grace note's note-on is left alone; the note after it takes its velocity
   assert.equal(out[0][1], 90, "the grace note as it was");
   assert.equal(out[1][1], 17);
 });
+
+// A score's text is anyone's: a meta line written by hand (or by an attacker)
+// must not put markup in the MIDI view (#537).
+test("a velocity on the meta line that is no number is dropped, and draws no markup (#537)", () => {
+  const payload = "<img src=x onerror=alert(1)>";
+  const meta = { velocity: { [V.noteId(0, 0, 60)]: payload, [V.noteId(0, Q, 62)]: 300, [V.noteId(0, 2 * Q, 64)]: 70, [V.noteId(0, 3 * Q, 65)]: "96" } };
+  const score = read(`{ c'4 d' e' f' }\n%% eui-score ${JSON.stringify(meta)}\n`);
+  assert.equal(score.meta.velocity[V.noteId(0, 0, 60)], payload, "the line as written");
+  const set = V.velocitiesOf(score);
+  assert.deepEqual(set, { [V.noteId(0, Q, 62)]: 127, [V.noteId(0, 2 * Q, 64)]: 70 }, "numbers only, clamped to 1–127");
+  const geo = R.rollLayout(score);
+  const svg = V.drawStrip(score, geo, { set });
+  assert.doesNotMatch(svg, /<img|onerror/);
+  assert.match(svg, /<title>127<\/title>/);
+  assert.match(svg, /<title>70<\/title>/);
+  // Handed a raw map all the same, the strip still writes text, not markup.
+  const raw = V.drawStrip(score, geo, { set: score.meta.velocity });
+  assert.doesNotMatch(raw, /<img/);
+  assert.equal(raw.match(/class="vel-note[ "]/g).length, 4);
+  // Nor does the MIDI get a velocity that is no number.
+  const out = ons(V.applyVelocities(score, played(score)));
+  assert.deepEqual(out.map(([key]) => key), [60, 62, 64, 65]);
+  assert.equal(out[1][1], 127);
+  assert.equal(out[2][1], 70);
+  assert.ok(out.every(([, v]) => Number.isInteger(v) && v >= 1 && v <= 127));
+});
+
+test("a velocity map that is no map reads as none (#537)", () => {
+  for (const velocity of ["<img src=x onerror=alert(1)>", [96, 70], 42, null]) {
+    const score = read("{ c'4 }");
+    score.meta = { velocity };
+    assert.deepEqual(V.velocitiesOf(score), {});
+  }
+  const score = read("{ c'4 }");
+  score.meta = JSON.parse('{"velocity":{"__proto__":5,"0:0:60":64}}');
+  assert.deepEqual(V.velocitiesOf(score), { "0:0:60": 64 });
+});

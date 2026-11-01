@@ -19,6 +19,8 @@
 const WEB_PUSH_TTL = 86400
 # Tries a device may fail in a row (not "gone") before it is let go.
 const WEB_PUSH_FAILURES_MAX = 5
+# Test messages one person may ask for an hour (#543).
+const PUSH_TESTS_PER_HOUR = 5
 
 class WebPush
   static def public_key
@@ -42,7 +44,14 @@ class WebPush
   # its person has a device: whether it was.
   static def queue(notification)
     return false if notification.nil? || !WebPush.configured?
-    return false if PushSubscription.where({"user_id": notification.user_id}).count == 0
+
+    WebPush.queue_job(notification)
+  end
+
+  # `notification` handed to PushNotificationJob if its person has a device
+  # on a push service: whether it was.
+  static def queue_job(notification)
+    return false if PushSubscription.of_key(notification.user_id).length == 0
 
     PushNotificationJob.perform_later({"notification_id": notification._key}, {"max_retries": 0})
     true
@@ -63,8 +72,14 @@ class WebPush
     user = User.find_by("_key", notification.user_id)
     return WebPush.counts(1) if user.nil? || !user.pushes?(notification.kind) || notification.read?
 
-    payload = WebPush.payload(notification).to_json
+    WebPush.send_all(user, WebPush.payload(notification).to_json, transport)
+  end
+
+  # `payload` sent to each of `user`'s devices on a push service, a row on
+  # any other host deleted first (#543): the counts.
+  static def send_all(user, payload, transport = nil)
     done = WebPush.counts(0)
+    PushSubscription.prune_unreachable(user)
     PushSubscription.of(user).each do |device|
       outcome = WebPush.outcome(WebPush.call(device.subscription, payload, transport))
       WebPush.after(device, outcome)
@@ -118,6 +133,48 @@ class WebPush
     }
   end
 
+  # Whether `user` may ask for one more test message now: each asked for
+  # counts, PUSH_TESTS_PER_HOUR an hour.
+  static def test_allowed?(user)
+    RateLimiter("push-test:#{user._key}", PUSH_TESTS_PER_HOUR, 3600).allowed()
+  end
+
+  # A test message for `user`'s devices handed to PushTestJob, so no
+  # request waits on a push service (#543): {"devices", "queued"}, and
+  # "unavailable" when push is not set up (no key to sign it with).
+  static def queue_test(user)
+    unless WebPush.configured?
+      return {
+        "devices": PushSubscription.count_of(user),
+        "queued": false,
+        "unavailable": true
+      }
+    end
+
+    WebPush.queue_test_job(user)
+  end
+
+  # The test message handed to PushTestJob when `user` has a device on a
+  # push service: {"devices", "queued"}.
+  static def queue_test_job(user)
+    devices = PushSubscription.count_of(user)
+    if devices == 0
+      return {"devices": 0, "queued": false}
+    end
+
+    PushTestJob.perform_later({"user_id": user._key}, {"max_retries": 0})
+    {"devices": devices, "queued": true}
+  end
+
+  # The test message PushTestJob sends to the person whose key is `key`:
+  # the counts, "off" 1 when push is not set up or they are gone.
+  static def test_key(key)
+    user = User.find_by("_key", key.to_s)
+    return WebPush.counts(1) if user.nil? || !WebPush.configured?
+
+    WebPush.test(user)
+  end
+
   # A test message to each of `user`'s devices: the counts.
   static def test(user, transport = nil)
     payload = {
@@ -126,13 +183,7 @@ class WebPush
       "url": "/app/account#push",
       "tag": "test"
     }.to_json
-    done = WebPush.counts(0)
-    PushSubscription.of(user).each do |device|
-      outcome = WebPush.outcome(WebPush.call(device.subscription, payload, transport))
-      WebPush.after(device, outcome)
-      done[outcome] = done[outcome] + 1
-    end
-    done
+    WebPush.send_all(user, payload, transport)
   end
 
   # `payload` to `subscription`, by `transport` (WebPush.http when nil).

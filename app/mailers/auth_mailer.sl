@@ -6,16 +6,18 @@
 # Links are built from `auth_base_url` (app/models/user.sl).
 
 class AuthMailer < Mailer
-  def reset_password(user, token)
+  # The four mails AuthMailJob sends take its `letter` (AuthMailJob.letter:
+  # the subject and the links, worked out there, where a spec can read them).
+  def reset_password(user, letter)
     @user = user
-    @reset_url = auth_base_url() + SiteLocale.path("/password/edit") + "?token=" + token
-    this.mail(to: user.email, subject: SiteText.t("mail.reset_password.title"))
+    @reset_url = letter["links"]["reset_url"]
+    this.mail(to: letter["to"], subject: letter["subject"])
   end
 
-  def confirm_email(user, token)
+  def confirm_email(user, letter)
     @user = user
-    @confirm_url = auth_base_url() + SiteLocale.path("/confirm_email") + "?token=" + token
-    this.mail(to: user.email, subject: SiteText.t("mail.confirm_email.title"))
+    @confirm_url = letter["links"]["confirm_url"]
+    this.mail(to: letter["to"], subject: letter["subject"])
   end
 
   # To the new address of a change asked for on the account page: the link
@@ -37,16 +39,27 @@ class AuthMailer < Mailer
     this.mail(to: user.email, subject: SiteText.t("mail.email_change_requested.title"))
   end
 
-  # Sent once, when the lockout trips. The sign-in response deliberately says
-  # nothing about the lock — telling the browser "this account is locked" also
-  # tells whoever is guessing that they found the right password — so this is
-  # how the owner finds out.
-  # `by_code`: locked by wrong second-step codes, so after a right password.
-  def account_locked(user, lock_minutes, by_code = false)
+  # To the owner of an address someone tried to sign up with (#539): the
+  # sign-up page answers that attempt as it answers a new account, so that
+  # it says nothing of who has one; this is how the owner hears of it.
+  def signup_taken(user, letter)
     @user = user
-    @lock_minutes = lock_minutes
-    @by_code = by_code
-    @reset_url = auth_base_url() + SiteLocale.path("/password/reset")
-    this.mail(to: user.email, subject: SiteText.t("mail.account_locked.title"))
+    @login_url = letter["links"]["login_url"]
+    @reset_url = letter["links"]["reset_url"]
+    this.mail(to: letter["to"], subject: letter["subject"])
+  end
+
+  # Sent once a window, when a lock trips (AuthMailJob, #539): one
+  # network's, the account's for every browser it does not know, or the
+  # code step's (#538: wrong two-step codes, so after a right password). The
+  # sign-in response deliberately says nothing about the lock — telling the
+  # browser "this account is locked" also tells whoever is guessing that they
+  # found the right password — so this is how the owner finds out.
+  def account_locked(user, letter)
+    @user = user
+    @lock_minutes = letter["minutes"]
+    @lock = letter["lock"]
+    @reset_url = letter["links"]["reset_url"]
+    this.mail(to: letter["to"], subject: letter["subject"])
   end
 end

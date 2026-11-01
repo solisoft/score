@@ -78,7 +78,9 @@ const clampTo = (c, v) => {
 export function normalize(id, points) {
   const c = controller(id);
   const byTick = new Map();
-  for (const [t, v] of points ?? []) {
+  for (const point of Array.isArray(points) ? points : []) {
+    if (!Array.isArray(point)) continue;
+    const [t, v] = point;
     const tick = Math.max(0, Math.round(Number(t)));
     if (!Number.isFinite(tick)) continue;
     byTick.set(tick, clampTo(c, v));
@@ -86,9 +88,27 @@ export function normalize(id, points) {
   return [...byTick].sort((a, b) => a[0] - b[0]);
 }
 
-/** The score's curves: { lane: { id: points } }. */
+/**
+ * The score's curves: { lane: { id: points } }. Read from the score's text,
+ * which anyone may have written: a staff's lane, a controller followed, its
+ * points as `normalize` keeps them and a value that is no number left out —
+ * what reaches the lane's SVG and the MIDI is a number (#537).
+ */
 export function curvesOf(score) {
-  return score?.meta?.cc ?? {};
+  const kept = score?.meta?.cc;
+  if (!kept || typeof kept !== "object" || Array.isArray(kept)) return {};
+  const out = {};
+  for (const [lane, curves] of Object.entries(kept)) {
+    if (!/^\d+$/.test(lane) || !curves || typeof curves !== "object" || Array.isArray(curves)) continue;
+    const mine = {};
+    for (const [id, points] of Object.entries(curves)) {
+      if (!controller(id) || !Array.isArray(points)) continue;
+      const clean = normalize(id, points.filter((p) => Array.isArray(p) && typeof p[1] === "number"));
+      if (clean.length) mine[id] = clean;
+    }
+    if (Object.keys(mine).length) out[lane] = mine;
+  }
+  return out;
 }
 
 /** Lane `lane`'s curve of controller `id`: [[tick, value]], [] when none. */
@@ -402,6 +422,8 @@ export function pointAt(geo, id, points, px, py) {
   return best;
 }
 
+const escape = (text) => String(text).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
+
 /** A value as words: "64", "on"/"off" for the pedal, "+2048" for a bend. */
 export function valueText(id, v) {
   if (id === "64") return v >= 64 ? "on" : "off";
@@ -425,7 +447,7 @@ export function drawLane(score, geo, id, points, { label = "", colour = "#2563c9
     parts.push(`<line class="cc-bar-line" x1="${bx}" x2="${bx}" y1="0" y2="${LANE_H}"/>`);
   }
   parts.push(`<text class="cc-label" x="8" y="16">${tr(c.name)}</text>`);
-  if (label) parts.push(`<text class="cc-scale" x="8" y="30">${label.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch])}</text>`);
+  if (label) parts.push(`<text class="cc-scale" x="8" y="30">${escape(label)}</text>`);
   parts.push(`<text class="cc-scale" x="${geo.left - 6}" y="${yOfValue(id, c.max) + 8}" text-anchor="end">${valueText(id, c.max)}</text><text class="cc-scale" x="${geo.left - 6}" y="${LANE_H - PAD}" text-anchor="end">${valueText(id, c.min)}</text>`);
   if (points.length) {
     const xy = [];
@@ -438,7 +460,7 @@ export function drawLane(score, geo, id, points, { label = "", colour = "#2563c9
     xy.push(`${geo.width},${yOfValue(id, points.at(-1)[1])}`);
     parts.push(`<polyline class="cc-curve${muted ? " cc-curve-muted" : ""}" points="${xy.join(" ")}" stroke="${colour}"/>`);
     points.forEach(([t, v], k) => {
-      parts.push(`<circle class="cc-point${k === chosen ? " cc-point-chosen" : ""}" data-cc-point="${k}" cx="${geo.x(t)}" cy="${yOfValue(id, v)}" r="4" fill="${colour}"><title>${valueText(id, v)}</title></circle>`);
+      parts.push(`<circle class="cc-point${k === chosen ? " cc-point-chosen" : ""}" data-cc-point="${k}" cx="${geo.x(t)}" cy="${yOfValue(id, v)}" r="4" fill="${colour}"><title>${escape(valueText(id, v))}</title></circle>`);
     });
   } else parts.push(`<text class="cc-empty" x="${geo.left + 12}" y="${LANE_H / 2 + 4}">${tr("Click to add a point")}</text>`);
   if (muted) parts.push(`<text class="cc-muted" x="${geo.left + 12}" y="${LANE_H - 12}">${muted}</text>`);
