@@ -1440,6 +1440,12 @@ fr:
       forgot: "Mot de passe oublié ?"
       reset: "En choisir un nouveau"
       footer: "Si ce n'était pas vous, il n'y a rien à faire : votre compte et son mot de passe n'ont pas changé."
+    account_locked:
+      source_body: "Il y a eu trop de tentatives de connexion échouées pour <strong>{email}</strong> depuis un même réseau : nous avons bloqué la connexion depuis ce réseau pendant {minutes} minutes."
+      source_advice: "La connexion depuis tout autre réseau fonctionne comme d'habitude, depuis votre navigateur habituel aussi. Si c'était vous, attendez la fin du blocage, ou réinitialisez votre mot de passe si vous l'avez oublié. Sinon, quelqu'un essaie de deviner votre mot de passe : les tentatives ont échoué, mais un mot de passe plus solide est une bonne idée."
+      account_body: "Il y a eu trop de tentatives de connexion échouées pour <strong>{email}</strong> depuis de nombreux réseaux : pendant {minutes} minutes, le compte ne se connecte que depuis un navigateur où vous vous êtes déjà connecté."
+      account_advice: "Votre navigateur habituel vous connecte toujours comme avant. Quelqu'un essaie de deviner votre mot de passe depuis de nombreux endroits : les tentatives ont échoué, mais un mot de passe plus solide est une bonne idée, et un nouveau lève le blocage."
+    unconfirmed_hint: "Nouveau compte ? Confirmez d'abord votre adresse avec le lien envoyé par e-mail, ou demandez-en un nouveau."
   # ---
   # (#540) security: engraving limits and MCP batches — keys under `security_540:` right below
   # ---

@@ -57,7 +57,8 @@ class RegistrationsController < Controller
 
     # An address that has an account already is answered as a new one is
     # (#539), with the same Argon2id work: the page must not say who has an
-    # account. Its owner is told by mail, as often as account e-mails go.
+    # account. Its owner is told by mail, as often as account e-mails go (an
+    # account not confirmed yet gets its link again, AuthMailJob.due).
     user.email = user.email.to_s.trim.downcase
     unless User.find_by("email", user.email).nil?
       User.burn_password_work(params["password"])
@@ -72,7 +73,9 @@ class RegistrationsController < Controller
     # The confirmation link, queued (AuthMailJob): a failure is logged, not
     # raised, so signup works before SMTP is configured (set
     # SOLI_MAIL_DELIVERY_METHOD=logger in dev to see the email in the console).
-    AuthMailJob.ask("confirm", user.email)
+    # It spends the address's mail budget as a taken address's note does
+    # (#539): a reset asked next must not find one budget fuller than the other.
+    AuthMailJob.ask("confirm", user.email) if User.account_email_allowed?(user.email, client_ip(req))
 
     return @_check_inbox(user) if auth_require_confirmed_email()
 

@@ -102,6 +102,74 @@ def guard_change_password(current)
   )
 end
 
+const GUARD_REDIRECT = "https://app.example/callback"
+const GUARD_VERIFIER = "guard-verifier-0123456789-abcdefghijklmnopqrstuvwxyz"
+
+# An authorization code of `user`'s for `client` (OauthClient), as the consent
+# page issues it: [the code, the client's id].
+def guard_oauth_code(user, client)
+  challenge = Base64.urlsafe_encode(Hex.decode(Crypto.sha256(GUARD_VERIFIER)))
+  [OauthCode.issue(client.client_id, user, GUARD_REDIRECT, challenge), client.client_id]
+end
+
+# The status of the exchange of `code` (guard_oauth_code) at /oauth/token.
+def guard_exchange_status(code)
+  clear_headers()
+  res_status(post(
+    "/oauth/token",
+    {
+      "grant_type": "authorization_code",
+      "code": code[0],
+      "client_id": code[1],
+      "redirect_uri": GUARD_REDIRECT,
+      "code_verifier": GUARD_VERIFIER
+    }
+  ))
+end
+
+# The password tries of `user`'s current round (as User counts them).
+def guard_password_tries(user)
+  RateLimiter("password-check:#{user._key}:#{user._password_round}", ACCOUNT_PASSWORD_TRIES, ACCOUNT_PASSWORD_WINDOW)
+end
+
+# A User that, asked to check a password, notes whether its password tries
+# were spent already at that moment: whether a try is counted before the
+# (slow) check, or after it, which parallel requests slip past.
+class GuardCountingUser < User
+  def authenticate(plaintext)
+    tries = guard_password_tries(this)
+    @spent_at_check = tries.throttle() > 0
+    plaintext == GUARD_PASSWORD
+  end
+end
+
+# A sign-in at `user` in a browser that keeps its cookies, `device` (a
+# device cookie) set when given.
+def guard_sign_in_with(user, device, password = GUARD_PASSWORD)
+  clear_cookies()
+  set_request_cookie("device", device) unless device.nil?
+  post(
+    "/login",
+    {"email": user.email, "password": password}
+  )
+end
+
+# How many resets `address` is still sent before /password/reset answers 429.
+def guard_resets_allowed(address)
+  sent = 0
+  while sent <= AUTH_EMAILS_PER_ADDRESS && res_status(post("/password/reset", {"email": address})) == 200
+    sent += 1
+  end
+  sent
+end
+
+# AUTH_ACCOUNT_MAX_FAILURES wrong sign-ins at `user`, each from another /64.
+def guard_lock_account(user)
+  (0 .. AUTH_ACCOUNT_MAX_FAILURES).each do |i|
+    User.find(user._key).register_failed_attempt("2001:db8:#{i}::1")
+  end
+end
+
 describe("Account security (#539)") do
   before_each() do
     as_guest()
@@ -414,6 +482,256 @@ describe("Account security (#539)") do
       User.find(user._key).unlock
       assert_not(User.find(user._key).locked_for?("192.0.2.9"))
       assert_not(User.find(user._key).locked?)
+    end
+  end
+
+  describe("the lock, counted per network") do
+    test("IPv6 addresses of one /64 count as one source, and lock it whole") do
+      user = guard_user()
+      (0 .. 101).each do |i|
+        User.find(user._key).register_failed_attempt("2001:db8:1:2::#{i}")
+      end
+      stored = User.find(user._key)
+      assert(stored.locked_for?("2001:db8:1:2:abcd::ffff"), "an address never used, in the /64")
+      assert(stored.locked_for?("2001:0db8:0001:0002:0000:0000:0000:0001"), "written in full")
+      assert_not(stored.locked_for?("2001:db8:1:3::1"), "the next /64 signs in")
+      assert_eq(stored.sign_in_failures.keys.length, 1, "one source, not 101")
+      assert_not(stored.account_locked?, "ten counted, not an account-wide lock")
+    end
+
+    test("an IPv4 address is its own source, and a mapped one is the same") do
+      assert_eq(User.failure_network("192.0.2.7"), "192.0.2.7")
+      assert_eq(User.failure_network("::ffff:192.0.2.7"), "192.0.2.7")
+      assert_ne(User.failure_network("192.0.2.7"), User.failure_network("192.0.2.8"))
+      assert_eq(User.failure_network("2001:db8::1"), User.failure_network("2001:db8:0:0:ffff::2"))
+      assert_eq(User.failure_network("[2001:DB8::1%en0]"), "2001:db8:0:0::/64")
+    end
+
+    test("the source is a keyed digest, not one anybody can recompute") do
+      source = User.failure_source("192.0.2.7")
+      assert_eq(source.length, 24)
+      assert_ne(source, Crypto.sha256("sign-in:192.0.2.7").substring(0, 24))
+      assert_eq(source, Crypto.hmac("sign-in:192.0.2.7", User.auth_secret).substring(0, 24))
+    end
+
+    test("a locked source is never forgotten to make room for others") do
+      user = guard_user()
+      guard_lock(user, "198.51.100.1")
+      # Locked a minute ago: the oldest entry, which room was made by dropping.
+      aged = User.find(user._key)
+      failures = aged.sign_in_failures
+      failures.keys.each do |source|
+        failures[source] = {
+          "count": AUTH_MAX_FAILED_ATTEMPTS,
+          "at": DateTime.utc.to_unix - 60,
+          "locked_at": DateTime.utc.to_unix - 60
+        }
+      end
+      aged.sign_in_failures = failures
+      aged.update
+      (0 .. AUTH_LOCK_SOURCES + 10).each do |i|
+        User.find(user._key).register_failed_attempt("203.0.113.#{i}")
+      end
+      stored = User.find(user._key)
+      assert(stored.locked_for?("198.51.100.1"), "still locked")
+      assert_eq(
+        stored.sign_in_failures.keys.length,
+        AUTH_LOCK_SOURCES + 1,
+        "the open ones capped, the locked one kept"
+      )
+    end
+  end
+
+  describe("the account-wide lock") do
+    test("one failure short of it, the account signs in from anywhere") do
+      user = guard_user()
+      (0 .. AUTH_ACCOUNT_MAX_FAILURES - 1).each do |i|
+        User.find(user._key).register_failed_attempt("2001:db8:#{i}::1")
+      end
+      assert_not(User.find(user._key).account_locked?)
+      assert_eq(res_status(guard_sign_in_with(user, nil)), 302)
+    end
+
+    test("refuses a browser new to the account, the right password as a wrong one, and tells the owner") do
+      user = guard_user()
+      guard_lock_account(user)
+      stored = User.find(user._key)
+      assert(stored.account_locked?)
+      assert(stored.locked_for?("198.51.100.200"), "a network that never guessed")
+      assert_not(stored.locked_for?("198.51.100.200", true), "a browser the account trusts")
+      right = guard_sign_in_with(user, nil)
+      wrong = guard_sign_in_with(user, nil, "not the password")
+      assert_eq(res_status(right), 401)
+      assert_eq(res_status(wrong), 401)
+      assert_contains(res_body(right), "Invalid email or password")
+      assert_eq(res_status(get("/app/account")), 302, "not signed in")
+      told = guard_mail_jobs(user.email).filter do |job|
+        guard_job_args(job)["kind"] == "account_locked"
+      end
+      assert_eq(told.length, 1, "told once, by a queued mail")
+      assert_eq(guard_job_args(told[0])["lock"], "account")
+    end
+
+    test("lets in a browser that signed in to the account before") do
+      user = guard_user()
+      signed = guard_sign_in_with(user, nil)
+      assert_eq(res_status(signed), 302)
+      set_cookie_header = str(res_headers(signed))
+      assert_contains(set_cookie_header, "device=")
+      assert_contains(set_cookie_header, "HttpOnly")
+      guard_lock_account(user)
+      device = User.find(user._key).device_cookie
+      assert_eq(res_status(guard_sign_in_with(user, device)), 302)
+      assert_eq(res_status(get("/app/account")), 200)
+      # Another account's device cookie, or a forged one, is a new browser.
+      other = guard_user()
+      assert_eq(res_status(guard_sign_in_with(user, User.find(other._key).device_cookie)), 401)
+      assert_eq(res_status(guard_sign_in_with(user, device + "x")), 401)
+      assert_eq(res_status(guard_sign_in_with(user, "garbage")), 401)
+      # Still, the trusted browser's wrong password counts, and a wrong one is refused.
+      assert_eq(res_status(guard_sign_in_with(user, device, "not the password")), 401)
+    end
+
+    test("runs out, and an admin's unlock or a new password lifts it") do
+      user = guard_user()
+      guard_lock_account(user)
+      over = User.find(user._key)
+      over.account_locked_at = DateTime.utc.to_unix - AUTH_ACCOUNT_WINDOW - 60
+      over.update
+      assert_not(User.find(user._key).account_locked?)
+      assert_eq(res_status(guard_sign_in_with(user, nil)), 302)
+      guard_lock_account(user)
+      User.find(user._key).unlock
+      assert_not(User.find(user._key).locked?)
+      guard_lock_account(user)
+      User.find(user._key).finish_password_reset(GUARD_NEW_PASSWORD)
+      assert_not(User.find(user._key).account_locked?)
+    end
+  end
+
+  describe("the password asked by a signed-in page") do
+    test("counts a try before the password is checked, and a right one starts the count again") do
+      probe = GuardCountingUser.new()
+      tries = guard_password_tries(probe)
+      (0 .. ACCOUNT_PASSWORD_TRIES - 1).each do |_|
+        tries.allowed()
+      end
+      assert(probe.confirms_password?(GUARD_PASSWORD), "the last try left")
+      assert(probe.spent_at_check, "the try was counted before the check")
+      assert_not(probe.password_tries_spent?, "the right one started the count again")
+      # A wrong one spends one, and once they are spent even the right one is
+      # refused without being checked.
+      (0 .. ACCOUNT_PASSWORD_TRIES).each do |_|
+        assert_not(probe.confirms_password?("wrong"))
+      end
+      probe.spent_at_check = nil
+      assert_not(probe.confirms_password?(GUARD_PASSWORD))
+      assert_null(probe.spent_at_check, "not checked at all")
+    end
+
+    test("an e-mail change spends the same tries") do
+      user = guard_user()
+      guard_sign_in(user)
+      (0 .. ACCOUNT_PASSWORD_TRIES).each do |i|
+        wrong = post(
+          "/app/account/email",
+          {"email": "moved-#{uuid_v4}@example.com", "password": "wrong #{i}"}
+        )
+        assert_eq(res_status(wrong), 422)
+      end
+      assert_null(User.find(user._key).email_change_to, "no change started")
+      assert_eq(res_status(guard_change_password(GUARD_PASSWORD)), 429)
+      assert(User.find(user._key).authenticate(GUARD_PASSWORD), "the password is unchanged")
+    end
+  end
+
+  describe("an account not confirmed yet, at sign-in") do
+    test("answers the right password as a wrong one, and sends the link again") do
+      user = guard_user(false)
+      right = guard_sign_in(user)
+      wrong = guard_sign_in(user, "not the password")
+      nobody = post(
+        "/login",
+        {"email": "nobody-#{uuid_v4}@example.com", "password": GUARD_PASSWORD}
+      )
+      assert_eq(res_status(right), 401)
+      assert_eq(res_status(wrong), 401)
+      assert_eq(res_status(nobody), 401)
+      assert_contains(res_body(right), "Invalid email or password")
+      assert_contains(res_body(right), "Confirm your address first")
+      assert_contains(res_body(nobody), "Confirm your address first")
+      assert_not(res_body(right).contains("Please confirm your email address first"))
+      assert_eq(res_status(get("/app/account")), 302)
+      sent = guard_mail_jobs(user.email).filter do |job|
+        guard_job_args(job)["kind"] == "confirm"
+      end
+      assert_eq(sent.length, 1, "the link again, for the right password only")
+    end
+  end
+
+  describe("sign-up and the per-address mail budget") do
+    test("a new address spends it as a taken one does") do
+      fresh = "budget-#{uuid_v4}@example.com"
+      owner = guard_user()
+      [fresh, owner.email].each do |address|
+        fields = guard_signup_fields()
+        sleep(2.1)
+        post("/signup", fields.merge({
+          "email": address,
+          "password": GUARD_PASSWORD
+        }))
+        # The sign-up spent one: the resets asked next run out one sooner.
+        assert_eq(guard_resets_allowed(address), AUTH_EMAILS_PER_ADDRESS - 1, address)
+      end
+    end
+
+    test("an address with an unconfirmed account gets its link again, not the note") do
+      owner = guard_user(false)
+      fields = guard_signup_fields()
+      sleep(2.1)
+      post("/signup", fields.merge({
+        "email": owner.email,
+        "password": "another long password"
+      }))
+      job = guard_mail_jobs(owner.email)[0]
+      done = AuthMailJob.perform_now(guard_job_args(job))
+      assert(done["due"])
+      assert_not_null(User.find(owner._key).confirmation_token_digest, "a link made")
+    end
+  end
+
+  describe("the authorization codes not yet exchanged") do
+    test("work, until the password is reset") do
+      user = guard_user()
+      client = OauthClient.register("Spec app", [GUARD_REDIRECT])
+      assert_eq(guard_exchange_status(guard_oauth_code(user, client)), 200)
+      pending = guard_oauth_code(user, client)
+      token = User.find(user._key).start_password_reset
+      post(
+        "/password/update",
+        {
+          "token": token,
+          "password": GUARD_NEW_PASSWORD,
+          "password_confirmation": GUARD_NEW_PASSWORD
+        }
+      )
+      assert_eq(OauthCode.where({"user_id": user._key}).count, 0)
+      assert_eq(guard_exchange_status(pending), 400)
+      assert_eq(AccessToken.where({"user_id": user._key}).count, 0)
+    end
+
+    test("die when the password is changed, or the address") do
+      user = guard_user()
+      client = OauthClient.register("Spec app", [GUARD_REDIRECT])
+      changed = guard_oauth_code(user, client)
+      guard_sign_in(user)
+      assert_eq(res_status(guard_change_password(GUARD_PASSWORD)), 302)
+      assert_eq(guard_exchange_status(changed), 400)
+      moved = guard_oauth_code(user, client)
+      link = User.find(user._key).start_email_change("moved-#{uuid_v4}@example.com")
+      post("/account/email", {"token": link})
+      assert_eq(guard_exchange_status(moved), 400)
+      assert_eq(OauthCode.where({"user_id": user._key}).count, 0)
     end
   end
 

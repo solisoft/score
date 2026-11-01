@@ -1440,6 +1440,12 @@ en:
       forgot: "Forgot your password?"
       reset: "Choose a new one"
       footer: "If that wasn't you, there is nothing to do: your account and its password are unchanged."
+    account_locked:
+      source_body: "There were too many failed sign-in attempts on <strong>{email}</strong> from one network, so we locked signing in from that network for {minutes} minutes."
+      source_advice: "Signing in from any other network works as usual, from your usual browser too. If the attempts were yours, wait for the lock to expire, or reset your password if you have forgotten it. If not, someone is guessing your password: the attempts failed, but a stronger password is a good idea."
+      account_body: "There were too many failed sign-in attempts on <strong>{email}</strong> from many networks, so for {minutes} minutes the account only signs in from a browser you have signed in from before."
+      account_advice: "Your usual browser still signs you in as before. Someone is guessing your password from many places: the attempts failed, but a stronger password is a good idea, and a new one lifts the lock."
+    unconfirmed_hint: "New account? Confirm your address first, with the link we emailed you, or ask for a new one."
   # ---
   # (#540) security: engraving limits and MCP batches — keys under `security_540:` right below
   # ---

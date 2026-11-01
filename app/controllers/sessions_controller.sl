@@ -2,8 +2,9 @@
 #
 # Ships with a per-IP throttle (AUTH_ATTEMPTS_PER_IP per
 # AUTH_IP_WINDOW_SECONDS), account lockout (AUTH_MAX_FAILED_ATTEMPTS wrong
-# passwords from one source address lock the account for that address for
-# AUTH_LOCKOUT_SECONDS, #539), optional remember-me
+# passwords from one source network lock the account for that network for
+# AUTH_LOCKOUT_SECONDS; AUTH_ACCOUNT_MAX_FAILURES from anywhere lock it for
+# every browser that never signed in to it, #539), optional remember-me
 # (persistent HttpOnly + Secure cookie), and an optional confirmed-email gate
 # (flip `auth_require_confirmed_email` in app/models/user.sl).
 #
@@ -61,8 +62,13 @@ class SessionsController < Controller
     # from an address that was never registered. The owner learns about the lock
     # from the notification `register_failed_attempt` sends when it trips, not
     # from this response.
+    #
+    # A browser that signed in to the account before (its `device` cookie)
+    # is not held by the account-wide lock: the owner's own, while a botnet
+    # guesses from everywhere else.
     ip = client_ip(req)
-    if !user.nil? && user.locked_for?(ip)
+    trusted = !user.nil? && user.trusts_device?(@_device_cookie)
+    if !user.nil? && user.locked_for?(ip, trusted)
       User.burn_password_work(password)
       return this._reject(SiteText.t("auth.invalid"), email, 401)
     end
@@ -74,18 +80,18 @@ class SessionsController < Controller
     authenticated = user.nil? ? User.burn_password_work(password) : user.authenticate(password)
 
     unless authenticated
-      user.register_failed_attempt(ip) unless user.nil?
+      user.register_failed_attempt(ip, false, trusted) unless user.nil?
       return this._reject(SiteText.t("auth.invalid"), email, 401)
     end
 
+    # An account not confirmed yet answers the right password as a wrong
+    # one (#539): "confirm first" told whoever typed it that the address had
+    # just signed up — sign-up's answer says nothing of that, this one must
+    # not either. Every refused sign-in reads how to confirm; the right
+    # password sends the link again, as often as account e-mails go.
     if auth_require_confirmed_email() && !user.confirmed?()
-      return render("sessions/new", {
-        "title": SiteText.t("auth.sign_in"),
-        "error": SiteText.t("auth.confirm_first"),
-        "email": email,
-        "return_to": @_return_to,
-        "unconfirmed": true
-      }, {"status": 403})
+      AuthMailJob.ask("confirm", email) if User.account_email_allowed?(email, ip)
+      return this._reject(SiteText.t("auth.invalid"), email, 401)
     end
 
     user.clear_failed_attempts(ip)
@@ -114,6 +120,15 @@ class SessionsController < Controller
     session_regenerate()
     session_set("user_id", user["_key"])
     session_set("session_version", user.current_session_version())
+    # A browser the account now knows (#539): the account-wide lock does
+    # not hold it. Signed (the mac in it), not secret: it opens nothing on
+    # its own, the password and the two-step code are still asked.
+    set_cookie("device", user.device_cookie, {
+      "max_age": AUTH_DEVICE_DAYS * 86400,
+      "http_only": true,
+      "same_site": "Lax",
+      "secure": true
+    })
 
     if remember
       token = user.start_remember_me()
@@ -138,8 +153,15 @@ class SessionsController < Controller
       "title": SiteText.t("auth.sign_in"),
       "error": message,
       "email": email,
-      "return_to": @_return_to
+      "return_to": @_return_to,
+      "confirm_hint": status == 401
     }, {"status": status})
+  end
+
+  # The browser's `device` cookie, or "".
+  def _device_cookie
+    device = cookies["device"] rescue nil
+    device.to_s
   end
 
   # Where a sign-in goes: back to the app page that asked for it, never to
