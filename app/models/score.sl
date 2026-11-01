@@ -25,6 +25,15 @@ class Score < Model
     "source",
     {"presence": true, "max_length": 1000000}
   )
+  # The engraver's limits on a new score's music (Score.limit_refusal): on
+  # create only — an update's record knows nothing of what changed, and a
+  # score stored before them must still be renamed, trashed, restored or
+  # shared. The updates that bring new music check them themselves (the
+  # editor's save, Score.refusal_of; a version restored).
+  validates(
+    "source",
+    {"custom": fn(value) { Score.limit_refusal(value) }, "on": "create"}
+  )
   validates(
     "visibility",
     {"inclusion": SCORE_VISIBILITIES, "allow_nil": true}
@@ -296,9 +305,21 @@ class Score < Model
   end
 
   # Why the editor's `source` may not be saved, or nil: the validations
-  # above (source and title lengths), read before the conditional write,
-  # which does not run them.
+  # above (source and title lengths, the engraver's limits), read before
+  # the conditional write, which does not run them.
   static def refusal_of(source)
+    bounds = Score.bounds_refusal(source)
+    return bounds unless bounds.nil?
+
+    limit = EngraverLimit.of(source)
+    return nil if limit.nil?
+
+    SiteText.t("security_540.not_saved", {"why": EngraverLimit.said(limit)})
+  end
+
+  # The bounds read without the engraver — the source's and the title's
+  # lengths — or nil. What the MCP tools read before an engraving they count.
+  static def bounds_refusal(source)
     return "Not saved: the score is too long to keep (a million characters at most)." if source.length > 1000000
 
     title = Score.title_in(source) ?? SCORE_UNTITLED
@@ -307,12 +328,32 @@ class Score < Model
     nil
   end
 
+  # The validation of the engraver's limits, for every new score (a blank
+  # one, an import, an AI reading kept, a copy): its refusal, or true. Past
+  # a million characters the length's own validation answers, without the
+  # engraver reading it.
+  static def limit_refusal(source)
+    return true if source.to_s.length > 1000000
+
+    limit = EngraverLimit.of(source)
+    limit.nil? ? true : SiteText.t("security_540.too_much_music", {"why": EngraverLimit.said(limit)})
+  end
+
   # Back to `version`, by `author`: the score as it stands is kept first.
+  # False, and nothing kept, when the version is past the engraver's limits
+  # (Score.restore_refusal says why).
   def restore_version(version, author = nil)
+    return false if version.source != @source && !EngraverLimit.of(version.source).nil?
+
     ScoreVersion.keep(this, @source, "restore", @saved_by)
     @source = version.source
     @saved_by = author&._key
     @save
+  end
+
+  # Why `version` is not restored: the engraver's limit it passes, said.
+  static def restore_refusal(version)
+    SiteText.t("security_540.not_restored", {"why": EngraverLimit.said(EngraverLimit.of(version.source).to_s)})
   end
 
   # Who saved the score last, as the app names them to `viewer`: nil when

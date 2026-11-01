@@ -7,10 +7,13 @@ class SharedScoresController < Controller
     this.layout = "application"
   }
 
-  # GET /s/:token
+  # GET /s/:token — 429 when the address (or the account) had too many
+  # pictures made this minute
   def show
     @score = @_readable_score
-    @figure = ScoreSvg.figure(@score.source, 1040, 7)
+    @figure = ScoreSvg.figure(@score.source, 1040, 7, ScoreSvg.sender("page", current_user(), client_ip(req)))
+    return ScoreSvg.too_many if @figure["throttled"]
+
     @pdf_url = "#{shared_score_path(this.score.share_token)}/score.pdf"
     @source_url = "#{shared_score_path(this.score.share_token)}/source.ly"
     # The downloads' name: the title's (score.pdf, score.mid… say nothing once saved).
@@ -59,12 +62,16 @@ class SharedScoresController < Controller
       }
     end
 
-    document = eui_score_pdf(score.source, score.title)
+    printed = ScoreSvg.pdf(score.source, score.title, ScoreSvg.sender("pdf", current_user(), client_ip(req)))
+    return ScoreSvg.too_many if printed["throttled"] == true
+
+    halt(422, printed["error"]) if printed["file"].nil?
+
     headers = {"Content-Type": "application/pdf", "Content-Disposition": score.content_disposition("inline", "pdf")}
     {
       "status": 200,
       "headers": headers.merge(caching),
-      "body": document
+      "body": printed["file"]
     }
   end
 

@@ -137,8 +137,10 @@ class SharedSection < Model
     return "The bars are missing: select some, then share them." if source.trim.blank?
     return "Those bars are too much to share at once." if source.length > SECTION_SOURCE_LENGTH
 
-    refused = eui_score_layout(source, 100, {})["error"]
-    return "The engraver refuses those bars: #{refused}" unless refused.nil?
+    # The engraver's limits (EngraverLimit) are refused as it reads them,
+    # and said in the app's language.
+    refused = eui_score_layout(source, ENGRAVER_LIMIT_WIDTH, {})["error"]
+    return "The engraver refuses those bars: #{EngraverLimit.said(refused)}" unless refused.nil?
 
     nil
   end

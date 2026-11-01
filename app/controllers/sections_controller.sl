@@ -99,13 +99,16 @@ class SectionsController < Controller
   # GET /sections/:id/play.mid — its bars as MIDI, for the Play button of its card
   def midi
     section = @_visible
-    bytes = eui_score_midi(section.source, {"bpm": section.bpm.to_s.to_i > 0 ? section.bpm.to_s.to_i : 100}) rescue nil
-    halt(422, "Those bars could not be played") if bytes.nil?
+    bpm = section.bpm.to_s.to_i > 0 ? section.bpm.to_s.to_i : 100
+    written = ScoreSvg.midi(section.source, bpm, ScoreSvg.sender("midi", current_user(), client_ip(req)))
+    return ScoreSvg.too_many if written["throttled"] == true
+
+    halt(422, "Those bars could not be played") if written["file"].nil?
 
     {
       "status": 200,
       "headers": {"Content-Type": "audio/midi", "Cache-Control": "public, max-age=3600"},
-      "body": bytes
+      "body": Base64.decode(written["file"])
     }
   end
 
