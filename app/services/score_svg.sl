@@ -11,9 +11,26 @@
 # first point, so the same shape anywhere is the same string. On a piano
 # page that is some 80 paths for 200 placements. Coordinates are kept to a
 # tenth of a pixel, finer than any screen draws them.
+
+# How many of each engraving one account, or one address when signed out,
+# may have the server make a minute (ScoreSvg.allowed?) — made, not read
+# back from what was kept: a library page asks for 60 previews at once, a
+# read page or the editor for a picture and its MIDI, an MCP client for a
+# check of each source it sends.
+const ENGRAVINGS_PER_MINUTE = {
+  "pdf": 20,
+  "midi": 60,
+  "preview": 120,
+  "page": 60,
+  "mcp": 30
+}
+# How long a sender held back is told to wait, in seconds (Retry-After).
+const ENGRAVING_RETRY_AFTER = 60
+
 class ScoreSvg
   # {"svg": markup, "error": nil}, or {"svg": nil, "error": the engraver's
-  # refusal, "score: … (at character N)"}. `width` and `staff_space` in px;
+  # refusal, "score: … (at character N)" — one of its limits said in the
+  # app's language (EngraverLimit.said)}. `width` and `staff_space` in px;
   # `max_height` px keeps only the bands that start above it (a preview),
   # 0 keeps them all. `marks` lights items as an editor shows a selection:
   # an item's number among the notes and rests, from 0, as a string, to a
@@ -21,15 +38,35 @@ class ScoreSvg
   #
   # Engraved once, then read back for ENGRAVING_DAYS (Engraving): the same
   # score at the same size and cut, with the same items lit, is the same
-  # drawing, and an engraving costs tens of milliseconds a page.
-  static def engrave(src, width, staff_space, max_height, marks)
+  # drawing, and an engraving costs tens of milliseconds a page. With a
+  # `sender` (ScoreSvg.sender), one made anew counts against its minute's
+  # engravings; past them the answer is {"svg": nil, "error": why,
+  # "throttled": true}, kept nowhere.
+  static def engrave(src, width, staff_space, max_height, marks, sender = nil)
     digest = ScoreSvg.digest(src, width, staff_space, max_height, marks)
     kept = Engraving.recall(digest)
-    return kept unless kept.nil?
+    return ScoreSvg.said(kept) unless kept.nil?
+    return ScoreSvg.throttled("svg") unless ScoreSvg.allowed?(sender)
 
     engraved = ScoreSvg.draw(src, width, staff_space, max_height, marks)
     Engraving.remember(digest, engraved)
-    engraved
+    ScoreSvg.said(engraved)
+  end
+
+  # `answer` with its error said in the app's language when it is one of
+  # the engraver's limits: what is kept is the engraver's English, read by
+  # people of either language.
+  static def said(answer)
+    return answer if answer["error"].nil?
+
+    answer.merge({"error": EngraverLimit.said(answer["error"])})
+  end
+
+  # The engraver's message in `error`, raised by one of its functions: its
+  # own words, "score: … (at character N)", without what Soli adds after.
+  static def engraver_message(error, otherwise)
+    found = Regex.capture("(?P<message>score: .*\\(at character [0-9]+\\))", str(error))
+    found.nil? ? otherwise : found["message"]
   end
 
   # What an engraving is kept under: all that makes it. ENGRAVING_FORMAT is
@@ -39,7 +76,10 @@ class ScoreSvg
     Crypto.sha256("#{ENGRAVING_FORMAT}|#{width}|#{staff_space}|#{max_height}|#{marks.to_json}|#{src}")
   end
 
-  # The engraving itself: `engrave`'s answer, every time anew.
+  # The engraving itself: `engrave`'s answer, every time anew, in the
+  # engraver's words. Music past the engraver's limits (EngraverLimit) is
+  # refused as it reads it, in milliseconds, or as it draws it: a score
+  # stored before them, or an AI's answer, costs no more than one saved now.
   static def draw(src, width, staff_space, max_height, marks)
     laid = eui_score_layout(src, width / staff_space, {})
     if laid.has_key("error")
@@ -47,10 +87,15 @@ class ScoreSvg
     end
 
     total = (laid["height"] * staff_space).ceil()
-    bands = eui_score_bands(laid, staff_space, {
-      "colour": "ink",
-      "marks": marks
-    }, total)
+    bands = nil
+    try
+      bands = eui_score_bands(laid, staff_space, {
+        "colour": "ink",
+        "marks": marks
+      }, total)
+    catch error
+      return {"svg": nil, "error": ScoreSvg.engraver_message(error, "score: it could not be drawn")}
+    end
     prefix = "g" + Crypto.sha256("#{width}|#{staff_space}|#{max_height}|#{src}").substring(0, 8)
     glyph_ids = {}
     glyphs = []
@@ -178,15 +223,21 @@ class ScoreSvg
   end
 
   # What a page shows of a source: its engraving and its MIDI as a data:
-  # URL (nil when refused).
-  static def figure(src, width, staff_space)
-    ScoreSvg.marked_figure(src, width, staff_space, {})
+  # URL (nil when refused). With a `sender`, "throttled" says it was past
+  # its engravings of the minute.
+  static def figure(src, width, staff_space, sender = nil)
+    ScoreSvg.marked_figure(src, width, staff_space, {}, sender)
   end
 
   # A figure with some of its items lit (see `engrave`).
-  static def marked_figure(src, width, staff_space, marks)
-    engraved = ScoreSvg.engrave(src, width, staff_space, 0, marks)
-    engraved.merge({"src": src, "midi": engraved["error"].nil? ? ScoreSvg.midi_url(src) : nil})
+  static def marked_figure(src, width, staff_space, marks, sender = nil)
+    engraved = ScoreSvg.engrave(src, width, staff_space, 0, marks, sender)
+    midi = engraved["error"].nil? ? ScoreSvg.midi(src, 100, sender) : {"file": nil}
+    engraved.merge({
+      "src": src,
+      "midi": midi["file"].nil? ? nil : "data:audio/midi;base64," + midi["file"],
+      "throttled": engraved["throttled"] == true || midi["throttled"] == true
+    })
   end
 
   # Each source of `sources` (a hash, name to LilyPond) as a figure.
@@ -202,18 +253,154 @@ class ScoreSvg
   # 100 a quarter when the source sets no tempo, as the editor plays it
   # (DEFAULT_BPM in public/eui-score/score-model.js).
   static def midi_url(src)
-    bytes = eui_score_midi(src, {"bpm": 100}) rescue nil
-    return nil if bytes.nil?
+    encoded = ScoreSvg.midi_base64(src, 100)
+    return nil if encoded.nil?
 
-    "data:audio/midi;base64," + Base64.encode(bytes)
+    "data:audio/midi;base64," + encoded
+  end
+
+  # Who asks for an engraving, for its limit (ENGRAVINGS_PER_MINUTE[kind]):
+  # `user`, or, signed out, whoever asks from `ip`.
+  static def sender(kind, user, ip)
+    {"kind": kind, "key": user.nil? ? "ip:#{ip}" : "user:#{user._key}"}
+  end
+
+  # Whether `user` — or, signed out, whoever asks from `ip` — may have the
+  # server make one more `kind` of engraving this minute; each asked counts.
+  static def engraving_allowed?(kind, user, ip)
+    ScoreSvg.allowed?(ScoreSvg.sender(kind, user, ip))
+  end
+
+  # Whether `sender` may have one more engraving made; always without one
+  # (the site's own pieces, a job's). What was kept is read back without
+  # asking: a source changed each time is what is made anew.
+  static def allowed?(sender)
+    return true if sender.nil?
+
+    RateLimiter("engrave-#{sender["kind"]}:#{sender["key"]}", ENGRAVINGS_PER_MINUTE[sender["kind"]], 60).allowed()
+  end
+
+  # The answer to a sender past its engravings, `field` ("svg", "file")
+  # left empty.
+  static def throttled(field)
+    answer = {"error": SiteText.t("security_540.too_many_engravings"), "throttled": true}
+    answer[field] = nil
+    answer
+  end
+
+  # A request answered "too many" (429), with when to come back.
+  static def too_many
+    {
+      "status": 429,
+      "headers": {"Content-Type": "text/plain; charset=utf-8", "Retry-After": ENGRAVING_RETRY_AFTER.to_s},
+      "body": SiteText.t("security_540.too_many_engravings")
+    }
+  end
+
+  # What a file made of `src` is kept under: its kind, what else made it
+  # (the MIDI's tempo, the PDF's title), the drawing's format, the source.
+  static def file_digest(kind, made_with, src)
+    Crypto.sha256("#{kind}|#{ENGRAVING_FORMAT}|#{made_with}|#{src}")
+  end
+
+  # The MIDI file of `src` at `bpm` a quarter, in Base64; nil when refused.
+  static def midi_base64(src, bpm)
+    ScoreSvg.midi(src, bpm, nil)["file"]
+  end
+
+  # The MIDI file of `src` at `bpm` a quarter: {"file": in Base64, "error":
+  # nil}, or {"file": nil, "error": why} — "throttled" past the sender's
+  # engravings. Kept as an engraving is (Engraving), so a read page seen
+  # again does not write it again.
+  static def midi(src, bpm, sender = nil)
+    digest = ScoreSvg.file_digest("midi", bpm, src)
+    kept = Engraving.recall(digest)
+    return ScoreSvg.said(kept) unless kept.nil?
+    return ScoreSvg.throttled("file") unless ScoreSvg.allowed?(sender)
+
+    written = nil
+    try
+      written = {"file": Base64.encode(eui_score_midi(src, {"bpm": bpm})), "error": nil}
+    catch error
+      written = {"file": nil, "error": ScoreSvg.engraver_message(error, "score: it could not be played")}
+    end
+    Engraving.remember(digest, written)
+    ScoreSvg.said(written)
+  end
+
+  # The score printed, as a PDF titled `title`: {"file": the document,
+  # "error": nil}, or {"file": nil, "error": why} — "throttled" past the
+  # sender's engravings. Kept as an engraving is, when no bigger than
+  # ENGRAVED_FILE_KEPT: a read page's PDF asked again is read, not printed
+  # again.
+  static def pdf(src, title, sender = nil)
+    digest = ScoreSvg.file_digest("pdf", title, src)
+    kept = Engraving.recall(digest)
+    return ScoreSvg.said(kept) unless kept.nil?
+    return ScoreSvg.throttled("file") unless ScoreSvg.allowed?(sender)
+
+    printed = nil
+    try
+      printed = {"file": eui_score_pdf(src, title), "error": nil}
+    catch error
+      printed = {"file": nil, "error": ScoreSvg.engraver_message(error, "score: it could not be printed")}
+    end
+    Engraving.remember(digest, printed) if printed["file"].to_s.length <= ENGRAVED_FILE_KEPT
+    ScoreSvg.said(printed)
+  end
+
+  # Why the engraver does not read `src` ({"error": why, in its own
+  # English: the MCP tools answer it}), or {"error": nil} when it does —
+  # "throttled" past the sender's engravings. Asked once the bounds read
+  # without it hold (Score.bounds_refusal); its answer is kept as an
+  # engraving is, and the engraver keeps its last layouts, so a source
+  # checked, then saved, is laid out once.
+  static def check(src, sender = nil)
+    digest = ScoreSvg.file_digest("check", "", src)
+    kept = Engraving.recall(digest)
+    return kept unless kept.nil?
+    return ScoreSvg.throttled("file") unless ScoreSvg.allowed?(sender)
+
+    laid = eui_score_layout(src, ENGRAVER_LIMIT_WIDTH, {}) rescue {"error": "the engraver could not read it"}
+    checked = {"file": nil, "error": laid.has_key("error") ? laid["error"].to_s : nil}
+    Engraving.remember(digest, checked)
+    checked
   end
 
   # The engraving alone, as an image a browser caches: the gallery's
   # previews, cut after the first systems.
-  static def preview(src)
-    engraved = ScoreSvg.engrave(src, 560, 5.5, 230, {})
+  static def preview(src, sender = nil)
+    ScoreSvg.preview_of(ScoreSvg.engrave(src, 560, 5.5, 230, {}, sender))
+  end
+
+  static def preview_of(engraved)
     svg = engraved["svg"] ?? "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1\" height=\"1\"/>"
     svg.replace("fill=\"currentColor\"", "fill=\"#111\"")
+  end
+
+  # A preview as the answer to an <img>: 200 and the picture, cached as
+  # `cache_control` says; past the sender's engravings, 429 and a blank
+  # picture of the same size, cached nowhere, with when to come back.
+  static def preview_answer(src, sender, cache_control)
+    engraved = ScoreSvg.engrave(src, 560, 5.5, 230, {}, sender)
+    if engraved["throttled"] == true
+      return {
+        "status": 429,
+        "headers": {
+          "Content-Type": "image/svg+xml",
+          "Cache-Control": "no-store",
+          "Retry-After": ENGRAVING_RETRY_AFTER.to_s
+        },
+        "body": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1\" height=\"1\">"
+        + "<title>#{ScoreSvg.escape(engraved["error"])}</title></svg>"
+      }
+    end
+
+    {
+      "status": 200,
+      "headers": {"Content-Type": "image/svg+xml", "Cache-Control": cache_control},
+      "body": ScoreSvg.preview_of(engraved)
+    }
   end
 
   # A kind-5 path as SVG's `d`, relative to its first point ("x", "y"), its

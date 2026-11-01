@@ -67,7 +67,9 @@ class AppScoresController < AppBaseController
 
     @owner = @score.owned_by?(current_user())
     @source = @score.source
-    @figure = ScoreSvg.figure(@source, 1000, 7)
+    @figure = ScoreSvg.figure(@source, 1000, 7, ScoreSvg.sender("page", current_user(), client_ip(req)))
+    return ScoreSvg.too_many if @figure["throttled"]
+
     @examples = ScoreLibrary.examples
     @eui_version = ScoreAssets.version
     @studio_preloads = ScoreAssets.studio_preloads
@@ -155,10 +157,15 @@ class AppScoresController < AppBaseController
   end
 
   # POST /app/scores/:id/versions/:version_id/restore — the score as it was
+  # (not a version past the engraver's limits)
   def restore_version
     score = @_score("update")
-    score.restore_version(@_version_of(score), current_user())
-    flash("notice", SiteText.t("app.scores.flash.version_restored"))
+    version = @_version_of(score)
+    if score.restore_version(version, current_user())
+      flash("notice", SiteText.t("app.scores.flash.version_restored"))
+    else
+      flash("error", Score.restore_refusal(version))
+    end
     redirect(app_score_path(score))
   end
 
@@ -177,14 +184,15 @@ class AppScoresController < AppBaseController
     redirect(app_score_path(copy))
   end
 
-  # GET /app/scores/:id/preview.svg — the first systems, for the library's card
+  # GET /app/scores/:id/preview.svg — the first systems, for the library's card;
+  # 429 and a blank picture past the account's previews of the minute
   def preview
     score = @_score("show")
-    {
-      "status": 200,
-      "headers": {"Content-Type": "image/svg+xml", "Cache-Control": "private, max-age=86400"},
-      "body": ScoreSvg.preview(score.source)
-    }
+    ScoreSvg.preview_answer(
+      score.source,
+      ScoreSvg.sender("preview", current_user(), client_ip(req)),
+      "private, max-age=86400"
+    )
   end
 
   # POST /app/scores/:id/rename
