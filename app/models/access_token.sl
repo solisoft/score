@@ -68,6 +68,7 @@ class AccessToken < Model
       "created_at": now,
       "last_used_at": nil
     })
+    client.token_issued
     {
       "token": secret,
       "refresh_token": refresh,
@@ -78,28 +79,61 @@ class AccessToken < Model
   # A new pair for refresh token `raw`, sent by client `client_id`, on the
   # same row (the old ones stop working): {"token", "refresh_token",
   # "record"}, or nil — unknown, expired, used already or another client's.
+  # A refresh token used already is a stolen or replayed one (#541): the
+  # connection it belonged to ends, the thief's tokens and the owner's alike.
   static def refresh_oauth(raw, client_id)
     text = raw.to_s
     return nil unless text.starts_with?(OAUTH_REFRESH_PREFIX)
 
-    record = AccessToken.where({"refresh_digest": Crypto.sha256(text)}).first
-    return nil if record.nil? || record.oauth_client_id.to_s != client_id.to_s
+    presented = Crypto.sha256(text)
+    record = AccessToken.where({"refresh_digest": presented}).first
+    if record.nil?
+      reused = AccessToken.where({"previous_refresh_digest": presented}).first
+      reused.delete unless reused.nil?
+      return nil
+    end
+    return nil if record.oauth_client_id.to_s != client_id.to_s
+    return nil if DateTime.utc.to_unix > record.refresh_expires_at.to_s.to_i
 
+    AccessToken.rotate(record, presented)
+  end
+
+  # Connection `record`'s new pair, if its refresh token is still the one of
+  # digest `presented`: one write that checks and rotates at once, so two
+  # refreshes racing with one token cannot both win. The one that finds it
+  # rotated already is a reuse: the connection is revoked, and nil (#541).
+  static def rotate(record, presented)
     now = DateTime.utc.to_unix
-    return nil if now > record.refresh_expires_at.to_s.to_i
-
     secret = ACCESS_TOKEN_PREFIX + Crypto.random_token(32)
     refresh = OAUTH_REFRESH_PREFIX + Crypto.random_token(32)
-    record.digest = Crypto.sha256(secret)
-    record.hint = secret.substring(0, ACCESS_TOKEN_PREFIX.length + 4)
-    record.expires_at = now + OAUTH_ACCESS_SECONDS
-    record.refresh_digest = Crypto.sha256(refresh)
-    record.refresh_expires_at = now + OAUTH_REFRESH_SECONDS
-    record.update()
+    key = record._key
+    digest = Crypto.sha256(secret)
+    hint = secret.substring(0, ACCESS_TOKEN_PREFIX.length + 4)
+    expires_at = now + OAUTH_ACCESS_SECONDS
+    refresh_digest = Crypto.sha256(refresh)
+    refresh_expires_at = now + OAUTH_REFRESH_SECONDS
+    rows = @sdbql{
+      FOR row IN access_tokens
+      FILTER row._key == #{key} AND row.refresh_digest == #{presented}
+      UPDATE row WITH {
+        digest: #{digest},
+        hint: #{hint},
+        expires_at: #{expires_at},
+        refresh_digest: #{refresh_digest},
+        refresh_expires_at: #{refresh_expires_at},
+        previous_refresh_digest: #{presented}
+      } IN access_tokens
+      RETURN NEW._key
+    }
+    unless type(rows) == "array" && rows.length > 0
+      record.delete
+      return nil
+    end
+
     {
       "token": secret,
       "refresh_token": refresh,
-      "record": record
+      "record": AccessToken.find(key)
     }
   end
 

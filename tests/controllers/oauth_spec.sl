@@ -64,12 +64,20 @@ def oauth_param(location, name)
   parts[1].split("&")[0]
 end
 
+# The answer to the consent page on show, with the request id it carries.
+def oauth_decide(decision)
+  get("/app/oauth/consent")
+  post(
+    "/app/oauth/consent",
+    {"decision": decision, "request_id": assigns()["request_id"]}
+  )
+end
+
 # A signed-in person's approval of `client_id`: the code sent back.
-def oauth_code_for(user, client_id)
+def oauth_code_for(user, client_id, extra = "")
   oauth_sign_in(user)
-  get(oauth_authorize_path(client_id))
-  decided = post("/app/oauth/consent", {"decision": "allow"})
-  oauth_param(res_location(decided), "code")
+  get(oauth_authorize_path(client_id, extra))
+  oauth_param(res_location(oauth_decide("allow")), "code")
 end
 
 # Form-encoded, as an OAuth client sends it (RFC 6749): not JSON.
@@ -171,9 +179,15 @@ describe("Signing in from an MCP client") do
     assert_eq(res_location(signed), "/app/oauth/consent")
     page = get("/app/oauth/consent")
     assert_eq(res_status(page), 200)
-    assert_contains(res_body(page), "Connect Claude Code?")
+    assert_contains(
+      res_body(page),
+      "An app on this computer wants to reach your scores, calling itself “Claude Code”"
+    )
     assert_contains(res_body(page), "127.0.0.1:33418")
-    decided = post("/app/oauth/consent", {"decision": "allow"})
+    decided = post(
+      "/app/oauth/consent",
+      {"decision": "allow", "request_id": assigns()["request_id"]}
+    )
     location = res_location(decided)
     assert(location.starts_with?(OAUTH_REDIRECT + "?"))
     assert_eq(oauth_param(location, "state"), "st4te")
@@ -222,15 +236,6 @@ describe("Signing in from an MCP client") do
     assert_ne(renewed["access_token"], tokens["access_token"])
     assert_eq(res_status(oauth_mcp(tokens["access_token"])), 401, "the old access token")
     assert_eq(res_status(oauth_mcp(renewed["access_token"])), 200)
-    stale = oauth_json(
-      "/oauth/token",
-      {
-        "grant_type": "refresh_token",
-        "refresh_token": tokens["refresh_token"],
-        "client_id": client_id
-      }
-    )
-    assert_eq(res_json(stale)["error"], "invalid_grant", "the old refresh token")
     other = oauth_json(
       "/oauth/token",
       {
@@ -258,6 +263,10 @@ describe("Signing in from an MCP client") do
       "user_id": user._key,
       "kind": "oauth"
     }).count, 0)
+    # The old refresh token is refused too: presented while the connection
+    # lived, it revokes it (#541, below).
+    stale = oauth_refresh(tokens["refresh_token"], client_id)
+    assert_eq(res_json(stale)["error"], "invalid_grant", "the old refresh token")
   end
 
   test("refused: denied, an unknown client or redirect, no PKCE, another scope; no code without consent") do
@@ -265,7 +274,7 @@ describe("Signing in from an MCP client") do
     client_id = oauth_register()
     oauth_sign_in(user)
     get(oauth_authorize_path(client_id))
-    denied = post("/app/oauth/consent", {"decision": "deny"})
+    denied = oauth_decide("deny")
     assert_eq(oauth_param(res_location(denied), "error"), "access_denied")
     assert_null(oauth_param(res_location(denied), "code"))
     assert_eq(res_status(get(oauth_authorize_path("score_oc_nobody"))), 400)
@@ -286,5 +295,253 @@ describe("Signing in from an MCP client") do
       "/oauth/token",
       {"grant_type": "authorization_code", "code": "made-up"}
     ))["error"], "invalid_grant")
+  end
+end
+
+# An authorization request of `client_id` sending its answer to `redirect` ("" for none).
+def oauth_authorize_to(client_id, redirect)
+  path = "/oauth/authorize?response_type=code&client_id=" + client_id + "&code_challenge="
+  + oauth_challenge(OAUTH_VERIFIER)
+  + "&code_challenge_method=S256&state=st4te"
+  redirect.blank? ? path : path + "&redirect_uri=" + url(redirect)
+end
+
+def oauth_refresh(refresh_token, client_id)
+  oauth_json(
+    "/oauth/token",
+    {
+      "grant_type": "refresh_token",
+      "refresh_token": refresh_token,
+      "client_id": client_id
+    }
+  )
+end
+
+# How many connections `user` has.
+def oauth_connections(user)
+  AccessToken.where({"user_id": user._key, "kind": "oauth"}).count
+end
+
+describe("The OAuth server's hardening (#541)") do
+  before_each() do
+    as_guest()
+    clear_headers()
+    clear_cookies()
+  end
+
+  test("a second /authorize between showing and deciding: the first page's answer is refused, no code") do
+    user = oauth_user()
+    shown_client = oauth_register("Claude Code")
+    other_client = oauth_register("Something else")
+    oauth_sign_in(user)
+    get(oauth_authorize_path(shown_client))
+    page = get("/app/oauth/consent")
+    shown_id = assigns()["request_id"]
+    assert_not_null(shown_id, "the consent page carries its request")
+    assert_contains(res_body(page), "name=\"request_id\" value=\"#{shown_id}\"")
+    # Another request lands in the session (a page that opened it in the background).
+    get(oauth_authorize_path(other_client))
+    codes_before = OauthCode.count
+    stale = post(
+      "/app/oauth/consent",
+      {"decision": "allow", "request_id": shown_id}
+    )
+    assert_eq(res_status(stale), 400)
+    assert_null(res_location(stale), "nothing sent back")
+    assert_contains(res_body(stale), "Another connection request was started")
+    assert_eq(OauthCode.count, codes_before, "no code issued")
+    assert_eq(res_status(post(
+      "/app/oauth/consent",
+      {"decision": "allow", "request_id": shown_id}
+    )), 400, "spent")
+    # Without its request id, an answer is refused just the same.
+    get(oauth_authorize_path(shown_client))
+    assert_eq(res_status(post("/app/oauth/consent", {"decision": "allow"})), 400)
+    assert_eq(OauthCode.count, codes_before)
+    # The page on show answered with its own id: a code.
+    get(oauth_authorize_path(shown_client))
+    assert_not_null(oauth_param(res_location(oauth_decide("allow")), "code"))
+    assert_eq(OauthCode.count, codes_before + 1)
+  end
+
+  test("the headline names where the answer goes; the self-chosen name is only quoted") do
+    user = oauth_user()
+    remote = res_json(oauth_json(
+      "/oauth/register",
+      {"client_name": "Claude Code", "redirect_uris": ["https://evil.example/cb"]}
+    ))["client_id"]
+    oauth_sign_in(user)
+    get(oauth_authorize_to(remote, "https://evil.example/cb"))
+    body = res_body(get("/app/oauth/consent"))
+    assert_contains(body, "evil.example wants to reach your scores, calling itself “Claude Code”")
+    assert_contains(body, "Score does not check that name")
+    assert_not(body.contains("Connect Claude Code?"))
+    assert_not(body.contains("An app on this computer"))
+    assert_eq(assigns()["title"], "Connect evil.example")
+    get(oauth_authorize_path(oauth_register("Claude Code")))
+    local = res_body(get("/app/oauth/consent"))
+    assert_contains(local, "An app on this computer wants to reach your scores, calling itself “Claude Code”")
+    assert_eq(assigns()["title"], "Connect an app on this computer")
+  end
+
+  test("a refresh token used twice: the whole connection is revoked, old and new tokens refused") do
+    user = oauth_user()
+    client_id = oauth_register()
+    tokens = res_json(oauth_exchange(client_id, oauth_code_for(user, client_id)))
+    renewed = res_json(oauth_refresh(tokens["refresh_token"], client_id))
+    assert_eq(res_status(oauth_mcp(renewed["access_token"])), 200)
+    reused = oauth_refresh(tokens["refresh_token"], client_id)
+    assert_eq(res_status(reused), 400)
+    assert_eq(res_json(reused)["error"], "invalid_grant")
+    assert_eq(oauth_connections(user), 0, "the connection is gone")
+    assert_eq(res_status(oauth_mcp(renewed["access_token"])), 401, "the new access token")
+    assert_eq(
+      res_json(oauth_refresh(renewed["refresh_token"], client_id))["error"],
+      "invalid_grant",
+      "the new refresh"
+    )
+    # A made-up refresh token revokes nothing.
+    kept = res_json(oauth_exchange(client_id, oauth_code_for(user, client_id)))
+    assert_eq(res_json(oauth_refresh("score_rt_made-up", client_id))["error"], "invalid_grant")
+    assert_eq(res_status(oauth_mcp(kept["access_token"])), 200)
+  end
+
+  test("two refreshes racing with one token: the loser finds it rotated and revokes the connection") do
+    user = oauth_user()
+    client_id = oauth_register()
+    tokens = res_json(oauth_exchange(client_id, oauth_code_for(user, client_id)))
+    presented = Crypto.sha256(tokens["refresh_token"])
+    # Both requests read the row; the first rotates it.
+    seen = AccessToken.where({"refresh_digest": presented}).first
+    renewed = res_json(oauth_refresh(tokens["refresh_token"], client_id))
+    assert_not_null(renewed["access_token"])
+    # The second, its read now stale, rotates nothing.
+    assert_null(AccessToken.rotate(seen, presented))
+    assert_eq(oauth_connections(user), 0)
+    assert_eq(res_status(oauth_mcp(renewed["access_token"])), 401)
+    # Unraced, a rotation goes through, once.
+    fresh = res_json(oauth_exchange(client_id, oauth_code_for(user, client_id)))
+    digest = Crypto.sha256(fresh["refresh_token"])
+    row = AccessToken.where({"refresh_digest": digest}).first
+    pair = AccessToken.rotate(row, digest)
+    assert_not_null(pair["token"])
+    assert_eq(AccessToken.where({"refresh_digest": Crypto.sha256(pair["refresh_token"])}).count, 1)
+    assert_eq(AccessToken.where({"refresh_digest": digest}).count, 0)
+    assert_eq(res_status(oauth_mcp(pair["token"])), 200)
+  end
+
+  test("a code asked with a redirect_uri is traded only with it; one asked without, without") do
+    user = oauth_user()
+    client_id = oauth_register()
+    code = oauth_code_for(user, client_id)
+    clear_headers()
+    missing = post(
+      "/oauth/token",
+      {
+        "grant_type": "authorization_code",
+        "code": code,
+        "client_id": client_id,
+        "code_verifier": OAUTH_VERIFIER
+      }
+    )
+    assert_eq(res_status(missing), 400)
+    assert_eq(res_json(missing)["error"], "invalid_grant")
+    assert_eq(oauth_connections(user), 0, "no token issued")
+    assert_eq(res_json(oauth_exchange(client_id, code))["error"], "invalid_grant", "and the code is spent")
+    # Asked without one (a single registered URI): traded without one.
+    oauth_sign_in(user)
+    get(oauth_authorize_to(client_id, ""))
+    bare = oauth_param(res_location(oauth_decide("allow")), "code")
+    clear_headers()
+    traded = post(
+      "/oauth/token",
+      {
+        "grant_type": "authorization_code",
+        "code": bare,
+        "client_id": client_id,
+        "code_verifier": OAUTH_VERIFIER
+      }
+    )
+    assert_eq(res_status(traded), 200)
+    assert_eq(oauth_connections(user), 1)
+  end
+
+  test("one address may register, trade and revoke only so often; another address is not held up") do
+    ["register", "token", "revoke"].each do |endpoint|
+      ip = "203.0.113.#{uuid_v4}"
+      limit = OauthServer.limiter(endpoint, ip).status()["limit"]
+      (0 .. limit).each do |_|
+        assert_null(OauthServer.throttled(endpoint, ip), endpoint)
+      end
+      refused = OauthServer.throttled(endpoint, ip)
+      assert_eq(refused["status"], 429, endpoint)
+      assert_eq(JSON.parse(refused["body"])["error"], "too_many_requests")
+      assert_not_null(refused["headers"]["Retry-After"])
+      assert_null(OauthServer.throttled(endpoint, "198.51.100.#{uuid_v4}"), endpoint)
+    end
+    assert_eq(OauthServer.limiter("register", "x").status()["window"], 3600)
+    assert_eq(OauthServer.limiter("token", "x").status()["window"], 60)
+  end
+
+  test("an old client that never got a token is purged; a used one and a new one are kept") do
+    user = oauth_user()
+    unused = OauthClient.register("Unused", [OAUTH_REDIRECT])
+    recent = OauthClient.register("Recent", [OAUTH_REDIRECT])
+    used_id = oauth_register("Used")
+    tokens = res_json(oauth_exchange(used_id, oauth_code_for(user, used_id)))
+    # Used, then let go: it got a token once, so it stays.
+    oauth_json(
+      "/oauth/revoke",
+      {"token": tokens["access_token"], "client_id": used_id}
+    )
+    assert_eq(oauth_connections(user), 0)
+    long_ago = DateTime.utc.to_unix - (OAUTH_CLIENT_UNUSED_DAYS + 1) * 86400
+    [unused.client_id, used_id].each do |client_id|
+      row = OauthClient.for_id(client_id)
+      row.created_at = long_ago
+      row.update()
+    end
+    done = DataCleanupJob.perform_now({})
+    assert_gt(done["oauth_clients"], 0)
+    assert_null(OauthClient.for_id(unused.client_id), "old and never used")
+    assert_not_null(OauthClient.for_id(used_id), "used once")
+    assert_not_null(OauthClient.for_id(recent.client_id), "registered today")
+    assert_eq(OauthClient.purge_unused, 0, "nothing more to purge")
+  end
+
+  # Last of the file: they spend this address's minute of token and revocation calls.
+  test("past the minute's token calls: 429, and a good code is not spent") do
+    user = oauth_user()
+    client_id = oauth_register()
+    code = oauth_code_for(user, client_id)
+    codes_before = OauthCode.count
+    statuses = (0 .. OAUTH_TOKEN_CALLS_PER_IP_MINUTE + 1).map do |_|
+      res_status(oauth_json("/oauth/token", {"grant_type": "password"}))
+    end
+    assert(statuses.includes?(429), "refused past the limit")
+    refused = oauth_exchange(client_id, code)
+    assert_eq(res_status(refused), 429)
+    assert_eq(res_json(refused)["error"], "too_many_requests")
+    assert_eq(OauthCode.count, codes_before, "the code is still there")
+    assert_eq(oauth_connections(user), 0)
+  end
+
+  test("past the minute's revocations: 429, and the connection stays") do
+    user = oauth_user()
+    client_id = oauth_register()
+    connection = AccessToken.issue_oauth(user, OauthClient.for_id(client_id))
+    statuses = (0 .. OAUTH_REVOCATIONS_PER_IP_MINUTE + 1).map do |_|
+      res_status(oauth_json(
+        "/oauth/revoke",
+        {"token": "score_unknown", "client_id": client_id}
+      ))
+    end
+    assert(statuses.includes?(429), "refused past the limit")
+    refused = oauth_json(
+      "/oauth/revoke",
+      {"token": connection["token"], "client_id": client_id}
+    )
+    assert_eq(res_status(refused), 429)
+    assert_eq(oauth_connections(user), 1)
   end
 end
