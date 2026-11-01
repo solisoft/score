@@ -1,5 +1,9 @@
 # public/js — client scripts under instant navigation
 
+> These notes used to sit in `public/js/CLAUDE.md`, where the static server
+> handed them to anyone asking for `/js/CLAUDE.md` (#544). They apply to every
+> script under `public/js/` and `public/eui-score/`.
+
 Every page is served with `/__soli/nav.js`. A same-origin link click fetches
 the next page and **swaps `<body>` in place**; the document never reloads. The
 consequence for any file in this directory:

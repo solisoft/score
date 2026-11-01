@@ -83,6 +83,9 @@ get("/playground", "playground#show", name: "playground")
 # One fixed path: the ticket names the score (a dynamic segment in a
 # websocket route is not matched by Soli 2.28).
 router_websocket("/ws/scores", "score_room#handle")
+# What the Content-Security-Policy refused, reported by browsers (#544):
+# logged, with or without the app's database.
+post("/csp-report", "csp_reports#create", name: "csp_report")
 get("/app/setup", "app_setup#show", name: "app_setup")
 middleware("require_app_database", fn() {
   get("/app", "app/home#index", name: "app_home")
@@ -228,8 +231,12 @@ middleware("require_app_database", fn() {
     post("/app/sections/:id/reports", "app/sections#report", name: "app_section_reports")
     post("/app/sections/:id/remove", "app/sections#remove", name: "app_section_remove")
 
+    # An admin without two-step sign-in is sent here by `require_admin`
+    # (#544): what to turn on, and where. Anyone else is answered 404.
+    get("/admin/two-step", "admin/two_step#show", name: "admin_two_step")
+
     # The admin section (#399): the accounts, the plans, the payments.
-    # Admins only (User#admin?): anyone else is answered 404.
+    # Admins only (User#admin?), with two-step on: anyone else is answered 404.
     middleware("require_admin", fn() {
       get("/admin", "admin/dashboard#index", name: "admin")
       get("/admin/customers", "admin/customers#index", name: "admin_customers")
@@ -245,6 +252,8 @@ middleware("require_app_database", fn() {
       post("/admin/reports/:id/show", "admin/reports#unhide", name: "admin_report_show")
       post("/admin/reports/:id/remove", "admin/reports#remove", name: "admin_report_remove")
       post("/admin/reports/:id/dismiss", "admin/reports#dismiss", name: "admin_report_dismiss")
+      # What the admins did (#544).
+      get("/admin/actions", "admin/actions#index", name: "admin_actions")
     })
   })
 })

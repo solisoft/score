@@ -113,9 +113,9 @@
   <% unless me.nil? %>
     <footer class="section-own">
       <% if can_remove %>
-        <form action="<%= app_section_remove_path(section._key) %>" method="POST" onsubmit="return confirm('Take this section away from the library? Its ratings and comments go with it.')">
+        <form action="<%= app_section_remove_path(section._key) %>" method="POST">
           <%- csrf_field() %>
-          <button type="submit" class="btn btn-danger" data-section-remove>Take it away from the library</button>
+          <button type="submit" class="btn btn-danger" data-confirm="Take this section away from the library? Its ratings and comments go with it." data-section-remove>Take it away from the library</button>
         </form>
       <% end %>
       <% unless section.by?(me) %>

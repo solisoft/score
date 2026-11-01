@@ -32,28 +32,37 @@ env:
   SOLI_VERSION: "2.29.3"
   # `soli test` resets its test databases on SoliDB before it starts.
   SOLIDB_VERSION: "2.3.1"
+  # SoliDB's releases publish no checksum: the tarball's SHA-256 is pinned
+  # here, next to its version (bump both together). Soli's releases publish
+  # a .sha256 beside each tarball, which fetch() checks instead.
+  SOLIDB_SHA256: "6116cdfe50db0898c410739169a21a4f169a32f00ba086273262f0ce7b081e00"
 
 jobs:
   verify:
     name: fmt + lint + boot + suite
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install soli and SoliDB (pinned)
         run: |
           set -euo pipefail
+          # A tarball is unpacked only once its SHA-256 matches: the one
+          # given as $4, or else the .sha256 the release publishes beside it.
           fetch() {
-            local name="$1" repo="$2" want="$3" tmp got
+            local name="$1" repo="$2" want="$3" sum="${4:-}" tmp got url
             tmp="$(mktemp -d)"
-            curl -fsSL "https://github.com/$repo/releases/download/v$want/$name-linux-amd64.tar.gz" -o "$tmp/pkg.tar.gz"
+            url="https://github.com/$repo/releases/download/v$want/$name-linux-amd64.tar.gz"
+            curl -fsSL "$url" -o "$tmp/pkg.tar.gz"
+            [ -n "$sum" ] || sum="$(curl -fsSL "$url.sha256" | grep -oE '^[0-9a-f]{64}')"
+            echo "$sum  $tmp/pkg.tar.gz" | sha256sum -c - || { echo "$name $want: checksum mismatch" >&2; exit 1; }
             tar -xzf "$tmp/pkg.tar.gz" -C "$tmp"
             sudo install -m 0755 "$(find "$tmp" -type f -name "$name" -perm -u+x | head -1)" "/usr/local/bin/$name"
             got="$("$name" --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
             [ "$got" = "$want" ] || { echo "$name: $got installed, $want expected" >&2; exit 1; }
           }
           fetch soli   solisoft/soli_lang "$SOLI_VERSION"
-          fetch solidb solisoft/solidb    "$SOLIDB_VERSION"
+          fetch solidb solisoft/solidb    "$SOLIDB_VERSION" "$SOLIDB_SHA256"
 
       # The server engraves what the browser's wasm engraves (library cards,
       # shared pages, PDFs): both must pin the same eui revision, or a score
@@ -135,9 +144,9 @@ jobs:
     name: browser engraver + editor tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: wasm
       - name: Tests
@@ -150,8 +159,8 @@ jobs:
     name: score editor model tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
       - name: Tests
@@ -175,7 +184,7 @@ jobs:
       # The `name` in the server's app.infos.
       APP: ${{ vars.DEPLOY_APP || 'score' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Check the configuration
         run: |
@@ -204,7 +213,7 @@ jobs:
       # their SHA-256, kept between runs. Before the rsync, which would
       # otherwise take them off the server.
       - name: Keep the sounds between runs
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: public/soundfonts/MuseScore_General.sf3
           key: soundfont-${{ hashFiles('deploy/soundfont.sh') }}
@@ -214,7 +223,9 @@ jobs:
 
       # --delete-delay: what leaves the repository leaves the server. The
       # exclusions keep what lives only on the server, and what has no
-      # business there (the Rust crate, tests, agent notes).
+      # business there (the Rust crate, tests, agent notes). public/ is
+      # served as is: an agent note `soli update docs` writes back into
+      # public/js/ must never reach it (#544).
       - name: Sync the files
         run: |
           set -euo pipefail
@@ -222,7 +233,14 @@ jobs:
             --exclude='.git/' --exclude='.github/' --exclude='.claude/' \
             --exclude='wasm/' --exclude='tests/' --exclude='coverage/' --exclude='tmp/' \
             --exclude='.env' --exclude='.env.*' --exclude='app.infos' --exclude='restart.txt' \
+            --exclude='/public/js/CLAUDE.md' \
             ./ "$USER@$HOST:$SITES_DIR/$DOMAIN/"
+
+      # The exclusion above also shields the copy an older deploy put on the
+      # server from --delete: taken off here, every time (nothing left, nothing
+      # done), so /js/CLAUDE.md is never served.
+      - name: Take the agents' notes off the server
+        run: ssh "$USER@$HOST" "rm -f '$SITES_DIR/$DOMAIN/public/js/CLAUDE.md'"
 
       - name: Note the version the server runs
         run: |

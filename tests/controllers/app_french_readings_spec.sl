@@ -233,7 +233,12 @@ describe("Photo imports and the consent page in French (#505)") do
     page = french_consent_page()
     assert_eq(res_status(page), 200)
     body = res_body(page)
-    assert_contains(body, "Connecter Claude Code ?")
+    # Named by where it goes back to, the name only quoted (#541).
+    assert_contains(
+      body,
+      "Une application de cet ordinateur veut accéder à vos partitions, en se présentant comme « Claude Code »"
+    )
+    assert_contains(body, "Score ne vérifie pas ce nom")
     assert_contains(body, "<strong>Claude Code</strong> demande à accéder à vos partitions")
     assert_contains(body, "<code>127.0.0.1:33418</code>")
     assert_contains(body, ">Autoriser</button>")
@@ -243,7 +248,7 @@ describe("Photo imports and the consent page in French (#505)") do
 
     french_reading_user()
     body = res_body(french_consent_page())
-    assert_contains(body, "Connect Claude Code?")
+    assert_contains(body, "An app on this computer wants to reach your scores, calling itself “Claude Code”")
     assert_contains(body, ">Allow</button>")
     assert_contains(body, ">Deny</button>")
     assert_contains(body, "You can disconnect it any time in")

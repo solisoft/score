@@ -3,6 +3,10 @@
 # claude.ai's connectors, Cursor — to ask a person for access to /mcp.
 # Public clients only, no secret: what binds a code to the client that
 # asked for it is PKCE and the exact redirect URI registered here.
+#
+# One that never got a token is let go after OAUTH_CLIENT_UNUSED_DAYS (#541).
+const OAUTH_CLIENT_UNUSED_DAYS = 30
+
 class OauthClient < Model
   validates("client_id", {"presence": true})
   validates("client_name", {"presence": true})
@@ -25,6 +29,40 @@ class OauthClient < Model
     return nil if client_id.to_s.blank?
 
     OauthClient.where({"client_id": client_id.to_s}).first
+  end
+
+  # The clients registered more than `days` ago that never got a token,
+  # deleted (#541): registering is open, so what was never used does not
+  # pile up. A client used once stays, its connections revoked or not.
+  # How many went.
+  static def purge_unused(days = OAUTH_CLIENT_UNUSED_DAYS)
+    cutoff = DateTime.utc.to_unix - days * 86400
+    stale = OauthClient.where("doc.created_at < @cutoff AND doc.token_issued_at == null", {"cutoff": cutoff}).all
+    gone = 0
+    stale.each do |client|
+      # Registered before #541 stamped it: its connections tell.
+      next if AccessToken.where({"oauth_client_id": client.client_id}).count > 0
+
+      client.delete
+      gone = gone + 1
+    end
+    gone
+  end
+
+  # Noted, the first time: it got a token, so it is kept. That field alone,
+  # and only while unset: a copy read earlier writes nothing else (#541).
+  def token_issued
+    return nil unless @token_issued_at.nil?
+
+    key = @_key
+    now = DateTime.utc.to_unix
+    @sdbql{
+      FOR row IN oauth_clients
+      FILTER row._key == #{key} AND row.token_issued_at == null
+      UPDATE row WITH {token_issued_at: #{now}} IN oauth_clients
+      RETURN NEW._key
+    }
+    @token_issued_at = now
   end
 
   # Whether codes may be sent to `uri`: one it registered, exactly.

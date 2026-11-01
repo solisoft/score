@@ -4,22 +4,28 @@
 # its password, secrets or tokens; and the scores others share with them,
 # listed only — those are their owners' to export.
 #
-# The zip is made in memory, so a big account comes in parts of about
-# EXPORT_PART_CHARACTERS characters of LilyPond each, a score never split
-# across two: one part for nearly everyone. Each part carries the account,
-# the list of every score (saying which part holds it) and the shared list.
+# The zip is made in memory, so a big account comes in parts of at most
+# EXPORT_PART_CHARACTERS characters of LilyPond each: one part for nearly
+# everyone. A score's versions are entries of their own (#543), so a score
+# with many may spread over several parts, and no part passes the limit but
+# by one file bigger than it (a take; a source is far smaller). Each part
+# carries the account, the list of every score (saying which part holds it
+# and each of its versions) and the shared list. A version's file is named
+# by when it was saved and its key, not its place, so a new version, or
+# the oldest let go, renames none between two downloads.
 const EXPORT_PART_CHARACTERS = 4000000
 # Downloads one person may ask for in EXPORT_WINDOW_SECONDS, parts included.
 const EXPORTS_PER_WINDOW = 10
 const EXPORT_WINDOW_SECONDS = 3600
 
 class AccountExport
-  # The parts `user`'s export comes in: each a list of their scores' keys,
-  # the oldest score first, then the audio takes of their scores (#390),
-  # each "take:<key>" and counted by its bytes. Always at least one part,
-  # empty when they have no score. Three queries, which read the sizes and
-  # not the sources.
-  static def parts(user)
+  # The parts `user`'s export comes in, each at most `limit` characters: a
+  # list of their scores' keys, the oldest score first, each followed by its
+  # versions, the oldest first, each "version:<key>"; then the audio takes
+  # of their scores (#390), each "take:<key>" and counted by its bytes.
+  # Always at least one part, empty when they have no score. Three queries,
+  # which read the sizes and not the sources.
+  static def parts(user, limit = EXPORT_PART_CHARACTERS)
     owner = user._key
     scores = @sdbql{
       FOR s IN scores
@@ -30,18 +36,23 @@ class AccountExport
     kept = @sdbql{
       FOR v IN score_versions
       FILTER v.user_id == #{owner}
-      COLLECT score = v.score_id AGGREGATE total = SUM(LENGTH(v.source))
-      RETURN {"key": score, "size": total}
+      SORT v.score_id ASC, v.created_at ASC, v._key ASC
+      RETURN {"key": v._key, "score": v.score_id, "size": LENGTH(v.source)}
     }
     versions = {}
     AccountExport.rows(kept).each do |row|
-      versions[row["key"]] = row["size"]
+      versions[row["score"]] ||= []
+      versions[row["score"]].push({
+        "key": "version:#{row["key"]}",
+        "size": row["size"]
+      })
     end
-    sizes = AccountExport.rows(scores).map do |row|
-      {
-        "key": row["key"],
-        "size": row["size"] + (versions[row["key"]] ?? 0)
-      }
+    sizes = []
+    AccountExport.rows(scores).each do |row|
+      sizes.push({"key": row["key"], "size": row["size"]})
+      (versions[row["key"]] ?? []).each do |entry|
+        sizes.push(entry)
+      end
     end
     takes = @sdbql{
       FOR t IN score_takes
@@ -52,7 +63,7 @@ class AccountExport
     AccountExport.rows(takes).each do |row|
       sizes.push({"key": "take:#{row["key"]}", "size": row["size"] ?? 0})
     end
-    AccountExport.packed(sizes, EXPORT_PART_CHARACTERS)
+    AccountExport.packed(sizes, limit)
   end
 
   # A query's rows; none when its collection was never written to (a new
@@ -92,22 +103,45 @@ class AccountExport
     ZipArchive.build(AccountExport.files(user, parts, number, at), at)
   end
 
-  # The files of part `number`: [{"name", "text"}].
+  # The files of part `number`: [{"name", "text"}]. Only the sources this
+  # part holds are read: every score and version is listed from its details.
   static def files(user, parts, number, at)
-    keys = parts[number - 1]
+    keys = parts[number - 1] ?? []
+    in_part = {}
+    keys.each do |key|
+      in_part[key] = true
+    end
+    score_keys = keys.filter do |key|
+      !key.contains(":")
+    end
+    version_keys = keys.filter do |key|
+      key.starts_with?("version:")
+    end.map do |key|
+      key.substring(8, key.length)
+    end
     owner = user._key
     scores = AccountExport.read(fn() {
-      Score.where("doc.user_id == @user", {"user": owner}).order("created_at", "asc").all
+      Score.where("doc.user_id == @user", {"user": owner}).select(
+        "title",
+        "composer",
+        "trashed_at",
+        "visibility",
+        "created_at",
+        "updated_at",
+        "user_id"
+      ).order("created_at", "asc").all
     })
+    sources = AccountExport.sources_of(Score, score_keys)
     shares = AccountExport.read(fn() { ScoreShare.where({"owner_id": owner}).order("email", "asc").all })
-    versions = []
-    if keys.length > 0
-      versions = AccountExport.read(fn() {
-        ScoreVersion.where("doc.score_id IN @keys", {"keys": keys}).order("created_at", "asc").all
-      })
-    end
+    version_sources = AccountExport.sources_of(ScoreVersion, version_keys)
+    # The scores this part holds, or holds versions of: each lists all its
+    # versions, and the part that holds each.
+    listed_keys = (score_keys + version_sources.values.map do |held|
+      held["score_id"]
+    end).uniq
+    versions = AccountExport.versions_of(listed_keys)
     authors = ScoreVersion.authors_of(versions)
-    threads = AccountExport.threads_on(keys)
+    threads = AccountExport.threads_on(score_keys)
     takes = AccountExport.read(fn() {
       ScoreTake.where("doc.score_id IN @keys", {"keys": scores.map(&:_key)}).order("track", "asc").all
     })
@@ -130,19 +164,26 @@ class AccountExport
         AccountExport.take_listing(take, part_of["take:#{take._key}"])
       end
       own_takes.each do |take|
-        if keys.includes?("take:#{take._key}")
+        if in_part["take:#{take._key}"]
           files.push({"name": "#{entry["folder"]}/#{AccountExport.take_file(take)}", "bytes": take.audio_bytes})
         end
       end
-      if keys.includes?(score._key)
-        own_versions = versions.filter do |version|
-          version.score_id == score._key
-        end
-        entry["versions"] = AccountExport.version_files(own_versions, authors)
+      own_versions = versions.filter do |version|
+        version.score_id == score._key
+      end
+      version_files = AccountExport.version_files(own_versions, authors, part_of)
+      holds_versions = own_versions.any? do |version|
+        in_part["version:#{version._key}"] == true
+      end
+      entry["versions"] = version_files if in_part[score._key] || holds_versions
+      if in_part[score._key]
         entry["comments"] = threads[score._key] ?? []
-        files.push({"name": "#{entry["folder"]}/#{score.file_name}.ly", "text": score.source})
-        own_versions.each_with_index do |version, i|
-          files.push({"name": "#{entry["folder"]}/#{entry["versions"][i]["file"]}", "text": version.source})
+        files.push({"name": "#{entry["folder"]}/#{score.file_name}.ly", "text": (sources[score._key] ?? {})["source"]})
+      end
+      own_versions.each_with_index do |version, i|
+        held = version_sources[version._key]
+        unless held.nil?
+          files.push({"name": "#{entry["folder"]}/#{version_files[i]["file"]}", "text": held["source"]})
         end
       end
       entry
@@ -152,6 +193,49 @@ class AccountExport
     files.push({"name": "comments.json", "text": JSON.stringify(AccountExport.comments_by(user))})
     files.push({"name": "notifications.json", "text": JSON.stringify(AccountExport.notifications_of(user))})
     files
+  end
+
+  # The sources of the `model` rows (Score or ScoreVersion) whose keys are
+  # `keys`: key to {"source", "score_id"}. None read for no key.
+  static def sources_of(model, keys)
+    found = {}
+    return found if keys.length == 0
+
+    rows = AccountExport.read(fn() { model.where("doc._key IN @keys", {"keys": keys}).all })
+    rows.each do |row|
+      found[row._key] = {"source": row.source, "score_id": row.score_id}
+    end
+    found
+  end
+
+  # The versions of the scores whose keys are `keys`, without their
+  # sources, the oldest first: by the second each was saved, a number, then
+  # by key, as AccountExport.parts orders them.
+  static def versions_of(keys)
+    return [] if keys.length == 0
+
+    rows = AccountExport.read(fn() {
+      ScoreVersion.where("doc.score_id IN @keys", {"keys": keys}).select(
+        "score_id",
+        "created_at",
+        "reason",
+        "author_id"
+      ).all
+    })
+    rows.sort do |one, other|
+      AccountExport.saved_order(one, other)
+    end
+  end
+
+  # Which of two versions was saved first: by `created_at`, compared as
+  # numbers, then by key (-1, 0 or 1).
+  static def saved_order(one, other)
+    first = one.created_at ?? 0
+    second = other.created_at ?? 0
+    return first < second ? -1 : 1 unless first == second
+    return 0 if one._key == other._key
+
+    one._key < other._key ? -1 : 1
   end
 
   # The comment threads on the scores whose keys are `keys` (the person's
@@ -352,17 +436,18 @@ class AccountExport
   end
 
   # Each of `versions` (the oldest first) as a file of its score's
-  # versions/ folder, numbered in order, with when, why and by whom.
-  static def version_files(versions, authors)
-    versions.each_with_index.map do |version, i|
-      padded = "00#{i + 1}"
-      number = padded.substring(padded.length - [3, padded.length - 2].max(), padded.length)
+  # versions/ folder, named by when it was saved and its key (the same in
+  # every download, #543), with when, why, by whom, and the part of the
+  # export that holds it (`part_of`, AccountExport.files).
+  static def version_files(versions, authors, part_of = {})
+    versions.map do |version|
       moment = DateTime.from_unix(version.created_at ?? 0).to_iso.substring(0, 19).replace(":", "-")
       {
-        "file": "versions/#{number}-#{moment}-#{version.reason}.ly",
+        "file": "versions/#{moment}-#{version._key}-#{version.reason}.ly",
         "reason": version.reason,
         "saved_at": AccountExport.iso(version.created_at),
-        "saved_by": authors[version.author_id.to_s]
+        "saved_by": authors[version.author_id.to_s],
+        "part": part_of["version:#{version._key}"]
       }
     end
   end
@@ -381,10 +466,14 @@ class AccountExport
   end
 
   static def readme(user, number, count, at)
-    part = count > 1 ? "This is part #{number} of #{count}: the scores are split so that no download is too big.\n" : ""
+    split = "the scores and their versions are split so that no download is too big; "
+    + "scores.json, in every part, says which part holds each, and lists a score's versions\n"
+    + "in each part that holds any of them.\n"
+    part = count > 1 ? "This is part #{number} of #{count}: #{split}" : ""
     "Score: everything in the account #{user.email}, exported #{AccountExport.iso(at)}.\n\n" + part
     + "scores/        your scores, one folder each: the score as it is now (.ly, LilyPond),\n"
-    + "               and versions/, every version kept of it, the oldest first;\n"
+    + "               and versions/, every version kept of it, each named by when it was\n"
+    + "               saved and its own key (the same in every download), the oldest first;\n"
     + "               takes/, the audio recorded onto its tracks (WAV, one per track).\n"
     + "trash/         the scores in your trash, the same way.\n"
     + "scores.json    every score: its folder, the part it is in, whether it is in the trash,\n"

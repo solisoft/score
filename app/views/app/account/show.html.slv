@@ -220,13 +220,22 @@
               <% push_words["off"] = t("app.account.push_state_off") %>
               <% push_words["on_failed"] = t("app.account.push_on_failed") %>
               <% push_words["off_failed"] = t("app.account.push_off_failed") %>
-              <% push_words["sent_one"] = t("app.account.push_sent_one") %>
-              <% push_words["sent_other"] = t("app.account.push_sent_other") %>
+              <% push_words["queued_one"] = t("security_543.push_queued_one") %>
+              <% push_words["queued_other"] = t("security_543.push_queued_other") %>
               <% push_words["sent_none"] = t("app.account.push_sent_none") %>
+              <% push_words["unavailable"] = t("app.account.not_available") %>
               <% push_words["send_failed"] = t("app.account.push_send_failed") %>
+              <%# Beside the script, not in it: its text never changes (#544). %>
+              <%- page_data("push-data", {
+                "words": push_words,
+                "subscribe": app_push_subscriptions_path(),
+                "unsubscribe": app_push_subscriptions_remove_path(),
+                "test": app_push_test_path()
+              }) %>
               <script data-push-script>
                 (() => {
-                  const words = <%- push_words.to_json %>;
+                  const page = JSON.parse(document.getElementById("push-data").textContent);
+                  const words = page.words;
                   const fill = (text, name, value) => text.replace(`{${name}}`, value);
                   const box = document.querySelector("[data-push]");
                   if (!box || box.dataset.ready) return;
@@ -275,7 +284,7 @@
                       if ((await Notification.requestPermission()) !== "granted") return show(false);
                       const registration = await ready;
                       const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytes(box.dataset.key) });
-                      const answer = await post("<%= app_push_subscriptions_path() %>", subscription.toJSON());
+                      const answer = await post(page.subscribe, subscription.toJSON());
                       count(answer.devices);
                       show(true);
                     } catch (error) {
@@ -289,7 +298,7 @@
                     try {
                       const subscription = await (await ready).pushManager.getSubscription();
                       if (subscription) {
-                        const answer = await post("<%= app_push_subscriptions_remove_path() %>", { endpoint: subscription.endpoint });
+                        const answer = await post(page.unsubscribe, { endpoint: subscription.endpoint });
                         await subscription.unsubscribe();
                         count(answer.devices);
                       }
@@ -302,8 +311,11 @@
                   });
                   test.addEventListener("click", async () => {
                     try {
-                      const answer = await post("<%= app_push_test_path() %>");
-                      say(answer.sent ? fill(answer.sent === 1 ? words.sent_one : words.sent_other, "n", answer.sent) : words.sent_none);
+                      const answer = await post(page.test);
+                      // Sent by a job (#543): on its way, not yet arrived;
+                      // nothing when the server cannot sign a message.
+                      if (answer.unavailable) say(words.unavailable);
+                      else say(answer.queued ? fill(answer.devices === 1 ? words.queued_one : words.queued_other, "n", answer.devices) : words.sent_none);
                     } catch (error) {
                       say(fill(words.send_failed, "error", error.message));
                     }

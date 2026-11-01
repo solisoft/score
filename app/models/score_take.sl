@@ -138,7 +138,9 @@ class ScoreTake < Model
     return nil if total <= limits["take_bytes"]
 
     room = Plan.size_text(limits["take_bytes"])
-    return {"error": "Your takes would pass the #{room} your plan keeps: delete some first."} unless limits["upgrade"]
+    unless limits["upgrade"]
+      return {"error": SiteText.t("security_543.take_room_full", {"room": room})}
+    end
 
     {
       "error": "Your takes would pass the #{room} the Free plan keeps: delete some, "

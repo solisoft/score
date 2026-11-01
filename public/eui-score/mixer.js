@@ -71,7 +71,7 @@ export function settings(stored = {}) {
       high: clamp(s.eq?.high ?? 0, -EQ_RANGE, EQ_RANGE),
     },
     comp: { on: Boolean(s.comp?.on), threshold: clamp(s.comp?.threshold ?? -24, -60, 0), ratio: clamp(s.comp?.ratio ?? 4, 1, 20) },
-    reverb: { on: Boolean(s.reverb?.on), room: ROOMS[s.reverb?.room] ? s.reverb.room : DEFAULT.reverb.room, mix: clamp(s.reverb?.mix ?? 0.25, 0, 1) },
+    reverb: { on: Boolean(s.reverb?.on), room: Object.hasOwn(ROOMS, s.reverb?.room ?? "") ? s.reverb.room : DEFAULT.reverb.room, mix: clamp(s.reverb?.mix ?? 0.25, 0, 1) },
   };
 }
 
@@ -221,7 +221,7 @@ function noise(seed) {
  * end), darker as it goes — the more `damping`, the darker.
  */
 export function impulseSamples(room, rate) {
-  const r = ROOMS[room] ?? ROOMS.hall;
+  const r = Object.hasOwn(ROOMS, room ?? "") ? ROOMS[room] : ROOMS.hall;
   const length = Math.max(1, Math.round(r.seconds * rate));
   const pre = Math.round(r.pre * rate);
   return [1, 2].map((side) => {

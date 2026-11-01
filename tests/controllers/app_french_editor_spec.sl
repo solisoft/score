@@ -57,8 +57,9 @@ describe("The score editor in French") do
     assert_contains(page, "depuis que vous l'avez ouverte")
     # The page's script words, and the modules' dictionary.
     assert_contains(page, "Vos changements s'enregistrent d'eux-mêmes.")
-    assert_contains(page, "window.EUI_WORDS = {")
-    assert_contains(page, "window.EUI_WORDS_LOCALE = \"fr\"")
+    # Beside the script that reads them, in a JSON block (#544).
+    assert_contains(page, "id=\"eui-words\">{\"words\":{")
+    assert_contains(page, "\"locale\":\"fr\"}</script>")
     assert_not(page.contains(">Save the LilyPond source <kbd>"), "no English menu item left")
     assert_not(page.contains("<summary class=\"studio-menu\">File</summary>"), "no English menu")
   end
@@ -78,7 +79,7 @@ describe("The score editor in French") do
     )
     assert_contains(page, "{title}, {composer}, {piece}, {opus}, {copyright} and {page} are filled in.")
     assert_contains(page, "Your changes save themselves.")
-    assert_contains(page, "window.EUI_WORDS = null")
+    assert_contains(page, "id=\"eui-words\">{\"words\":null,\"locale\":\"en\"}")
     assert_not(page.contains("Fichier"), "no French menu")
   end
 
@@ -88,7 +89,7 @@ describe("The score editor in French") do
     assert_contains(page, "<summary class=\"studio-menu\">File</summary>")
     assert_contains(page, "title=\"Undo (Ctrl+Z)\" aria-label=\"Undo\"")
     assert_contains(page, "<option value=\"-3\">E♭ major / C minor</option>")
-    assert_contains(page, "window.EUI_WORDS = null")
+    assert_contains(page, "id=\"eui-words\">{\"words\":null,\"locale\":\"en\"}")
     assert_not(page.contains("Fichier"), "no French menu")
   end
 
@@ -96,10 +97,10 @@ describe("The score editor in French") do
     user = fr_editor_user()
     fr_editor_sign_in(user)
     english = res_body(get("/app"))
-    assert_contains(english, "window.EUI_WORDS = null")
+    assert_contains(english, "id=\"eui-words\">{\"words\":null,\"locale\":\"en\"}")
     set_request_cookie("locale", "fr")
     french = res_body(get("/app"))
-    assert_contains(french, "window.EUI_WORDS = {")
+    assert_contains(french, "id=\"eui-words\">{\"words\":{")
     assert_contains(french, "En attente de l'IA… {time}")
     assert_contains(french, "<option value=\"0\" selected>Do majeur / la mineur</option>")
   end

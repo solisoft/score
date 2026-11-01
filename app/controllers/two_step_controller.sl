@@ -36,6 +36,8 @@ class TwoStepController < SessionsController
       back = session_get("two_step_return").to_s
       @_forget_pending
       @_finish_sign_in(user, remember)
+      # This session passed the second step: the admin section asks for it.
+      SecondStep.mark(user)
       return redirect(back.blank? ? app_home_path() : back)
     end
 

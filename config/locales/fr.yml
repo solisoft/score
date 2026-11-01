@@ -344,8 +344,6 @@ fr:
       push_state_off: "Désactivées sur cet appareil."
       push_on_failed: "Impossible de les activer : {error}"
       push_off_failed: "Impossible de les désactiver : {error}"
-      push_sent_one: "Envoyé à {n} appareil."
-      push_sent_other: "Envoyé à {n} appareils."
       push_sent_none: "Rien n'a pu être envoyé : réactivez-les sur cet appareil."
       push_send_failed: "Envoi impossible : {error}"
       plan_on: "Vous êtes sur l'offre <strong>{plan}</strong>."
@@ -1365,8 +1363,6 @@ fr:
       photo_of: "Photo du {when}"
       photo_of_format: "%d/%m/%Y, %H:%M"
     oauth:
-      title: "Connecter {name}"
-      heading: "Connecter {name} ?"
       description: "Une application demande à accéder à vos partitions Score."
       asks_html: "<strong>{name}</strong> demande à accéder à vos partitions sur Score, en tant que <strong>{email}</strong>."
       can_list: "Lister et lire vos partitions"
@@ -1450,10 +1446,37 @@ fr:
   # (#540) security: engraving limits and MCP batches — keys under `security_540:` right below
   # ---
   # (#541) security: the OAuth server — keys under `security_541:` right below
+  security_541:
+    title: "Connecter {host}"
+    title_local: "Connecter une application de cet ordinateur"
+    heading: "{host} veut accéder à vos partitions, en se présentant comme « {name} »"
+    heading_local: "Une application de cet ordinateur veut accéder à vos partitions, en se présentant comme « {name} »"
+    name_unchecked: "Score ne vérifie pas ce nom : n'autorisez que si vous venez de demander à cette application de se connecter."
+    stale_title: "Cette demande a été remplacée"
+    stale_body: "Une autre demande de connexion a été lancée depuis l'affichage de cette page : rien n'a été autorisé. Recommencez depuis l'application qui demandait à se connecter."
+    outdated_title: "Cette page n'est plus à jour"
+    outdated_body: "Cette page n'est plus à jour : relancez la connexion depuis votre application. Rien n'a été autorisé."
   # ---
   # (#542) security: live sharing and rights — keys under `security_542:` right below
+  security_542:
+    trashed: "Cette partition est dans la corbeille."
+    push_taken: "Les notifications de cet appareil sont celles d'un autre compte : désactivez-les d'abord depuis ce compte."
   # ---
   # (#543) security: push, storage and export — keys under `security_543:` right below
+  security_543:
+    push_test_limited: "Trop de messages de test : réessayez dans une heure."
+    push_queued_one: "En route vers {n} appareil."
+    push_queued_other: "En route vers {n} appareils."
+    take_room_full: "Vos prises dépasseraient les {room} que garde votre offre : supprimez-en d'abord."
   # ---
   # (#544) security: CSP, configuration and admin — keys under `security_544:` right below
+  security_544:
+    admin_two_step_title: "Connexion en deux étapes requise"
+    admin_two_step_description: "L'administration s'ouvre à un administrateur qui se connecte en deux étapes."
+    admin_two_step_lead: "L'administration modifie les comptes des autres : elle ne s'ouvre qu'à un administrateur qui se connecte en deux étapes, pour qu'un mot de passe seul ne suffise jamais."
+    admin_two_step_do: "Activez la connexion en deux étapes dans votre compte pour utiliser l'administration."
+    admin_two_step_button: "Activer la connexion en deux étapes"
+    admin_two_step_unavailable: "Ce serveur ne peut pas encore garder les secrets de la connexion en deux étapes : la personne qui l'administre doit d'abord définir SOLI_ENCRYPTION_KEY."
+    admin_two_step_again: "Cette session a été ouverte sans votre code : avant d'activer la connexion en deux étapes, ou sur un navigateur mémorisé. Déconnectez-vous, puis reconnectez-vous avec le code de votre application d'authentification pour utiliser l'administration."
+    admin_two_step_sign_out: "Se déconnecter"
   # ---
