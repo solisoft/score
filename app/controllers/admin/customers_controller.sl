@@ -26,10 +26,14 @@ class AdminCustomersController < AdminBaseController
     @description = "Every account of the site."
   end
 
-  # GET /admin/customers/:id
+  # GET /admin/customers/:id — `scores_page`: the page of their scores (#626)
   def show
     @customer = User.find(params["id"])
     @picture = AdminReport.customer(@customer)
+    @scores_page = Score.page_number(params["scores_page"])
+    @scores = AdminReport.customer_scores(@customer, @scores_page)
+    # The scores others share with them, each read through its owner's page.
+    @shared_with = ScoreShare.shared_with(@customer)
     stripe_id = @customer.stripe_customer_id
     @invoices = stripe_id.blank? ? {
       "invoices": [],

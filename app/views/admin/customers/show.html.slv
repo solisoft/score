@@ -82,26 +82,58 @@
     <% end %>
   </section>
 
-  <section class="admin-panel">
-    <h2>Scores</h2>
-    <% if picture["scores"].length == 0 %>
-      <p class="admin-empty">No score.</p>
+  <%# Their scores (#626), each opened read only; the latest changed first. %>
+  <section class="admin-panel" id="scores">
+    <h2><%= t("admin_626.scores") %></h2>
+    <% if scores["scores"].length == 0 %>
+      <p class="admin-empty"><%= t("admin_626.no_score") %></p>
     <% else %>
       <div class="table-scroll">
         <table class="ref-table admin-table" data-customer-scores>
-          <thead><tr><th>Title</th><th>Changed</th><th>Made</th><th></th></tr></thead>
+          <thead><tr>
+            <th><%= t("admin_626.title") %></th>
+            <th><%= t("admin_626.updated") %></th>
+            <th><%= t("admin_626.visibility") %></th>
+            <th class="num"><%= t("admin_626.shared_with") %></th>
+            <th class="num"><%= t("admin_626.versions") %></th>
+            <th></th>
+          </tr></thead>
           <tbody>
-            <% for score in picture["scores"] %>
-              <tr>
-                <td><%= score.title %><% if score.composer.present? %> <span class="muted">— <%= score.composer %></span><% end %></td>
-                <td><%= admin_day(score.updated_at) %></td>
-                <td><%= admin_day(score.created_at) %></td>
-                <td><%= score.trashed_at.nil? ? "" : "In the trash" %></td>
+            <% for score in scores["scores"] %>
+              <tr data-customer-score="<%= score._key %>">
+                <td><a href="<%= admin_customer_score_path(customer._key, score._key) %>"><%= score.title %></a><% if score.composer.present? %> <span class="muted">— <%= score.composer %></span><% end %></td>
+                <td><%= time_ago(score.updated_at) %></td>
+                <td data-visibility="<%= score.visibility %>"><%= t("admin_626.visibility_" + (score.visibility ?? "private")) %></td>
+                <td class="num"><%= scores["shares"][score._key] ?? 0 %></td>
+                <td class="num"><%= scores["versions"][score._key] ?? 0 %></td>
+                <td><% unless score.trashed_at.nil? %><span class="admin-badge admin-badge-trouble" data-trashed><%= t("admin_626.in_trash") %></span><% end %></td>
               </tr>
             <% end %>
           </tbody>
         </table>
       </div>
+      <% if scores_page > 1 || scores["more"] %>
+        <nav class="admin-pager" aria-label="<%= t("admin_626.scores") %>">
+          <% if scores_page > 1 %><a class="btn btn-ghost" href="<%= admin_customer_path(customer) %>?scores_page=<%= scores_page - 1 %>#scores"><%= t("admin_626.newer") %></a><% end %>
+          <% if scores["more"] %><a class="btn btn-ghost" href="<%= admin_customer_path(customer) %>?scores_page=<%= scores_page + 1 %>#scores" data-more-scores><%= t("admin_626.more") %></a><% end %>
+        </nav>
+      <% end %>
+    <% end %>
+  </section>
+
+  <section class="admin-panel">
+    <h2><%= t("admin_626.shared_with_them") %></h2>
+    <% if shared_with.length == 0 %>
+      <p class="admin-empty"><%= t("admin_626.none_shared") %></p>
+    <% else %>
+      <ul data-shared-with-customer>
+        <% for shared in shared_with %>
+          <li>
+            <a href="<%= admin_customer_score_path(shared["score"].user_id, shared["score"]._key) %>"><%= shared["score"].title %></a>
+            <span class="muted">· <%= t("admin_626.owned_by", {"name": shared["owner"]}) %> · <%= t("admin_626.role_" + shared["role"].to_s) %></span>
+          </li>
+        <% end %>
+      </ul>
     <% end %>
   </section>
 

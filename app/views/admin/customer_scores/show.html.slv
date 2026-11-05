@@ -1,0 +1,54 @@
+<%# A customer's score as an admin reads it (#626): engraved, its LilyPond,
+    its people and its versions. Read only: no form, no editor. %>
+<section class="admin" data-admin="customer-score">
+  <%- partial("admin/head", {"heading": score.title, "current": "customers"}) %>
+
+  <section class="admin-panel">
+    <h2><%= t("admin_626.about_score") %></h2>
+    <%- partial("admin/customer_scores/facts", {"customer": customer, "score": score, "read_page": read_page}) %>
+  </section>
+
+  <section class="admin-panel" data-admin-score-figure>
+    <h2><%= t("admin_626.engraved") %></h2>
+    <%- score_figure(figure, {"name": score.file_name(), "title": score.title, "source": "none"}) %>
+  </section>
+
+  <section class="admin-panel">
+    <h2><%= t("admin_626.source") %></h2>
+    <div class="score-code"><pre data-admin-source><code><%- score_highlight(score.source) %></code></pre></div>
+  </section>
+
+  <div class="admin-panels">
+    <section class="admin-panel">
+      <h2><%= t("admin_626.shared_with_people", {"n": shares.length}) %></h2>
+      <% if shares.length == 0 %>
+        <p class="admin-empty"><%= t("admin_626.shared_with_nobody") %></p>
+      <% else %>
+        <ul data-admin-score-shares>
+          <% for share in shares %>
+            <li><%= share.email %> <span class="muted">· <%= t("admin_626.role_" + share.role.to_s) %></span></li>
+          <% end %>
+        </ul>
+      <% end %>
+    </section>
+
+    <section class="admin-panel">
+      <h2><%= t("admin_626.versions_count", {"n": versions.length}) %></h2>
+      <% if versions.length == 0 %>
+        <p class="admin-empty"><%= t("admin_626.no_version") %></p>
+      <% else %>
+        <ul data-admin-score-versions>
+          <% for version in versions %>
+            <li>
+              <a href="<%= admin_customer_score_version_path(customer._key, score._key, version._key) %>"><%= version.title %></a>
+              <span class="muted">· <%= time_ago(version.created_at) %> · <%= t("app.scores.versions.reason_" + version.reason.to_s) %><% unless authors[version.author_id.to_s].nil? %> · <%= authors[version.author_id.to_s] %><% end %></span>
+            </li>
+          <% end %>
+        </ul>
+      <% end %>
+    </section>
+  </div>
+</section>
+<script defer src="<%= public_path("js/score.js") %>" data-player="<%= public_path("eui-score/player.js") %>"
+  data-engine="<%= public_path("eui-score/eui-score.js") %>" data-model="<%= public_path("eui-score/score-model.js") %>" data-feel="<%= public_path("eui-score/feel.js") %>" data-velocity="<%= public_path("eui-score/velocity.js") %>"
+  data-musicxml="<%= public_path("eui-score/musicxml.js") %>"></script>

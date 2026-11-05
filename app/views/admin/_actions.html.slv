@@ -1,5 +1,6 @@
 <%# What the admins did (`actions`, AdminAction rows, #544), with the name of
-    each account they were done to (`names`, key to name). %>
+    each account they were done to (`names`, key to name). A score read
+    (#626) links to the admin's view of it, its owner beside it. %>
 <% if actions.length == 0 %>
   <p class="admin-empty">Nothing done by an admin yet.</p>
 <% else %>
@@ -11,12 +12,16 @@
           <tr data-admin-action="<%= action.action %>">
             <td><%= admin_day(action.created_at) %></td>
             <td><%= action.admin_email %></td>
-            <td><%= action.summary() %></td>
+            <% if action.target_type == "score" %>
+              <td><a href="<%= admin_customer_score_path(action.account_key(), action.target_id) %>" data-viewed-score><%= action.summary() %></a></td>
+            <% else %>
+              <td><%= action.summary() %></td>
+            <% end %>
             <td>
-              <% if action.target_type == "user" %>
-                <a href="<%= admin_customer_path(action.target_id) %>"><%= names[action.target_id] ?? action.target_id %></a>
-              <% else %>
+              <% if action.account_key().nil? %>
                 <a href="<%= admin_reports_path() %>">A report</a>
+              <% else %>
+                <a href="<%= admin_customer_path(action.account_key()) %>"><%= names[action.account_key()] ?? action.account_key() %></a>
               <% end %>
             </td>
           </tr>
