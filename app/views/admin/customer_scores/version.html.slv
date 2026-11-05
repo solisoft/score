@@ -1,0 +1,28 @@
+<%# One version of a customer's score, as an admin reads it (#626): engraved
+    and its LilyPond. Read only: nothing here restores or copies it. %>
+<section class="admin" data-admin="customer-score-version">
+  <%- partial("admin/head", {"heading": version.title, "current": "customers"}) %>
+
+  <section class="admin-panel">
+    <h2><%= t("admin_626.about_version") %></h2>
+    <p class="admin-note" data-admin-read-only><%= t("admin_626.read_only") %></p>
+    <dl class="account-facts">
+      <dt><%= t("admin_626.kept") %></dt><dd><%= time_ago(version.created_at) %> · <%= t("app.scores.versions.reason_" + version.reason.to_s) %></dd>
+      <dt><%= t("admin_626.of_score") %></dt><dd><a href="<%= admin_customer_score_path(customer._key, score._key) %>" data-admin-back-to-score><%= score.title %></a></dd>
+      <dt><%= t("admin_626.owner") %></dt><dd><a href="<%= admin_customer_path(customer) %>"><%= customer.display_name %></a></dd>
+    </dl>
+  </section>
+
+  <section class="admin-panel" data-admin-score-figure>
+    <h2><%= t("admin_626.engraved") %></h2>
+    <%- score_figure(figure, {"name": score.file_name(), "title": version.title, "source": "none"}) %>
+  </section>
+
+  <section class="admin-panel">
+    <h2><%= t("admin_626.source") %></h2>
+    <div class="score-code"><pre data-admin-source><code><%- score_highlight(version.source) %></code></pre></div>
+  </section>
+</section>
+<script defer src="<%= public_path("js/score.js") %>" data-player="<%= public_path("eui-score/player.js") %>"
+  data-engine="<%= public_path("eui-score/eui-score.js") %>" data-model="<%= public_path("eui-score/score-model.js") %>" data-feel="<%= public_path("eui-score/feel.js") %>" data-velocity="<%= public_path("eui-score/velocity.js") %>"
+  data-musicxml="<%= public_path("eui-score/musicxml.js") %>"></script>

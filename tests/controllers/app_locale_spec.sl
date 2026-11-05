@@ -106,9 +106,12 @@ describe("AppLocale") do
     assert_eq(AppLocale.pick("", "xx"), "en")
   end
 
-  test("app_path? is /app and what is under it") do
+  test("app_path? is /app, /admin and what is under them") do
     assert(AppLocale.app_path?("/app"))
     assert(AppLocale.app_path?("/app/account"))
+    assert(AppLocale.app_path?("/admin"))
+    assert(AppLocale.app_path?("/admin/customers"))
+    assert_not(AppLocale.app_path?("/administration"))
     assert_not(AppLocale.app_path?("/apple"))
     assert_not(AppLocale.app_path?("/fr/pricing"))
   end

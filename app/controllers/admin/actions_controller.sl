@@ -5,10 +5,10 @@ class AdminActionsController < AdminBaseController
   # GET /admin/actions
   def index
     @actions = AdminAction.latest
-    on_accounts = @actions.filter do |action|
-      action.target_type == "user"
-    end
-    @names = User.names_of(on_accounts.map(&:target_id))
+    # The accounts named: those acted on, and the owners of the scores read (#626).
+    @names = User.names_of(@actions.map(&:account_key).filter(&{ |key|
+      !key.nil?
+    }))
     @title = "Activity · Admin"
     @description = "What the admins did."
   end

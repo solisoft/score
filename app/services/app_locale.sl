@@ -2,9 +2,12 @@
 # every page under /app. English or French; the choice made on this browser
 # (the `locale` cookie) first, else the one the account keeps, else English.
 class AppLocale
-  # Whether `path` is a page of the app.
+  # Whether `path` is a page of the app — the admin section (/admin) among
+  # them: it speaks the app's language too (#626).
   static def app_path?(path)
-    path == "/app" || path.starts_with?("/app/")
+    ["/app", "/admin"].any? do |prefix|
+      path == prefix || path.starts_with?(prefix + "/")
+    end
   end
 
   # The language of the app for a browser that chose `chosen` (nil when it

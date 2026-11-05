@@ -245,6 +245,13 @@ middleware("require_app_database", fn() {
       post("/admin/customers/:id/gift/stop", "admin/customers#stop_gift", name: "admin_customer_stop_gift")
       post("/admin/customers/:id/unlock", "admin/customers#unlock", name: "admin_customer_unlock")
       post("/admin/customers/:id/confirm", "admin/customers#confirm", name: "admin_customer_confirm")
+      # A customer's score, read only (#626): each read kept as an AdminAction.
+      get("/admin/customers/:id/scores/:score_id", "admin/customer_scores#show", name: "admin_customer_score")
+      get(
+        "/admin/customers/:id/scores/:score_id/versions/:version_id",
+        "admin/customer_scores#version",
+        name: "admin_customer_score_version"
+      )
       get("/admin/payments", "admin/payments#index", name: "admin_payments")
       # The shared library's reports (#444).
       get("/admin/reports", "admin/reports#index", name: "admin_reports")

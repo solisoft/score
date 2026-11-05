@@ -163,18 +163,62 @@ class AdminReport
     counts
   end
 
-  # One customer's picture: their scores (the latest first, out of the
-  # trash and in it), the bytes of their audio takes, the Stripe events
-  # about them.
+  # One customer's picture: how many scores they have out of the trash
+  # (the list itself is `customer_scores`), the bytes of their audio
+  # takes, the Stripe events about them.
   static def customer(user)
     mine = {"user": user._key}
     {
-      "scores": Score.listed(Score.where("doc.user_id == @user", mine)).order("updated_at", "desc").limit(50).all,
       "score_count": Score.where("doc.user_id == @user AND doc.trashed_at == null", mine).count,
       "take_bytes": ScoreTake.bytes_of(user),
       "names": User.names_in([user]),
       "events": StripeEvent.where("doc.user_id == @user", mine).order("received_at", "desc").limit(20).all
     }
+  end
+
+  # Page `page` (from 1) of the scores `user` owns, in the trash or not, the
+  # latest changed first (#626): each as a list shows it, without its
+  # source, with how many people it is shared with and how many versions
+  # it keeps — {"scores", "shares", "versions", "more"}, the counts by the
+  # score's key. Two round-trips however many there are: the page, then
+  # its two counts together.
+  static def customer_scores(user, page)
+    first = (Score.page_number(page) - 1) * ADMIN_PAGE_SIZE
+    rows = Score.where("doc.user_id == @user", {"user": user._key}).select(
+      "title",
+      "composer",
+      "user_id",
+      "updated_at",
+      "created_at",
+      "trashed_at",
+      "visibility"
+    ).order("updated_at", "desc").offset(first).limit(ADMIN_PAGE_SIZE + 1).all
+    more = rows.length > ADMIN_PAGE_SIZE
+    scores = more ? rows.slice(0, ADMIN_PAGE_SIZE) : rows
+    keys = scores.map(&:_key)
+    share_rows = []
+    version_rows = []
+    if keys.length > 0
+      grouped(fn() {
+        share_rows = ScoreShare.where("doc.score_id IN @keys", {"keys": keys}).group_by("score_id").all
+        version_rows = ScoreVersion.where("doc.score_id IN @keys", {"keys": keys}).group_by("score_id").all
+      })
+    end
+    {
+      "scores": scores,
+      "shares": AdminReport.counted(share_rows),
+      "versions": AdminReport.counted(version_rows),
+      "more": more
+    }
+  end
+
+  # Grouped counts (rows of {"score_id", "n"}) as each score's key to its count.
+  static def counted(rows)
+    counts = {}
+    rows.each do |row|
+      counts[row["score_id"]] = row["n"]
+    end
+    counts
   end
 
   # --- Payments ---------------------------------------------------------------

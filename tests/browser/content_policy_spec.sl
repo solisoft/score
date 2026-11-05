@@ -138,4 +138,35 @@ describe("The Content-Security-Policy, in a browser") do
     wait_for("#new-score")
     csp_none_refused("back to /app")
   end
+
+  test("the admin: a customer's scores, and one read with its engraving (#626)") do
+    customer = User.new()
+    customer.email = "csp-customer-#{uuid_v4}@example.com"
+    customer.set_password(CSP_BROWSER_PASSWORD)
+    customer.confirmed_at = DateTime.utc.to_unix
+    customer.save
+    score = Score.start(User.find_by("email", customer.email), CSP_BROWSER_SOURCE)
+    email = "csp-admin-#{uuid_v4}@example.com"
+    admin = User.new()
+    admin.email = email
+    admin.role = "admin"
+    admin.set_password(CSP_BROWSER_PASSWORD)
+    admin.confirmed_at = DateTime.utc.to_unix
+    admin.save
+    secret = User.find_by("email", email).start_two_step
+    User.find_by("email", email).confirm_two_step(Crypto.totp_generate(secret, DateTime.utc.to_unix, 30))
+    login(email, CSP_BROWSER_PASSWORD)
+    post("/login/code", {"code": Crypto.totp_generate(secret, DateTime.utc.to_unix + 30, 30)})
+
+    visit("/admin")
+    wait_for("[data-admin=\"dashboard\"]")
+    csp_watch()
+    csp_go("/admin/customers/#{score.user_id}")
+    wait_for("[data-customer-scores]")
+    csp_none_refused("a customer's scores")
+    csp_go("/admin/customers/#{score.user_id}/scores/#{score._key}")
+    wait_for("[data-admin-score-figure] svg", {"timeout": 20})
+    csp_none_refused("a customer's score, read by an admin")
+    assert_no_page_errors()
+  end
 end

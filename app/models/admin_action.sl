@@ -4,6 +4,10 @@
 # to an account can always be traced to the admin who made it. Written by
 # the actions themselves, never edited, read back on a customer's page and
 # in the admin section's list (/admin/actions).
+#
+# A customer's score read by an admin is kept too ("view_score", #626):
+# nothing changes, but someone else's music was opened — the score is the
+# target, its owner in the details, so the owner's page lists it.
 const ADMIN_ACTIONS_SHOWN = 100
 const ADMIN_ACTION_KINDS = [
   "gift",
@@ -13,7 +17,8 @@ const ADMIN_ACTION_KINDS = [
   "report_hide",
   "report_show",
   "report_remove",
-  "report_dismiss"
+  "report_dismiss",
+  "view_score"
 ]
 
 class AdminAction < Model
@@ -38,9 +43,15 @@ class AdminAction < Model
     })
   end
 
-  # What was done to one account or report, the latest first.
+  # What was done to one account or report, the latest first — for an
+  # account, its scores read by an admin among them (#626). The owner is
+  # read as details['owner']: the query builder rewrites a second dotted
+  # step (details.owner) to details.doc.owner, which matches nothing.
   static def about(target_id)
-    AdminAction.where({"target_id": target_id.to_s}).order("at", "desc").limit(ADMIN_ACTIONS_SHOWN).all
+    AdminAction.where(
+      "doc.target_id == @target OR (doc.target_type == 'score' AND doc.details['owner'] == @target)",
+      {"target": target_id.to_s}
+    ).order("at", "desc").limit(ADMIN_ACTIONS_SHOWN).all
   end
 
   # The latest actions, of every admin on everything.
@@ -58,7 +69,27 @@ class AdminAction < Model
     return "Unlocked signing in" if @action == "unlock"
     return "Confirmed the address" if @action == "confirm"
     return "Report: #{outcome}" if @action.starts_with?("report_") && !outcome.nil?
+    return @_viewed(details) if @action == "view_score"
 
     @action
+  end
+
+  # The account a line is about: the target for an account, the owner for
+  # one of its scores read (#626); nil for a report.
+  def account_key
+    return @target_id if @target_type == "user"
+    return (@details ?? {})["owner"] if @target_type == "score"
+
+    nil
+  end
+
+  private
+
+  # "Read the score “Title”", or one of its versions, in the admin's language.
+  def _viewed(details)
+    title = details["title"].to_s
+    return SiteText.t("admin_626.viewed_version", {"title": title}) unless details["version"].blank?
+
+    SiteText.t("admin_626.viewed_score", {"title": title})
   end
 end
