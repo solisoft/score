@@ -15,7 +15,9 @@ class AdminCustomerScoresController < AdminBaseController
     @versions = ScoreVersion.history(@score)
     @authors = ScoreVersion.authors_of(@versions)
     @shares = ScoreShare.of(@score)
-    @read_page = @score.trashed? || @score.visibility == "private" ? nil : shared_score_path(this.score.share_token)
+    # Only a score open by link or to everyone, out of the trash, has a read page.
+    by_link = ["link", "public"].includes?(@score.visibility) && !@score.trashed?
+    @read_page = by_link ? shared_score_path(this.score.share_token) : nil
     @_record({})
     @title = "#{this.score.title} · Admin"
     @description = "One score of an account, read only."

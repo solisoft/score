@@ -6,7 +6,7 @@
   <dt><%= t("admin_626.title") %></dt><dd data-admin-score-title><%= score.title %></dd>
   <% if score.composer.present? %><dt><%= t("admin_626.composer") %></dt><dd><%= score.composer %></dd><% end %>
   <dt><%= t("admin_626.owner") %></dt><dd><a href="<%= admin_customer_path(customer) %>"><%= customer.display_name %></a></dd>
-  <dt><%= t("admin_626.visibility") %></dt><dd data-admin-visibility="<%= score.visibility %>"><%= t("admin_626.visibility_" + score.visibility.to_s) %></dd>
+  <dt><%= t("admin_626.visibility") %></dt><dd data-admin-visibility="<%= score.visibility ?? "private" %>"><%= t("admin_626.visibility_" + (score.visibility ?? "private")) %></dd>
   <dt><%= t("admin_626.updated") %></dt><dd><%= time_ago(score.updated_at) %></dd>
   <% unless score.trashed_at.nil? %>
     <dt><%= t("admin_626.trash") %></dt><dd><span class="admin-badge admin-badge-trouble" data-admin-trashed><%= t("admin_626.in_trash_since", {"when": time_ago(score.trashed_at)}) %></span></dd>
