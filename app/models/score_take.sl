@@ -221,5 +221,4 @@ class ScoreTake < Model
   static def blobs
     __soli_resolve_solidb_client()
   end
-
 end

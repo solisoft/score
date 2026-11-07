@@ -428,7 +428,11 @@ describe("The admin section") do
       Score.start(composer, Score.blank_source("Two"))
       Score.start(composer, Score.blank_source("Binned")).move_to_trash
       quiet = admin_spec_user("member", "Quiet-#{uuid_v4}")
-      assert_eq(AdminReport.score_counts([composer, quiet, admin]), {composer._key: 2})
+      assert_eq(AdminReport.score_counts([
+        composer,
+        quiet,
+        admin
+      ]), {composer._key: 2})
       assert_eq(AdminReport.score_counts([]), {})
       admin_spec_sign_in(admin)
       response = get("/admin/customers?q=#{url_encode(composer.name.downcase)}")

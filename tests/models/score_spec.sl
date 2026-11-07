@@ -491,12 +491,20 @@ describe("Score, its composer and its pages") do
     assert_eq(one_by_one.call_count("where"), 1, "the versions of all four, in one statement")
     thrown.each do |score|
       assert_null(Score.find_by("_key", score._key))
-      assert_eq(remains_of(score), [0, 0, 0])
+      assert_eq(remains_of(score), [
+        0,
+        0,
+        0
+      ])
       assert_eq(ScoreThread.where({"score_id": score._key}).count, 0)
       assert_eq(ScoreComment.where({"score_id": score._key}).count, 0)
       assert_eq(UserNotification.where({"score_id": score._key}).count, 0)
     end
-    assert_eq(remains_of(kept), [1, 1, 1])
+    assert_eq(remains_of(kept), [
+      1,
+      1,
+      1
+    ])
     assert_eq(Score.erase_keys([]), 0)
   end
 end

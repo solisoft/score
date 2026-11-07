@@ -80,17 +80,71 @@ describe("ScoreShare, once a score and an address (#689)") do
 
   test("the shares made twice before are merged: the oldest kept, with the stronger role") do
     rows = [
-      {"key": "a1", "score_id": "s1", "email": "x@example.com", "role": "read"},
-      {"key": "a2", "score_id": "s1", "email": "x@example.com", "role": "write"},
-      {"key": "a3", "score_id": "s1", "email": "x@example.com", "role": "read"},
-      {"key": "b1", "score_id": "s1", "email": "y@example.com", "role": "read"},
-      {"key": "c1", "score_id": "s2", "email": "x@example.com", "role": "write"},
-      {"key": "c2", "score_id": "s2", "email": "x@example.com", "role": "read"},
-      {"key": "d1", "score_id": "s3", "email": "z@example.com", "role": "read"},
-      {"key": "d2", "score_id": "s3", "email": "z@example.com", "role": "read"}
+      {
+        "key": "a1",
+        "score_id": "s1",
+        "email": "x@example.com",
+        "role": "read"
+      },
+      {
+        "key": "a2",
+        "score_id": "s1",
+        "email": "x@example.com",
+        "role": "write"
+      },
+      {
+        "key": "a3",
+        "score_id": "s1",
+        "email": "x@example.com",
+        "role": "read"
+      },
+      {
+        "key": "b1",
+        "score_id": "s1",
+        "email": "y@example.com",
+        "role": "read"
+      },
+      {
+        "key": "c1",
+        "score_id": "s2",
+        "email": "x@example.com",
+        "role": "write"
+      },
+      {
+        "key": "c2",
+        "score_id": "s2",
+        "email": "x@example.com",
+        "role": "read"
+      },
+      {
+        "key": "d1",
+        "score_id": "s3",
+        "email": "z@example.com",
+        "role": "read"
+      },
+      {
+        "key": "d2",
+        "score_id": "s3",
+        "email": "z@example.com",
+        "role": "read"
+      }
     ]
-    assert_eq(ScoreShare.duplicates_in(rows), {"to_write": ["a1"], "gone": ["a2", "a3", "c2", "d2"]})
-    assert_eq(ScoreShare.duplicates_in([]), {"to_write": [], "gone": []})
-    assert_eq(ScoreShare.duplicates_in(rows.slice(3, 5)), {"to_write": [], "gone": []})
+    assert_eq(
+      ScoreShare.duplicates_in(rows),
+      {"to_write": ["a1"], "gone": [
+        "a2",
+        "a3",
+        "c2",
+        "d2"
+      ]}
+    )
+    assert_eq(
+      ScoreShare.duplicates_in([]),
+      {"to_write": [], "gone": []}
+    )
+    assert_eq(
+      ScoreShare.duplicates_in(rows.slice(3, 5)),
+      {"to_write": [], "gone": []}
+    )
   end
 end

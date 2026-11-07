@@ -40,7 +40,10 @@ end
 # The shares made twice merged (ScoreShare.duplicates_in): how many went.
 # Through `db`, the database migrated; none on a server that never shared.
 def _merge_shares_689(db)
-  return 0 unless db.list_collections().includes?("score_shares")
+  shared = db.list_collections().any? do |collection|
+    collection["name"] == "score_shares"
+  end
+  return 0 unless shared
 
   rows = db.query("FOR s IN score_shares SORT s.score_id ASC, s.email ASC, s.created_at ASC, s._key ASC "
   + "RETURN {\"key\": s._key, \"score_id\": s.score_id, \"email\": s.email, \"role\": s.role}")
@@ -49,7 +52,8 @@ def _merge_shares_689(db)
   plan = ScoreShare.duplicates_in(rows)
   # The keys are the database's own: written into the query as they are.
   if plan["to_write"].length > 0
-    db.query("FOR s IN score_shares FILTER s._key IN #{plan["to_write"].to_json} UPDATE s WITH {role: \"write\"} IN score_shares")
+    keys = plan["to_write"].to_json
+    db.query("FOR s IN score_shares FILTER s._key IN #{keys} UPDATE s WITH {role: \"write\"} IN score_shares")
   end
   if plan["gone"].length > 0
     db.query("FOR s IN score_shares FILTER s._key IN #{plan["gone"].to_json} REMOVE s IN score_shares")

@@ -40,10 +40,16 @@ class ScoreShare < Model
     return {"error": SiteText.t("app.scores.invite.own_address")} if !owner.nil? && owner.email == address
     return {"error": SiteText.t("app.scores.invite.choose_role")} unless SCORE_SHARE_ROLES.includes?(role)
 
-    share = ScoreShare.written(score, address, role, ScoreShare.where({"score_id": score._key, "email": address}).first)
+    share = ScoreShare.written(score, address, role, ScoreShare.where({
+      "score_id": score._key,
+      "email": address
+    }).first)
     return share unless share.nil?
 
-    share = ScoreShare.written(score, address, role, ScoreShare.where({"score_id": score._key, "email": address}).first, true)
+    share = ScoreShare.written(score, address, role, ScoreShare.where({
+      "score_id": score._key,
+      "email": address
+    }).first, true)
     return share unless share.nil?
 
     {"error": SiteText.t("app.scores.invite.not_an_email")}

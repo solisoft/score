@@ -148,9 +148,12 @@ describe("A long score in the editor (#689)") do
     # Many notes lit since, on the same picture: no new engraving, no picture swapped in.
     assert(evaluate("document.querySelector('.studio-svg svg') === window.drawnSvg"), "the same picture")
     assert(engravings() - started <= 1, "at most the one engraving of the notes' coloured copies")
-    lit = evaluate("[...document.querySelectorAll('.studio-svg svg > .studio-playing [fill]')].map((e) => e.getAttribute('fill'))")
+    lit = evaluate("[...document.querySelectorAll('.studio-svg svg > .studio-playing [fill]')]"
+    + ".map((e) => e.getAttribute('fill'))")
     assert(lit.length > 0, "the notes playing drawn over the score")
-    assert(lit.all?(&{ |fill| fill == "#0f9d47" }), "in the colour of the notes playing")
+    assert(lit.all?(&{ |fill|
+      fill == "#0f9d47"
+    }), "in the colour of the notes playing")
     # One group only, the notes before it no longer lit.
     assert_eq(evaluate("document.querySelectorAll('.studio-svg svg > .studio-playing').length"), 1)
     # The band over what sounds follows them.
@@ -158,7 +161,11 @@ describe("A long score in the editor (#689)") do
     evaluate("document.querySelector('[data-act=\"stop\"]').click()")
     long_wait("document.querySelector('#studio').studio.playing === null")
     sleep(0.3)
-    assert_eq(evaluate("document.querySelectorAll('.studio-svg svg .studio-playing').length"), 0, "unlit once stopped")
+    assert_eq(
+      evaluate("document.querySelectorAll('.studio-svg svg .studio-playing').length"),
+      0,
+      "unlit once stopped"
+    )
     assert_no_page_errors()
   end
 end

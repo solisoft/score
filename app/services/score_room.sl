@@ -405,7 +405,10 @@ class ScoreRoom
     shares = []
     unless score.nil?
       emails = users.map(&:email)
-      shares = ScoreShare.where("doc.score_id == @score AND doc.email IN @emails", {"score": score._key, "emails": emails}).all
+      shares = ScoreShare.where(
+        "doc.score_id == @score AND doc.email IN @emails",
+        {"score": score._key, "emails": emails}
+      ).all
     end
     users.each do |user|
       found["users"][user._key] = user

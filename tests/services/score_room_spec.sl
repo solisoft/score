@@ -744,7 +744,10 @@ end
 
 # `user`'s tab in the room, in as `role`.
 def room_tab(user, role)
-  {"user_id": user._key, "metas": [{"connection_id": "#{user._key}-#{role}", "role": role}]}
+  {"user_id": user._key, "metas": [{
+    "connection_id": "#{user._key}-#{role}",
+    "role": role
+  }]}
 end
 
 describe("ScoreRoom, read in a few queries however many are in it (#689)") do
@@ -761,7 +764,8 @@ describe("ScoreRoom, read in a few queries however many are in it (#689)") do
     stranger = room_user()
     presences = writers.map do |writer|
       room_tab(writer, "edit")
-    end + [room_tab(owner, "edit"), room_tab(reader, "edit"), room_tab(reader, "listen"), room_tab(stranger, "edit")]
+    end
+    + [room_tab(owner, "edit"), room_tab(reader, "edit"), room_tab(reader, "listen"), room_tab(stranger, "edit")]
     one_by_one = Mock.spy_class(User, "find_by")
     their_share = Mock.spy_class(ScoreShare, "role_for")
     delivery = ScoreRoom.delivery(score, presences)
@@ -770,7 +774,8 @@ describe("ScoreRoom, read in a few queries however many are in it (#689)") do
     # What each hears is what it was: the editors stay; the reader's editor and the stranger go.
     sent = writers.map do |writer|
       "#{writer._key}-edit"
-    end + ["#{owner._key}-edit", "#{reader._key}-listen"]
+    end
+    + ["#{owner._key}-edit", "#{reader._key}-listen"]
     assert_eq(delivery["send"], sent)
     assert_eq(delivery["close"], ["#{reader._key}-edit", "#{stranger._key}-edit"])
   end
@@ -779,13 +784,24 @@ describe("ScoreRoom, read in a few queries however many are in it (#689)") do
     owner = room_user()
     score = Score.start(owner, Score.blank_source("Lobby read"))
     score.make_visible("link")
-    listeners = lobby_listeners(score, ["guest-1", "guest-2", "guest-3"])
+    listeners = lobby_listeners(score, [
+      "guest-1",
+      "guest-2",
+      "guest-3"
+    ])
     users = Mock.spy_class(User, "where")
     looked_up = Mock.spy_class(User, "find_by")
-    assert_eq(ScoreRoom.delivery(score, listeners, true)["send"], ["guest-1", "guest-2", "guest-3"])
+    assert_eq(ScoreRoom.delivery(score, listeners, true)["send"], [
+      "guest-1",
+      "guest-2",
+      "guest-3"
+    ])
     users.assert_not_received("where")
     looked_up.assert_not_received("find_by")
-    assert_eq(ScoreRoom.people_in(score, listeners), {"users": {}, "roles": {}})
+    assert_eq(
+      ScoreRoom.people_in(score, listeners),
+      {"users": {}, "roles": {}}
+    )
   end
 
   test("a cursor is relayed on the access found at most SCORE_ROOM_RECHECK_SECONDS ago, then read again") do
@@ -795,8 +811,18 @@ describe("ScoreRoom, read in a few queries however many are in it (#689)") do
     ScoreShare.invite(score, friend.email, "write")
     now = DateTime.utc.to_unix
     entered = ScoreRoom.signed(ScoreRoom.ticket(score, friend, now))
-    presences = [{"user_id": friend._key, "metas": [{"connection_id": "friend-tab", "name": friend.email}]}]
-    event = cursor_event("friend-tab", {"event": "cursor", "lane": 0, "bars": [1, 2]})
+    presences = [{"user_id": friend._key, "metas": [{
+      "connection_id": "friend-tab",
+      "name": friend.email
+    }]}]
+    event = cursor_event(
+      "friend-tab",
+      {
+        "event": "cursor",
+        "lane": 0,
+        "bars": [1, 2]
+      }
+    )
     assert_not_null(ScoreRoom.relay_cursor(event, entered, presences, now)["broadcast_channel"])
     # The share taken away behind the room's back (no callback: a bulk delete).
     ScoreShare.where({"score_id": score._key, "email": friend.email}).delete_all
@@ -823,16 +849,36 @@ describe("ScoreRoom, read in a few queries however many are in it (#689)") do
     ScoreShare.invite(score, friend.email, "write")
     now = DateTime.utc.to_unix
     entered = ScoreRoom.signed(ScoreRoom.ticket(score, friend, now))
-    presences = [{"user_id": friend._key, "metas": [{"connection_id": "friend-tab", "name": friend.email}]}]
-    event = cursor_event("friend-tab", {"event": "cursor", "lane": 0, "bars": [0, 0]})
+    presences = [{"user_id": friend._key, "metas": [{
+      "connection_id": "friend-tab",
+      "name": friend.email
+    }]}]
+    event = cursor_event(
+      "friend-tab",
+      {
+        "event": "cursor",
+        "lane": 0,
+        "bars": [0, 0]
+      }
+    )
     assert_not_null(ScoreRoom.relay_cursor(event, entered, presences, now)["broadcast_channel"])
     # Lowered to read only: no longer one who works in the room.
     ScoreShare.invite(score, friend.email, "read")
     assert_eq(ScoreRoom.relay_cursor(event, entered, presences, now + 1), {})
     ScoreShare.invite(score, friend.email, "write")
     owners = ScoreRoom.signed(ScoreRoom.ticket(score, owner, now))
-    mine = [{"user_id": owner._key, "metas": [{"connection_id": "owner-tab", "name": owner.email}]}]
-    owner_event = cursor_event("owner-tab", {"event": "cursor", "lane": 0, "bars": [0, 0]})
+    mine = [{"user_id": owner._key, "metas": [{
+      "connection_id": "owner-tab",
+      "name": owner.email
+    }]}]
+    owner_event = cursor_event(
+      "owner-tab",
+      {
+        "event": "cursor",
+        "lane": 0,
+        "bars": [0, 0]
+      }
+    )
     assert_not_null(ScoreRoom.relay_cursor(owner_event, owners, mine, now + 2)["broadcast_channel"])
     score.move_to_trash
     assert_eq(ScoreRoom.relay_cursor(owner_event, owners, mine, now + 3), {})

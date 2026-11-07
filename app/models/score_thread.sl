@@ -297,5 +297,4 @@ class ScoreThread < Model
       keys.includes?(view["id"])
     end
   end
-
 end

@@ -12,6 +12,15 @@ class Changelog
     [
       {"date": "2026-11-07", "entries": [
         {
+          "area": "editor",
+          "title": "Long scores edit and play faster",
+          "text": "On a long score, each change is now drawn once instead of twice, and the notes light up as the "
+          + "music plays without the whole score being drawn again for each one: a 400-bar quartet keeps scrolling "
+          + "smoothly while it plays, and starts sooner. Opening, saving and sharing a long score ask less of the "
+          + "server too, and the account page opens without sizing your data export first.",
+          "link": "playground"
+        },
+        {
           "area": "site",
           "title": "Signing out clears what the browser kept of your scores",
           "text": "Signing out now also takes the undo history the editor keeps in the browser for each of your "
