@@ -25,7 +25,8 @@ def auth_letter(user, kind, locale, extra = {})
   args = {
     "kind": kind,
     "email": user.email,
-    "locale": locale
+    "locale": locale,
+    "letter": uuid_v7()
   }.merge(extra)
   previous = I18n.locale()
   I18n.set_locale(AuthMailJob.locale_of(args))
@@ -34,6 +35,37 @@ def auth_letter(user, kind, locale, extra = {})
   letter = AuthMailJob.letter(User.find(user._key), due)
   I18n.set_locale(previous)
   letter
+end
+
+# A message as a mailer's, which the mail server takes or, `refused`,
+# refuses — on purpose, and its warning says so: CI fails on any other
+# "could not be sent" in the suite's log (#671).
+class AuthMailStandIn
+  def deliver_now
+    throw "550 mailbox unavailable (on purpose: auth_mail_job_spec)" if @refused
+
+    true
+  end
+end
+
+# One attempt of the job of `args`, as the worker makes it, its message a
+# stand-in the mail server takes or refuses (`refused`); the link the
+# letter carried is pushed on `links`.
+def auth_mail_attempt(args, refused, links)
+  AuthMailJob.send_for(args, fn(user, letter) {
+    links.push(letter["links"]["reset_url"] ?? letter["links"]["confirm_url"])
+    AuthMailStandIn.new({"refused": refused})
+  })
+end
+
+# The arguments `ask` queues for a letter of `kind` to `user`.
+def auth_mail_args(user, kind)
+  {
+    "kind": kind,
+    "email": user.email,
+    "locale": "en",
+    "letter": uuid_v7()
+  }
 end
 
 # Every link of `letter` goes to the site's own address.
@@ -226,5 +258,141 @@ describe("AuthMailJob") do
       }
     )
     assert_null(User.find(user._key).reset_token_digest, "no link made")
+  end
+end
+
+# A mail that cannot leave fails the job, and the queue tries it again
+# (#671); the attempts of one letter carry one link, never a new one that
+# would kill the link of a mail that left all the same (#671's review).
+describe("AuthMailJob, a mail that could not leave") do
+  before_each() do
+    I18n.set_locale("en")
+  end
+
+  test("fails the job, with the mail server's own words; sent, it answers so") do
+    user = auth_mail_user()
+    args = auth_mail_args(user, "reset")
+    links = []
+    error = assert_raises("reset email could not be sent: ") do
+      auth_mail_attempt(args, true, links)
+    end
+    assert_contains(error, "550 mailbox unavailable")
+    assert_eq(links.length, 1, "the message was built")
+    sent = auth_mail_attempt(args, false, links)
+    assert_eq(
+      sent,
+      {
+        "found": true,
+        "due": true,
+        "sent": true
+      }
+    )
+  end
+
+  test("every retry of a reset carries the first attempt's link, which stays good") do
+    user = auth_mail_user()
+    args = auth_mail_args(user, "reset")
+    links = []
+    assert_raises("could not be sent") do
+      auth_mail_attempt(args, true, links)
+    end
+    first = User.find(user._key)
+    assert_raises("could not be sent") do
+      auth_mail_attempt(args, true, links)
+    end
+    auth_mail_attempt(args, false, links)
+    assert_eq(links.length, 3)
+    assert_eq(links[1], links[0], "the second attempt's link")
+    assert_eq(links[2], links[0], "the one that left")
+    stored = User.find(user._key)
+    assert_eq(stored.reset_token_digest, first.reset_token_digest, "the first link is the account's")
+    assert_eq(stored.reset_token_digest, Crypto.sha256(links[0].split("token=")[1]))
+    assert_eq(stored.reset_sent_at, first.reset_sent_at, "its time unchanged")
+    assert_eq(stored.reset_letter, args["letter"])
+  end
+
+  test("a confirmation link too") do
+    user = auth_mail_user(false)
+    args = auth_mail_args(user, "confirm")
+    links = []
+    assert_raises("confirm email could not be sent") do
+      auth_mail_attempt(args, true, links)
+    end
+    auth_mail_attempt(args, false, links)
+    assert_eq(links[1], links[0])
+    assert_eq(User.find(user._key).confirmation_token_digest, Crypto.sha256(links[0].split("token=")[1]))
+  end
+
+  test("a retry after the link was followed sends nothing, and makes none") do
+    user = auth_mail_user()
+    args = auth_mail_args(user, "reset")
+    links = []
+    assert_raises("could not be sent") do
+      auth_mail_attempt(args, true, links)
+    end
+    User.find(user._key).finish_password_reset("another long password")
+    assert_eq(
+      auth_mail_attempt(args, false, links),
+      {
+        "found": true,
+        "due": false,
+        "sent": false
+      }
+    )
+    assert_eq(links.length, 1, "no second mail")
+    assert_null(User.find(user._key).reset_token_digest, "no link made")
+  end
+
+  test("an older letter retried after a newer one sends nothing: the newer link stays") do
+    user = auth_mail_user()
+    older = auth_mail_args(user, "reset")
+    sleep(0.01)
+    newer = auth_mail_args(user, "reset")
+    assert(older["letter"] < newer["letter"], "letters are time-ordered")
+    links = []
+    assert_raises("could not be sent") do
+      auth_mail_attempt(older, true, links)
+    end
+    auth_mail_attempt(newer, false, links)
+    assert_ne(links[1], links[0], "a newer letter, a new link")
+    assert_eq(auth_mail_attempt(older, false, links)["due"], false)
+    assert_eq(links.length, 2)
+    assert_eq(User.find(user._key).reset_token_digest, Crypto.sha256(links[1].split("token=")[1]))
+  end
+
+  test("a letter's token is the key's: another key, another token; none without") do
+    letter = uuid_v7()
+    one = AuthMailJob.letter_token(letter, "a key")
+    assert_eq(AuthMailJob.letter_token(letter, "a key"), one)
+    assert_ne(AuthMailJob.letter_token(letter, "another key"), one)
+    assert_ne(AuthMailJob.letter_token(uuid_v7(), "a key"), one)
+    assert_null(AuthMailJob.letter_token(letter, ""))
+  end
+
+  test("without a key, the first attempt makes a link, and a retry fails rather than kill it") do
+    user = auth_mail_user()
+    args = auth_mail_args(user, "reset")
+    token = AuthMailJob.link_token(User.find(user._key), "reset", args, "")
+    assert_eq(User.find(user._key).reset_token_digest, Crypto.sha256(token))
+    assert_raises("cannot be made again without SOLI_ENCRYPTION_KEY") do
+      AuthMailJob.link_token(User.find(user._key), "reset", args, "")
+    end
+    assert_eq(User.find(user._key).reset_token_digest, Crypto.sha256(token), "the first link still good")
+    # Followed, nothing is due: no failure.
+    User.find(user._key).finish_password_reset("another long password")
+    assert_null(AuthMailJob.link_token(User.find(user._key), "reset", args, ""))
+  end
+
+  test("a job queued before letters had an id still makes its link") do
+    user = auth_mail_user()
+    args = {
+      "kind": "reset",
+      "email": user.email,
+      "locale": "en"
+    }
+    token = AuthMailJob.link_token(User.find(user._key), "reset", args)
+    stored = User.find(user._key)
+    assert_eq(stored.reset_token_digest, Crypto.sha256(token))
+    assert_null(stored.reset_letter)
   end
 end
