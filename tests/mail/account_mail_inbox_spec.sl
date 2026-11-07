@@ -47,6 +47,31 @@ def inbox_mails(email)
   []
 end
 
+# The state the AuthMailJob of `kind` for `email` ended in, once the
+# server's worker has finished with it (ten seconds at most), or nil.
+def inbox_job_state(email, kind)
+  tries = 0
+  while tries < 80
+    rows = @sdbql{
+      FOR job IN _jobs
+      FILTER job.handler == "AuthMailJob" AND job.args.email == #{email} AND job.args.kind == #{kind}
+      RETURN job.state
+    }
+    assert_eq(type(rows), "array", "the queue answers: #{rows}")
+    if rows.length > 0 && [
+      "done",
+      "failed",
+      "dead"
+    ].includes?(rows[0])
+      return rows[0]
+    end
+
+    sleep(0.125)
+    tries += 1
+  end
+  nil
+end
+
 # The one mail delivered to `email`.
 def inbox_mail(email)
   mails = inbox_mails(email)
@@ -118,10 +143,9 @@ describe("The e-mails as they left") do
   test("nothing to an address without an account") do
     nobody = "nobody-#{uuid_v4}@example.com"
     post("/password/reset", {"email": nobody})
-    user = inbox_user()
-    # Asked after it: once its mail is in, the first job has run too.
-    post("/password/reset", {"email": user.email})
-    inbox_mail(user.email)
+    # Read once its own job is done: the server's workers run jobs side by
+    # side, so another job's mail arriving says nothing of this one.
+    assert_eq(inbox_job_state(nobody, "reset"), "done")
     assert_eq(inbox_rows(nobody), [])
   end
 
