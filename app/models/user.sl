@@ -1407,22 +1407,13 @@ class User < Model
     }
   end
 
-  # The account gone, and all it left: its scores (trash, versions, shares
-  # and the AI's suggestions included), what was shared with it, its photo
-  # readings and the requests it made of the AI, its devices for push
-  # notifications. A subscription is
-  # cancelled first; if Stripe cannot be reached, that is logged and the
-  # account goes all the same.
-  def erase_account
-    Billing.cancel_on_leaving(this)
-    Score.delete_all_of(this)
-    ScoreReading.delete_all_of(this)
-    ScoreSuggestion.delete_all_of(this)
-    UserNotification.delete_all_of(this)
-    PushSubscription.delete_all_of(this)
-    AccessToken.delete_all_of(this)
-    TwoStepGuard.delete_of(this)
-    @delete
+  # The account gone, and all it left, its writing on other people's
+  # scores and in the library included (AccountErasure, #686). A
+  # subscription is cancelled first; if Stripe cannot be reached, that is
+  # logged and the account goes all the same. `batch`: how many rows are
+  # read at a time.
+  def erase_account(batch = ERASE_BATCH)
+    AccountErasure.erase(this, batch)
   end
 
   # The time step `code` is for, one step either side of `now`, or nil.

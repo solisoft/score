@@ -404,7 +404,7 @@ en:
       download_part: "Download part {part} of {parts}"
       download: "Download my data (.zip)"
       delete_title: "Delete the account"
-      delete_lead: "Your account and every score in it are deleted for good."
+      delete_lead: "Your account is deleted for good, with everything in it: your scores, and what you wrote on other people's scores and in the library."
       delete_summary: "Delete my account…"
       delete_button: "Delete my account"
       enrol_title: "Two-step sign-in"

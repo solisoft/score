@@ -6,6 +6,9 @@ const SCORE_TRASH_DAYS = 30
 const SCORE_UNTITLED = "Untitled score"
 # How many scores a page of the library shows.
 const SCORE_PAGE_SIZE = 60
+# How many scores `erase_each` reads at a time: it reads again until none
+# is left (#686), so a library of any size goes whole.
+const SCORE_ERASE_BATCH = 500
 # Who may read a score without an invitation: nobody but its owner and the
 # people it is shared with ("private"), whoever has its link ("link"), or
 # anyone, search engines included ("public").
@@ -176,19 +179,33 @@ class Score < Model
     DateTime.utc.to_unix - SCORE_TRASH_DAYS * 86400
   end
 
-  # Every score `query` finds (up to 5000 a run), erased. Answers how many.
-  static def erase_each(query)
-    scores = query.limit(5000).all
-    scores.each do |score|
-      score.erase
+  # Every score `query` finds, erased, `batch` read at a time until none is
+  # left (#686: it stopped at 5000 before, and said nothing). A score that
+  # comes back after its erase could not be deleted: that raises, rather
+  # than loop on it. Answers how many went.
+  static def erase_each(query, batch = SCORE_ERASE_BATCH)
+    erased = 0
+    seen = {}
+    while true
+      scores = query.limit(batch).all
+      break if scores.length == 0
+
+      scores.each do |score|
+        throw "Score #{score._key} could not be erased" if seen[score._key]
+
+        seen[score._key] = true
+        score.erase
+      end
+      erased = erased + scores.length
+      break if scores.length < batch
     end
-    scores.length
+    erased
   end
 
   # Every score of `user`, trash included, with all that hangs off them,
-  # and what was shared with them: their account is going.
-  static def delete_all_of(user)
-    Score.erase_each(Score.where("doc.user_id == @user", {"user": user._key}))
+  # and what was shared with them: their account is going (AccountErasure).
+  static def delete_all_of(user, batch = SCORE_ERASE_BATCH)
+    Score.erase_each(Score.where("doc.user_id == @user", {"user": user._key}), batch)
     ScoreShare.delete_all_of(user)
     ScoreVersion.delete_all_of(user)
   end

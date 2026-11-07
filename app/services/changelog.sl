@@ -13,6 +13,15 @@ class Changelog
       {"date": "2026-11-07", "entries": [
         {
           "area": "site",
+          "title": "Deleting your account deletes everything",
+          "text": "Deleting your account now removes everything you wrote, including on other people's scores and in "
+          + "the library: your comments and replies, your recordings, the sections you shared with what was said of "
+          + "them, your ratings, comments and reports, your notifications, devices, tokens and queued e-mails. A "
+          + "library of any size goes whole, and a deletion cut off half-way is finished the same night.",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "Two-step setup and invitations, tightened",
           "text": "Turning on two-step sign-in now waits 15 minutes for the first code of your app, then asks for your "
           + "password again, and wrong codes there count like those at sign-in. A score's title stays on one line "
