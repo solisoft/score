@@ -13,6 +13,15 @@ class Changelog
       {"date": "2026-11-07", "entries": [
         {
           "area": "site",
+          "title": "Two changes at once no longer undo each other",
+          "text": "Renaming, sharing or trashing a score while it was being saved could bring back its older text, "
+          + "resolving a comment while the music moved could reopen it, and a rating could show a section an "
+          + "admin had just hidden. Each change now keeps the other's, a notification e-mail is sent once, and a "
+          + "name given with a section or a comment that is refused is no longer kept.",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "Deleting your account deletes everything",
           "text": "Deleting your account now removes everything you wrote, including on other people's scores and in "
           + "the library: your comments and replies, your recordings, the sections you shared with what was said of "

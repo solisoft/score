@@ -24,6 +24,17 @@ class RateCount < Model
     taken <= limit
   end
 
+  # Whether `name` has had its `limit` asks in the window running now,
+  # without counting one more: what a page reads before it offers to ask.
+  static def spent?(name, limit, window)
+    return false unless AppSetup.ready?
+
+    row = RateCount.find_by("_key", Crypto.sha256(name.to_s)) rescue nil
+    return false if row.nil? || row.started_at.to_s.to_i <= DateTime.utc.to_unix - window
+
+    row.count.to_s.to_i >= limit
+  end
+
   # One more ask of `name` at `now`: how many its window has had, this one
   # included; nil when the count could not be written.
   static def count_one(name, window, now)

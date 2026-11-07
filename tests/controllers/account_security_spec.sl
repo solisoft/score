@@ -148,9 +148,10 @@ def guard_exchange_status(code)
   ))
 end
 
-# The password tries of `user`'s current round (as User counts them).
+# The name the password tries of `user`'s current round are counted under
+# (RateCount, as User counts them).
 def guard_password_tries(user)
-  RateLimiter("password-check:#{user._key}:#{user._password_round}", ACCOUNT_PASSWORD_TRIES, ACCOUNT_PASSWORD_WINDOW)
+  "password-check:#{user._key}:#{user._password_round}"
 end
 
 # A User that, asked to check a password, notes whether its password tries
@@ -159,7 +160,7 @@ end
 class GuardCountingUser < User
   def authenticate(plaintext)
     tries = guard_password_tries(this)
-    @spent_at_check = tries.throttle() > 0
+    @spent_at_check = RateCount.spent?(tries, ACCOUNT_PASSWORD_TRIES, ACCOUNT_PASSWORD_WINDOW)
     plaintext == GUARD_PASSWORD
   end
 end
@@ -753,7 +754,7 @@ describe("Account security (#539)") do
       probe = GuardCountingUser.new()
       tries = guard_password_tries(probe)
       (0 .. ACCOUNT_PASSWORD_TRIES - 1).each do |_|
-        tries.allowed()
+        RateCount.take(tries, ACCOUNT_PASSWORD_TRIES, ACCOUNT_PASSWORD_WINDOW)
       end
       assert(probe.confirms_password?(GUARD_PASSWORD), "the last try left")
       assert(probe.spent_at_check, "the try was counted before the check")

@@ -401,19 +401,32 @@ class SharedSection < Model
     (@rating.to_s.to_f * 10).round() / 10.0
   end
 
-  # Its counters set again from its ratings and comments, as they now are.
+  # Its counters set again from its ratings and comments, as they now are:
+  # counted and written in one statement, the counters alone (#685). This
+  # copy was read before; written whole, it put back what an admin changed
+  # since — a section hidden while someone rated it was shown again.
   def recount
-    ratings = SectionRating.where({"section_id": @_key}).all
-    @rating_sum = ratings.map do |rating|
-      rating.stars
-    end.sum
-    @rating_count = ratings.length
-    @rating = @rating_count == 0 ? 0 : @rating_sum.to_f / @rating_count
-    @comments_count = SectionComment.where(
-      "doc.section_id == @section AND doc.hidden != true",
-      {"section": @_key}
-    ).count
-    @update()
+    key = @_key
+    written = @sdbql{
+      FOR s IN shared_sections
+      FILTER s._key == #{key}
+      LET stars = (FOR r IN section_ratings FILTER r.section_id == s._key RETURN r.stars)
+      LET comments = LENGTH(FOR c IN section_comments FILTER c.section_id == s._key AND c.hidden != true RETURN 1)
+      UPDATE s WITH {
+        rating_sum: SUM(stars),
+        rating_count: LENGTH(stars),
+        rating: LENGTH(stars) == 0 ? 0 : SUM(stars) / LENGTH(stars),
+        comments_count: comments
+      } IN shared_sections
+      RETURN NEW
+    }
+    throw "SharedSection#recount: #{written}" if type(written) == "string"
+    return nil if written.length == 0
+
+    @rating_sum = written[0]["rating_sum"]
+    @rating_count = written[0]["rating_count"]
+    @rating = written[0]["rating"]
+    @comments_count = written[0]["comments_count"]
     nil
   end
 

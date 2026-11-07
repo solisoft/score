@@ -68,7 +68,7 @@ class Billing
     return {"error": SiteText.t("app.account.billing_stripe_down")} unless answer["ok"]
 
     user.stripe_customer_id = answer["data"]["id"].to_s
-    user.update()
+    user.save_changes
     {"id": user.stripe_customer_id}
   end
 
@@ -179,7 +179,7 @@ class Billing
     outcome = Billing.applied(kind, object, user, transport)
     if outcome == "processed"
       user.billing_event_at = at
-      user.update()
+      user.save_changes
     end
     {"outcome": outcome, "user": user._key}
   end
@@ -223,7 +223,7 @@ class Billing
     subscription = Billing.id_of(session["subscription"])
     user.stripe_customer_id = customer unless customer.blank?
     user.stripe_subscription_id = subscription unless subscription.blank?
-    user.update()
+    user.save_changes
     return "processed" if subscription.blank?
 
     answer = Stripe.call("GET", "subscriptions/#{url_encode(subscription)}", "", transport)
@@ -247,7 +247,7 @@ class Billing
     user.plan_gift = false
     customer = Billing.id_of(subscription["customer"])
     user.stripe_customer_id = customer unless customer.blank?
-    user.update()
+    user.save_changes
     "processed"
   end
 
@@ -262,7 +262,7 @@ class Billing
     user.plan_status = "canceled"
     user.cancel_at_period_end = false
     user.stripe_subscription_id = nil
-    user.update()
+    user.save_changes
     "processed"
   end
 
@@ -273,7 +273,7 @@ class Billing
     return "ignored" if subscription.blank? || Billing.other_subscription?(user, subscription)
 
     user.plan_status = "past_due"
-    user.update()
+    user.save_changes
     "processed"
   end
 
