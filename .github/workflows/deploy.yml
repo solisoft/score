@@ -1,17 +1,24 @@
 # Verify, then deploy the site to score.solisoft.net.
 #
-# The server-side contract (soli-proxy, already installed there):
-#   1. rsync this app into <sites_dir>/<domain>/ — that folder and nothing else;
-#   2. `soli-proxy deploy`: the proxy starts the idle slot, waits for its
-#      health check, moves the traffic across, then stops the old slot.
+# The server-side contract (soli-proxy, already installed there; #681):
+#   1. deploy/upload.sh copies this checkout into a release directory of its
+#      own, /home/rocky/releases/<domain>/<yyyymmddHHMMSS>-<commit> — never
+#      into the directory the site runs from;
+#   2. deploy/release.sh, on the server: checks the server runs the Soli this
+#      run tested, snapshots the database, runs the migrations in the new
+#      release while the site still runs the old one, then points
+#      sites/<domain> (a symlink) at it and runs `soli-proxy deploy`: the idle
+#      slot starts on the new release, passes its health check, takes the
+#      traffic, and the old slot stops. The site is then checked through the
+#      proxy (/health/deep, pages, /app); a failure past the switch puts the
+#      previous release back the same way.
 #
 # The app (/app) keeps accounts and scores in SoliDB: once the server's .env
-# names a database (SOLIDB_HOST), each deploy runs its migrations before the
-# switch, and the deploy fails unless /health/deep then answers 200 (the
-# database answers, no job left far behind). The browser engraver
-# (public/eui-score/) is committed, built by wasm/build.sh, so a deploy needs
-# no Rust to deploy; the `engraver` job only tests it. See deploy/README.md
-# for the one-time server setup.
+# names a database (SOLIDB_HOST), each deploy snapshots it and runs its
+# migrations before the switch. The database is never restored on its own
+# (the live site keeps taking writes meanwhile): the log says how. The browser
+# engraver (public/eui-score/) is committed, built by wasm/build.sh, so a
+# deploy needs no Rust; the `engraver` job only tests it. See deploy/README.md.
 name: verify & deploy
 
 on:
@@ -25,6 +32,10 @@ on:
 concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+# Nothing here writes to the repository.
+permissions:
+  contents: read
 
 env:
   # Pinned, so CI tests what the server runs. The eui_score_* builtins the
@@ -41,6 +52,7 @@ jobs:
   verify:
     name: fmt + lint + boot + suite
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -170,6 +182,7 @@ jobs:
   engraver:
     name: browser engraver + editor tests
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -185,6 +198,7 @@ jobs:
   editor:
     name: score editor model tests
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -193,11 +207,24 @@ jobs:
       - name: Tests
         run: node --test tests/js/*.test.mjs
 
+  # The deploy's own scripts, against a server simulated in a temp directory:
+  # the switch from the old layout, releases, a failed migration, a failed
+  # proxy deploy or site check and the rollback, a soli of another version.
+  deploy-scripts:
+    name: deploy scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Tests
+        run: bash tests/deploy/release_test.sh
+
   deploy:
     name: deploy score.solisoft.net
-    needs: [verify, engraver, editor]
+    needs: [verify, engraver, editor, deploy-scripts]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment:
       name: production
       url: https://${{ vars.DEPLOY_DOMAIN || 'score.solisoft.net' }}
@@ -219,26 +246,31 @@ jobs:
           [ -n "$HOST" ] || { echo "secret DEPLOY_HOST is missing" >&2; exit 1; }
           echo "Target: $USER@$HOST:$SITES_DIR/$DOMAIN"
 
+      # The secrets reach the script through its environment, never pasted
+      # into its text.
       - name: Prepare SSH
+        env:
+          SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
           install -d -m 700 ~/.ssh
-          printf '%s\n' "${{ secrets.SSH_DEPLOY_KEY }}" > ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_DEPLOY_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           # known_hosts, not StrictHostKeyChecking=no: host verification stays on.
-          printf '%s\n' "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
       # The site is created by hand once (app.infos + .env); this workflow
-      # creates nothing on the server.
+      # creates nothing on the server but releases and snapshots.
       - name: Check the site exists on the server
         run: |
           ssh "$USER@$HOST" "test -f '$SITES_DIR/$DOMAIN/app.infos' && test -f '$SITES_DIR/$DOMAIN/.env'" \
             || { echo "$SITES_DIR/$DOMAIN must hold app.infos and .env — see deploy/README.md" >&2; exit 1; }
 
       # The players' sounds are not in git (38 MB): fetched, checked against
-      # their SHA-256, kept between runs. Before the rsync, which would
-      # otherwise take them off the server.
+      # their SHA-256, kept between runs, uploaded with the release (a hard
+      # link to the live release's copy when unchanged).
       - name: Keep the sounds between runs
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
@@ -248,78 +280,21 @@ jobs:
       - name: Fetch the sounds
         run: deploy/soundfont.sh
 
-      # --delete-delay: what leaves the repository leaves the server. The
-      # exclusions keep what lives only on the server, and what has no
-      # business there (the Rust crate, tests, agent notes). public/ is
-      # served as is: an agent note `soli update docs` writes back into
-      # public/js/ must never reach it (#544).
-      - name: Sync the files
+      - name: Name the release
         run: |
           set -euo pipefail
-          rsync -rlzv --delete-delay --delay-updates \
-            --exclude='.git/' --exclude='.github/' --exclude='.claude/' \
-            --exclude='wasm/' --exclude='tests/' --exclude='coverage/' --exclude='tmp/' \
-            --exclude='.env' --exclude='.env.*' --exclude='app.infos' --exclude='restart.txt' \
-            --exclude='/public/js/CLAUDE.md' \
-            ./ "$USER@$HOST:$SITES_DIR/$DOMAIN/"
+          echo "RELEASE=$(date -u +%Y%m%d%H%M%S)-${GITHUB_SHA::12}" >> "$GITHUB_ENV"
+          echo "RELEASES_DIR=$(dirname "$SITES_DIR")/releases/$DOMAIN" >> "$GITHUB_ENV"
 
-      # The exclusion above also shields the copy an older deploy put on the
-      # server from --delete: taken off here, every time (nothing left, nothing
-      # done), so /js/CLAUDE.md is never served.
-      - name: Take the agents' notes off the server
-        run: ssh "$USER@$HOST" "rm -f '$SITES_DIR/$DOMAIN/public/js/CLAUDE.md'"
+      # Into a new directory: the live site is not touched.
+      - name: Upload the release
+        run: deploy/upload.sh "$RELEASE"
 
-      - name: Note the version the server runs
+      # Checks, snapshot, migrations, switch, soli-proxy deploy, the site
+      # through the proxy — and back to the previous release on a failure
+      # past the switch. See deploy/release.sh.
+      - name: Deploy the release
         run: |
-          installed="$(ssh "$USER@$HOST" 'soli --version' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
-          echo "server: $installed — pinned: $SOLI_VERSION"
-          if [ "$installed" != "$SOLI_VERSION" ]; then
-            echo "::warning::the server runs Soli $installed; this run tested $SOLI_VERSION"
-          fi
-
-      # Only where the server has a database: see deploy/README.md.
-      - name: Migrations
-        run: |
-          set -euo pipefail
-          if ssh "$USER@$HOST" "grep -qE '^SOLIDB_HOST=.+' '$SITES_DIR/$DOMAIN/.env'"; then
-            ssh "$USER@$HOST" "set -e; cd '$SITES_DIR/$DOMAIN' && soli db:migrate up"
-          else
-            echo "::notice::no SOLIDB_HOST in the server's .env: migrations skipped, /app shows its set-up page"
-          fi
-
-      # `soli-proxy deploy` rather than touching restart.txt: it waits for
-      # the new slot and fails loudly when it cannot start.
-      - name: Switch the blue-green slot
-        run: ssh "$USER@$HOST" "soli-proxy deploy -c '$PROXY_CONF' '$APP' 2>&1"
-
-      # After a switch the proxy balances across both slot ports; restart
-      # brings both up on the new code.
-      - name: Bring both slots up
-        run: ssh "$USER@$HOST" "soli-proxy restart -c '$PROXY_CONF' '$APP'"
-
-      # End to end, through the proxy, with the real hostname. /health only
-      # says the process runs; /health/deep that its database answers and
-      # no job is left far behind (503 with the reason otherwise), and /app
-      # answers 200 or sends a visitor to /login: a broken migration or a
-      # stopped database fails the deploy here.
-      - name: Check the site through the proxy
-        run: |
-          set -euo pipefail
-          for attempt in 1 2 3 4 5; do
-            sleep 4
-            codes="$(ssh "$USER@$HOST" "for p in /health /health/deep / /examples /eui-score/eui_score_web_bg.wasm; do curl -sk -m 8 --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{http_code} ' \"https://$DOMAIN\$p\"; done" || true)"
-            app="$(ssh "$USER@$HOST" "curl -sk -m 8 --resolve '$DOMAIN:443:127.0.0.1' -o /dev/null -w '%{http_code} %{redirect_url}' 'https://$DOMAIN/app'" || true)"
-            # The app's own answer, not a 200 from something in front of it.
-            ready="$(ssh "$USER@$HOST" "curl -sk -m 8 --resolve '$DOMAIN:443:127.0.0.1' 'https://$DOMAIN/health/deep'" || true)"
-            echo "attempt $attempt: $codes| /app -> $app | ready: $ready"
-            if [ "$codes" = "200 200 200 200 200 " ] && echo "$ready" | grep -q '"status":"ok"'; then
-              case "$app" in
-                "200 "|"302 "*/login*|"303 "*/login*) exit 0 ;;
-              esac
-            fi
-          done
-          echo "The site does not answer through the proxy, or is not ready:" >&2
-          ssh "$USER@$HOST" "curl -sk -m 8 --resolve '$DOMAIN:443:127.0.0.1' 'https://$DOMAIN/health/deep'" >&2 || true
-          echo >&2
-          echo "  ssh $USER@$HOST 'soli-proxy logs -c $PROXY_CONF $APP'" >&2
-          exit 1
+          ssh "$USER@$HOST" "SITES_DIR='$SITES_DIR' DOMAIN='$DOMAIN' APP='$APP' PROXY_CONF='$PROXY_CONF' \
+            RELEASES_DIR='$RELEASES_DIR' SOLI_VERSION='$SOLI_VERSION' \
+            bash '$RELEASES_DIR/$RELEASE/deploy/release.sh' deploy '$RELEASE'" 2>&1
