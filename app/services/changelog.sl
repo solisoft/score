@@ -10,15 +10,6 @@
 class Changelog
   static def days
     [
-      {"date": "2026-11-05", "entries": [{
-        "area": "site",
-        "title": "Admins can read a customer's scores",
-        "text": "In the admin section, a customer's page lists their scores: who can open each one, how many people "
-        + "it is shared with, how many versions it keeps, and whether it is in the trash. An admin can open a "
-        + "score to read it, engraved and in LilyPond, with its versions, but cannot change it. Each reading is "
-        + "logged in the admins' activity.",
-        "app": true
-      }]},
       {"date": "2026-11-01", "entries": [
         {
           "area": "site",
