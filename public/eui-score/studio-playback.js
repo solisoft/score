@@ -9,7 +9,8 @@ const { tr } = await import(`./words.js${V}`);
 export function install(ctx) {
   const { root, state, playhead, st, toMidi, M, P, X, Vel, Pr, Sy, F, A, Snd, Ch, G } = ctx;
   const {
-    barNo, changeBar, selectedBarsOrNull, selectedBars, draw, showState, say, showPlaying, mixHeard, applyMix,
+    barNo, changeBar, selectedBarsOrNull, selectedBars, draw, showState, say, showPlaying, placeOverlay, playingCopies, mixHeard,
+    applyMix,
     finishRecording, chooseOutput
   } = ctx.call;
 
@@ -197,6 +198,12 @@ export function install(ctx) {
     }
     st.playing = state;
     showState();
+    // While it plays: no palette, no comment button over the drawing. Its
+    // notes are lit over it as they sound (showPlaying, #689): their copies
+    // made now, once, before the music starts — not the score drawn again
+    // for each note.
+    placeOverlay();
+    playingCopies();
     const progress = (f) => st.playing === state && say(tr("Loading the sounds… {percent} % (38 MB, once)", { percent: Math.round(100 * f) }));
     try {
       if (!P.isReady()) say(tr("Loading the sounds…"));
@@ -243,9 +250,6 @@ export function install(ctx) {
     state.ticker = setInterval(tick, 25);
     // The MIDI clock sent with the music, when it is on (midi-sync.js).
     ctx.sync?.wake();
-    // Drawn once as it is while playing (no palette, no comment button); then
-    // only the notes playing are lit, over that drawing (showPlaying, #689).
-    draw();
     const follow = () => {
       if (st.playing !== state) return;
       light(state.handle.heard);

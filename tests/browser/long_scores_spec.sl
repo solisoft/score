@@ -136,11 +136,15 @@ describe("A long score in the editor (#689)") do
 
   test("playing lights the notes over the drawing as it stands: the score is not drawn again for each note") do
     assert(evaluate("(#{LONG_SOUNDS.trim})()") > 100, "the silent sounds in the cache")
-    evaluate("window.drawnSvg = document.querySelector('.studio-svg svg')")
     click(".studio-play[data-act=\"play\"]")
     long_wait("document.querySelector('#studio').studio.playing?.handle?.playing === true")
+    # Drawn once as it is while playing; then the notes lit, one after another.
+    long_wait("(document.querySelector('#studio').studio.playing?.lit ?? -1) >= 0")
+    sleep(0.3)
+    evaluate("window.drawnSvg = document.querySelector('.studio-svg svg')")
+    first_lit = evaluate("document.querySelector('#studio').studio.playing.lit")
     started = engravings()
-    long_wait("(document.querySelector('#studio').studio.playing?.lit ?? -1) > 8")
+    long_wait("(document.querySelector('#studio').studio.playing?.lit ?? -1) > #{first_lit + 8}")
     # Many notes lit since, on the same picture: no new engraving, no picture swapped in.
     assert(evaluate("document.querySelector('.studio-svg svg') === window.drawnSvg"), "the same picture")
     assert(engravings() - started <= 1, "at most the one engraving of the notes' coloured copies")

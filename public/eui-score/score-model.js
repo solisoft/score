@@ -3575,7 +3575,9 @@ function midChanges(score, s) {
   const top = s === firstMusic(score);
   // A \\time or a \\partial inside a bar, where it was (see oddWriting): the first staff's.
   const odds = [];
-  for (let b = 0; top && b < barsOf(score); b++) {
+  // Counted once, not again at every bar: a long score's bars are many (#689).
+  const bars = top ? barsOf(score) : 0;
+  for (let b = 0; b < bars; b++) {
     const odd = isOddBar(score, b) ? oddWriting(score, b) : null;
     if (!odd || odd.pos === 0) continue;
     const text = odd.kind === "partial" ? `\\partial ${pickupText(odd.ticks)}` : `\\time ${odd.parts?.length > 1 ? odd.parts.join("+") : odd.time[0]}/${odd.time[1]}`;
@@ -4998,14 +5000,15 @@ export function playOrder(score) {
   const toCoda = jumps.find((c) => c.jump === "to-coda" && c.bar >= from)?.bar;
   const coda = (score.changes ?? []).find((c) => c.mark === "coda" && c.bar > back.bar)?.bar;
   const again = [];
-  for (let b = from; b < barsOf(score); b++) {
+  const bars = barsOf(score);
+  for (let b = from; b < bars; b++) {
     // The second time through, the repeats are not taken; an ending's
     // bars after the first are skipped with them.
     if ((score.repeats ?? []).some((r) => r.endings.length > 1 && b > r.to + r.endings[0] && b <= repeatEnd(r))) continue;
     again.push(b);
     if (back.jump.endsWith("fine") && b === fine) break;
     if (back.jump.endsWith("coda") && b === toCoda && coda != null) {
-      for (let c = coda; c < barsOf(score); c++) again.push(c);
+      for (let c = coda; c < bars; c++) again.push(c);
       break;
     }
   }
@@ -7277,7 +7280,8 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
   ensureLength(score, Math.max(...score.staves.map(lengthOf), barStart(score, 1)));
   if (score.staves.some((st) => !isBarLine(score, lengthOf(st)))) return { unsupported: ["a bar left unfinished"] };
   // A double bar at the very end is the final bar line, written anyway.
-  score.changes = score.changes.filter((c) => c.bar < barsOf(score));
+  const bars = barsOf(score);
+  score.changes = score.changes.filter((c) => c.bar < bars);
   // A beam written by hand that does not close in its bar is not written again.
   for (const staff of score.staves) {
     const kept = handBeams(score, staff).filter((b) => b === "[").length;
