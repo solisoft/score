@@ -100,19 +100,13 @@ class AdminReportsController < AdminBaseController
     })
   end
 
+  # The flag alone is written (#685): a copy saved whole would put back the
+  # counters a rating or a comment changed meanwhile.
   def _set_hidden(report, hidden)
     if report.target == "comment"
-      comment = SectionComment.find_by("_key", report.target_id)
-      unless comment.nil?
-        comment.hidden = hidden
-        comment.update()
-      end
+      SectionComment.where({"_key": report.target_id.to_s}).update_all({"hidden": hidden})
     else
-      section = SharedSection.find_by("_key", report.section_id)
-      unless section.nil?
-        section.hidden = hidden
-        section.update()
-      end
+      SharedSection.where({"_key": report.section_id.to_s}).update_all({"hidden": hidden})
     end
     SharedSection.find_by("_key", report.section_id)&.recount
   end

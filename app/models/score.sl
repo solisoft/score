@@ -4,8 +4,14 @@
 # SCORE_TRASH_DAYS days.
 const SCORE_TRASH_DAYS = 30
 const SCORE_UNTITLED = "Untitled score"
+# How often a rename or a version restored is tried again, read anew, when
+# an editor's save got there first (#685).
+const SCORE_WRITE_ATTEMPTS = 5
 # How many scores a page of the library shows.
 const SCORE_PAGE_SIZE = 60
+# How many scores `erase_each` reads at a time: it reads again until none
+# is left (#686), so a library of any size goes whole.
+const SCORE_ERASE_BATCH = 500
 # Who may read a score without an invitation: nobody but its owner and the
 # people it is shared with ("private"), whoever has its link ("link"), or
 # anyone, search engines included ("public").
@@ -176,13 +182,29 @@ class Score < Model
     DateTime.utc.to_unix - SCORE_TRASH_DAYS * 86400
   end
 
-  # Every score `query` finds (up to 5000 a run), erased. Answers how many.
-  # Their keys only are read, and what hangs off them goes in one statement
-  # a kind for them all (`erase_keys`, #689), not seven a score.
-  static def erase_each(query)
-    keys = query.select("user_id").limit(5000).all.map(&:_key)
-    Score.erase_keys(keys)
-    keys.length
+  # Every score `query` finds, erased, `batch` read at a time until none is
+  # left (#686: it stopped at 5000 before, and said nothing). Only their keys
+  # are read, and what hangs off a batch goes in one statement a kind for
+  # them all (`erase_keys`, #689), not seven a score. A score that comes back
+  # after its erase could not be deleted: that raises, rather than loop on
+  # it. Answers how many went.
+  static def erase_each(query, batch = SCORE_ERASE_BATCH)
+    erased = 0
+    seen = {}
+    while true
+      keys = query.select("user_id").limit(batch).all.map(&:_key)
+      break if keys.length == 0
+
+      keys.each do |key|
+        throw "Score #{key} could not be erased" if seen[key]
+
+        seen[key] = true
+      end
+      Score.erase_keys(keys)
+      erased = erased + keys.length
+      break if keys.length < batch
+    end
+    erased
   end
 
   # The scores whose keys are `keys` erased, with all that hangs off them:
@@ -206,9 +228,9 @@ class Score < Model
   end
 
   # Every score of `user`, trash included, with all that hangs off them,
-  # and what was shared with them: their account is going.
-  static def delete_all_of(user)
-    Score.erase_each(Score.where("doc.user_id == @user", {"user": user._key}))
+  # and what was shared with them: their account is going (AccountErasure).
+  static def delete_all_of(user, batch = SCORE_ERASE_BATCH)
+    Score.erase_each(Score.where("doc.user_id == @user", {"user": user._key}), batch)
     ScoreShare.delete_all_of(user)
     ScoreVersion.delete_all_of(user)
   end
@@ -434,13 +456,29 @@ class Score < Model
   # Back to `version`, by `author`: the score as it stands is kept first.
   # False, and nothing kept, when the version is past the engraver's limits
   # (Score.restore_refusal says why).
+  #
+  # Written over the revision this copy read (#685): when the editor saved
+  # since, the score is read again and that newer text is the one kept as a
+  # version before it is replaced — never overwritten unkept.
   def restore_version(version, author = nil)
     return false if version.source != @source && !EngraverLimit.of(version.source).nil?
+    return false unless Score.bounds_refusal(version.source).nil?
 
-    ScoreVersion.keep(this, @source, "restore", @saved_by)
-    @source = version.source
-    @saved_by = author&._key
-    @save
+    fields = {
+      "source": version.source,
+      "title": Score.title_in(version.source) ?? @title ?? SCORE_UNTITLED,
+      "composer": Score.composer_in(version.source).to_s,
+      "saved_by": author&._key
+    }
+    attempts = 0
+    while attempts < SCORE_WRITE_ATTEMPTS
+      attempts = attempts + 1
+      ScoreVersion.keep(this, @source, "restore", @saved_by)
+      return true if @_write_fields(fields, @revision)
+
+      @reload
+    end
+    false
   end
 
   # Why `version` is not restored: the engraver's limit it passes, said.
@@ -498,14 +536,12 @@ class Score < Model
   def make_visible(visibility)
     return false unless SCORE_VISIBILITIES.includes?(visibility)
 
-    @visibility = visibility
-    @save
+    @_write_fields({"visibility": visibility})
   end
 
   # A new read-page address; the old one stops working.
   def new_link
-    @share_token = Score.new_token
-    @save
+    @_write_fields({"share_token": Score.new_token})
   end
 
   def trashed?
@@ -534,22 +570,73 @@ class Score < Model
     "#{how}; filename=\"#{plain}.#{extension}\"; filename*=UTF-8''#{url_encode(this.file_name)}.#{extension}"
   end
 
+  # The title written into the source, over the revision this copy read
+  # (#685): when the editor saved since, the score is read again and the
+  # title written into that newer text. False, and nothing written, when
+  # the title is too long.
   def rename(title)
-    @source = Score.with_title(@source, title)
-    @save
+    attempts = 0
+    while attempts < SCORE_WRITE_ATTEMPTS
+      attempts = attempts + 1
+      source = Score.with_title(@source, title)
+      return false unless Score.bounds_refusal(source).nil?
+
+      fields = {
+        "source": source,
+        "title": Score.title_in(source) ?? SCORE_UNTITLED,
+        "composer": Score.composer_in(source).to_s
+      }
+      return true if @_write_fields(fields, @revision)
+
+      @reload
+    end
+    false
   end
 
   def move_to_trash
-    @trashed_at = DateTime.utc.to_unix
-    saved = @save
+    written = @_write_fields({"trashed_at": DateTime.utc.to_unix})
     # Nobody works in its room any more: read again at their next cursor (#689).
     ScoreRoom.forget(@_key)
-    saved
+    written
   end
 
   def restore_from_trash
-    @trashed_at = nil
-    @save
+    @_write_fields({"trashed_at": nil})
+  end
+
+  # `fields` written into the stored score, with what `stamp` sets on a
+  # save — the time, the next revision — and nothing else (#685): `save`
+  # writes this whole copy, and so put back over an editor's save made
+  # since the text this copy read, under the revision that save had taken.
+  # With `base_revision`, only while the score is still at it: false when
+  # another save got there first. This copy then holds what was written.
+  def _write_fields(fields, base_revision = nil)
+    score_key = @_key
+    now = DateTime.utc.to_unix
+    any_revision = base_revision.nil?
+    written = @sdbql{
+      FOR s IN scores
+      FILTER s._key == #{score_key} AND (#{any_revision} OR s.revision == #{base_revision})
+      UPDATE s WITH MERGE(#{fields}, {
+        updated_at: #{now},
+        revision: (s.revision == null ? 0 : s.revision) + 1
+      }) IN scores
+      RETURN NEW
+    }
+    raise("The score could not be written: #{written}") if type(written) == "string"
+    return false if written.length == 0
+
+    stored = written[0]
+    @source = stored["source"]
+    @title = stored["title"]
+    @composer = stored["composer"]
+    @saved_by = stored["saved_by"]
+    @trashed_at = stored["trashed_at"]
+    @visibility = stored["visibility"]
+    @share_token = stored["share_token"]
+    @updated_at = stored["updated_at"]
+    @revision = stored["revision"]
+    true
   end
 
   # A copy in `user`'s library (the owner's, by default), "(copy)" after

@@ -2,6 +2,10 @@
 # answer takes longer than a request may.
 class ScoreSuggestionJob
   static def perform(args: Hash)
-    ScoreSuggestion.find(args["suggestion_id"]).perform
+    suggestion = ScoreSuggestion.find_by("_key", args["suggestion_id"].to_s)
+    # Gone with its account, or its score, before its turn came (#686).
+    return true if suggestion.nil?
+
+    suggestion.perform
   end
 end

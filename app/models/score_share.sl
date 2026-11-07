@@ -111,21 +111,69 @@ class ScoreShare < Model
   # invitation sent (a new share, or a role changed, which mails again)
   # counts for 24 hours, even once the share is gone. `open`: whether
   # payments are open (Plan.limits); nil asks Stripe's settings.
+  #
+  # The invitation's place in the day is taken in the account as it is
+  # stored (`take_invitation`, #685), and given back when the invitation is
+  # refused: counted from the copy each request had read, invitations sent
+  # together all passed the count, and each wrote its list over the others'.
   static def invite_by(user, score, email, role, open = nil)
-    if ScoreShare.invitations_left(user) <= 0
-      used_up = SiteText.t("app.scores.invite.used_up", {"n": ScoreShare.invitations_per_day(user)})
-      return {"error": used_up, "limit": true}
-    end
+    return ScoreShare.used_up(user) if ScoreShare.invitations_left(user) <= 0
 
     full = ScoreShare.plan_refusal(score, email, open)
     return full unless full.nil?
 
-    share = ScoreShare.invite(score, email, role)
-    return share if type(share) == "hash"
+    now = DateTime.utc.to_unix
+    return ScoreShare.used_up(user) unless ScoreShare.take_invitation(user, now)
 
-    user.invitations_sent = ScoreShare.sent_today(user) + [DateTime.utc.to_unix]
-    user.update()
+    share = ScoreShare.invite(score, email, role)
+    ScoreShare.give_back_invitation(user, now) if type(share) == "hash"
     share
+  end
+
+  # The refusal once `user` has sent the day's invitations.
+  static def used_up(user)
+    {"error": SiteText.t("app.scores.invite.used_up", {"n": ScoreShare.invitations_per_day(user)}), "limit": true}
+  end
+
+  # One more invitation by `user` at `now`, written into the stored account
+  # in one statement that keeps the last 24 hours' and adds this one: false,
+  # and nothing written, once the day's are all sent. Nothing else of the
+  # account is written.
+  static def take_invitation(user, now)
+    key = user._key
+    since = now - 86400
+    most = ScoreShare.invitations_per_day(user)
+    taken = @sdbql{
+      FOR u IN users
+      FILTER u._key == #{key}
+      LET kept = (FOR sent IN (u.invitations_sent == null ? [] : u.invitations_sent) FILTER sent > #{since} RETURN sent)
+      FILTER LENGTH(kept) < #{most}
+      UPDATE u WITH {invitations_sent: APPEND(kept, [#{now}])} IN users
+      RETURN NEW.invitations_sent
+    }
+    throw "ScoreShare.take_invitation: #{taken}" if type(taken) == "string"
+    return false if taken.length == 0
+
+    user.invitations_sent = taken[0]
+    true
+  end
+
+  # The invitation `take_invitation` counted at `now` given back: it was
+  # refused, and nothing was sent.
+  static def give_back_invitation(user, now)
+    key = user._key
+    kept = @sdbql{
+      FOR u IN users
+      FILTER u._key == #{key}
+      LET others = (
+        FOR sent IN (u.invitations_sent == null ? [] : u.invitations_sent) FILTER sent != #{now} RETURN sent
+      )
+      UPDATE u WITH {invitations_sent: others} IN users
+      RETURN NEW.invitations_sent
+    }
+    throw "ScoreShare.give_back_invitation: #{kept}" if type(kept) == "string"
+    user.invitations_sent = kept[0] if kept.length > 0
+    true
   end
 
   # Why `email` may not be one more person `score` is shared with, under its

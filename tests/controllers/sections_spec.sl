@@ -126,6 +126,26 @@ describe("SectionsController and AppSectionsController") do
       assert_eq(lib_count(author), 0, "nothing written")
     end
 
+    test("the name given with a refused section is not kept; given with one shared, it is (#685)") do
+      author = lib_user()
+      lib_sign_in(author)
+      refused = lib_fields()
+      refused["style"] = "polka-metal"
+      refused["author_name"] = "Not Kept"
+      assert_eq(res_status(post("/app/sections", refused)), 422)
+      assert_null(User.find(author._key).name, "a refused section renames nobody")
+      long = lib_fields()
+      long["author_name"] = "n" * 61
+      response = post("/app/sections", long)
+      assert_eq(res_status(response), 422)
+      assert_contains(res_json(response)["error"], "60 characters")
+      assert_eq(lib_count(author), 0)
+      shared = lib_fields()
+      shared["author_name"] = "Kept Name"
+      assert_eq(res_status(post("/app/sections", shared)), 201)
+      assert_eq(User.find(author._key).name, "Kept Name")
+    end
+
     test("twenty sections a day, no more") do
       author = lib_user()
       (0 .. 20).each do |n|
@@ -362,6 +382,28 @@ describe("SectionsController and AppSectionsController") do
       elsewhere = SectionComment.where({"section_id": other._key}).first
       response = post("/app/sections/#{section._key}/comments/#{elsewhere._key}/remove", {})
       assert_eq(res_status(response), 404)
+    end
+
+    test("the name given with a refused comment is not kept; with one posted, it is (#685)") do
+      section = lib_section(lib_user())
+      writer = lib_user()
+      lib_sign_in(writer)
+      post(
+        "/app/sections/#{section._key}/comments",
+        {"body": "   ", "author_name": "Not Kept"}
+      )
+      assert_null(User.find(writer._key).name, "a refused comment renames nobody")
+      post(
+        "/app/sections/#{section._key}/comments",
+        {"body": "Nice", "author_name": "n" * 61}
+      )
+      assert_eq(SectionComment.where({"section_id": section._key}).count, 0, "a name too long refuses the comment")
+      post(
+        "/app/sections/#{section._key}/comments",
+        {"body": "Nice", "author_name": "Kept Name"}
+      )
+      assert_eq(User.find(writer._key).name, "Kept Name")
+      assert_eq(SectionComment.where({"section_id": section._key}).count, 1)
     end
   end
 

@@ -8,7 +8,8 @@
 # Every notification is listed in the app, and sent to the person's devices
 # when they turned push notifications on (WebPush, #400). The e-mails leave from
 # NotificationMailJob (`mail_due`), each as its person's settings allow
-# (User#mails?): "mail" is "pending" until then, "sent", "off" (not wanted),
+# (User#mails?): "mail" is "pending" until then, "sending" while a run of
+# the job has claimed it (`mail_due`), "sent", "off" (not wanted),
 # "failed" (NOTIFICATION_MAIL_TRIES tries), or "none" for a share, whose
 # invitation e-mail (AppScoresController#invite) tells of it already. The
 # changes are mailed together, in one digest a person, once their hour is over.
@@ -21,6 +22,9 @@ const NOTIFICATION_KINDS = [
 const NOTIFICATION_CHANGED_SECONDS = 3600
 const NOTIFICATIONS_LISTED = 100
 const NOTIFICATION_MAIL_TRIES = 3
+# How long a run of the mails keeps the notifications it claimed (#685)
+# before another may take them: past it, the run that claimed them stopped.
+const NOTIFICATION_CLAIM_SECONDS = 3600
 const NOTIFICATION_EXCERPT_LENGTH = 140
 
 class UserNotification < Model
@@ -139,7 +143,14 @@ class UserNotification < Model
 
     @actor_ids = (@actor_ids ?? []) + [actor._key]
     @actor_names = (@actor_names ?? []) + [actor.display_name]
-    @save
+    # The names alone (#685): saved whole, this copy put back the read mark
+    # and the mail's state as it had read them — a mail sent since went
+    # "pending" again, and was sent twice.
+    UserNotification.where({"_key": @_key}).update_all({
+      "actor_ids": @actor_ids,
+      "actor_names": @actor_names
+    })
+    true
   end
 
   static def excerpt(body)
@@ -174,7 +185,9 @@ class UserNotification < Model
     return true unless @read_at.nil?
 
     @read_at = DateTime.utc.to_unix
-    @save
+    # The mark alone (#685), as `joined_by` writes its names.
+    UserNotification.where({"_key": @_key}).update_all({"read_at": @read_at})
+    true
   end
 
   def read?
@@ -223,6 +236,13 @@ class UserNotification < Model
   # Those the person turned off, or whose person is gone, are not sent.
   # Answers {"sent", "off", "failed", "waiting"}: messages, and
   # notifications not sent or waiting for their hour.
+  #
+  # Each mail's notifications are claimed before it is sent (`claimed`,
+  # #685): "pending" becomes "sending" in the stored rows, and only the
+  # rows this run turned so are mailed. Two runs at once — one slow to send,
+  # the next one due — read the same rows "pending"; without the claim
+  # both sent them. Rows a run claimed and never marked (it stopped) go back
+  # to "pending" after NOTIFICATION_CLAIM_SECONDS.
   static def mail_due(now)
     done = {
       "sent": 0,
@@ -230,6 +250,10 @@ class UserNotification < Model
       "failed": 0,
       "waiting": 0
     }
+    UserNotification.where(
+      "doc.mail == 'sending' AND doc.claimed_at < @since",
+      {"since": now - NOTIFICATION_CLAIM_SECONDS}
+    ).update_all({"mail": "pending"})
     rows = UserNotification.where({"mail": "pending"}).order("created_at", "asc").limit(1000).all
     return done if rows.length == 0
 
@@ -243,14 +267,15 @@ class UserNotification < Model
     for row in rows
       user = by_key[row.user_id]
       if user.nil? || !user.mails?(row.kind)
-        row.mail = "off"
-        row.save
+        UserNotification.where({
+          "_key": row._key,
+          "mail": "pending"
+        }).update_all({"mail": "off"})
         done["off"] = done["off"] + 1
         next
       end
       if row.kind != "changed"
-        sent = MailDelivery.attempt_mail("#{row.kind} notification", NotificationMail.single(row, user))
-        UserNotification.mailed([row], sent, now, done)
+        UserNotification.send_claimed([row], user, now, done)
         next
       end
       if row.created_at > closes
@@ -260,11 +285,43 @@ class UserNotification < Model
 
       digests[user._key] = (digests[user._key] ?? []) + [row]
     end
-    for key in digests.keys
-      sent = MailDelivery.attempt_mail("changes digest", NotificationMail.digest(digests[key], by_key[key]))
-      UserNotification.mailed(digests[key], sent, now, done)
+    for key in digests.keys()
+      UserNotification.send_claimed(digests[key], by_key[key], now, done)
     end
     done
+  end
+
+  # `rows`, `user`'s, claimed, and the one mail they make sent of those
+  # this run claimed — a reply or a mention its own, changes a digest — then
+  # marked (`mailed`). Nothing is sent when another run claimed them all.
+  static def send_claimed(rows, user, now, done)
+    claimed = UserNotification.claimed(rows, now)
+    return false if claimed.length == 0
+
+    sent = false
+    if claimed[0].kind == "changed"
+      sent = MailDelivery.attempt_mail("changes digest", NotificationMail.digest(claimed, user))
+    else
+      sent = MailDelivery.attempt_mail("#{claimed[0].kind} notification", NotificationMail.single(claimed[0], user))
+    end
+    UserNotification.mailed(claimed, sent, now, done)
+    true
+  end
+
+  # Those of `rows` still "pending" in the database, turned "sending" at
+  # `now` in one statement: the ones this run may mail.
+  static def claimed(rows, now)
+    keys = rows.map(&:_key)
+    taken = @sdbql{
+      FOR n IN user_notifications
+      FILTER n._key IN #{keys} AND n.mail == "pending"
+      UPDATE n WITH {mail: "sending", claimed_at: #{now}} IN user_notifications
+      RETURN NEW._key
+    }
+    throw "UserNotification.claimed: #{taken}" if type(taken) == "string"
+    rows.filter do |row|
+      taken.includes?(row._key)
+    end
   end
 
   # `rows`, mailed together: "sent", or tried once more ("failed" after
@@ -272,10 +329,14 @@ class UserNotification < Model
   static def mailed(rows, sent, now, done)
     for row in rows
       row.mail_tries = (row.mail_tries ?? 0) + 1
-      row.mail = "sent" if sent
-      row.mailed_at = now if sent
-      row.mail = "failed" if !sent && row.mail_tries >= NOTIFICATION_MAIL_TRIES
-      row.save
+      row.mail = sent ? "sent" : (row.mail_tries >= NOTIFICATION_MAIL_TRIES ? "failed" : "pending")
+      fields = {"mail_tries": row.mail_tries, "mail": row.mail}
+      if sent
+        row.mailed_at = now
+        fields["mailed_at"] = now
+      end
+      # Its mail's fields alone (#685): not the read mark.
+      UserNotification.where({"_key": row._key}).update_all(fields)
     end
     outcome = sent ? "sent" : "failed"
     done[outcome] = done[outcome] + 1
