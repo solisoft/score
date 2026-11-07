@@ -4,12 +4,20 @@
 # ("conflict" — the refused text, so nothing typed is ever lost). A score
 # keeps its latest SCORE_VERSIONS_KEPT. Each says who saved it (author_id,
 # a user's key); one kept before authors were recorded says nobody.
+# A version is no longer than a score may be (#684): a million characters.
 const SCORE_VERSION_EVERY = 600
 const SCORE_VERSIONS_KEPT = 200
+# How many refused texts ("conflict") a score keeps in an hour (#684): past
+# them a refused save is answered as before, and kept in the editor's
+# browser only, not here.
+const SCORE_CONFLICTS_PER_HOUR = 20
 
 class ScoreVersion < Model
   validates("score_id", {"presence": true})
-  validates("source", {"presence": true})
+  validates(
+    "source",
+    {"presence": true, "max_length": 1000000}
+  )
   validates("reason", {"inclusion": [
     "auto",
     "manual",
@@ -43,6 +51,21 @@ class ScoreVersion < Model
     return nil unless latest.nil? || DateTime.utc.to_unix - latest.created_at >= SCORE_VERSION_EVERY
 
     ScoreVersion.keep(score, score.source, "auto", score.saved_by)
+  end
+
+  # Whether `score` has kept SCORE_CONFLICTS_PER_HOUR refused texts in the
+  # last hour already.
+  static def conflicts_full?(score)
+    since = DateTime.utc.to_unix - 3600
+    kept = ScoreVersion.where(
+      "doc.score_id == @score AND doc.reason == @reason AND doc.created_at > @since",
+      {
+        "score": score._key,
+        "reason": "conflict",
+        "since": since
+      }
+    ).count
+    kept >= SCORE_CONFLICTS_PER_HOUR
   end
 
   # `score`'s versions, the latest first, as the History page lists them:

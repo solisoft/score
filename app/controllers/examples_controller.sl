@@ -35,17 +35,28 @@ class ExamplesController < Controller
     @description = @example["about"]
   end
 
-  # GET /examples/:category/:slug/score.pdf — the piece on A4
+  # GET /examples/:category/:slug/score.pdf — the piece on A4: printed once,
+  # then read back (Engraving) and cached by browsers for an hour; a printing
+  # counted against the sender's PDFs of the minute (429 past them, #684)
   def pdf
     example = ScoreLibrary.example(params["category"], params["slug"])
     halt(404, "Unknown example") if example.nil?
 
-    document = eui_score_pdf(ScoreLibrary.source(example), example["title"])
+    sender = ScoreSvg.sender("pdf", current_user(), client_ip(req))
+    printed = ScoreSvg.pdf(ScoreLibrary.source(example), example["title"], sender)
+    return ScoreSvg.too_many if printed["throttled"] == true
+
+    halt(422, printed["error"]) if printed["file"].nil?
+
     disposition = "inline; filename=\"#{example["slug"]}.pdf\""
     {
       "status": 200,
-      "headers": {"Content-Type": "application/pdf", "Content-Disposition": disposition},
-      "body": document
+      "headers": {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": disposition,
+        "Cache-Control": "public, max-age=3600"
+      },
+      "body": printed["file"]
     }
   end
 

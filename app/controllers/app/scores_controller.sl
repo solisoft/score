@@ -46,14 +46,17 @@ class AppScoresController < AppBaseController
 
   # POST /app/scores — a score from `source` (a template, an imported file,
   # the playground's draft), titled `title` when it has none; blank without
-  # one. Opened in the editor.
+  # one. Opened in the editor. 429 past the account's engravings of the
+  # minute (#684); 422 and why past its scores (Plan.limits).
   def create
     source = params["source"].to_s
     title = params["title"].to_s
     source = Score.blank_source(title) if source.blank?
     source = Score.with_title(source, title) if Score.title_in(source).nil? && !title.blank?
+    return ScoreSvg.too_many if Score.engraving_held?(source, @_save_sender)
+
     score = Score.start(current_user(), source)
-    halt(422, "That score could not be created.") if score._errors
+    halt(422, Score.refusal_in(score, "That score could not be created.")) if score._errors
 
     redirect(app_score_path(score))
   end
@@ -102,7 +105,8 @@ class AppScoresController < AppBaseController
     return @_not_writable unless score.writable_by?(current_user())
 
     body = req["json"] ?? params
-    saved = score.save_from_editor(body["source"].to_s, body["revision"].to_s.to_i, current_user())
+    sender = @_save_sender
+    saved = score.save_from_editor(body["source"].to_s, body["revision"].to_s.to_i, current_user(), sender)
     if saved["status"] == 200
       ScoreRoom.tell_saved(score, body["origin"])
       # The comments follow their bars (#392): moved by where the save says they went.
@@ -149,7 +153,9 @@ class AppScoresController < AppBaseController
   def version
     @score = @_score("show")
     @version = @_version_of(@score)
-    @figure = ScoreSvg.figure(@version.source, 1000, 7)
+    @figure = ScoreSvg.figure(@version.source, 1000, 7, ScoreSvg.sender("page", current_user(), client_ip(req)))
+    return ScoreSvg.too_many if @figure["throttled"]
+
     @file_name = @score.file_name
     @can_restore = @score.writable_by?(current_user())
     @title = SiteText.t("app.scores.version.title", {"title": @version.title})
@@ -161,6 +167,8 @@ class AppScoresController < AppBaseController
   def restore_version
     score = @_score("update")
     version = @_version_of(score)
+    return ScoreSvg.too_many if Score.engraving_held?(version.source, @_save_sender)
+
     if score.restore_version(version, current_user())
       flash("notice", SiteText.t("app.scores.flash.version_restored"))
     else
@@ -174,8 +182,11 @@ class AppScoresController < AppBaseController
   def copy_version
     score = @_score("show")
     version = @_version_of(score)
-    copy = Score.copy_of(current_user()._key, version.source, version.title ?? score.title)
-    halt(422, SiteText.t("app.scores.errors.version_not_copied")) if copy._errors
+    title = version.title ?? score.title
+    return ScoreSvg.too_many if Score.engraving_held?(Score.copy_source(version.source, title), @_save_sender)
+
+    copy = Score.copy_of(current_user()._key, version.source, title)
+    halt(422, Score.refusal_in(copy, SiteText.t("app.scores.errors.version_not_copied"))) if copy._errors
 
     flash("notice", SiteText.t(
       "app.scores.flash.version_copied",
@@ -206,8 +217,10 @@ class AppScoresController < AppBaseController
   # POST /app/scores/:id/duplicate — the copy opened in the editor
   def duplicate
     score = @_score("show")
+    return ScoreSvg.too_many if Score.engraving_held?(Score.copy_source(score.source, score.title), @_save_sender)
+
     copy = score.duplicate(current_user())
-    halt(422, SiteText.t("app.scores.errors.not_copied")) if copy._errors
+    halt(422, Score.refusal_in(copy, SiteText.t("app.scores.errors.not_copied"))) if copy._errors
 
     flash("notice", SiteText.t(
       "app.scores.flash.copied",
@@ -369,6 +382,12 @@ class AppScoresController < AppBaseController
     )
     @ai_left = ScoreSuggestion.left_today(user)
     @ai_link = nil
+  end
+
+  # Who asks the engraver to read a score before it is written (#684):
+  # the signed-in person, held to ENGRAVINGS_PER_MINUTE["save"].
+  def _save_sender
+    ScoreSvg.sender("save", current_user(), client_ip(req))
   end
 
   # The editor's JSON calls on a score this person may not (or no longer)
