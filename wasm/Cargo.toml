@@ -30,13 +30,14 @@ crate-type = ["cdylib", "rlib"]
 # word's range, what a double click opens (#434); b64978c a chord
 # diagram's strings and frets (#436); 291b705 a slur's side written ^( or
 # _(, and hairpins under a slur drawn below (#467); 2dee226 a PDF set a
-# little smaller, down to 17 pt, when that saves a page (#470). The browser draws
+# little smaller, down to 17 pt, when that saves a page (#470); 1250ae9 words
+# and marks over the staff clear accidentals and slurs (#668). The browser draws
 # those before the server's Soli does;
 # move this
 # and the server's Soli together otherwise. `build.sh` writes the module
 # into public/eui-score/, and that output is committed: deploying the site
 # needs no Rust.
-eui-score = { git = "https://github.com/solisoft/eui", rev = "e50f836" }
+eui-score = { git = "https://github.com/solisoft/eui", rev = "1250ae9" }
 wasm-bindgen = "=0.2.126"
 serde_json = "1"
 
