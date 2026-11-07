@@ -22,6 +22,22 @@ class Changelog
         },
         {
           "area": "site",
+          "title": "Signing out clears what the browser kept of your scores",
+          "text": "Signing out now also takes the undo history the editor keeps in the browser for each of your "
+          + "scores, with their text, besides the pages kept for offline use and the unsent changes. When your "
+          + "session ends another way (signed out from another device, or expired), the pages kept go the next "
+          + "time the sign-in page opens, and the account page is never kept on the device.",
+          "app": true
+        },
+        {
+          "area": "editor",
+          "title": "A shared link asks before replacing your draft",
+          "text": "A score's link opened in the playground no longer replaces the score you were writing there "
+          + "without a word: it asks first, and once opened, Edit ▸ Undo brings your draft back.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
           "title": "Two-step setup and invitations, tightened",
           "text": "Turning on two-step sign-in now waits 15 minutes for the first code of your app, then asks for your "
           + "password again, and wrong codes there count like those at sign-in. A score's title stays on one line "
