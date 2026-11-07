@@ -3,7 +3,7 @@
 # process, so a stand-in message plays one here; the real mails are sent
 # through it by the controller specs (sign-up, reset, invitations).
 #
-# The two failures below are made on purpose, and their warnings say so
+# The failures below are made on purpose, and their warnings say so
 # ("on purpose: mail_delivery_spec"): CI fails the suite on any other
 # "could not be sent" in its log or the test servers' (#671).
 
@@ -53,6 +53,21 @@ describe("MailDelivery") do
     assert_eq(warnings.length, 1)
     assert_contains(warnings[0], "WARN")
     assert_contains(warnings[0], "SMTP refused the recipient")
+  end
+
+  test("error_of answers why it could not leave, or nil when it left") do
+    refused = StandInMessage.new({
+      "fails": true,
+      "sent": false
+    })
+    error = MailDelivery.error_of("invitation", fn() { refused })
+    assert_contains(error, "SMTP refused the recipient")
+    taken = StandInMessage.new({
+      "fails": false,
+      "sent": false
+    })
+    assert_null(MailDelivery.error_of("invitation", fn() { taken }))
+    assert(taken.sent?)
   end
 
   test("a message that cannot even be built answers false too") do
