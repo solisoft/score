@@ -8,7 +8,11 @@
 // - The sounds (38 MB): kept once, in the cache the player keeps them in
 //   too (SOUNDS, public/eui-score/player.js), under the same address.
 // - The app's pages: from the network when there is one, kept as they come;
-//   without one, the copy kept, or a page that says so.
+//   without one, the copy kept, or a page that says so. Not the account's
+//   page (its tokens, its plan): never kept, it needs the network.
+// - The sign-in page, opened from the network: the session it asks for is
+//   gone (signed out on another device, run out, or someone else about to
+//   sign in), so the app's pages kept here go — someone's scores (#688).
 //
 // What is typed offline is not this file's: the editor page keeps it in the
 // browser and sends it when the network is back (app/views/app/scores/show).
@@ -18,7 +22,8 @@ const ASSETS = "eui-score-assets-v2";
 // The player's own cache (public/eui-score/player.js): one copy of the sounds.
 const SOUNDS = "eui-score-sounds";
 // v2: the pages kept before sign-out cleared them (#356) go with v1.
-const PAGES = "eui-score-pages-v2";
+// v3: the account's page, kept by v2, goes (#688).
+const PAGES = "eui-score-pages-v3";
 
 self.addEventListener("install", () => self.skipWaiting());
 // Caches of an older version of this file are let go — the sounds they
@@ -107,6 +112,9 @@ const isLasting = (url) =>
     : url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com";
 const isAsset = (url) => url.origin === self.location.origin && /^\/(eui-score|css|js|images)\//.test(url.pathname);
 const isAppPage = (url) => url.origin === self.location.origin && /^\/(app|s)(\/|$)/.test(url.pathname);
+// Asked for from the network only: what the account's page shows is not kept on the device.
+const isUnkept = (url) => /^\/app\/account(\/|$)/.test(url.pathname);
+const isSignIn = (url) => url.origin === self.location.origin && /^(\/fr)?\/login\/?$/.test(url.pathname);
 
 self.addEventListener("fetch", (event) => {
   const request = event.request;
@@ -114,8 +122,26 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (isLasting(url)) return event.respondWith(fromCacheFirst(request));
   if (isAsset(url)) return event.respondWith(fromNetworkFirst(request, ASSETS));
-  if (request.mode === "navigate" && isAppPage(url)) return event.respondWith(fromNetworkFirst(request, PAGES));
+  if (request.mode !== "navigate") return;
+  if (isSignIn(url)) return event.respondWith(signingIn(request));
+  if (isAppPage(url)) return event.respondWith(isUnkept(url) ? fromNetworkOnly(request) : fromNetworkFirst(request, PAGES));
 });
+
+// The sign-in page, as the network answers it, once the app's pages kept
+// here are gone. Offline, nothing is let go: no one could sign in anyway.
+async function signingIn(request) {
+  const response = await fetch(request);
+  await caches.delete(PAGES);
+  return response;
+}
+
+async function fromNetworkOnly(request) {
+  try {
+    return await fetch(request);
+  } catch (error) {
+    return offline(NOT_KEPT);
+  }
+}
 
 async function fromCacheFirst(request) {
   const cache = await caches.open(isSounds(new URL(request.url)) ? SOUNDS : ASSETS);
@@ -137,12 +163,19 @@ async function fromNetworkFirst(request, name) {
     const kept = await cache.match(request, { ignoreSearch: true });
     if (kept) return kept;
     if (name !== PAGES) throw error;
-    return new Response(OFFLINE, { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } });
+    return offline(NOT_OPENED);
   }
 }
 
-const OFFLINE = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+const NOT_OPENED = "This page was not opened on this device before, so it is not kept here.";
+const NOT_KEPT = "Your account's page is never kept on this device: it needs the network.";
+
+/** The page that says the network is gone, and `why` this page is not here. */
+function offline(why) {
+  const page = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Offline · Score</title><body style="font:16px/1.6 system-ui,sans-serif;background:#fbf9f4;color:#1d1914;max-width:520px;margin:15vh auto;padding:0 20px">
-<h1 style="font-family:Georgia,serif">You are offline</h1><p>This page was not opened on this device before, so it is not kept here.
+<h1 style="font-family:Georgia,serif">You are offline</h1><p>${why}
 The scores you opened before are: go back, or try again once the network is back.</p>
 <p><a href="/app" style="color:#8b2b2c">Your scores</a></p></body></html>`;
+  return new Response(page, { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } });
+}

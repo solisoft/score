@@ -76,6 +76,14 @@ describe("The Content-Security-Policy") do
       assert_contains(ContentPolicy.policy([], "not a url"), "connect-src 'self' blob:;")
     end
 
+    test("sends a form to the site, or to Stripe's two pages a payment goes to, nowhere else (#688)") do
+      policy = ContentPolicy.policy([], "")
+      form_action = policy.split("; ").filter do |directive|
+        directive.starts_with("form-action")
+      end
+      assert_eq(form_action, ["form-action 'self' https://checkout.stripe.com https://billing.stripe.com"])
+    end
+
     test("the MP3 encoder named is the one the audio export loads") do
       assert_contains(File.read("public/eui-score/audio-export.js"), "LAME_URL = \"#{CSP_MP3_ENCODER}\"")
     end

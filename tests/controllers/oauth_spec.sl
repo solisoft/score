@@ -73,11 +73,25 @@ def oauth_decide(decision)
   )
 end
 
+# Where the answer to the consent page sends the browser on (#688): the
+# address its page goes on to by itself, the same as its link — never a
+# redirect, which the policy's form-action refuses for another site.
+def oauth_sent_to(response)
+  assert_eq(res_status(response), 200, "the answer is a page")
+  assert_null(res_location(response), "not a redirect")
+  body = res_body(response)
+  found = Regex.capture("<meta http-equiv=\"refresh\" content=\"0; url=(?P<to>[^\"]+)\">", body)
+  assert_not_null(found, "the page goes on by itself")
+  link = Regex.capture("href=\"(?P<to>[^\"]+)\" data-oauth-leave-link", body)
+  assert_eq(link["to"], found["to"], "and its link goes to the same address")
+  html_unescape(found["to"])
+end
+
 # A signed-in person's approval of `client_id`: the code sent back.
 def oauth_code_for(user, client_id, extra = "")
   oauth_sign_in(user)
   get(oauth_authorize_path(client_id, extra))
-  oauth_param(res_location(oauth_decide("allow")), "code")
+  oauth_param(oauth_sent_to(oauth_decide("allow")), "code")
 end
 
 # Form-encoded, as an OAuth client sends it (RFC 6749): not JSON.
@@ -188,7 +202,7 @@ describe("Signing in from an MCP client") do
       "/app/oauth/consent",
       {"decision": "allow", "request_id": assigns()["request_id"]}
     )
-    location = res_location(decided)
+    location = oauth_sent_to(decided)
     assert(location.starts_with?(OAUTH_REDIRECT + "?"))
     assert_eq(oauth_param(location, "state"), "st4te")
     assert_not_null(oauth_param(location, "code"))
@@ -274,9 +288,9 @@ describe("Signing in from an MCP client") do
     client_id = oauth_register()
     oauth_sign_in(user)
     get(oauth_authorize_path(client_id))
-    denied = oauth_decide("deny")
-    assert_eq(oauth_param(res_location(denied), "error"), "access_denied")
-    assert_null(oauth_param(res_location(denied), "code"))
+    denied = oauth_sent_to(oauth_decide("deny"))
+    assert_eq(oauth_param(denied, "error"), "access_denied")
+    assert_null(oauth_param(denied, "code"))
     assert_eq(res_status(get(oauth_authorize_path("score_oc_nobody"))), 400)
     elsewhere = "/oauth/authorize?response_type=code&client_id=" + client_id + "&redirect_uri="
     + url("https://evil.example/cb")
@@ -372,7 +386,7 @@ describe("The OAuth server's hardening (#541)") do
     assert_eq(OauthCode.count, codes_before)
     # The page on show answered with its own id: a code.
     get(oauth_authorize_path(shown_client))
-    assert_not_null(oauth_param(res_location(oauth_decide("allow")), "code"))
+    assert_not_null(oauth_param(oauth_sent_to(oauth_decide("allow")), "code"))
     assert_eq(OauthCode.count, codes_before + 1)
   end
 
@@ -559,7 +573,7 @@ describe("The OAuth server's hardening (#541)") do
     # Asked without one (a single registered URI): traded without one.
     oauth_sign_in(user)
     get(oauth_authorize_to(client_id, ""))
-    bare = oauth_param(res_location(oauth_decide("allow")), "code")
+    bare = oauth_param(oauth_sent_to(oauth_decide("allow")), "code")
     clear_headers()
     traded = post(
       "/oauth/token",

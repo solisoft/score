@@ -30,6 +30,8 @@
   "That link holds no score: here is the starting one.": "Ce lien ne contient pas de partition : voici celle de départ.",
   "A shared score. Your changes stay in this browser; Share makes a new link.": "Une partition partagée. Vos modifications restent dans ce navigateur ; Partager crée un nouveau lien.",
   "Your last score, kept in this browser. New starts afresh.": "Votre dernière partition, gardée dans ce navigateur. Nouvelle repart de zéro.",
+  "Your last score, kept in this browser. The link holds another: open it, or keep this one.": "Votre dernière partition, gardée dans ce navigateur. Le lien en contient une autre : ouvrez-la, ou gardez celle-ci.",
+  "Your draft is kept: the shared score was not opened.": "Votre brouillon est gardé : la partition partagée n'a pas été ouverte.",
   "That section is no longer in the library.": "Cette section n'est plus dans la bibliothèque.",
   "That section could not be added: try again.": "Impossible d'ajouter cette section : réessayez.",
   "1 bar": "1 mesure",

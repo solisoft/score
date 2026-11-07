@@ -860,6 +860,21 @@
     </div>
   </dialog>
 
+  <%# A shared link (#s=) opened over a draft of another score (#688): the
+      draft stays until the person says which to keep (studio.js). %>
+  <dialog class="studio-keys studio-parts" data-shared-ask data-untitled="<%= t("app.editor.untitled") %>" aria-labelledby="studio-shared-title">
+    <div class="studio-keys-head">
+      <h2 id="studio-shared-title"><%= t("app.editor.shared_ask_title") %></h2>
+    </div>
+    <% shared_title = "<strong data-shared-ask-shared></strong>" %>
+    <% draft_title = "<strong data-shared-ask-draft></strong>" %>
+    <p class="studio-parts-note"><%- t("app.editor.shared_ask_about", {"shared": shared_title, "draft": draft_title}) %></p>
+    <div class="tool-row studio-new-actions">
+      <button type="button" class="tool tool-wide" data-shared-keep><%= t("app.editor.shared_keep") %></button>
+      <button type="button" class="tool tool-wide tool-primary" data-shared-open><%= t("app.editor.shared_open") %></button>
+    </div>
+  </dialog>
+
   <dialog class="studio-keys studio-new" data-new aria-labelledby="studio-new-title">
     <form method="dialog" data-new-form>
       <div class="studio-keys-head">

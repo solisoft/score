@@ -139,6 +139,15 @@
   let heldUntil = 0;
   // This editor, for the room: its own saves come back to it, and are skipped.
   const origin = crypto.randomUUID?.() ?? String(Math.random()).slice(2);
+  // The room tells it back as its SHA-256 (ScoreRoom.origin_tag, #688), never
+  // as it is: another editor could send it with a save of theirs, which this
+  // one would then skip. Without SubtleCrypto (an http page not on this
+  // computer) nothing is recognised: its own news is taken as anyone's.
+  let originTag = null;
+  try {
+    const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(origin)));
+    originTag = [...hash].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  } catch (error) {}
   let applyingRemote = false;
   // The bars put in or taken away here since `base` (#392), in order; null
   // once an Undo or a Redo makes them not the whole story. Sent with each
@@ -566,11 +575,11 @@
         // Someone came in: they see where this person works.
         if (Object.keys(data.payload.joins ?? {}).length) sendPlace();
       } else if (data.event === "cursor") {
-        if (data.origin === origin && !data.gone) return;
+        if (data.origin === originTag && !data.gone) return;
         if (data.gone || !data.bars) delete cursors[data.connection_id];
         else cursors[data.connection_id] = { user_id: data.user_id, name: data.name, lane: data.lane, bars: data.bars };
         showCursors();
-      } else if (data.event === "saved" && data.origin !== origin && data.revision > revision) {
+      } else if (data.event === "saved" && data.origin !== originTag && data.revision > revision) {
         // This editor's own save on its way, or a choice open: that save meets the 409, which merges.
         if (saving || conflict) {
           show(say("changed_window"), "conflict");
@@ -596,7 +605,7 @@
         forgetLocally();
         titleBox.textContent = data.title;
         show(say("saved"), "ok");
-      } else if (data.event === "comments" && data.origin !== origin) {
+      } else if (data.event === "comments" && data.origin !== originTag) {
         // A comment of someone else's (#385): in the panel and on the score; the bell may have news.
         comments.take(data);
         window.euiBell?.();

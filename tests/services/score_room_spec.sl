@@ -63,7 +63,7 @@ describe("ScoreRoom") do
     score = Score.start(user, Score.blank_source("News"))
     news = ScoreRoom.saved_news(score, "editor-1")
     assert_eq(news["revision"], score.revision)
-    assert_eq(news["origin"], "editor-1")
+    assert_eq(news["origin"], Crypto.sha256("editor-1"))
     assert_contains(news["source"], "News")
     # Who saved it, by key: the editors name them from the room's presence.
     assert_eq(news["saved_by"], user._key)
@@ -154,11 +154,11 @@ describe("ScoreRoom") do
     assert_eq(news["event"], "comments")
     assert_eq(news["thread"]["id"], "t1")
     assert_null(news["gone"])
-    assert_eq(news["origin"], "editor-2")
+    assert_eq(news["origin"], Crypto.sha256("editor-2"))
     gone = ScoreRoom.comments_news(nil, "t1", "x" * 100)
     assert_eq(gone["gone"], "t1")
     assert_null(gone["thread"])
-    assert_eq(gone["origin"].length, 64, "an origin is kept short")
+    assert_eq(gone["origin"], Crypto.sha256("x" * 64), "an origin is kept short")
   end
 
   # (tell_saved, tell_comments and deliver reach the socket runtime, which
@@ -219,7 +219,7 @@ describe("ScoreRoom, where each person works") do
     assert_eq(news["user_id"], owner._key)
     assert_eq(news["name"], "Olivia")
     assert_eq(news["connection_id"], "conn-a")
-    assert_eq(news["origin"], "editor-1")
+    assert_eq(news["origin"], Crypto.sha256("editor-1"))
     assert_eq(news["lane"], 1)
     assert_eq(news["bars"], [3, 5])
   end
@@ -585,11 +585,32 @@ describe("ScoreRoom, listening from the read page (#392)") do
     assert_null(ScoreRoom.signed(parts.join(".")))
   end
 
+  # #688: told as it is, an editor's id could be sent back by another editor
+  # with a save of their own, which the page it belongs to would then skip.
+  test("the room hears an editor's tag, never its id; a tag sent back is not the same tag") do
+    tag = ScoreRoom.origin_tag("editor-secret")
+    assert_eq(tag, Crypto.sha256("editor-secret"))
+    assert_not(tag.contains("editor-secret"))
+    assert_ne(ScoreRoom.origin_tag(tag), tag, "a tag sent as an origin names no one")
+    assert_eq(ScoreRoom.origin_tag(nil), "")
+    assert_eq(ScoreRoom.origin_tag(""), "")
+    user = room_user()
+    score = Score.start(user, Score.blank_source("Tagged"))
+    [
+      ScoreRoom.saved_news(score, "editor-secret"),
+      ScoreRoom.comments_news(nil, "t1", "editor-secret"),
+      ScoreRoom.moved_news([], "editor-secret")
+    ].each do |news|
+      assert_eq(news["origin"], tag)
+      assert_not(news.to_json.contains("editor-secret"))
+    end
+  end
+
   test("comment threads moved by a save are news of their own, the editor that saved named") do
     news = ScoreRoom.moved_news([{"id": "t1"}, {"id": "t2"}], "editor-9")
     assert_eq(news["event"], "comments")
     assert_eq(news["threads"].length, 2)
-    assert_eq(news["origin"], "editor-9")
+    assert_eq(news["origin"], Crypto.sha256("editor-9"))
   end
 end
 

@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#fbf9f4">
     <title><%= title %> · Score</title>
+    <%# A page that goes on elsewhere by itself (@refresh_to): the OAuth
+        consent's answer, app/oauth/leave (#688). %>
+    <% unless refresh_to.to_s.blank? %>
+    <meta http-equiv="refresh" content="0; url=<%= refresh_to %>">
+    <% end %>
 
     <%# Share tags (Open Graph, Twitter card, canonical), as on the site's
         layout. Actions set @title and @description. %>
@@ -134,8 +139,11 @@
       if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
     </script>
     <%# Just signed out, or the account deleted (a "signed_out" flash): the
-        computer may be shared, so the app's pages kept for offline use and
-        the editor's unsent text go. %>
+        computer may be shared, so the app's pages kept for offline use, the
+        editor's unsent text and the undo histories of the account's scores
+        (public/eui-score/undo-history.js: "score:<person>:<score>", each
+        with the score's text) go. The playground's own history stays: it
+        is this browser's, not the account's (#688). %>
     <% signed_out = false %>
     <% for message in flashes() %>
       <% signed_out = true if message["type"] == "signed_out" %>
@@ -148,6 +156,21 @@
             const key = localStorage.key(i);
             if (key && key.startsWith("eui-score-pending:")) localStorage.removeItem(key);
           }
+        } catch (error) {}
+        try {
+          const opening = indexedDB.open("eui-score-history");
+          // None kept in this browser: none is made by asking.
+          opening.onupgradeneeded = () => opening.transaction.abort();
+          opening.onerror = (event) => event.preventDefault();
+          opening.onsuccess = () => {
+            const db = opening.result;
+            const stores = ["histories", "used"].filter((name) => db.objectStoreNames.contains(name));
+            if (!stores.length) return db.close();
+            const tx = db.transaction(stores, "readwrite");
+            // Every key from "score:" up to, not with, "score;": the next character after ":".
+            for (const name of stores) tx.objectStore(name).delete(IDBKeyRange.bound("score:", "score;", false, true));
+            tx.oncomplete = tx.onabort = tx.onerror = () => db.close();
+          };
         } catch (error) {}
         navigator.serviceWorker?.controller?.postMessage({ type: "signed-out" });
         if (!window.caches) return;
