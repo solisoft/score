@@ -423,8 +423,11 @@ describe("Accounts") do
       response = request("DELETE", "/logout", {}, {})
       # The spec client drops every cookie on a /logout path; a browser keeps
       # the new session's, which carries the flash.
-      headers = res_headers(response)
-      session_cookie = (headers["set-cookie"] ?? headers["Set-Cookie"]).to_s.split(";")[0]
+      # `set-cookie` is an Array, one line per cookie (Soli 2.30.2, #659).
+      session_line = res_header(response, "set-cookie").find do |line|
+        line.starts_with?("session_id=")
+      end
+      session_cookie = session_line.split(";")[0]
       assert_contains(session_cookie, "session_id=")
       set_request_cookie("session_id", session_cookie.split("=")[1])
       page = res_body(get(res_location(response)))

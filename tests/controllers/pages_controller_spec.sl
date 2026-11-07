@@ -20,7 +20,8 @@ describe("PagesController") do
       assert_contains(body, "?source=syntax/notes")
       assert_contains(body, "?source=syntax/nested-groups")
       # Every snippet but the two the home page shows is on this page.
-      names = ScoreLibrary.snippets.keys.filter do |name|
+      # `keys()`: one snippet is named "keys", which a bare `.keys` would read.
+      names = ScoreLibrary.snippets.keys().filter do |name|
         !["home", "hello"].includes?(name)
       end
       names.each do |name|
