@@ -146,8 +146,9 @@ end
 
 class User < Model
   # Fields: email, password_digest, role, plus the auth-flow fields:
-  # reset_token_digest, reset_sent_at, confirmation_token_digest,
-  # confirmation_sent_at, confirmed_at, remember_token_digest,
+  # reset_token_digest, reset_sent_at, reset_letter,
+  # confirmation_token_digest, confirmation_sent_at, confirmation_letter,
+  # confirmed_at, remember_token_digest,
   # failed_attempts, locked_at.
   # (Model stores fields dynamically — no need to declare them.)
   validates(
@@ -365,10 +366,19 @@ class User < Model
   # Written alone (`_patch_stored`): the copy asking may be older than the
   # account's lockout counts (the mail job reads it), and saving it whole
   # would put them back as they were then.
-  def start_password_reset
-    token = uuid_v4()
+  #
+  # `token` and `letter` are the mail job's (AuthMailJob.link_token): the
+  # token it derives for its letter, and the letter's id, kept so that a
+  # retry of that job knows the link is made and sends the same one again.
+  def start_password_reset(token = nil, letter = nil)
+    token ||= uuid_v4()
     sent_at = DateTime.utc().to_unix()
-    @_patch_stored({"reset_token_digest": Crypto.sha256(token), "reset_sent_at": sent_at})
+    @_patch_stored({
+      "reset_token_digest": Crypto.sha256(token),
+      "reset_sent_at": sent_at,
+      "reset_letter": letter
+    })
+    this.reset_letter = letter
     this.reset_token_digest = Crypto.sha256(token)
     this.reset_sent_at = sent_at
     token
@@ -466,11 +476,17 @@ class User < Model
   # --- Email confirmation -----------------------------------------------------
   # Written alone, as `start_password_reset` is: the mail job's copy of the
   # account is read before the sign-ins counted since — saved whole, it
-  # wrote their failures back to what it had read.
-  def start_email_confirmation
-    token = uuid_v4()
+  # wrote their failures back to what it had read. `token` and `letter`:
+  # the mail job's, as `start_password_reset` takes them.
+  def start_email_confirmation(token = nil, letter = nil)
+    token ||= uuid_v4()
     sent_at = DateTime.utc().to_unix()
-    @_patch_stored({"confirmation_token_digest": Crypto.sha256(token), "confirmation_sent_at": sent_at})
+    @_patch_stored({
+      "confirmation_token_digest": Crypto.sha256(token),
+      "confirmation_sent_at": sent_at,
+      "confirmation_letter": letter
+    })
+    this.confirmation_letter = letter
     this.confirmation_token_digest = Crypto.sha256(token)
     this.confirmation_sent_at = sent_at
     token

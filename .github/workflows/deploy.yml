@@ -142,32 +142,51 @@ jobs:
           tail -40 "$RUNNER_TEMP/solidb.log" >&2
           exit 1
 
+      # The test servers write their logs to /tmp/soli_test_server_w<N>.log,
+      # and a later run of soli test writes over them: each run starts from
+      # none, and its logs are copied out by a step that runs even when the
+      # tests fail.
       - name: Suite, coverage at least 90 %
         run: |
           set -o pipefail
+          rm -f /tmp/soli_test_server_w*.log
           soli test --coverage --coverage-min 90.0 2>&1 | tee "$RUNNER_TEMP/suite.log"
-          # The test servers' logs: the next run of soli test writes over them.
-          cat /tmp/soli_test_server_w*.log > "$RUNNER_TEMP/suite-servers.log"
+
+      - name: Keep the suite's test server logs
+        if: always()
+        run: cat /tmp/soli_test_server_w*.log > "$RUNNER_TEMP/suite-servers.log" 2>/dev/null || true
 
       # The e-mails as they leave, read from the inbox a `--dev` test server
       # keeps (#671): their subject and link. The suite above skips them.
       - name: The e-mails, subject and link
         run: |
           set -o pipefail
+          rm -f /tmp/soli_test_server_w*.log
           SOLI_TEST_SERVER_DEV=1 soli test tests/mail --no-coverage 2>&1 | tee "$RUNNER_TEMP/mail.log"
-          # Skipped, they would pass and prove nothing.
-          if grep -q "pending" "$RUNNER_TEMP/mail.log"; then
-            echo "the mail specs were skipped" >&2
+          # Skipped, they would pass and prove nothing. The summary reads
+          # "6 tests" when they ran, "0 tests, 6 pending" when they did not.
+          summary="$(grep -E '^ *[0-9]+ tests?\b' "$RUNNER_TEMP/mail.log" | tail -1)"
+          if ! echo "$summary" | grep -qE '^ *[1-9][0-9]* tests?\b' || echo "$summary" | grep -qE '\b[1-9][0-9]* pending'; then
+            echo "the mail specs were skipped: ${summary:-no summary}" >&2
             exit 1
           fi
-          cat /tmp/soli_test_server_w*.log >> "$RUNNER_TEMP/mail.log"
+
+      - name: Keep the mail specs' test server logs
+        if: always()
+        run: cat /tmp/soli_test_server_w*.log > "$RUNNER_TEMP/mail-servers.log" 2>/dev/null || true
 
       # A mail that could not be sent is a warning, not a failed spec, so it
       # went unseen in green runs (#671). Any one a spec did not make on
       # purpose fails here — the suite's log and its test servers'.
       - name: No e-mail failed
+        if: always()
         run: |
-          if grep -h "could not be sent" "$RUNNER_TEMP"/suite.log "$RUNNER_TEMP"/suite-servers.log "$RUNNER_TEMP"/mail.log | grep -v "on purpose"; then
+          logs=()
+          for log in suite.log suite-servers.log mail.log mail-servers.log; do
+            [ -f "$RUNNER_TEMP/$log" ] && logs+=("$RUNNER_TEMP/$log")
+          done
+          [ ${#logs[@]} -gt 0 ] || exit 0
+          if grep -h "could not be sent" "${logs[@]}" | grep -v "on purpose"; then
             echo "an e-mail could not be sent (above)" >&2
             exit 1
           fi
