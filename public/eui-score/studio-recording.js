@@ -23,7 +23,7 @@ export function install(ctx) {
   midiIn?.addEventListener("change", () => chooseInput(midiIn));
 
   function playKey(key, held) {
-    if (!st.score) return;
+    if (!st.score || !root.isConnected) return;
     if (!st.input.on && !st.sel) setInput(true);
     // A key pressed while others are down joins their chord.
     const add = held.length > 0 && st.input.on && st.input.last;
@@ -34,6 +34,10 @@ export function install(ctx) {
     });
     hear();
   }
+
+  // The keyboard is the tab's (player.js), not the page's: once this editor
+  // is gone (instant navigation), its keys write no more into this score.
+  ctx.ends.push(() => P.unlisten(playKey, recordKey));
 
   // ---- Recording from a MIDI keyboard --------------------------------------------
   //

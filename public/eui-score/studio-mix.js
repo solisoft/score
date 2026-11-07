@@ -36,10 +36,14 @@ export function install(ctx) {
   }
 
   // Play's mixer goes out through the MIDI-learn volume (player.js), a WAV's straight to its file.
-  P.setRouter((ctx, synth, offline, destination) => {
+  // Play's synthesizer outlives a page (instant navigation): from now on it goes through this editor's mixer.
+  const unroute = P.setRouter((ctx, synth, offline, destination) => {
     const graph = X.mixerGraph(ctx, synth, destination);
     graph.apply(mixHeard(), st.score ? M.channels(st.score) : []);
-    if (!offline) st.liveMixer = graph;
+    if (!offline) {
+      st.liveMixer?.disconnect();
+      st.liveMixer = graph;
+    }
     // Save the sound: the synthesizer's notes, all scheduled, into their strips (#391).
     else if (st.offlineNotes?.notes.length) Sy.scheduleAll(ctx, st.offlineNotes.notes, st.offlineNotes.settingsOf, (channel) => graph.strips[channel % 16].input);
   });
@@ -87,6 +91,7 @@ export function install(ctx) {
     },
     commit: mixCommit,
     level: () => (st.playing?.handle && st.liveMixer ? st.liveMixer.level().peak : 0),
+    signal: ctx.signal,
   });
 
   // The microphone (audio-ui.js, #390): what of the editor it works with.
@@ -111,6 +116,17 @@ export function install(ctx) {
       gridName: () => quantizeBox?.selectedOptions[0]?.textContent ?? tr("sixteenths"),
       mixHeard,
     },
+  });
+
+  // The editor gone (instant navigation): its mixer, its instruments and its
+  // microphone let go, and Play's synthesizer is no longer heard through them.
+  ctx.ends.push(() => {
+    unroute();
+    st.liveMixer?.disconnect();
+    st.liveMixer = null;
+    st.mixer.end();
+    st.instruments.end();
+    st.audio.end();
   });
 
   /** The Playback section's staves, a Mute and a Solo for each. */

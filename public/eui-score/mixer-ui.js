@@ -10,7 +10,8 @@
 // `instrument` (instruments-ui.js) → what each staff plays, in its strip;
 // `preview(mix)` while a control moves (heard, not kept); `commit(lane,
 // patch)` when it is let go (kept, one Undo away); `level()` → the master's
-// peak (0–1), or null while nothing plays.
+// peak (0–1), or null while nothing plays; `signal` ends its listener on the
+// document, `end()` its meter, when the editor is gone.
 
 const SEARCH = new URL(import.meta.url).search;
 const X = await import(`./mixer.js${SEARCH}`);
@@ -105,7 +106,7 @@ function shown(field, value) {
   return `${value} dB`;
 }
 
-export function mixerPanel({ root, tracks, mix, preview, commit, level, instrument = null }) {
+export function mixerPanel({ root, tracks, mix, preview, commit, level, instrument = null, signal = undefined }) {
   const panel = Object.assign(document.createElement("dialog"), { className: "studio-mixer" });
   panel.setAttribute("aria-label", tr("Mixer"));
   panel.innerHTML = `<div class="mixer-head"><h3>${tr("Mixer")}</h3><span class="mixer-note">${tr("Kept with the score; heard on Play and in Save the sound.")}</span><button type="button" class="tool" data-mixer-close aria-label="${tr("Close the mixer")}">✕</button></div><div class="mixer-strips" data-mixer-strips></div>`;
@@ -131,7 +132,8 @@ export function mixerPanel({ root, tracks, mix, preview, commit, level, instrume
 
   function meter() {
     frame = 0;
-    if (!panel.open) return;
+    // Swapped out by instant navigation, the dialog is still open: its meter stops all the same.
+    if (!panel.open || !panel.isConnected) return;
     const peak = level?.() ?? 0;
     const fill = panel.querySelector(".mixer-meter-fill");
     if (fill) {
@@ -150,7 +152,7 @@ export function mixerPanel({ root, tracks, mix, preview, commit, level, instrume
   });
   panel.ownerDocument.addEventListener("pointerup", () => {
     held = false;
-  });
+  }, { signal });
   panel.addEventListener("input", (event) => {
     const control = event.target.closest("[data-field]");
     if (!control || control.type === "checkbox" || control.tagName === "SELECT") return;
@@ -199,6 +201,8 @@ export function mixerPanel({ root, tracks, mix, preview, commit, level, instrume
     panel,
     open,
     close,
+    /** The editor is gone (instant navigation): the meter stops. */
+    end: close,
     toggle() {
       if (panel.open) close();
       else open();

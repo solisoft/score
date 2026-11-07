@@ -75,6 +75,8 @@ export function audioTracks({ root, st, studio, options = {} }) {
   const url = options.url ?? null;
   const say = (text, error = false, link = null) => studio.say(text, error, link);
   st.taking = null;
+  // The editor is gone (`end`): nothing more is listened to.
+  let ended = false;
   // Track → { take, samples, rate, peaks, unsaved?, wav? }.
   const takes = new Map();
   let trackCount = T.TRACKS;
@@ -257,6 +259,7 @@ export function audioTracks({ root, st, studio, options = {} }) {
       render();
       return say(error.message, true);
     }
+    if (ended) return Mic.closeMic(stream);
     if (st.playing) studio.stop();
     const bar = studio.changeBar() ?? 0;
     const passes = M.playback(st.score);
@@ -284,6 +287,7 @@ export function audioTracks({ root, st, studio, options = {} }) {
       render();
       return say(tr("The microphone could not be recorded: {why}", { why: error.message ?? error }), true);
     }
+    if (ended) return taking.rec.stop();
     render();
     await studio.play();
     if (st.taking !== taking) return;
@@ -640,6 +644,7 @@ export function audioTracks({ root, st, studio, options = {} }) {
       tunerBox.querySelector("[data-tuner-cents]").textContent = error.message;
       return say(error.message, true);
     }
+    if (ended) return Mic.closeMic(stream);
     let smooth = null;
     let quiet = 0;
     tuning = {
@@ -715,6 +720,7 @@ export function audioTracks({ root, st, studio, options = {} }) {
       practiceBox.querySelector("[data-practice-said]").textContent = error.message;
       return say(error.message, true);
     }
+    if (ended) return Mic.closeMic(stream);
     if (st.playing) studio.stop();
     const follower = Fo.createFollower(expected, { octaves: practiceBox.querySelector("[data-practice-octaves]").checked });
     const bar = studio.changeBar() ?? 0;
@@ -759,8 +765,26 @@ export function audioTracks({ root, st, studio, options = {} }) {
 
   load();
 
+  /**
+   * The editor is gone (instant navigation): the microphone let go — the
+   * tuner's, practice's, a take's (not kept) — and the takes silent. A
+   * microphone asked for meanwhile is let go as it comes (`ended`).
+   */
+  function end() {
+    ended = true;
+    stopListening();
+    const taking = st.taking;
+    st.taking = null;
+    if (taking) {
+      taking.rec?.stop();
+      Mic.closeMic(taking.stream);
+    }
+    stopPlayback();
+  }
+
   return {
     html,
+    end,
     startPlayback,
     sync,
     stopPlayback,

@@ -13,6 +13,15 @@ class Changelog
       {"date": "2026-11-07", "entries": [
         {
           "area": "editor",
+          "title": "Leaving a score leaves it alone",
+          "text": "After a link took you from one score to another page, a MIDI keyboard could still write notes "
+          + "into the score you had left, and save them; its music, the tuner's microphone and the mixer's meter "
+          + "went on, and the next score played without its mixer. Leaving a score now stops all of it, and the "
+          + "next score is heard through its own mixer.",
+          "app": true
+        },
+        {
+          "area": "editor",
           "title": "A damaged settings line is kept, never wiped",
           "text": "A score keeps its mixer, note velocities and curves on a hidden last line of its text. When "
           + "that line is damaged, cut short or edited by hand, the editor now keeps it word for word and says "
