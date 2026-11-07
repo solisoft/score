@@ -44,7 +44,8 @@ test("the curves: kept on the meta line under cc, beside the other features' key
   // Emptied, curve by curve: the key goes.
   for (const id of ["1", "64", "bend"]) A.setCurve(score, 0, id, []);
   assert.equal(M.readMeta(M.toLilyPond(score).source).cc, undefined);
-  assert.throws(() => A.setCurve(score, 0, "74", [[0, 1]]), /No such controller/);
+  assert.throws(() => A.setCurve(score, 0, "128", [[0, 1]]), /No such controller/);
+  assert.throws(() => A.setCurve(score, 0, "07", [[0, 1]]), /No such controller/);
 });
 
 test("a curve's value: a ramp between points, the pedal steps, held after the last, nothing before the first", () => {
@@ -192,7 +193,7 @@ test("the lane under the roll: its curve, its points, where a click lands", () =
   assert.equal(A.valueOfY("1", A.yOfValue("1", 90)), 90);
   assert.equal(A.valueOfY("bend", A.yOfValue("bend", 0)), 0);
   assert.deepEqual([A.valueText("64", 127), A.valueText("bend", 5), A.valueText("bend", -5), A.valueText("1", 7)], ["on", "+5", "-5", "7"]);
-  assert.deepEqual([A.idOfNumber(64), A.idOfNumber(74), A.controller("bend").name], ["64", null, "Pitch bend"]);
+  assert.deepEqual([A.idOfNumber(64), A.idOfNumber(74), A.idOfNumber(0), A.idOfNumber(121), A.controller("bend").name], ["64", "74", null, null, "Pitch bend"]);
 });
 
 // A score's text is anyone's: a curve written by hand (or by an attacker) on
@@ -224,4 +225,27 @@ test("a curves map that is no map reads as none (#537)", () => {
     assert.deepEqual(A.curvesOf(score), {});
     assert.deepEqual(A.curveOf(score, 0, "1"), []);
   }
+});
+
+// #670: a virtual instrument is shaped with controllers General MIDI never
+// named — dynamics on CC 21, vibrato on CC 2… Any of 0–127 is a curve.
+test("any controller 0–127: kept by its number, named when General MIDI names it, played in its staff's track", () => {
+  const score = read("<< \\new Staff { c'4 d' e' f' } \\new Staff { \\clef bass c4 d e f } >>");
+  assert.deepEqual(A.setCurve(score, 1, "21", [[0, 10], [Q, 300]]), [[0, 10], [Q, 127]], "in range");
+  A.setCurve(score, 1, "66", [[0, 90], [Q, 20]]);
+  assert.deepEqual(A.curveOf(score, 1, "66"), [[0, 127], [Q, 0]], "the sostenuto pedal is a switch, on or off");
+  assert.deepEqual(M.readMeta(M.toLilyPond(score).source).cc, { 1: { 21: [[0, 10], [Q, 127]], 66: [[0, 127], [Q, 0]] } });
+  assert.equal(A.controllerName("21"), "CC 21");
+  assert.equal(A.controllerName("2"), "Breath");
+  assert.equal(A.controllerName("1"), "Modulation");
+  assert.equal(A.valueText("66", 127), "on");
+  for (const bad of ["128", "-1", "007", "1.5", "cc", ""]) assert.equal(A.controller(bad), null, bad);
+  const events = channelEvents(A.applyAutomation(score, played(score)))[1];
+  assert.deepEqual(controllers(events, 21).map((e) => e.bytes[2]), [10, 39, 69, 98, 127], "a ramp, a value every sixteenth");
+  assert.deepEqual(controllers(events, 66).map((e) => e.bytes[2]), [127, 0]);
+  const svg = A.drawLane(score, R.rollLayout(score, { layout: "tracks" }), "21", A.curveOf(score, 1, "21"));
+  assert.match(svg, />CC 21</);
+  // A curve read from the text by its number; one that is no controller left out.
+  const kept = read(`{ c'4 }\n%% eui-score ${JSON.stringify({ cc: { 0: { 21: [[0, 5]], 200: [[0, 5]], "021": [[0, 5]] } } })}\n`);
+  assert.deepEqual(A.curvesOf(kept), { 0: { 21: [[0, 5]] } });
 });

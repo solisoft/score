@@ -32,6 +32,8 @@ const { installInstruments } = await import(`./instruments-ui.js${V}`);
 // Swing, humanize and the tempo's glides, put into the MIDI that is heard (#379).
 const F = await import(`./feel.js${V}`);
 const A = await import(`./automation.js${V}`);
+// Keyswitches, program changes and articulation maps, for a virtual instrument (#670).
+const Snd = await import(`./sound.js${V}`);
 const Ch = await import(`./channels.js${V}`);
 const G = await import(`./graces.js${V}`);
 const { automationLane } = await import(`./automation-ui.js${V}`);
@@ -247,7 +249,7 @@ export function startStudio(root, options = {}) {
   const ctx = {
     root, options, draftKey, sheet, sourceBox, status, state, notice, svgHost, overlay, palette, rollHost, rollScroll,
     playhead, st, quantizeBox, loaded, toMidi, toPdf, download, engine, M, P, R, K, S, X, Vel, mixerPanel, Pr, Sy,
-    installInstruments, F, A, Ch, G, automationLane, audioTracks, H, mergeScores, conflictLines, editor_view_lit,
+    installInstruments, F, A, Snd, Ch, G, automationLane, audioTracks, H, mergeScores, conflictLines, editor_view_lit,
     score_json, source_spans, parseKept, musicXml, refuse, say
   };
   // The editor's lifetime: instant navigation swaps the page out without

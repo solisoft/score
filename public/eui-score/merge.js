@@ -37,7 +37,7 @@ const SIDES = ["mine", "theirs"];
 const ABSENT = "∅";
 
 /** The names the meta line's keys are shown under. */
-const META_NAMES = () => ({ mixer: tr("Mixer"), velocity: tr("Note velocities"), swing: tr("Swing"), humanize: tr("Humanize"), cc: tr("Automation curves"), synth: tr("Synthesizer"), soundfont: tr("Own SoundFont") });
+const META_NAMES = () => ({ mixer: tr("Mixer"), velocity: tr("Note velocities"), swing: tr("Swing"), humanize: tr("Humanize"), cc: tr("Automation curves"), ks: tr("Keyswitches and program changes"), ksmaps: tr("Articulation maps"), ksopt: tr("Keyswitch timing"), synth: tr("Synthesizer"), soundfont: tr("Own SoundFont") });
 
 /** The names the score's fields are shown under. */
 const SCORE_NAMES = () => ({ key: tr("Key"), mode: tr("Key"), time: tr("Time signature"), tempo: tr("Tempo"), pickup: tr("Pickup"), group: tr("Staff groups"), groups: tr("Staff groups"), repeats: tr("Repeats"), paper: tr("Page layout"), compress: tr("Bars of rest"), timeParts: tr("Time signature") });
@@ -429,7 +429,7 @@ export function mergeScores(base, mine, theirs, { parse, prefer = null } = {}) {
  * merged score `out` is: a lane goes to its staff's (by `staffMap`) same
  * voice there, a tick to the same place in its bar's (by `barMap`). The
  * velocities (`"lane:tick:key"`), the curves (`{ lane: { controller:
- * [[tick, value]] } }`), the mixer's tracks, the synthesizers and the own
+ * [[tick, value]] } }`), the keyswitches and program changes (`ks`), the mixer's tracks, the synthesizers and the own
  * SoundFonts' presets (by lane) move; the rest
  * stays. Answers `{ meta, dropped }`: `dropped` what found no place, named
  * by staff, voice, bar and offset (the same on two sides of one shape).
@@ -485,6 +485,29 @@ function layMeta(score, meta, side, staffMap, barMap, laneAt, out) {
       if (l.lane != null && Object.keys(kept).length) laidOut.cc[l.lane] = kept;
     }
   }
+  // A staff's keyswitches and program changes (sound.js, #670): by lane, each at its tick; its map by lane.
+  if (meta.ks && typeof meta.ks === "object") {
+    laidOut.ks = {};
+    for (const [lane, sounds] of Object.entries(meta.ks)) {
+      const l = laneOf(lane);
+      const kept = {};
+      for (const kind of ["keys", "programs"]) {
+        const moved = [];
+        for (const marker of Array.isArray(sounds?.[kind]) ? sounds[kind] : []) {
+          if (!Array.isArray(marker)) continue;
+          const t = tickOf(marker[0]);
+          if (l.lane == null || t.tick == null) dropped.push(`ks ${l.where} ${kind} ${t.where}=${marker.slice(1).join("/")}`);
+          else moved.push([t.tick, ...marker.slice(1)]);
+        }
+        if (moved.length) kept[kind] = moved;
+      }
+      if (typeof sounds?.map === "string") {
+        if (l.lane == null) dropped.push(`ks ${l.where} map=${sounds.map}`);
+        else kept.map = sounds.map;
+      }
+      if (l.lane != null && Object.keys(kept).length) laidOut.ks[l.lane] = kept;
+    }
+  }
   if (meta.mixer?.tracks && typeof meta.mixer.tracks === "object") {
     const tracks = {};
     for (const [lane, settings] of Object.entries(meta.mixer.tracks)) {
@@ -514,7 +537,7 @@ function layMeta(score, meta, side, staffMap, barMap, laneAt, out) {
     }
   }
   // Emptied by what went: gone, as the editor leaves them.
-  for (const name of ["velocity", "cc", "synth", "soundfont"]) {
+  for (const name of ["velocity", "cc", "ks", "synth", "soundfont"]) {
     if (laidOut[name] && !Object.keys(laidOut[name]).length && Object.keys(meta[name]).length) delete laidOut[name];
   }
   return { meta: laidOut, dropped: dropped.sort() };

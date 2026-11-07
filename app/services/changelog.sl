@@ -10,6 +10,15 @@
 class Changelog
   static def days
     [
+      {"date": "2026-11-07", "entries": [{
+        "area": "editor",
+        "title": "Keyswitches for virtual instruments",
+        "text": "Playing through a sample library in your DAW? Under the MIDI view, the automation lane now takes any "
+        + "controller (CC 0–127), and its Keyswitches and programs mode places keyswitches and program changes on a "
+        + "staff. An articulation map sends the right keyswitch before each staccato, pizz., tremolo or slurred "
+        + "note. They go to the device of Sound to and into Save as MIDI, never onto the page.",
+        "app": true
+      }]},
       {"date": "2026-11-06", "entries": [{
         "area": "engine",
         "title": "Words over the staff clear sharps, flats and naturals",

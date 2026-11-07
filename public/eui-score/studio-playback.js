@@ -7,7 +7,7 @@ const { tr } = await import(`./words.js${V}`);
 
 /** The Playback section set up; answers Play, Stop, the loop, and the MIDI heard. */
 export function install(ctx) {
-  const { root, state, playhead, st, toMidi, M, P, X, Vel, Pr, Sy, F, A, Ch, G } = ctx;
+  const { root, state, playhead, st, toMidi, M, P, X, Vel, Pr, Sy, F, A, Snd, Ch, G } = ctx;
   const {
     barNo, changeBar, selectedBarsOrNull, selectedBars, draw, showState, say, followPlaying, mixHeard, applyMix,
     finishRecording, chooseOutput
@@ -38,9 +38,12 @@ export function install(ctx) {
    * those velocities, its rit. and accel. gliding. Play, Save as MIDI and
    * Save the sound all play this; `mix` (Save as MIDI) writes the mixer's
    * volume and pan in too; `practice` transposes it, and sets its speed (a
-   * saved file's, when asked: practice.js).
+   * saved file's, when asked: practice.js). `sound` (Save as MIDI, Play to
+   * a MIDI device) adds the keyswitches and program changes (sound.js, #670)
+   * last, untransposed and unswung, each a little before its note: this
+   * browser's synthesizer never gets them — a keyswitch would be a low note.
    */
-  const heardMidi = (score, passes = score ? M.playback(score) : [], { mix = null, practice = null } = {}) =>
+  const heardMidi = (score, passes = score ? M.playback(score) : [], { mix = null, practice = null, sound = false } = {}) =>
     engraved(score).then((bytes) => {
       const velocities = score ? Vel.applyVelocities(score, bytes) : bytes;
       // Past fifteen channels, two staves may go through one mixer strip: their volume and pan in the file (#389).
@@ -48,8 +51,10 @@ export function install(ctx) {
       const fileMix = mix ?? (shared.length ? mixHeard() : null);
       const curves = score ? A.applyAutomation(score, velocities, { passes, mix: fileMix, mixLanes: mix ? null : shared, volumeMin: X.VOLUME_MIN }) : velocities;
       const graced = score ? G.applyGraces(score, curves, { passes }) : curves;
-      const felt = F.feel(graced, { score, passes, ...F.feelOf(score ? score.meta : M.readMeta(st.text)) });
-      return practice ? Pr.applyPractice(felt, practice) : felt;
+      const feel = F.feelOf(score ? score.meta : M.readMeta(st.text));
+      const felt = F.feel(graced, { score, passes, ...feel });
+      const practised = practice ? Pr.applyPractice(felt, practice) : felt;
+      return sound && score ? Snd.applySound(score, practised, { passes, early: F.humanizeOf(feel.humanize)?.time ?? 0 }) : practised;
     });
 
   /** The engraver's MIDI of what is heard, each staff on its own channel (channels.js, #389). */
@@ -174,7 +179,8 @@ export function install(ctx) {
     let sound = null;
     let notes = [];
     try {
-      bytes = await heardMidi(played, passes, { practice: { transpose: transposeNow() } });
+      // To a MIDI device (Sound to): the keyswitches and program changes too (#670).
+      bytes = await heardMidi(played, passes, { practice: { transpose: transposeNow() }, sound: Boolean(P.outputPort()) });
       // The synthesizer's staves and the own SoundFonts' (#391): in this browser only, not to a MIDI device.
       if (!P.outputPort()) {
         sound = await st.instruments.prepare(played);
@@ -205,6 +211,11 @@ export function install(ctx) {
       return say(tr("The sounds could not be loaded."), true);
     }
     if (!state.handle || st.playing !== state) return;
+    // To a MIDI device: the keyswitches in effect where the music starts, which a seek passes over (#670).
+    if (P.outputPort() && played) {
+      state.keyswitches = { times: Snd.keyswitchTimes(played, { passes }), velocity: Snd.optionsOf(played).velocity };
+      if (at > 0) chaseKeyswitches(state, at);
+    }
     state.handle.rate = state.ramp ? Pr.rampPercent(state.ramp, 0) / 100 : rate();
     if (state.ramp) showRamp(Pr.rampText(state.ramp, 0));
     if (notes.length) {
@@ -234,6 +245,12 @@ export function install(ctx) {
       state.frame = requestAnimationFrame(follow);
     };
     follow();
+  }
+
+  /** After a jump to `sec` (the start, the loop's, a seek): the keyswitches in effect there, again to the MIDI device. */
+  function chaseKeyswitches(state, sec) {
+    const keys = state?.keyswitches;
+    if (keys?.times.length) P.sendKeyswitches(Snd.keysAt(keys.times, sec), keys.velocity);
   }
 
   /** The selected bars as a loop: from their first pass to the end of that pass through the last; null with none selected. */
@@ -272,6 +289,7 @@ export function install(ctx) {
     const now = handle.time;
     if (state.loop && now >= state.loop.end - 0.02) {
       handle.time = state.loop.start;
+      chaseKeyswitches(state, state.loop.start);
       state.next = null;
       if (state.ramp) rampPass(state, handle);
       return;
@@ -343,7 +361,9 @@ export function install(ctx) {
     const handle = st.playing?.handle;
     if (!handle?.duration) return;
     const rect = progress.getBoundingClientRect();
-    handle.time = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) * handle.duration;
+    const sec = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) * handle.duration;
+    handle.time = sec;
+    chaseKeyswitches(st.playing, sec);
   });
 
   const clock = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;

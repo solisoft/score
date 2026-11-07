@@ -1038,6 +1038,32 @@
   .cc-curve-muted { opacity: .35; stroke-dasharray: 4 3; }
   .cc-point { cursor: grab; stroke: var(--sheet); stroke-width: 1.5; }
   .cc-point-chosen { stroke: #b4373a; stroke-width: 2.5; }
+  .studio-cc-field input[type="number"] { font: 12.5px var(--font-sans, inherit); width: 58px; padding: 3px 5px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--sheet); color: var(--ink); }
+  .studio-cc-field output { font: 11px var(--font-mono); color: var(--ink); min-width: 28px; }
+  /* The Sound lane (#670, sound-ui.js): keyswitches and program changes, never engraved. */
+  .ks-strip { cursor: crosshair; display: block; }
+  .ks-row-name { font-size: 10.5px; font-weight: 600; fill: var(--muted); }
+  .ks-marker { cursor: grab; }
+  .ks-marker line { stroke-width: 1.5; }
+  .ks-marker text { font: 600 10px var(--font-mono); fill: #fff; pointer-events: none; }
+  .ks-program rect { opacity: .75; }
+  .ks-chosen rect { stroke: #b4373a; stroke-width: 2; }
+  .ks-mapped text { font: 10px var(--font-mono); fill: var(--muted); }
+  /* Within the window whatever its height: the head stays, the rules scroll under it. */
+  .studio-ksmap { position: fixed; z-index: 40; inset: auto 16px 16px auto; margin: 0; width: min(calc(100vw - 32px), 640px); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: 0 14px 10px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--sheet); color: var(--ink); box-shadow: var(--shadow), 0 18px 40px -18px rgba(48, 36, 20, .35); font-size: 13px; }
+  .studio-ksmap h3 { font-size: 18px; margin: 0; }
+  .studio-ksmap .mixer-head { position: sticky; top: 0; z-index: 1; margin: 0; padding: 10px 0 8px; background: var(--sheet); }
+  .studio-ksmap .mixer-note { font-size: 12px; line-height: 1.35; }
+  .ksmap-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 6px 0; }
+  .ksmap-row .studio-menu { padding-top: 3px; padding-bottom: 3px; }
+  .ksmap-rules .tool { min-width: 26px; height: 26px; padding: 0 6px; }
+  .ksmap-row label { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
+  .studio-ksmap input, .studio-ksmap select { font: 13px var(--font-sans, inherit); padding: 2px 6px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--sheet); color: var(--ink); }
+  .studio-ksmap input[type="number"] { width: 64px; }
+  .ksmap-rules { width: 100%; border-collapse: collapse; margin: 6px 0; }
+  .ksmap-rules th { text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; padding: 2px 4px; }
+  .ksmap-rules td { padding: 1px 4px; }
+  .ksmap-note { color: var(--muted); font-size: 12px; line-height: 1.4; margin: 4px 0; }
   /* The microphone (#390, audio-ui.js): the takes' waveforms under the staves, the
      audio tracks' panel, the tuner and practice — beside the score, like the mixer. */
   .studio-waves { border-top: 1px solid var(--line-strong); }
