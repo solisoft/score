@@ -471,4 +471,32 @@ describe("Score, its composer and its pages") do
     assert(Score.find(theirs._key).trashed?)
     assert_eq(Score.empty_trash_of(owner), 0)
   end
+
+  test("many scores erased go in one statement a kind, not one a score, with all that hangs off them (#689)") do
+    owner = score_owner()
+    friend = score_owner()
+    kept = Score.start(owner, Score.blank_source("Still here"))
+    hang_off(kept)
+    thrown = (0 .. 4).map do |i|
+      score = Score.start(owner, Score.blank_source("Thrown #{i}"))
+      hang_off(score)
+      started = ScoreThread.start(score, friend, 0, [0, 0], "", "Here")
+      assert_not_null(started["comment"], "a comment on it")
+      UserNotification.tell(friend._key, "changed", score, owner)
+      score.move_to_trash
+      score
+    end
+    one_by_one = Mock.spy_class(ScoreVersion, "where")
+    assert_eq(Score.empty_trash_of(owner), 4)
+    assert_eq(one_by_one.call_count("where"), 1, "the versions of all four, in one statement")
+    thrown.each do |score|
+      assert_null(Score.find_by("_key", score._key))
+      assert_eq(remains_of(score), [0, 0, 0])
+      assert_eq(ScoreThread.where({"score_id": score._key}).count, 0)
+      assert_eq(ScoreComment.where({"score_id": score._key}).count, 0)
+      assert_eq(UserNotification.where({"score_id": score._key}).count, 0)
+    end
+    assert_eq(remains_of(kept), [1, 1, 1])
+    assert_eq(Score.erase_keys([]), 0)
+  end
 end

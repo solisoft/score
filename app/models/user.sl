@@ -622,12 +622,6 @@ class User < Model
     old
   end
 
-  # How many zips "Export all my data" comes in (AccountExport): what the
-  # account page can ask, where the service is out of reach.
-  def export_part_count
-    AccountExport.parts(this).length
-  end
-
   # --- Remember me ------------------------------------------------------------
   def start_remember_me
     token = uuid_v4()

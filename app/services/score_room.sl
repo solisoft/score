@@ -32,8 +32,19 @@
 # (`show_out`). In the lobby everyone is "A reader": no address, no key.
 const SCORE_ROOM_TICKET_SECONDS = 3600
 const SCORE_ROOM_ROLES = ["edit", "listen"]
+# How long a person found allowed to work in a room is trusted with their
+# cursors before their access is read again (#689): a cursor comes four
+# times a second, and losing access shows them out at once (`show_out`) or
+# at the next save (`tell_saved`) anyway.
+const SCORE_ROOM_RECHECK_SECONDS = 30
+const SCORE_ROOM_CLEARED_MOST = 10000
 
 class ScoreRoom
+  # "<score>:<user>" to until when (unix seconds) they were found allowed to
+  # work in the score's room: this process's, forgotten when the score's
+  # shares or trash change here (`forget`).
+  static cleared: Hash = {}
+
   static def channel(score_key)
     "score:#{score_key}"
   end
@@ -58,11 +69,11 @@ class ScoreRoom
 
   # May `user` be in `score`'s room as an editor, relay where they work and
   # hear its saves? Those who may change it, while it is out of the trash.
-  static def allowed?(score, user)
+  static def allowed?(score, user, roles = nil)
     return false if score.nil? || user.nil?
     return false if score.trashed?
 
-    score.writable_by?(user)
+    score.writable_by?(user, roles)
   end
 
   # What `user` (nil for someone signed out), in as `role`, may still hear
@@ -71,13 +82,14 @@ class ScoreRoom
   # may change it; a listener while they may see it through their account,
   # the saves only while it is open to them by its link or in public — by
   # the link they came in with (`link`, its `link_mark`), still its own.
-  # (`current_mark`: the mark of the score's link, when the caller has it.)
-  static def hearing(score, user, role, link = nil, current_mark = nil)
+  # (`current_mark`: the mark of the score's link, when the caller has it;
+  # `roles`: the score's shares, address to role, when it has read them.)
+  static def hearing(score, user, role, link = nil, current_mark = nil, roles = nil)
     return nil if score.nil? || score.trashed?
-    return (ScoreRoom.allowed?(score, user) ? "all" : nil) if role == "edit"
+    return (ScoreRoom.allowed?(score, user, roles) ? "all" : nil) if role == "edit"
     return nil unless role == "listen"
-    return "all" unless score.access_of(user).nil?
-    return "saves" if score.readable_by?(user) && ScoreRoom.current_link?(score, link, current_mark)
+    return "all" unless score.access_of(user, roles).nil?
+    return "saves" if score.readable_by?(user, roles) && ScoreRoom.current_link?(score, link, current_mark)
 
     nil
   end
@@ -225,7 +237,9 @@ class ScoreRoom
   # admitted (in `presences`, the room's when not given, under the ticket's
   # person), whose person still may change the score; who it is comes from
   # that presence, never from the message. Anything else is dropped: {}.
-  static def relay_cursor(event, entered, presences = nil)
+  # Their access is read again every SCORE_ROOM_RECHECK_SECONDS (`now`, unix
+  # seconds), not for each cursor (`still_allowed?`, #689).
+  static def relay_cursor(event, entered, presences = nil, now = nil)
     said = JSON.parse(event["message"].to_s) rescue nil
     return {} unless said.is_a?("hash") && said["event"] == "cursor"
 
@@ -239,18 +253,18 @@ class ScoreRoom
     return {} if present.nil? || present["user_id"].to_s != entered["user"]
     # A listener (the read page) is in the room to hear, not to be seen working.
     return {} unless entered["role"] == "edit"
-
-    user = User.find_by("_key", entered["user"])
-    return {} unless ScoreRoom.allowed?(Score.find_by("_key", entered["score"]), user)
+    return {} unless ScoreRoom.still_allowed?(entered["score"], entered["user"], now ?? DateTime.utc.to_unix)
 
     meta = present["metas"].find do |one|
       one["connection_id"].to_s == connection_id
     end
     place = ScoreRoom.place(said["lane"], said["bars"])
+    # Named as the room was told when they came in (their presence).
+    name = meta["name"] ?? User.find_by("_key", entered["user"])&.email
     news = {
       "event": "cursor",
-      "user_id": user._key,
-      "name": meta["name"] ?? user.email,
+      "user_id": entered["user"],
+      "name": name,
       "connection_id": connection_id,
       "origin": said["origin"].to_s.substring(0, 64),
       "lane": place["lane"],
@@ -274,6 +288,42 @@ class ScoreRoom
     return nowhere if bars[0] > bars[1]
 
     {"lane": lane, "bars": [bars[0], bars[1]]}
+  end
+
+  # May the person whose key is `user_key` still work in the room of the
+  # score whose key is `score_key`, at `now`? Read from the database when
+  # last found more than SCORE_ROOM_RECHECK_SECONDS ago (or never); trusted
+  # until then (#689).
+  static def still_allowed?(score_key, user_key, now)
+    key = "#{score_key}:#{user_key}"
+    return true if (ScoreRoom.cleared[key] ?? 0) > now
+
+    user = nil
+    score = nil
+    grouped(fn() {
+      user = User.find_by("_key", user_key)
+      score = Score.find_by("_key", score_key)
+    })
+    unless ScoreRoom.allowed?(score, user)
+      ScoreRoom.cleared.delete(key)
+      return false
+    end
+
+    # Kept small: past so many people, everyone is read again.
+    ScoreRoom.cleared = {} if ScoreRoom.cleared.length >= SCORE_ROOM_CLEARED_MOST
+    ScoreRoom.cleared[key] = now + SCORE_ROOM_RECHECK_SECONDS
+    true
+  end
+
+  # Who may work in the room of the score whose key is `score_key` is read
+  # again at their next cursor: its shares or its trash changed (ScoreShare,
+  # Score).
+  static def forget(score_key)
+    prefix = "#{score_key}:"
+    ScoreRoom.cleared.keys().each do |key|
+      ScoreRoom.cleared.delete(key) if key.starts_with?(prefix)
+    end
+    true
   end
 
   # A page gone: its cursor is taken away from the others' scores.
@@ -311,10 +361,11 @@ class ScoreRoom
     send_to = []
     close = []
     current_mark = lobby && presences.length > 0 ? ScoreRoom.link_mark(score&.share_token) : nil
+    people = ScoreRoom.people_in(score, presences)
     presences.each do |presence|
-      user = User.find_by("_key", presence["user_id"].to_s)
+      user = people["users"][presence["user_id"].to_s]
       (presence["metas"] ?? []).each do |meta|
-        hearing = ScoreRoom.hearing(score, user, meta["role"] ?? "edit", meta["link"], current_mark)
+        hearing = ScoreRoom.hearing(score, user, meta["role"] ?? "edit", meta["link"], current_mark, people["roles"])
         stays = lobby ? !hearing.nil? : hearing == "all"
         if stays
           send_to = send_to + [meta["connection_id"].to_s]
@@ -324,6 +375,34 @@ class ScoreRoom
       end
     end
     {"send": send_to, "close": close}
+  end
+
+  # The people of `presences`, and what `score` is shared with them as, read
+  # for the whole room in two reads (#689) — not each person, then their share,
+  # one after the other: {"users": key to user, "roles": address to role}.
+  # The lobby's readers ("guest") are nobody to read.
+  static def people_in(score, presences)
+    keys = presences.map do |presence|
+      presence["user_id"].to_s
+    end.filter do |key|
+      key.present? && key != "guest"
+    end.uniq
+    found = {"users": {}, "roles": {}}
+    return found if keys.length == 0
+
+    users = User.where("doc._key IN @keys", {"keys": keys}).all
+    shares = []
+    unless score.nil?
+      emails = users.map(&:email)
+      shares = ScoreShare.where("doc.score_id == @score AND doc.email IN @emails", {"score": score._key, "emails": emails}).all
+    end
+    users.each do |user|
+      found["users"][user._key] = user
+    end
+    shares.each do |share|
+      found["roles"][share.email] = share.role
+    end
+    found
   end
 
   # Each save, to the people of the room and of its lobby who still may hear

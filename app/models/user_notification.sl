@@ -92,31 +92,42 @@ class UserNotification < Model
   # `score` saved by `actor`: everyone else who may see it is told, once an
   # hour a score: within the hour, `actor` joins the names of the
   # notification already made. Answers how many new ones were made.
+  #
+  # Every save asks (AppScoresController#update): who may see the score (as
+  # ScoreShare.people_of: its owner, and those it is shared with who have an
+  # account) and this hour's notifications are read in one query (#689),
+  # and a notification read again only to add `actor` to it.
   static def changed(score, actor)
     since = DateTime.utc.to_unix - NOTIFICATION_CHANGED_SECONDS
-    people = []
-    this_hour = []
-    grouped(fn() {
-      people = ScoreShare.people_of(score)
-      this_hour = UserNotification.where(
-        "doc.score_id == @score AND doc.kind == 'changed' AND doc.created_at >= @since",
-        {"score": score._key, "since": since}
-      ).limit(1000).all
-    })
+    score_key = score._key
+    owner = score.user_id
+    found = @sdbql{
+      LET emails = (FOR s IN score_shares FILTER s.score_id == #{score_key} LIMIT 500 RETURN s.email)
+      LET people = (FOR u IN users FILTER u._key == #{owner} OR u.email IN emails LIMIT 501 RETURN u._key)
+      LET hour = (
+        FOR n IN user_notifications
+        FILTER n.score_id == #{score_key} AND n.kind == "changed" AND n.created_at >= #{since}
+        LIMIT 1000
+        RETURN {"key": n._key, "user_id": n.user_id, "actor_ids": n.actor_ids}
+      )
+      RETURN {"people": people, "hour": hour}
+    }
+    raise("The change could not be told: #{found}") if found.is_a?("string")
+
     by_user = {}
-    this_hour.each do |notification|
-      by_user[notification.user_id] = notification
+    found[0]["hour"].each do |notification|
+      by_user[notification["user_id"]] = notification
     end
     made = 0
-    for person in people
-      next if person._key == actor._key
+    for person_key in found[0]["people"]
+      next if person_key == actor._key
 
-      group = by_user[person._key]
+      group = by_user[person_key]
       if group.nil?
-        UserNotification.tell(person._key, "changed", score, actor)
+        UserNotification.tell(person_key, "changed", score, actor)
         made = made + 1
-      else
-        group.joined_by(actor)
+      elsif !(group["actor_ids"] ?? []).includes?(actor._key)
+        UserNotification.find_by("_key", group["key"])&.joined_by(actor)
       end
     end
     made
@@ -268,11 +279,6 @@ class UserNotification < Model
     end
     outcome = sent ? "sent" : "failed"
     done[outcome] = done[outcome] + 1
-  end
-
-  # Gone with their score (Score#erase).
-  static def delete_all_for(score)
-    UserNotification.where({"score_id": score._key}).delete_all
   end
 
   # Gone with their person (User#erase_account).

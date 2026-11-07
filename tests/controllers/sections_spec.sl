@@ -455,6 +455,25 @@ describe("SectionsController and AppSectionsController") do
       assert_eq(on_removed[0].target_type, "report")
     end
 
+    test("the reports page reads what is reported together, not once a report (#689)") do
+      reporter = lib_user()
+      reported = (0 .. 4).map do |i|
+        section = lib_section(lib_user())
+        comment = SectionComment.write(section, lib_user(), "Words #{i}")["comment"]
+        SectionReport.file(section, nil, reporter, "Not music #{i}")
+        SectionReport.file(section, comment, reporter, "Rude #{i}")
+        comment
+      end
+      lib_sign_in(lib_user("Admin", "admin"))
+      response = get("/admin/reports")
+      assert_eq(res_status(response), 200)
+      # Every reported comment shown, with what it says.
+      reported.each do |comment|
+        assert_contains(res_body(response), comment.body)
+      end
+      assert_no_n_plus_one(response)
+    end
+
     test("an admin dismisses a report: the section stays as it was") do
       section = lib_section(lib_user())
       SectionReport.file(section, nil, lib_user(), "Not sure")

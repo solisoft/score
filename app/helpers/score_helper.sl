@@ -163,6 +163,18 @@ def score_snippet(figures, name, sandbox)
   )
 end
 
+# A module of the browser engraver (public/eui-score/) at the set's one
+# version, which the eui_version middleware puts on the request (#689): the
+# modules name the ones they import at their own version, so pages that load
+# several (Play: player.js, heard.js; musicxml.js) load each module once.
+# Outside a request, the file's own address.
+def eui_module_path(name)
+  version = req ? req["eui_version"].to_s : ""
+  return public_path("eui-score/#{name}") if version.blank?
+
+  "/eui-score/#{name}?v=#{version}"
+end
+
 # The pickups the editor's menus offer: [value, label], the value as
 # \partial writes it (score-model.js reads it with pickupOf), "" for none.
 def editor_pickups

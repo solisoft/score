@@ -76,82 +76,20 @@ class ScoreAssets
   static def version
     return ScoreAssets.cached unless ScoreAssets.cached.blank?
 
-    parts = [
-      "words.js",
-      "eui-score.js",
-      "eui-score-editor.js",
-      "studio.js",
-      "studio-toolbox.js",
-      "studio-files.js",
-      "studio-text.js",
-      "studio-selection.js",
-      "studio-history.js",
-      "studio-source.js",
-      "studio-input.js",
-      "studio-commands.js",
-      "studio-clipboard.js",
-      "studio-words.js",
-      "studio-draw.js",
-      "studio-peers.js",
-      "studio-roll.js",
-      "studio-velocity.js",
-      "studio-pointer.js",
-      "studio-ghost.js",
-      "ghost.js",
-      "studio-playback.js",
-      "studio-mix.js",
-      "studio-recording.js",
-      "score-model.js",
-      "musicxml.js",
-      "midi-import.js",
-      "piano-roll.js",
-      "patterns.js",
-      "pattern-tools.js",
-      "voicings.js",
-      "drums.js",
-      "riffs.js",
-      "accompaniments.js",
-      "section-library.js",
-      "feel.js",
-      "feel-tools.js",
-      "shortcuts.js",
-      "player.js",
-      "midi-sync.js",
-      "mixer.js",
-      "mixer-ui.js",
-      "velocity.js",
-      "automation.js",
-      "automation-ui.js",
-      "sound.js",
-      "sound-ui.js",
-      "audio-export.js",
-      "merge.js",
-      "channels.js",
-      "graces.js",
-      "comments.js",
-      "undo-history.js",
-      "pitch.js",
-      "follow.js",
-      "takes.js",
-      "mic.js",
-      "mic-worklet.js",
-      "audio-ui.js",
-      "practice.js",
-      "synth.js",
-      "soundbank.js",
-      "mpe.js",
-      "instruments-ui.js",
-      "vendor/README.md",
-      "eui_score_web.js",
-      "wasm.version"
-    ]
+    # Every module of the set, whatever its name (heard.js, #682, was missing
+    # from a list kept by hand: a change to it alone kept the old version).
+    modules = File.glob("public/eui-score/*.js").map do |path|
+      path.split("/").last
+    end.sort
+    parts = modules + ["vendor/README.md", "wasm.version"]
     text = parts.map do |name|
       File.read("public/eui-score/#{name}") rescue name
     end.join("\n")
     digest = Crypto.sha256(text).substring(0, 12)
-    # Kept for the process in production, where a deploy restarts it; read
-    # again each time elsewhere, where the files change under a running server.
-    ScoreAssets.cached = digest if getenv("APP_ENV") == "production"
+    # Kept for the process in production, where a deploy restarts it, and in
+    # the specs (every page asks for it, #689); read again each time in
+    # development, where the files change under a running server.
+    ScoreAssets.cached = digest if ["production", "test"].includes?(getenv("APP_ENV"))
     digest
   end
 

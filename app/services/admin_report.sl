@@ -27,19 +27,40 @@ class AdminReport
 
   # The figures at `now` (unix seconds): accounts, confirmed, new in 7 and
   # 30 days, on Pro (paying and gifted), in payment trouble, cancelling,
-  # and the monthly revenue of the paying ones, in cents.
+  # and the monthly revenue of the paying ones, in cents. The counts are
+  # read together, in one round-trip (#689), then the paying accounts.
   static def figures(now)
+    accounts = 0
+    confirmed = 0
+    new_week = 0
+    new_month = 0
+    pro = 0
+    gifts = 0
+    past_due = 0
+    cancelling = 0
+    scores = 0
+    grouped(fn() {
+      accounts = User.count
+      confirmed = User.where("doc.confirmed_at != null").count
+      new_week = AdminReport.signed_up_since(now - 7 * ADMIN_DAY).count
+      new_month = AdminReport.signed_up_since(now - 30 * ADMIN_DAY).count
+      pro = AdminReport.filtered("pro", now).count
+      gifts = AdminReport.filtered("gift", now).count
+      past_due = AdminReport.filtered("past_due", now).count
+      cancelling = AdminReport.filtered("cancelling", now).count
+      scores = Score.where("doc.trashed_at == null").count
+    })
     {
-      "accounts": User.count,
-      "confirmed": User.where("doc.confirmed_at != null").count,
-      "new_week": AdminReport.signed_up_since(now - 7 * ADMIN_DAY).count,
-      "new_month": AdminReport.signed_up_since(now - 30 * ADMIN_DAY).count,
-      "pro": AdminReport.filtered("pro", now).count,
-      "gifts": AdminReport.filtered("gift", now).count,
-      "past_due": AdminReport.filtered("past_due", now).count,
-      "cancelling": AdminReport.filtered("cancelling", now).count,
+      "accounts": accounts,
+      "confirmed": confirmed,
+      "new_week": new_week,
+      "new_month": new_month,
+      "pro": pro,
+      "gifts": gifts,
+      "past_due": past_due,
+      "cancelling": cancelling,
       "mrr_cents": AdminReport.monthly_revenue(now),
-      "scores": Score.where("doc.trashed_at == null").count
+      "scores": scores
     }
   end
 
@@ -148,7 +169,8 @@ class AdminReport
     )
   end
 
-  # Each of `users`' keys to how many scores they have out of the trash.
+  # Each of `users`' keys to how many scores they have out of the trash:
+  # counted by the database, a row a person, not a row a score (#689).
   static def score_counts(users)
     keys = users.map do |user|
       user._key
@@ -156,9 +178,9 @@ class AdminReport
     return {} if keys.length == 0
 
     counts = {}
-    rows = Score.where("doc.user_id IN @keys AND doc.trashed_at == null", {"keys": keys}).select("user_id").all
+    rows = Score.where("doc.user_id IN @keys AND doc.trashed_at == null", {"keys": keys}).group_by("user_id").all
     rows.each do |row|
-      counts[row.user_id] = (counts[row.user_id] ?? 0) + 1
+      counts[row["user_id"]] = row["n"]
     end
     counts
   end

@@ -6,11 +6,24 @@ class AdminReportsController < AdminBaseController
   # GET /admin/reports — the open reports, the oldest first
   def index
     reports = SectionReport.still_open
+    # What they report, read together (#689): not a read for each report.
+    section_keys = reports.map(&:section_id).uniq
+    comment_keys = reports.filter do |report|
+      report.target == "comment"
+    end.map(&:target_id).uniq
+    found_sections = []
+    found_comments = []
+    grouped(fn() {
+      found_sections = SharedSection.where("doc._key IN @keys", {"keys": section_keys}).all if section_keys.length > 0
+      found_comments = SectionComment.where("doc._key IN @keys", {"keys": comment_keys}).all if comment_keys.length > 0
+    })
     sections = {}
     comments = {}
-    reports.each do |report|
-      sections[report.section_id] ||= SharedSection.find_by("_key", report.section_id)
-      comments[report.target_id] ||= SectionComment.find_by("_key", report.target_id) if report.target == "comment"
+    found_sections.each do |section|
+      sections[section._key] = section
+    end
+    found_comments.each do |comment|
+      comments[comment._key] = comment
     end
     keys = reports.map do |report|
       report.user_id

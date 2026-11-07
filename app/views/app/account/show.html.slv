@@ -496,7 +496,9 @@
           <% if locals["export_error"].present? %>
             <p class="form-error" role="alert"><%= locals["export_error"] %></p>
           <% end %>
-          <% export_parts = user.export_part_count() %>
+          <%# How many zips the export comes in is read when it is asked for, not on every visit (#689):
+              one comes at once; several are listed here then (`export_parts`), each to download. %>
+          <% export_parts = locals["export_parts"] ?? 1 %>
           <% if export_parts > 1 %>
             <p class="muted"><%= t("app.account.export_parts", {"n": export_parts}) %></p>
           <% end %>
@@ -504,7 +506,9 @@
             <% for part in range(1, export_parts + 1) %>
               <form action="<%= app_account_export_path() %>" method="POST">
                 <%- csrf_field() %>
-                <input type="hidden" name="part" value="<%= part %>">
+                <% if export_parts > 1 %>
+                  <input type="hidden" name="part" value="<%= part %>">
+                <% end %>
                 <button type="submit" class="btn btn-ghost"><%= export_parts > 1 ? t("app.account.download_part", {"part": part, "parts": export_parts}) : t("app.account.download") %></button>
               </form>
             <% end %>

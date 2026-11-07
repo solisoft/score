@@ -70,6 +70,40 @@ describe("Account data") do
       assert_eq(res_status(response), 200)
       assert_contains(res_body(response), "Download my data (.zip)")
     end
+
+    test("does not size the export on every visit: a big one is listed in parts when it is asked for (#689)") do
+      owner = data_user("big")
+      score = Score.start(owner, Score.blank_source("Big"))
+      # A take bigger than a part: the export comes in two.
+      take = ScoreTake.create({
+        "score_id": score._key,
+        "user_id": owner._key,
+        "track": 1,
+        "name": "Long",
+        "size": EXPORT_PART_CHARACTERS + 1,
+        "created_at": 1792700000
+      })
+      assert_eq(AccountExport.parts(owner), [[score._key], ["take:#{take._key}"]])
+      data_sign_in(owner)
+      page = res_body(get("/app/account"))
+      # The page as for everyone: one button, the parts not read.
+      assert_contains(page, "Download my data (.zip)")
+      assert_not(page.contains("Download part 1 of 2"), "no parts on the page as it opens")
+      assert_not(page.contains("name=\"part\""))
+      # Asked for: the two parts, each its own download, and no zip yet.
+      listed = post("/app/account/export", {})
+      assert_eq(res_status(listed), 200)
+      assert_not(res_body(listed).starts_with?("PK"), "not a zip")
+      assert_contains(res_body(listed), "Your scores are many: they come in 2 zips")
+      assert_contains(res_body(listed), "Download part 1 of 2")
+      assert_contains(res_body(listed), "Download part 2 of 2")
+      assert_contains(res_body(listed), "name=\"part\" value=\"2\"")
+      # A part asked for by its number comes as a zip.
+      first = post("/app/account/export", {"part": "1"})
+      assert_eq(res_header(first, "Content-Type"), "application/zip")
+      assert_contains(res_header(first, "Content-Disposition"), "-part-1-of-2.zip")
+      assert_contains(res_body(first), "big.ly")
+    end
   end
 
   describe("POST /app/account/export") do

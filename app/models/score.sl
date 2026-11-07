@@ -177,12 +177,32 @@ class Score < Model
   end
 
   # Every score `query` finds (up to 5000 a run), erased. Answers how many.
+  # Their keys only are read, and what hangs off them goes in one statement
+  # a kind for them all (`erase_keys`, #689), not seven a score.
   static def erase_each(query)
-    scores = query.limit(5000).all
-    scores.each do |score|
-      score.erase
+    keys = query.select("user_id").limit(5000).all.map(&:_key)
+    Score.erase_keys(keys)
+    keys.length
+  end
+
+  # The scores whose keys are `keys` erased, with all that hangs off them:
+  # their versions, shares, requests to the assistant, comments, audio takes
+  # (and their sound) and the notifications about them.
+  static def erase_keys(keys)
+    return 0 if keys.length == 0
+
+    of_them = {"keys": keys}
+    ScoreVersion.where("doc.score_id IN @keys", of_them).delete_all
+    ScoreShare.where("doc.score_id IN @keys", of_them).delete_all
+    ScoreSuggestion.where("doc.score_id IN @keys", of_them).delete_all
+    ScoreComment.where("doc.score_id IN @keys", of_them).delete_all
+    ScoreThread.where("doc.score_id IN @keys", of_them).delete_all
+    ScoreTake.where("doc.score_id IN @keys", of_them).all.each do |take|
+      take.remove
     end
-    scores.length
+    UserNotification.where("doc.score_id IN @keys", of_them).delete_all
+    Score.where("doc._key IN @keys", of_them).delete_all
+    keys.length
   end
 
   # Every score of `user`, trash included, with all that hangs off them,
@@ -440,13 +460,7 @@ class Score < Model
   # shares, the AI suggestions asked of it, its comments and what was told of it. "Delete for good", the trash's
   # purge and a deleted account all go through here.
   def erase
-    ScoreVersion.delete_all_for(this)
-    ScoreShare.delete_all_for(this)
-    ScoreSuggestion.delete_all_for(this)
-    ScoreThread.delete_all_for(this)
-    ScoreTake.delete_all_for(this)
-    UserNotification.delete_all_for(this)
-    @delete
+    Score.erase_keys([@_key])
   end
 
   def owned_by?(user)
@@ -456,26 +470,29 @@ class Score < Model
   # "owner", "write", "read" or nil: what `user` may do with this score
   # through their account. (A link or public score is also readable by
   # anyone: `readable_by?`.) In the trash it is its owner's alone (#542).
-  def access_of(user)
+  # `roles`: the score's shares already read, address to role
+  # (ScoreRoom.people_in, for a whole room at once, #689); nil reads them.
+  def access_of(user, roles = nil)
     return nil if user.nil?
     return "owner" if this.owned_by?(user)
     return nil if this.trashed?
+    return roles[user.email] unless roles.nil?
 
     ScoreShare.role_for(this, user)
   end
 
   # Nobody changes a score in the trash, its owner included: they restore it
   # first (#542).
-  def writable_by?(user)
+  def writable_by?(user, roles = nil)
     return false if this.trashed?
 
-    ["owner", "write"].includes?(this.access_of(user))
+    ["owner", "write"].includes?(this.access_of(user, roles))
   end
 
-  def readable_by?(user)
+  def readable_by?(user, roles = nil)
     return true if ["link", "public"].includes?(@visibility)
 
-    !this.access_of(user).nil?
+    !this.access_of(user, roles).nil?
   end
 
   def make_visible(visibility)
@@ -524,7 +541,10 @@ class Score < Model
 
   def move_to_trash
     @trashed_at = DateTime.utc.to_unix
-    @save
+    saved = @save
+    # Nobody works in its room any more: read again at their next cursor (#689).
+    ScoreRoom.forget(@_key)
+    saved
   end
 
   def restore_from_trash
@@ -560,7 +580,8 @@ class Score < Model
   # `source` written over `base_revision` by the user whose key is
   # `saved_by`, in one statement, which matches only while the score is
   # still at that revision: false when another save got there first. It
-  # sets what `stamp` would, to the same values.
+  # sets what `stamp` would, to the same values. The statement answers the
+  # key alone, not the score — its whole source — back again (#689).
   def _write_over(source, base_revision, saved_by)
     title = Score.title_in(source) ?? @title ?? SCORE_UNTITLED
     composer = Score.composer_in(source).to_s
@@ -584,7 +605,7 @@ class Score < Model
         visibility: #{visibility},
         share_token: #{share_token}
       } IN scores
-      RETURN NEW
+      RETURN NEW._key
     }
     raise("The save could not be written: #{written}") if type(written) == "string"
     return false if written.length == 0
