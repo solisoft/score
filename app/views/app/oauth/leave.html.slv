@@ -1,0 +1,10 @@
+<%# The consent's answer on its way to the client (#688): the layout's
+    refresh line (`refresh_to`) takes the browser there by itself — a page
+    going on, not a redirect answering the consent form, which the policy's
+    form-action would refuse for another site (ContentPolicy). The link is
+    there for a browser that does not follow it. %>
+<section class="auth" data-oauth-leave>
+  <h1><%= t("app.oauth.leaving_title") %></h1>
+  <p><%- t("app.oauth.leaving_html", {"host": h(redirect_host)}) %></p>
+  <p><a class="btn btn-primary" href="<%= refresh_to %>" data-oauth-leave-link><%= t("app.oauth.leaving_go", {"host": redirect_host}) %></a></p>
+</section>

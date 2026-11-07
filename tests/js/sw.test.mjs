@@ -56,10 +56,11 @@ function worker(held, network = async () => new Response("from the network")) {
     handlers[type]({ data, waitUntil: (promise) => (work = promise) });
     await work;
   };
-  /** A GET of `url` through the worker: its answer. */
-  const get = async (url) => {
+  /** A GET of `url` through the worker (`mode` "navigate" for a page): its answer, undefined when it lets it through. */
+  const get = async (url, mode = "no-cors") => {
     let answer;
-    handlers.fetch({ request: { url, method: "GET", mode: "no-cors" }, respondWith: (promise) => (answer = promise) });
+    handlers.fetch({ request: { url, method: "GET", mode }, respondWith: (promise) => (answer = promise) });
+    if (!answer) return undefined;
     const response = await answer;
     // The cache is written after the answer: let that settle.
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -164,4 +165,52 @@ test("any other message leaves the caches alone", async () => {
   await fire("message", { type: "something-else" });
   await fire("message", null);
   assert.equal(names().length, 2);
+});
+
+// #688: a session that ends without a sign-out on this device (run out,
+// signed out everywhere from another one) leaves no one's pages behind.
+const SCORE_PAGE = "https://score.test/app/scores/abc";
+const offline = async () => {
+  throw new TypeError("Failed to fetch");
+};
+
+test("the sign-in page, opened from the network, drops the kept pages and keeps the rest", async () => {
+  for (const path of ["/login", "/fr/login"]) {
+    const { names, get } = worker({ [pagesCache()]: [SCORE_PAGE], [assetsCache()]: [], [soundsCache()]: [] });
+    assert.equal(await (await get(`https://score.test${path}`, "navigate")).text(), "from the network");
+    assert.deepEqual(names(), [assetsCache(), soundsCache()].sort(), path);
+  }
+});
+
+test("the sign-in page offline leaves the kept pages: no one signs in without a network", async () => {
+  const { names, get } = worker({ [pagesCache()]: [SCORE_PAGE] }, offline);
+  await assert.rejects(() => get("https://score.test/login", "navigate"));
+  assert.deepEqual(names(), [pagesCache()]);
+});
+
+test("a page that is not the sign-in page leaves the kept pages alone", async () => {
+  const { urlsIn, get } = worker({ [pagesCache()]: [SCORE_PAGE] });
+  assert.equal(await get("https://score.test/login-help", "navigate"), undefined);
+  assert.equal(await get("https://score.test/pricing", "navigate"), undefined);
+  await get("https://score.test/app", "navigate");
+  assert.deepEqual(urlsIn(pagesCache()), ["https://score.test/app", SCORE_PAGE]);
+});
+
+test("the account's page is never kept, and offline it says so", async () => {
+  const { urlsIn, get } = worker([]);
+  await get("https://score.test/app/account", "navigate");
+  await get("https://score.test/app/account/data", "navigate");
+  assert.deepEqual(urlsIn(pagesCache()), []);
+  const away = worker({ [pagesCache()]: ["https://score.test/app/account"] }, offline);
+  const answer = await away.get("https://score.test/app/account", "navigate");
+  assert.equal(answer.status, 503);
+  assert.match(await answer.text(), /never kept on this device/);
+});
+
+test("the pages kept by v2, the account's among them, go with it", async () => {
+  assert.notEqual(pagesCache(), "eui-score-pages-v2");
+  const { names, fire } = worker(["eui-score-pages-v2", pagesCache()]);
+  await fire("activate");
+  assert.ok(!names().includes("eui-score-pages-v2"));
+  assert.ok(names().includes(pagesCache()));
 });

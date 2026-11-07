@@ -96,7 +96,7 @@ may still exist under another name — try a synonym before writing it by hand.
 | Background jobs, cron | `app/jobs/`, `Cron`, `static cron` | `docs/jobs.md` |
 | Real-time: WebSockets, presence | WebSocket routes + presence | `docs/websockets.md` |
 | Server-rendered interactivity, no JS | Live View | `docs/liveview.md` |
-| htmx / Alpine (shipped, no build step) | `public/js/` | `docs/client-interactivity.md` |
+| htmx / Alpine (removed from this app, #688: see `app/views/CLAUDE.md`) | — | `docs/client-interactivity.md` |
 | SSE, chunked streaming | streaming responses | `docs/streaming.md` |
 | Web push | `vapid_*` | `docs/builtins/vapid.md` |
 | i18n, pluralization, money/date formatting | `I18n.*`, `Money`, `DateTime`, `Duration` | `docs/i18n.md`, `docs/builtins.md` |

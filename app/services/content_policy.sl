@@ -25,6 +25,15 @@
 # Enforced, and reported: a browser posts what it refused to /csp-report
 # (CspReportsController), where each report is one log line (`violations`).
 #
+# Forms (#688): sent to the site only — a form slipped into a page cannot
+# post what is typed in it elsewhere. A browser holds a form's redirects to
+# the same rule (Chrome does), so the two that send the person off the site
+# after a POST are seen to: Upgrade and Manage billing answer with Stripe's
+# page (AppBillingController), whose two hosts are named here; the OAuth
+# consent's answer goes to the client's own address, which no policy set at
+# boot can name, so it is a page that goes on there by itself
+# (AppOauthController#decide, app/oauth/leave), not a redirect.
+#
 # Styles stay 'unsafe-inline': the views and the engraver's components set
 # style attributes, and a style cannot run a script.
 #
@@ -36,6 +45,10 @@ const CSP_VIEWS_DIR = "app/views"
 # The audio export's MP3 encoder (public/eui-score/audio-export.js, LAME_URL),
 # loaded only when someone exports an MP3, with its SRI hash.
 const CSP_MP3_ENCODER = "https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"
+
+# Where a form may go besides the site: Stripe's Checkout and customer
+# portal, which Upgrade and Manage billing redirect to (Billing).
+const CSP_FORM_TARGETS = ["https://checkout.stripe.com", "https://billing.stripe.com"]
 
 # The `type`s a browser runs; any other (application/json, text/x-lilypond)
 # is a data block, outside the policy.
@@ -71,6 +84,7 @@ class ContentPolicy
       "worker-src 'self'",
       "object-src 'none'",
       "base-uri 'none'",
+      "form-action 'self' #{CSP_FORM_TARGETS.join(" ")}",
       "frame-ancestors 'self'",
       "report-uri #{CSP_REPORT_PATH}"
     ].join("; ")

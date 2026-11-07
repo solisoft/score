@@ -170,3 +170,66 @@ describe("The Content-Security-Policy, in a browser") do
     assert_no_page_errors()
   end
 end
+
+# The OAuth consent's answer under form-action (#688): the browser goes on
+# to the client's address, another origin — here the site under its other
+# name, localhost, which a loopback client may use — with the code, or the
+# refusal. A redirect answering the form would be refused by the policy.
+const CSP_OAUTH_VERIFIER = "csp-verifier-0123456789-abcdefghijklmnopqrstuvwxyz"
+
+# The consent page of a client sending its answer to `redirect_uri`, opened
+# by a signed-in person as a client opens it: by a full load.
+def csp_consent_for(redirect_uri)
+  set_header("Content-Type", "application/json")
+  registered = post("/oauth/register", {
+    "client_name": "Policed client",
+    "redirect_uris": [redirect_uri]
+  }.to_json)
+  clear_headers()
+  client_id = res_json(registered)["client_id"]
+  challenge = Base64.urlsafe_encode(Hex.decode(Crypto.sha256(CSP_OAUTH_VERIFIER)))
+  visit("/oauth/authorize?response_type=code&client_id=#{client_id}&redirect_uri=#{url(redirect_uri)}"
+  + "&code_challenge=#{challenge}&code_challenge_method=S256&state=st4te")
+  wait_for("[data-oauth-consent]")
+end
+
+# Waits for the browser to be at `host`, and answers where it is.
+def csp_wait_for_host(host)
+  tries = 0
+  while tries < 100 && evaluate("location.host") != host
+    sleep(0.1)
+    tries = tries + 1
+  end
+  evaluate("location.href")
+end
+
+describe("The OAuth consent under the form policy, in a browser") do
+  before_each() do
+    logout()
+  end
+
+  test("allowing goes on to the client's address with the code; denying, with the refusal") do
+    email = "csp-oauth-#{uuid_v4}@example.com"
+    user = User.new()
+    user.email = email
+    user.set_password(CSP_BROWSER_PASSWORD)
+    user.confirmed_at = DateTime.utc.to_unix
+    user.save
+    login(email, CSP_BROWSER_PASSWORD)
+    visit("/pricing")
+    port = evaluate("location.port")
+    client_host = "localhost:#{port}"
+    redirect_uri = "http://#{client_host}/pricing"
+
+    csp_consent_for(redirect_uri)
+    click("[data-oauth-allow]")
+    landed = csp_wait_for_host(client_host)
+    assert_match(landed, "^http://localhost:#{port}/pricing\\?code=[^&]+&state=st4te&iss=")
+    code = Regex.capture("code=(?P<code>[^&]+)", landed)["code"]
+    assert_not_null(OauthCode.find_by("code_digest", Crypto.sha256(code)), "the code sent is one issued")
+
+    csp_consent_for(redirect_uri)
+    click("[data-oauth-deny]")
+    assert_eq(csp_wait_for_host(client_host), "http://localhost:#{port}/pricing?error=access_denied&state=st4te")
+  end
+end
