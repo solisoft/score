@@ -50,6 +50,21 @@ describe("Score") do
       assert_null(Score.title_in("\\header { title = \"  \" }"))
     end
 
+    test("is one line (#687): no line break, tab or control character reaches a mail's subject") do
+      spam = "\\header { title = \"Buy\nnow\r\n\r\nBcc: x@example.com\t at\u0007once \" }\n{ c'4 }"
+      assert_eq(Score.title_in(spam), "Buy now Bcc: x@example.com at once")
+      assert_eq(Score.composer_in("\\header { composer = \"J.\n S.\n\nBach\" }"), "J. S. Bach")
+      assert_null(Score.title_in("\\header { title = \"\n\r\t\" }"), "nothing but breaks: no title")
+      assert_eq(Score.one_line(nil), "")
+      assert_eq(Score.one_line("Ode à la joie — 2"), "Ode à la joie — 2", "the rest untouched")
+      user = User.new()
+      user.email = "one-line-#{uuid_v4}@example.com"
+      user.set_password("correct horse battery")
+      user.save
+      score = Score.start(user, spam)
+      assert_eq(Score.find(score._key).title, "Buy now Bcc: x@example.com at once", "as kept")
+    end
+
     test("is written into the header, or a header of its own") do
       assert_eq(
         Score.with_title("\\header { title = \"Old\" }\n{ c'4 }", "New"),

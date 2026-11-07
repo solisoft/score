@@ -69,11 +69,18 @@ class OauthServerController < Controller
   end
 
   # GET /oauth/authorize — the request checked and parked in the session,
-  # then the consent page (signing in first when need be)
+  # then the consent page (signing in first when need be).
+  #
+  # A request that is wrong is answered here, on a page, never by sending
+  # the browser to the redirect URI (#687, RFC 9700 §4.11.2): anyone may
+  # register a client with any https URI, without signing in, so a redirect
+  # before the person has seen the consent page would make this server an
+  # open redirector. The browser goes back to the client only from the
+  # consent page, once the person answered (AppOauthController#decide).
   def authorize
     checked = OauthServer.check_authorization(params)
     return @_fatal(checked["fatal"]) if checked.has_key("fatal")
-    return @_refuse(checked) if checked.has_key("redirect_error")
+    return @_request_error(checked) if checked.has_key("redirect_error")
 
     # A request replaces the one pending: its own id, which the consent page
     # sends back, so that a page showing an earlier request cannot approve
@@ -176,13 +183,15 @@ class OauthServerController < Controller
     render("oauth_server/error", {}, {"status": 400})
   end
 
-  # A refusal told to the client's (verified) redirect URI.
-  def _refuse(checked)
-    values = {
-      "error": checked["redirect_error"],
-      "error_description": checked["description"],
-      "state": checked["state"]
-    }
-    redirect_external(OauthServer.callback(checked["redirect_uri"], values))
+  # A request of a known client, to a URI it registered, but malformed (no
+  # PKCE, another scope…): the OAuth error said on the page, for whoever
+  # writes the client; nothing sent to the redirect URI.
+  def _request_error(checked)
+    @title = "Connection refused"
+    @description = "An application asked to connect to Score in a way it cannot."
+    @reason = "request_error"
+    @error_code = checked["redirect_error"]
+    @error_description = checked["description"]
+    render("oauth_server/error", {}, {"status": 400})
   end
 end

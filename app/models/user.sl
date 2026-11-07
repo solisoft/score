@@ -14,6 +14,9 @@ const AUTH_LOCKOUT_SECONDS = 1800  # auto-unlock after 30 minutes
 # TwoStepGuard): as many as wrong passwords, apart from them.
 const TWO_STEP_MAX_WRONG = AUTH_MAX_FAILED_ATTEMPTS
 const TWO_STEP_LOCK_SECONDS = AUTH_LOCKOUT_SECONDS
+# How long a two-step setup waits for its first code (#687): left longer,
+# it is started again, with the password.
+const TWO_STEP_PENDING_SECONDS = 900
 const AUTH_CONFIRMATION_TOKEN_TTL = 172800  # confirmation links last 48 hours
 const AUTH_REMEMBER_DAYS = 30  # remember-me cookie lifetime
 const AUTH_MIN_PASSWORD_LENGTH = 12  # shortest password accepted at sign-up
@@ -997,15 +1000,25 @@ class User < Model
       TOTP_ALPHABET[b % 32]
     end.join("")
     this.totp_pending = Crypto.encrypt(secret, getenv("SOLI_ENCRYPTION_KEY"))
+    this.totp_pending_at = DateTime.utc.to_unix
     this.update()
     secret
   end
 
-  # The secret being set up, or nil.
+  # The secret being set up, or nil: none, or one left past its time.
   def pending_two_step
-    return nil if this.totp_pending.blank?
+    return nil if this.totp_pending.blank? || @two_step_setup_expired?
 
     Crypto.decrypt(this.totp_pending, getenv("SOLI_ENCRYPTION_KEY"))
+  end
+
+  # A setup started more than TWO_STEP_PENDING_SECONDS ago (#687): its
+  # secret no longer takes a code. One started before #687 kept no time,
+  # and has run out too.
+  def two_step_setup_expired?
+    return false if this.totp_pending.blank?
+
+    DateTime.utc.to_unix - this.totp_pending_at.to_s.to_i > TWO_STEP_PENDING_SECONDS
   end
 
   # What an authenticator app enrols from (the QR code's text).
@@ -1015,12 +1028,19 @@ class User < Model
 
   # The pending secret turned on, if `code` is one of its: the backup codes,
   # to show once; nil when the code is not.
+  #
+  # Each code is counted before it is checked (#687), as the sign-in's are
+  # (TwoStepGuard.take_try): TWO_STEP_MAX_WRONG wrong ones pause the code
+  # step, this one included — no code is checked then (`codes_locked?`).
   def confirm_two_step(code)
     secret = this.pending_two_step()
     return nil if secret.nil?
+    return nil if TwoStepGuard.take_try(this).nil?
 
     step = User.totp_step(secret, code, DateTime.utc().to_unix())
     return nil if step.nil?
+
+    TwoStepGuard.clear_wrong(this)
 
     codes = (1 .. TOTP_BACKUP_COUNT + 1).map do |_|
       User.backup_code()

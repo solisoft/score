@@ -12,6 +12,23 @@ class Changelog
     [
       {"date": "2026-11-07", "entries": [
         {
+          "area": "site",
+          "title": "Two-step setup and invitations, tightened",
+          "text": "Turning on two-step sign-in now waits 15 minutes for the first code of your app, then asks for your "
+          + "password again, and wrong codes there count like those at sign-in. A score's title stays on one line "
+          + "wherever it goes, invitation e-mails included, and an account confirmed less than a week ago sends 10 "
+          + "invitations a day instead of 50.",
+          "app": true
+        },
+        {
+          "area": "site",
+          "title": "Play on shared pages sounds as in the editor",
+          "text": "Play on a shared score, a section and the examples now follows each note's own force, the swing, "
+          + "the curves you drew and the mixer's levels, mutes and solos, as the editor's Play does, and the MIDI "
+          + "link saves that same file. Play works again on pieces without repeats, and its words are in French on "
+          + "the French pages."
+        },
+        {
           "area": "editor",
           "title": "Leaving a score leaves it alone",
           "text": "After a link took you from one score to another page, a MIDI keyboard could still write notes "

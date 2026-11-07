@@ -146,7 +146,7 @@ def _score_actions(figure, opts)
   end
   unless name.blank? || opts["sandbox"].blank?
     href = "#{html_escape(opts["sandbox"])}?source=#{html_escape(name)}"
-    buttons.push("<a class=\"score-btn score-btn-ghost\" href=\"#{href}\">Edit in the playground →</a>")
+    buttons.push("<a class=\"score-btn score-btn-ghost\" href=\"#{href}\">#{I18n.translate("score.edit")}</a>")
   end
   "<div class=\"score-actions\">#{buttons.join("")}<div class=\"score-player\" data-score-player></div></div>"
 end

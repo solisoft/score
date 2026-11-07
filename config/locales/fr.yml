@@ -89,6 +89,7 @@ fr:
     source: "Source LilyPond"
     copy: "Copier"
     play: "Lecture"
+    edit: "Modifier dans le bac à sable →"
   home:
     eyebrow: "Un éditeur de partitions dans votre navigateur"
     headline: "Écrire, jouer et partager des partitions, <em>ensemble</em>, dans le navigateur."
@@ -1498,7 +1499,7 @@ fr:
     admin_two_step_do: "Activez la connexion en deux étapes dans votre compte pour utiliser l'administration."
     admin_two_step_button: "Activer la connexion en deux étapes"
     admin_two_step_unavailable: "Ce serveur ne peut pas encore garder les secrets de la connexion en deux étapes : la personne qui l'administre doit d'abord définir SOLI_ENCRYPTION_KEY."
-    admin_two_step_again: "Cette session a été ouverte sans votre code : avant d'activer la connexion en deux étapes, ou sur un navigateur mémorisé. Déconnectez-vous, puis reconnectez-vous avec le code de votre application d'authentification pour utiliser l'administration."
+    admin_two_step_again: "Cette session n'a pas encore donné de code, ou l'a donné il y a plus de 12 heures (connexion avant l'activation des deux étapes, ou navigateur mémorisé) : saisissez le code de votre application d'authentification pour utiliser l'administration."
     admin_two_step_sign_out: "Se déconnecter"
   # ---
   # (#626) admin: a customer's scores, read only — keys under `admin_626:` right below
@@ -1545,4 +1546,12 @@ fr:
   security_684:
     too_many_scores: "Non créée : un compte garde {n} partitions au plus, celles de la corbeille comprises. Supprimez-en définitivement depuis la corbeille pour faire de la place."
     too_many_photos: "Trop de photos envoyées cette minute : réessayez dans une minute."
+  # (#687) security: admin powers, two-step setup — keys under `security_687:` right below
+  security_687:
+    removed_section: "A retiré la section « {title} » de la bibliothèque"
+    removed_comment: "A retiré un commentaire de la section « {title} »"
+    enrol_expired: "Cette activation a expiré au bout de {minutes} minutes : saisissez votre mot de passe pour recommencer."
+    admin_code_label: "Code de votre application d'authentification"
+    admin_code_submit: "Ouvrir l'admin"
+    admin_code_wrong: "Ce code n'est pas le bon, ou il a déjà servi."
   # ---

@@ -386,9 +386,11 @@ class SharedSection < Model
     !user.nil? && @user_id == user._key
   end
 
-  # Whether `user` may take it away: its author, or an admin.
+  # Whether `user` may take it away: its author, or an admin whose session
+  # passed the second step (#687, SecondStep.admin?) — an admin's password
+  # alone does not.
   def removable_by?(user)
-    !user.nil? && (@by?(user) || user.admin?)
+    !user.nil? && (@by?(user) || SecondStep.admin?(user))
   end
 
   # Its average, to one decimal: 0 with no rating yet.

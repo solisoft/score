@@ -53,9 +53,10 @@ class AdminCustomerScoresController < AdminBaseController
     ScoreSvg.figure(source, 1040, 7, ScoreSvg.sender("page", current_user(), client_ip(req)))
   end
 
-  # The read kept: which admin, which score, whose.
+  # The read kept: which admin, which score, whose — or a 503 and no page
+  # when it cannot be (#687, AdminAction.kept).
   def _record(details)
-    AdminAction.record(current_user(), "view_score", "score", @score._key, {
+    AdminAction.kept(current_user(), "view_score", "score", @score._key, {
       "owner": @customer._key,
       "title": @score.title
     }.merge(details))
