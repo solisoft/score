@@ -55,7 +55,10 @@ def guard_tokens_dead(user, made)
   assert_eq(AccessToken.where({"user_id": user._key}).count, 0)
 end
 
-# The AuthMailJob rows queued for `email` (`soli test` runs no worker).
+# The AuthMailJob rows queued for `email`. The test server's worker runs
+# them meanwhile: a spec preparing one of them (AuthMailJob.prepare) races
+# with it, which is harmless — every run of one letter makes the same link
+# (guard_letter_digest), whichever comes first.
 def guard_mail_jobs(email)
   Job.list().filter do |job|
     str(job["handler"]).contains("AuthMailJob") && str(job).contains(email)
@@ -65,6 +68,12 @@ end
 # The arguments `job` (a row of Job.list) was queued with.
 def guard_job_args(job)
   job["args"]
+end
+
+# The digest of the link the letter of `args` carries, made by the spec or
+# the server's worker, whichever ran it first (AuthMailJob.link_token).
+def guard_letter_digest(args)
+  Crypto.sha256(AuthMailJob.letter_token(args["letter"], getenv("SOLI_ENCRYPTION_KEY")))
 end
 
 # The page `response` shows, `address` taken out, and the time it was
@@ -345,11 +354,14 @@ describe("Account security (#539)") do
       assert_eq(guard_mail_jobs(user.email).length, 1)
       assert_eq(guard_mail_jobs(nobody).length, 1, "a job for an unknown address too")
       # The job makes the link and its mail (account_mail_spec: the mail as
-      # the server's worker sends it); for nobody, nothing.
-      done = AuthMailJob.prepare(guard_job_args(guard_mail_jobs(user.email)[0]))
+      # the server's worker sends it); for nobody, nothing. The worker may
+      # run it before, after or while the spec prepares it: one link.
+      args = guard_job_args(guard_mail_jobs(user.email)[0])
+      done = AuthMailJob.prepare(args)
       assert(done["found"])
       assert(done["due"])
-      assert_not_null(User.find(user._key).reset_token_digest)
+      assert_eq(User.find(user._key).reset_token_digest, guard_letter_digest(args))
+      assert_eq(Crypto.sha256(done["letter"]["links"]["reset_url"].split("token=")[1]), guard_letter_digest(args))
       none = AuthMailJob.prepare(guard_job_args(guard_mail_jobs(nobody)[0]))
       assert_eq(
         none,
@@ -367,8 +379,9 @@ describe("Account security (#539)") do
       assert_eq(guard_job_args(guard_mail_jobs(user.email)[0]).keys, guard_job_args(guard_mail_jobs(nobody)[0]).keys)
       assert_eq(guard_mail_jobs(user.email).length, 1)
       assert_eq(guard_mail_jobs(nobody).length, 1)
-      assert(AuthMailJob.prepare(guard_job_args(guard_mail_jobs(user.email)[0]))["due"])
-      assert_not_null(User.find(user._key).confirmation_token_digest)
+      args = guard_job_args(guard_mail_jobs(user.email)[0])
+      assert(AuthMailJob.prepare(args)["due"])
+      assert_eq(User.find(user._key).confirmation_token_digest, guard_letter_digest(args))
       already = AuthMailJob.prepare({
         "kind": "confirm",
         "email": confirmed.email,
@@ -825,7 +838,11 @@ describe("Account security (#539)") do
       job = guard_mail_jobs(owner.email)[0]
       done = AuthMailJob.prepare(guard_job_args(job))
       assert(done["due"])
-      assert_not_null(User.find(owner._key).confirmation_token_digest, "a link made")
+      assert_eq(
+        User.find(owner._key).confirmation_token_digest,
+        guard_letter_digest(guard_job_args(job)),
+        "a link made"
+      )
     end
   end
 
