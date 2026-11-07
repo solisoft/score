@@ -3952,11 +3952,31 @@ export async function shareCode(text) {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-/** The text a link's code holds; throws on a code that is not one. */
-export async function fromShareCode(code) {
+/**
+ * What a link may unfold to (#688): a score the server would keep, with
+ * room for accents in UTF-8. A few kilobytes of link can inflate to
+ * gigabytes; past this, reading stops.
+ */
+export const SHARE_LIMIT = 2 * SOURCE_LIMIT;
+
+/** The text a link's code holds; throws on a code that is not one, or that unfolds past `limit` bytes. */
+export async function fromShareCode(code, { limit = SHARE_LIMIT } = {}) {
   const binary = atob(code.replace(/-/g, "+").replace(/_/g, "/"));
   const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
-  return new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text();
+  const reader = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw")).getReader();
+  const chunks = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > limit) {
+      await reader.cancel().catch(() => {});
+      throw new Error(`share link: more than ${limit} bytes`);
+    }
+    chunks.push(value);
+  }
+  return new TextDecoder().decode(await new Blob(chunks).arrayBuffer());
 }
 
 // ---- Refusals ---------------------------------------------------------------------------------

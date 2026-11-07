@@ -353,7 +353,9 @@ export function startStudio(root, options = {}) {
   let start = fixed ? options.source : sourceBox.value;
   const fromExample = fixed || new URLSearchParams(location.search).has("source");
   // A shared link: its score, which then becomes this browser's draft; the
-  // link itself leaves the address bar, so a reload keeps the edits.
+  // link itself leaves the address bar, so a reload keeps the edits. Over a
+  // draft of another score, the draft opens and the person is asked first
+  // (#688): a link someone sent must not wipe what was being written.
   const shared = fixed ? null : /^#s=([A-Za-z0-9_-]+)$/.exec(location.hash)?.[1];
   let opening = Promise.resolve(null);
   let draft = null;
@@ -364,15 +366,18 @@ export function startStudio(root, options = {}) {
     opening = M.fromShareCode(shared).then((text) => (text.trim() ? text : null)).catch(() => null);
     history.replaceState(null, "", location.pathname + location.search);
   } else if (!fromExample && draft) start = draft;
+  let asking = false;
   // The engraver reads the source: nothing is read before it has loaded.
   const ready = Promise.all([loaded(), opening]).then(([, sharedText]) => {
-    if (sharedText != null) start = sharedText;
+    asking = sharedText != null && !fromExample && Boolean(draft?.trim()) && draft !== sharedText;
+    if (asking) start = draft;
+    else if (sharedText != null) start = sharedText;
     // A link that holds no score opens what would have opened without it.
     else if (shared && draft) start = draft;
     sourceBox.value = start;
     readText(start);
     adoptText();
-    if (sharedText != null) saveDraft();
+    if (sharedText != null && !asking) saveDraft();
     return draw().then(() => sharedText);
   }).then(async (sharedText) => {
     // The undo history kept in this browser: never in the way of the score opening.
@@ -387,6 +392,7 @@ export function startStudio(root, options = {}) {
     if (st.passed.length) say(`${options.greeting ?? tr("Opened.")}${passedText()}`);
     else if (options.greeting) say(options.greeting);
     else if (shared && sharedText == null) say(draft ? tr("That link holds no score: here is your last one.") : tr("That link holds no score: here is the starting one."), true);
+    else if (asking) say(tr("Your last score, kept in this browser. The link holds another: open it, or keep this one."));
     else if (sharedText != null) say(tr("A shared score. Your changes stay in this browser; Share makes a new link."));
     else if (!fromExample && start !== sourceBox.defaultValue) say(tr("Your last score, kept in this browser. New starts afresh."));
     // Otherwise nothing: the bar beside it already says how to start (#419).
@@ -395,7 +401,30 @@ export function startStudio(root, options = {}) {
     // A settings line that does not read, lines merged, a text near the length kept (#683): said last, as a warning.
     const notices = openingNotices();
     if (notices) say(`${status.textContent}${notices}`.trim(), true);
+    if (asking) askShared(sharedText);
   }).then(() => (options.importSection ? importFromLibrary(options.importSection) : null));
+
+  /**
+   * A shared link's score over the draft of another (#688): which to keep,
+   * asked in the dialog of the editor's markup. Opened, it is one edit of
+   * the draft — Undo brings the draft back; kept, the link is let go.
+   */
+  function askShared(sharedText) {
+    const ask = $("[data-shared-ask]");
+    const titleIn = (text) => /\\header\s*\{[^}]*?title\s*=\s*"([^"]*)"/.exec(text)?.[1] || ask.dataset.untitled || "";
+    ask.querySelector("[data-shared-ask-shared]").textContent = titleIn(sharedText);
+    ask.querySelector("[data-shared-ask-draft]").textContent = titleIn(st.text);
+    let opened = false;
+    ask.querySelector("[data-shared-open]").addEventListener("click", () => {
+      opened = true;
+      ask.close();
+      load(sharedText, tr("A shared score. Your changes stay in this browser; Share makes a new link."));
+    }, { once: true, signal: lifetime.signal });
+    ask.querySelector("[data-shared-keep]").addEventListener("click", () => ask.close(), { once: true, signal: lifetime.signal });
+    // Closed any other way (Escape): the draft is kept too.
+    ask.addEventListener("close", () => opened || say(tr("Your draft is kept: the shared score was not opened.")), { once: true, signal: lifetime.signal });
+    ask.showModal();
+  }
 
   /**
    * A section of the library added after the score's bars (#451), from its

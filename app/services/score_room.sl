@@ -233,7 +233,7 @@ class ScoreRoom
 
   # Where the page's person works, sent to the others in the room:
   # {"event": "cursor", "lane", "bars": [first, last] (or nil for none),
-  # "origin": the editor's id}. Relayed only from a connection the room
+  # "origin": the editor's id, told as its `origin_tag`}. Relayed only from a connection the room
   # admitted (in `presences`, the room's when not given, under the ticket's
   # person), whose person still may change the score; who it is comes from
   # that presence, never from the message. Anything else is dropped: {}.
@@ -266,7 +266,7 @@ class ScoreRoom
       "user_id": entered["user"],
       "name": name,
       "connection_id": connection_id,
-      "origin": said["origin"].to_s.substring(0, 64),
+      "origin": ScoreRoom.origin_tag(said["origin"]),
       "lane": place["lane"],
       "bars": place["bars"]
     }
@@ -338,16 +338,27 @@ class ScoreRoom
     {"broadcast_channel": {"channel": channel, "message": gone.to_json}}
   end
 
+  # The editor (`origin`: the page's own id, sent with its saves, comments
+  # and place) behind a news, as the room is told it (#688): its SHA-256,
+  # which the page that chose the id recognises and no one can turn back
+  # into it. Told as it is, another editor in the room could send it with a
+  # save of their own, and the page it belongs to would skip that save as
+  # its own. "" for none.
+  static def origin_tag(origin)
+    text = origin.to_s.substring(0, 64)
+    text.blank? ? "" : Crypto.sha256(text)
+  end
+
   # What the room hears when `score` is saved: its source, its revision,
-  # the editor (`origin`) that saved it and who saved it (`saved_by`, their
-  # key: the room names them, as its presence does).
+  # the editor (`origin`, as `origin_tag`) that saved it and who saved it
+  # (`saved_by`, their key: the room names them, as its presence does).
   static def saved_news(score, origin)
     {
       "event": "saved",
       "revision": score.revision,
       "source": score.source,
       "title": score.title,
-      "origin": origin.to_s,
+      "origin": ScoreRoom.origin_tag(origin),
       "saved_by": score.saved_by.to_s
     }
   end
@@ -450,7 +461,7 @@ class ScoreRoom
       "event": "comments",
       "thread": thread_view,
       "gone": gone,
-      "origin": origin.to_s.substring(0, 64)
+      "origin": ScoreRoom.origin_tag(origin)
     }
   end
 
@@ -460,7 +471,7 @@ class ScoreRoom
     {
       "event": "comments",
       "threads": thread_views,
-      "origin": origin.to_s.substring(0, 64)
+      "origin": ScoreRoom.origin_tag(origin)
     }
   end
 

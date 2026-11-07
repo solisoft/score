@@ -1219,6 +1219,10 @@ fr:
       midi_learn_title: "Apprentissage MIDI"
       clear_them_all: "Tout effacer"
       print_a_part_title: "Imprimer une partie"
+      shared_ask_title: "Ouvrir la partition partagée ?"
+      shared_ask_about: "Ce lien contient {shared}. Ouverte, elle prend la place de votre brouillon, {draft}, dans ce navigateur : Édition ▸ Annuler ramène votre brouillon."
+      shared_open: "Ouvrir la partition partagée"
+      shared_keep: "Garder mon brouillon"
       a_part_is_written_as_its_player_reads_it: "Une partie est écrite comme son musicien la lit : une clarinette en si♭ un ton plus haut, un cor en fa une quinte."
       save_as_ly: "Enregistrer en .ly"
       new_score: "Nouvelle partition"
@@ -1374,6 +1378,9 @@ fr:
       deny: "Refuser"
       nothing_title: "Rien à connecter"
       nothing_description: "Aucune application n'attend votre réponse."
+      leaving_title: "Retour à l'application"
+      leaving_html: "Votre réponse part vers <code>{host}</code>. Si rien ne se passe, suivez le lien."
+      leaving_go: "Continuer vers {host}"
   app_nav:
     site: "Le site"
   mail:

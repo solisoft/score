@@ -302,63 +302,16 @@ Then in a view:
 Group helpers thematically — `application_helper.sl`, `markdown_helpers.sl`,
 `form_helpers.sl` — rather than one mega-file.
 
-## Client interactivity — HTMX + Alpine.js
+## Client interactivity — no HTMX, no Alpine.js
 
-Every scaffolded app ships with **HTMX** and **Alpine.js** preloaded in
-`app/views/layouts/application.html.slv`:
-
-```erb
-<script defer src="<%= public_path("js/htmx.min.js") %>"></script>
-<script defer src="<%= public_path("js/alpine.min.js") %>"></script>
-```
-
-This is Soli's default client stack. Reach for it before introducing React /
-Vue / similar — most "make this page interactive" tasks fit it cleanly,
-without a build step.
-
-**HTMX** for server-driven partials. Swap a piece of the DOM with the HTML
-response of a Soli action — no JSON, no client-side templating:
-
-```erb
-<button hx-post="<%= post_path(post) %>/like"
-        hx-target="#like-count"
-        hx-swap="outerHTML">
-  Like
-</button>
-
-<span id="like-count"><%= post.likes %></span>
-```
-
-Pair with a controller that returns the partial fragment directly:
-
-```soli
-def like
-  @post = Post.find(params["id"])
-  @post.increment("likes")
-  render("posts/_like_count")     # tiny partial, no layout
-end
-```
-
-For HTMX requests, skip the layout by detecting the `HX-Request` header in
-the controller (e.g. `if req["headers"]["hx-request"] == "true"`) and pass
-`{ "layout": false }` to `render`.
-
-**Alpine.js** for purely-local UI state (open/closed, expanded/collapsed,
-in-input validation flash). Keep it scoped — no app-level Alpine stores.
-
-```erb
-<div x-data="{ open: false }">
-  <button @click="open = !open">Toggle</button>
-  <div x-show="open">…content…</div>
-</div>
-```
-
-Rule of thumb: **server first**. If a piece of state lives on the server
-(user data, validations, search results), use HTMX. If it lives only in the
-DOM (modals, dropdowns, tabs), use Alpine. Mix freely — they don't conflict.
-
-See `docs/client-interactivity.md` (bundled in every Soli app) for the
-deeper end of either library.
+Soli scaffolds apps with HTMX and Alpine.js in `public/js/`. **This app does
+not ship them** (#688): no page used them, and under the
+Content-Security-Policy's `script-src 'self'` a library the site serves is
+one that markup slipped into a page could load — htmx would then run its
+`hx-*` attributes. `tests/controllers/public_files_spec.sl` checks they stay
+out. Pages are made interactive by a page's own inline script (allowed by its
+hash, see below) or a module under `public/`; if `soli update docs` or a
+generator puts either library back, delete it.
 
 ## Instant navigation — every link click
 
