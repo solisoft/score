@@ -11,6 +11,20 @@ describe("public/") do
     assert_eq(res_status(script), 200)
     assert_contains(res_header(script, "Content-Type"), "javascript")
   end
+
+  # Under script-src 'self', a library the site serves is one markup slipped
+  # into a page could load and drive (#688): htmx would run hx-* attributes.
+  # Neither was used by any page.
+  test("serves no htmx nor Alpine: no page used them, markup slipped in could") do
+    ["htmx.min.js", "alpine.min.js"].each do |library|
+      assert_not(File.exists("public/js/#{library}"), library)
+      assert_eq(res_status(get("/js/#{library}")), 404, library)
+    end
+    ContentPolicy.view_files("app/views").each do |path|
+      text = File.read(path).downcase
+      assert_not(text.contains("htmx") || text.contains("alpine"), path)
+    end
+  end
 end
 
 describe("the deploy") do

@@ -863,6 +863,18 @@ test("sharing: a score goes into a link and comes back the same", async () => {
   await assert.rejects(() => M.fromShareCode("not-a-score"));
 });
 
+test("a link that unfolds past what a score can be is refused, read no further (#688)", async () => {
+  // 40 MB of the same letter: a link of a few kilobytes.
+  const bomb = await M.shareCode("c".repeat(40_000_000));
+  assert.ok(bomb.length < 100_000, `a short link (${bomb.length})`);
+  await assert.rejects(() => M.fromShareCode(bomb), /more than 2000000 bytes/);
+  assert.equal(M.SHARE_LIMIT, 2 * M.SOURCE_LIMIT);
+  // The limit itself, and one byte past it.
+  const at = await M.shareCode("é".repeat(5));
+  assert.equal(await M.fromShareCode(at, { limit: 10 }), "é".repeat(5));
+  await assert.rejects(() => M.fromShareCode(at, { limit: 9 }), /more than 9 bytes/);
+});
+
 test("a refusal points at its line: the brace left open, or the engraver's own place", () => {
   const refusal = (text) => {
     try {

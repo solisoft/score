@@ -53,7 +53,7 @@ class AppOauthController < AppBaseController
     redirect_uri = checked["redirect_uri"]
     state = checked["state"]
     if params["decision"] != "allow"
-      return redirect_external(OauthServer.callback(
+      return @_leave_for(OauthServer.callback(
         redirect_uri,
         {"error": "access_denied", "state": state}
       ))
@@ -66,7 +66,7 @@ class AppOauthController < AppBaseController
       checked["code_challenge"],
       !pending["redirect_uri"].to_s.blank?
     )
-    redirect_external(OauthServer.callback(
+    @_leave_for(OauthServer.callback(
       redirect_uri,
       {
         "code": code,
@@ -77,6 +77,17 @@ class AppOauthController < AppBaseController
   end
 
   private
+
+  # The answer sent on to the client's `callback`: a page that goes there by
+  # itself (app/oauth/leave), not a redirect — the Content-Security-Policy's
+  # form-action refuses a form's redirect to another site (#688).
+  def _leave_for(callback)
+    @refresh_to = callback
+    @redirect_host = OauthServer.host_of(callback)
+    @title = SiteText.t("app.oauth.leaving_title")
+    @description = SiteText.t("app.oauth.description")
+    render("app/oauth/leave")
+  end
 
   def _nothing_pending
     @title = SiteText.t("app.oauth.nothing_title")

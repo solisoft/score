@@ -1219,6 +1219,10 @@ en:
       midi_learn_title: "MIDI learn"
       clear_them_all: "Clear them all"
       print_a_part_title: "Print a part"
+      shared_ask_title: "Open the shared score?"
+      shared_ask_about: "This link holds {shared}. Opened, it takes the place of your draft, {draft}, in this browser: Edit ▸ Undo brings your draft back."
+      shared_open: "Open the shared score"
+      shared_keep: "Keep my draft"
       a_part_is_written_as_its_player_reads_it: "A part is written as its player reads it: a clarinet in B♭ a tone higher, a horn in F a fifth."
       save_as_ly: "Save as .ly"
       new_score: "New score"
@@ -1374,6 +1378,9 @@ en:
       deny: "Deny"
       nothing_title: "Nothing to connect"
       nothing_description: "No application is waiting for your answer."
+      leaving_title: "Back to the application"
+      leaving_html: "Your answer is on its way to <code>{host}</code>. If nothing happens, follow the link."
+      leaving_go: "Go on to {host}"
   app_nav:
     site: "The site"
   mail:
