@@ -149,7 +149,9 @@ export function install(ctx) {
     svg?.querySelector(":scope > .studio-playing")?.remove();
     const now = st.playing?.now;
     if (!svg || !now?.length) return;
-    const lit = now.map((item) => playingCopies()?.get(item) ?? "").join("");
+    const of = playingCopies();
+    if (!of) return;
+    const lit = now.map((item) => of.get(item) ?? "").join("");
     if (lit) svg.insertAdjacentHTML("beforeend", `<g class="studio-playing">${lit}</g>`);
   }
 
