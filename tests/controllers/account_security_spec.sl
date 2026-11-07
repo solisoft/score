@@ -344,19 +344,16 @@ describe("Account security (#539)") do
       assert_eq(guard_job_args(guard_mail_jobs(user.email)[0]).keys, guard_job_args(guard_mail_jobs(nobody)[0]).keys)
       assert_eq(guard_mail_jobs(user.email).length, 1)
       assert_eq(guard_mail_jobs(nobody).length, 1, "a job for an unknown address too")
-      # The job makes the link and its mail; for nobody, nothing.
-      done = AuthMailJob.perform_now(guard_job_args(guard_mail_jobs(user.email)[0]))
+      # The job makes the link and its mail (account_mail_spec: the mail as
+      # the server's worker sends it); for nobody, nothing.
+      done = AuthMailJob.prepare(guard_job_args(guard_mail_jobs(user.email)[0]))
       assert(done["found"])
       assert(done["due"])
       assert_not_null(User.find(user._key).reset_token_digest)
-      none = AuthMailJob.perform_now(guard_job_args(guard_mail_jobs(nobody)[0]))
+      none = AuthMailJob.prepare(guard_job_args(guard_mail_jobs(nobody)[0]))
       assert_eq(
         none,
-        {
-          "found": false,
-          "due": false,
-          "sent": false
-        }
+        {"found": false, "due": false}
       )
     end
 
@@ -370,23 +367,19 @@ describe("Account security (#539)") do
       assert_eq(guard_job_args(guard_mail_jobs(user.email)[0]).keys, guard_job_args(guard_mail_jobs(nobody)[0]).keys)
       assert_eq(guard_mail_jobs(user.email).length, 1)
       assert_eq(guard_mail_jobs(nobody).length, 1)
-      assert(AuthMailJob.perform_now(guard_job_args(guard_mail_jobs(user.email)[0]))["due"])
+      assert(AuthMailJob.prepare(guard_job_args(guard_mail_jobs(user.email)[0]))["due"])
       assert_not_null(User.find(user._key).confirmation_token_digest)
-      already = AuthMailJob.perform_now({
+      already = AuthMailJob.prepare({
         "kind": "confirm",
         "email": confirmed.email,
         "locale": "en"
       })
       assert_eq(
         already,
-        {
-          "found": true,
-          "due": false,
-          "sent": false
-        }
+        {"found": true, "due": false}
       )
       assert_null(User.find(confirmed._key).confirmation_token_digest, "no link made")
-      odd = AuthMailJob.perform_now({
+      odd = AuthMailJob.prepare({
         "kind": "unknown",
         "email": user.email,
         "locale": "en"
@@ -429,8 +422,8 @@ describe("Account security (#539)") do
       assert_eq(guard_mail_jobs(owner.email).length, 1, "the owner's note, queued")
       note = guard_job_args(guard_mail_jobs(owner.email)[0])
       assert_eq(note["kind"], "signup_taken")
-      assert(AuthMailJob.perform_now(note)["due"])
-      gone = AuthMailJob.perform_now({
+      assert(AuthMailJob.prepare(note)["due"])
+      gone = AuthMailJob.prepare({
         "kind": "signup_taken",
         "email": fresh + ".none",
         "locale": "en"
@@ -830,7 +823,7 @@ describe("Account security (#539)") do
         "password": "another long password"
       }))
       job = guard_mail_jobs(owner.email)[0]
-      done = AuthMailJob.perform_now(guard_job_args(job))
+      done = AuthMailJob.prepare(guard_job_args(job))
       assert(done["due"])
       assert_not_null(User.find(owner._key).confirmation_token_digest, "a link made")
     end

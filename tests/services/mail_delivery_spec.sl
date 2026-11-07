@@ -2,10 +2,14 @@
 # failure is logged and answered, never raised. Mailers live in the server
 # process, so a stand-in message plays one here; the real mails are sent
 # through it by the controller specs (sign-up, reset, invitations).
+#
+# The two failures below are made on purpose, and their warnings say so
+# ("on purpose: mail_delivery_spec"): CI fails the suite on any other
+# "could not be sent" in its log or the test servers' (#671).
 
 class StandInMessage
   def deliver_now
-    throw "SMTP refused the recipient" if @fails
+    throw "SMTP refused the recipient (on purpose: mail_delivery_spec)" if @fails
 
     @sent = true
   end
@@ -53,7 +57,7 @@ describe("MailDelivery") do
 
   test("a message that cannot even be built answers false too") do
     assert_not(MailDelivery.attempt("confirmation", fn() {
-      throw "no such template"
+      throw "no such template (on purpose: mail_delivery_spec)"
     }))
     assert_eq(Logger.entries().filter(&{ |line|
       line.contains("confirmation email could not be sent")
