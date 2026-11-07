@@ -114,10 +114,11 @@ class SectionsController < Controller
 
   private
 
-  # The section of the route, unless it is hidden (404; but to an admin).
+  # The section of the route, unless it is hidden (404; but to an admin
+  # whose session passed the second step, #687).
   def _visible
     section = SharedSection.find(params["id"])
-    halt(404, "No such section") if section.hidden && !(current_user()&.admin? ?? false)
+    halt(404, "No such section") if section.hidden && !SecondStep.admin?(current_user())
 
     section
   end

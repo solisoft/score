@@ -702,4 +702,21 @@ describe("ScoreRoom, shown out at once (#542)") do
     assert_not(ScoreRoom.current_link?(score, mark))
     assert(ScoreRoom.current_link?(score, ScoreRoom.link_mark(score.share_token)))
   end
+
+  test("a ticket is signed with a key drawn from the secret, never the secret itself (#687)") do
+    owner = room_user()
+    score = Score.start(owner, Score.blank_source("Keyed"))
+    ticket = ScoreRoom.ticket(score, owner, DateTime.utc.to_unix)
+    parts = ticket.split(".")
+    body = parts.slice(0, 5).join(".")
+    assert_eq(parts[5], Crypto.hmac(body, ScoreRoom.ticket_key))
+    assert_ne(parts[5], Crypto.hmac(body, ScoreRoom.secret), "not the raw secret's")
+    assert_ne(ScoreRoom.ticket_key, ScoreRoom.secret)
+    assert_ne(ScoreRoom.ticket_key, ScoreRoom.link_key)
+    assert_ne(ScoreRoom.ticket_key, User.auth_key("sign-in"))
+    # One signed with the raw secret, as before #687, is not taken.
+    raw = body + "." + Crypto.hmac(body, ScoreRoom.secret)
+    assert_null(ScoreRoom.signed(raw))
+    assert_not_null(ScoreRoom.signed(ticket))
+  end
 end

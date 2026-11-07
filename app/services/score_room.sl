@@ -96,6 +96,14 @@ class ScoreRoom
     Crypto.hmac("score room link marks", ScoreRoom.secret)
   end
 
+  # The key tickets are signed with (#687): drawn from the secret, as the
+  # link marks' and the sign-in's (User.auth_key) are — never the secret
+  # itself: a ticket is the secret's HMAC over text the asker partly
+  # chooses, and an HMAC of the secret is exactly what those other keys are.
+  static def ticket_key
+    Crypto.hmac("score room tickets", ScoreRoom.secret)
+  end
+
   # Is `link` (a `link_mark`) the mark of `score`'s link as it now stands
   # (`current_mark`, worked out here when not given)?
   static def current_link?(score, link, current_mark = nil)
@@ -111,7 +119,7 @@ class ScoreRoom
   static def ticket(score, user, now, role = "edit")
     link = role == "listen" ? ScoreRoom.link_mark(score.share_token) : ""
     body = "#{score._key}.#{user&._key.to_s}.#{now + SCORE_ROOM_TICKET_SECONDS}.#{role}.#{link}"
-    body + "." + Crypto.hmac(body, ScoreRoom.secret)
+    body + "." + Crypto.hmac(body, ScoreRoom.ticket_key)
   end
 
   # {"score", "user" ("" for someone signed out), "until", "role", "link"}
@@ -122,7 +130,7 @@ class ScoreRoom
     return nil unless parts.length == 6
 
     body = parts.slice(0, 5).join(".")
-    return nil unless Crypto.secure_compare(Crypto.hmac(body, ScoreRoom.secret), parts[5])
+    return nil unless Crypto.secure_compare(Crypto.hmac(body, ScoreRoom.ticket_key), parts[5])
     return nil unless SCORE_ROOM_ROLES.includes?(parts[3])
 
     {

@@ -10,15 +10,26 @@
 class Changelog
   static def days
     [
-      {"date": "2026-11-07", "entries": [{
-        "area": "editor",
-        "title": "Keyswitches for virtual instruments",
-        "text": "Playing through a sample library in your DAW? Under the MIDI view, the automation lane now takes any "
-        + "controller (CC 0–127), and its Keyswitches and programs mode places keyswitches and program changes on a "
-        + "staff. An articulation map sends the right keyswitch before each staccato, pizz., tremolo or slurred "
-        + "note. They go to the device of Sound to and into Save as MIDI, never onto the page.",
-        "app": true
-      }]},
+      {"date": "2026-11-07", "entries": [
+        {
+          "area": "site",
+          "title": "Two-step setup and invitations, tightened",
+          "text": "Turning on two-step sign-in now waits 15 minutes for the first code of your app, then asks for your "
+          + "password again, and wrong codes there count like those at sign-in. A score's title stays on one line "
+          + "wherever it goes, invitation e-mails included, and an account confirmed less than a week ago sends 10 "
+          + "invitations a day instead of 50.",
+          "app": true
+        },
+        {
+          "area": "editor",
+          "title": "Keyswitches for virtual instruments",
+          "text": "Playing through a sample library in your DAW? Under the MIDI view, the automation lane now takes "
+          + "any controller (CC 0–127), and its Keyswitches and programs mode places keyswitches and program changes "
+          + "on a staff. An articulation map sends the right keyswitch before each staccato, pizz., tremolo or slurred "
+          + "note. They go to the device of Sound to and into Save as MIDI, never onto the page.",
+          "app": true
+        }
+      ]},
       {"date": "2026-11-06", "entries": [{
         "area": "engine",
         "title": "Words over the staff clear sharps, flats and naturals",

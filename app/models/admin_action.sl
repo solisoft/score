@@ -8,6 +8,13 @@
 # A customer's score read by an admin is kept too ("view_score", #626):
 # nothing changes, but someone else's music was opened — the score is the
 # target, its owner in the details, so the owner's page lists it.
+#
+# A section or a comment of the library taken away by an admin who is not
+# its author ("section_remove", "comment_remove", #687) is kept the same
+# way: the section or the comment is the target, its author the owner.
+#
+# Kept or not done (#687): `kept` stops the request (503) when the line
+# could not be written, before the action it keeps goes on.
 const ADMIN_ACTIONS_SHOWN = 100
 const ADMIN_ACTION_KINDS = [
   "gift",
@@ -18,7 +25,9 @@ const ADMIN_ACTION_KINDS = [
   "report_show",
   "report_remove",
   "report_dismiss",
-  "view_score"
+  "view_score",
+  "section_remove",
+  "comment_remove"
 ]
 
 class AdminAction < Model
@@ -43,14 +52,28 @@ class AdminAction < Model
     })
   end
 
+  # `record`, or the request stopped (halt 503) when the line could not
+  # be written: what an admin does is kept, or not done.
+  static def kept(admin, action, target_type, target_id, details = {})
+    line = AdminAction.record(admin, action, target_type, target_id, details)
+    halt(503, "The admins' log could not be written: nothing was done.") unless line._errors.nil?
+
+    line
+  end
+
   # What was done to one account or report, the latest first — for an
-  # account, its scores read by an admin among them (#626). The owner is
+  # account, its scores read by an admin among them (#626), and its
+  # sections and comments taken away by an admin (#687). The owner is
   # read as details['owner']: the query builder rewrites a second dotted
   # step (details.owner) to details.doc.owner, which matches nothing.
   static def about(target_id)
     AdminAction.where(
-      "doc.target_id == @target OR (doc.target_type == 'score' AND doc.details['owner'] == @target)",
-      {"target": target_id.to_s}
+      "doc.target_id == @target OR (doc.target_type IN @owned AND doc.details['owner'] == @target)",
+      {"target": target_id.to_s, "owned": [
+        "score",
+        "section",
+        "comment"
+      ]}
     ).order("at", "desc").limit(ADMIN_ACTIONS_SHOWN).all
   end
 
@@ -70,15 +93,19 @@ class AdminAction < Model
     return "Confirmed the address" if @action == "confirm"
     return "Report: #{outcome}" if @action.starts_with?("report_") && !outcome.nil?
     return @_viewed(details) if @action == "view_score"
+    return @_removed(details) if ["section_remove", "comment_remove"].includes?(@action)
 
     @action
   end
 
   # The account a line is about: the target for an account, the owner for
-  # one of its scores read (#626); nil for a report.
+  # one of its scores read (#626) or its section or comment taken away
+  # (#687); nil for a report.
   def account_key
     return @target_id if @target_type == "user"
-    return (@details ?? {})["owner"] if @target_type == "score"
+    if ["score", "section", "comment"].includes?(@target_type)
+      return (@details ?? {})["owner"]
+    end
 
     nil
   end
@@ -91,5 +118,11 @@ class AdminAction < Model
     return SiteText.t("admin_626.viewed_version", {"title": title}) unless details["version"].blank?
 
     SiteText.t("admin_626.viewed_score", {"title": title})
+  end
+
+  # "Took the section “Title” away", or a comment on it, in the admin's language.
+  def _removed(details)
+    key = @action == "section_remove" ? "removed_section" : "removed_comment"
+    SiteText.t("security_687.#{key}", {"title": details["title"].to_s})
   end
 end

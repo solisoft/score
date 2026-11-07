@@ -39,6 +39,43 @@ def admin_spec_sign_in(user)
   post("/login/code", {"code": Crypto.totp_generate(secret, DateTime.utc.to_unix + 30, 30)})
 end
 
+# An admin with two-step on: [the account, its backup codes]. The sign-in
+# takes the app's code of the next step, the last one it would take: a
+# code asked again is a backup code.
+def admin_spec_with_codes
+  admin = admin_spec_user("admin", nil, false)
+  secret = User.find(admin._key).start_two_step
+  codes = User.find(admin._key).confirm_two_step(Crypto.totp_generate(secret, DateTime.utc.to_unix, 30))
+  [User.find(admin._key), codes]
+end
+
+# Its sessions' second step said to be passed at `marked_at` (#687: a code
+# lasts SECOND_STEP_SECONDS) — the sessions are SoliDB documents.
+def admin_spec_mark_at(user, marked_at)
+  owner = user._key
+  sessions = @sdbql{
+    FOR s IN sessions
+    FILTER s.data.second_step_user == #{owner}
+    RETURN s
+  }
+  # The session's data written whole: an UPDATE does not merge into it.
+  sessions.each do |session|
+    data = session["data"]
+    data["second_step_at"] = marked_at
+    session_key = session["_key"]
+    patch = {"data": data}
+    @sdbql{
+      UPDATE #{session_key} WITH #{patch} IN sessions
+    }
+  end
+  marks = @sdbql{
+    FOR s IN sessions
+    FILTER s.data.second_step_user == #{owner}
+    RETURN s.data.second_step_at
+  }
+  assert_eq(marks, [marked_at], "the session's mark")
+end
+
 def admin_spec_paying(user, interval = "monthly")
   user.plan = "pro"
   user.plan_status = "active"
@@ -172,7 +209,8 @@ describe("The admin section") do
       assert_eq(AdminAction.about(target._key).length, 0)
       page = get("/admin/two-step")
       assert_eq(res_status(page), 200)
-      assert_contains(res_body(page), "Sign out, then sign in again with the code of your authenticator app")
+      assert_contains(res_body(page), "type the code of your authenticator app to use the admin")
+      assert_contains(res_body(page), "data-admin-code")
       assert_contains(res_body(page), "data-sign-in-again")
       assert_not(res_body(page).contains("data-turn-on-two-step"))
 
@@ -219,6 +257,83 @@ describe("The admin section") do
       assert_eq(res_status(confirmed), 200)
       assert(User.find(admin._key).two_step?)
       assert_eq(res_status(get("/admin")), 200)
+    end
+
+    test("a code lasts 12 hours (#687): then the admin is closed until the code is typed again, counted") do
+      made = admin_spec_with_codes()
+      admin = made[0]
+      target = admin_spec_user()
+      admin_spec_sign_in(admin)
+      assert_eq(res_status(get("/admin")), 200, "open: the code just given")
+      # The code given 12 hours and a second ago.
+      admin_spec_mark_at(admin, DateTime.utc.to_unix - SECOND_STEP_SECONDS - 1)
+      assert_eq(res_location(get("/admin")), "/admin/two-step")
+      gift = post("/admin/customers/#{target._key}/gift", {"days": "365"})
+      assert_eq(res_location(gift), "/admin/two-step")
+      assert_not(User.find(target._key).pro?)
+      assert_eq(AdminAction.about(target._key).length, 0)
+      page = get("/admin/two-step")
+      assert_eq(res_status(page), 200)
+      assert_contains(res_body(page), "data-admin-code")
+      # A wrong code: refused, counted, the admin still closed.
+      wrong = post("/admin/two-step", {"code": "000000"})
+      assert_eq(res_status(wrong), 422)
+      assert_contains(res_body(wrong), "That code is not right, or it was already used.")
+      assert_eq(TwoStepGuard.find_by("user_id", admin._key).wrong, 1)
+      assert_eq(res_location(get("/admin")), "/admin/two-step")
+      # The step its enrolment used is spent: refused too.
+      secret = Crypto.decrypt(User.find(admin._key).totp_secret, getenv("SOLI_ENCRYPTION_KEY"))
+      reused = post("/admin/two-step", {"code": Crypto.totp_generate(secret, DateTime.utc.to_unix, 30)})
+      assert_eq(res_status(reused), 422)
+      # The right one opens it again, and the count starts again.
+      right = post("/admin/two-step", {"code": made[1][0]})
+      assert_eq(res_location(right), "/admin")
+      assert_eq(res_status(get("/admin")), 200)
+      assert_eq(TwoStepGuard.find_by("user_id", admin._key).wrong, 0)
+      assert_eq(res_location(get("/admin/two-step")), "/admin")
+      assert_eq(res_location(post("/admin/two-step", {"code": "000000"})), "/admin", "open: no code asked")
+      # Given 11 hours ago: still open.
+      admin_spec_mark_at(admin, DateTime.utc.to_unix - 11 * 3600)
+      assert_eq(res_status(get("/admin")), 200)
+    end
+
+    test("the code asked again: paused after too many wrong ones; a member gets a 404, a plain admin none of it") do
+      made = admin_spec_with_codes()
+      admin = made[0]
+      admin_spec_sign_in(admin)
+      admin_spec_mark_at(admin, DateTime.utc.to_unix - SECOND_STEP_SECONDS - 1)
+      guard = TwoStepGuard.of(admin)
+      guard.locked_at = DateTime.utc.to_unix
+      guard.save
+      paused = post("/admin/two-step", {"code": made[1][0]})
+      assert_eq(res_status(paused), 429)
+      assert_contains(res_body(paused), "Too many wrong codes for this account")
+      assert_eq(res_location(get("/admin")), "/admin/two-step", "paused: the right code opened nothing")
+
+      member = admin_spec_user()
+      admin_spec_sign_in(member)
+      assert_eq(res_status(post("/admin/two-step", {"code": "000000"})), 404)
+      assert_eq(TwoStepGuard.find_by("user_id", member._key), nil, "nothing counted for a member")
+
+      plain = admin_spec_user("admin", nil, false)
+      admin_spec_sign_in(plain)
+      assert_eq(res_location(post("/admin/two-step", {"code": "000000"})), "/admin/two-step")
+      assert_eq(res_location(get("/admin")), "/admin/two-step")
+      clear_cookies()
+      assert_eq(res_status(post("/admin/two-step", {"code": "000000"})), 401, "a guest")
+    end
+
+    test("SecondStep.fresh?: the account's own mark, SECOND_STEP_SECONDS long") do
+      admin = admin_spec_user("admin")
+      now = DateTime.utc.to_unix
+      assert_eq(SECOND_STEP_SECONDS, 12 * 3600)
+      assert(SecondStep.fresh?(admin._key, now, admin, now))
+      assert(SecondStep.fresh?(admin._key, now - SECOND_STEP_SECONDS, admin, now), "to the second")
+      assert_not(SecondStep.fresh?(admin._key, now - SECOND_STEP_SECONDS - 1, admin, now), "past it")
+      assert_not(SecondStep.fresh?("someone-else", now, admin, now), "another account's")
+      assert_not(SecondStep.fresh?(admin._key, nil, admin, now), "no mark")
+      assert_not(SecondStep.admin?(nil), "a guest")
+      assert_not(SecondStep.admin?(admin_spec_user()), "a member")
     end
 
     test("an admin sees the overview, and an Admin link in the nav") do

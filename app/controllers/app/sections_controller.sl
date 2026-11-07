@@ -56,12 +56,21 @@ class AppSectionsController < AppBaseController
     @_back(section, written["error"] ?? "Your comment is posted.")
   end
 
-  # POST /app/sections/:id/comments/:comment_id/remove — its author's, or an admin's
+  # POST /app/sections/:id/comments/:comment_id/remove — its author's, or an
+  # admin's (with the second step, #687: kept in the admins' log)
   def uncomment
     section = @_visible
     comment = @_comment_of(section)
     halt(403, "Only its author may take a comment away.") unless comment.removable_by?(current_user())
 
+    unless comment.by?(current_user())
+      AdminAction.kept(current_user(), "comment_remove", "comment", comment._key, {
+        "owner": comment.user_id,
+        "title": section.title,
+        "section_id": section._key,
+        "body": comment.body.to_s.substring(0, 200)
+      })
+    end
     comment.delete
     section.recount
     @_back(section, "The comment is taken away.")
@@ -75,11 +84,18 @@ class AppSectionsController < AppBaseController
     @_back(section, problem ?? "Thank you: the admins will look at it.")
   end
 
-  # POST /app/sections/:id/remove — its author's, or an admin's
+  # POST /app/sections/:id/remove — its author's, or an admin's (with the
+  # second step, #687: kept in the admins' log)
   def remove
     section = SharedSection.find(params["id"])
     halt(403, "Only its author may take a section away.") unless section.removable_by?(current_user())
 
+    unless section.by?(current_user())
+      AdminAction.kept(current_user(), "section_remove", "section", section._key, {
+        "owner": section.user_id,
+        "title": section.title
+      })
+    end
     section.remove
     flash("notice", "“#{section.title}” is taken away from the library.")
     redirect(sections_path())
@@ -87,10 +103,11 @@ class AppSectionsController < AppBaseController
 
   private
 
-  # The section of the route, unless it is hidden (404; but to an admin).
+  # The section of the route, unless it is hidden (404; but to an admin
+  # whose session passed the second step, #687).
   def _visible
     section = SharedSection.find(params["id"])
-    halt(404, "No such section") if section.hidden && !current_user().admin?
+    halt(404, "No such section") if section.hidden && !SecondStep.admin?(current_user())
 
     section
   end

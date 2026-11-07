@@ -207,14 +207,22 @@ class Score < Model
     Score.header_field(source, "composer")
   end
 
-  # The \header's `field` (a plain word: "title", "composer"), trimmed, or
-  # nil when it is not there or blank.
+  # The \header's `field` (a plain word: "title", "composer"), on one line
+  # and trimmed, or nil when it is not there or blank.
   static def header_field(source, field)
     found = Regex.capture("\\\\header\\s*\\{[^}]*?#{field}\\s*=\\s*\"(?P<value>[^\"]*)\"", source.to_s)
     return nil if found.nil?
 
-    value = found["value"].trim
+    value = Score.one_line(found["value"])
     value.blank? ? nil : value
+  end
+
+  # `text` on one line (#687): its line breaks, tabs and other control
+  # characters each run made one space, then trimmed. A title goes in an
+  # e-mail's subject, in a list, in a file name: a line break in it could
+  # start a new header or a whole paragraph of someone else's words.
+  static def one_line(text)
+    Regex.replace_all("[\\p{Cc}\\p{Zl}\\p{Zp}\\s]+", text.to_s, " ").trim
   end
 
   # The scores saved before their composer was kept (#370), given it from

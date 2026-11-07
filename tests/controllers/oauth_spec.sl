@@ -284,17 +284,57 @@ describe("Signing in from an MCP client") do
     no_pkce = "/oauth/authorize?response_type=code&client_id=" + client_id + "&redirect_uri="
     + url(OAUTH_REDIRECT)
     + "&state=s"
-    assert_eq(oauth_param(res_location(get(no_pkce)), "error"), "invalid_request")
-    assert_eq(
-      oauth_param(res_location(get(oauth_authorize_path(client_id, "&scope=admin"))), "error"),
-      "invalid_scope"
-    )
+    # Told on a page, never by a redirect (#687, below).
+    malformed = get(no_pkce)
+    assert_eq(res_status(malformed), 400)
+    assert_null(res_location(malformed))
+    assert_contains(res_body(malformed), "data-oauth-error=\"invalid_request\"")
+    other_scope = get(oauth_authorize_path(client_id, "&scope=admin"))
+    assert_eq(res_status(other_scope), 400)
+    assert_null(res_location(other_scope))
+    assert_contains(res_body(other_scope), "data-oauth-error=\"invalid_scope\"")
+    assert_eq(res_status(get("/app/oauth/consent")), 400, "nothing parked by a request refused")
     assert_eq(res_status(post("/app/oauth/consent", {"decision": "allow"})), 400, "nothing pending: no code")
     assert_eq(res_json(oauth_json("/oauth/token", {"grant_type": "password"}))["error"], "unsupported_grant_type")
     assert_eq(res_json(oauth_json(
       "/oauth/token",
       {"grant_type": "authorization_code", "code": "made-up"}
     ))["error"], "invalid_grant")
+  end
+
+  test("no open redirect (#687): a client registered to any https URI is never sent there before consent") do
+    clear_cookies()
+    evil = "https://evil.example/x"
+    registered = oauth_json(
+      "/oauth/register",
+      {"client_name": "Not a client", "redirect_uris": [evil]}
+    )
+    assert_eq(res_status(registered), 201, "anyone may register, without signing in")
+    client_id = res_json(registered)["client_id"]
+    attempts = [
+      "/oauth/authorize?client_id=#{client_id}&redirect_uri=#{url(evil)}&response_type=foo",
+      "/oauth/authorize?client_id=#{client_id}&response_type=foo&state=s",
+      "/oauth/authorize?client_id=#{client_id}&redirect_uri=#{url(evil)}&response_type=code",
+      oauth_authorize_to(client_id, evil) + "&scope=other",
+      oauth_authorize_to(client_id, evil) + "&resource=https://elsewhere.example/mcp"
+    ]
+    attempts.each do |path|
+      answer = get(path)
+      assert_eq(res_status(answer), 400, path)
+      assert_null(res_location(answer), path)
+      assert_not(res_body(answer).contains("evil.example"), path)
+      assert_contains(res_body(answer), "data-oauth-error=", path)
+    end
+    # A well-formed request of that client is parked, then shown on the
+    # consent page behind sign-in: only the person's answer goes back there.
+    assert_contains(res_location(get(oauth_authorize_to(client_id, evil))), "/app/oauth/consent")
+    user = oauth_user()
+    oauth_sign_in(user)
+    get(oauth_authorize_to(client_id, evil))
+    consent = get("/app/oauth/consent")
+    assert_eq(res_status(consent), 200)
+    assert_contains(res_body(consent), "evil.example")
+    assert_contains(res_location(oauth_decide("deny")), "https://evil.example/x?error=access_denied")
   end
 end
 
