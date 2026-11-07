@@ -5547,9 +5547,12 @@
     inset: auto 16px 16px auto;
     margin: 0;
     width: min(calc(100vw - 32px), 640px);
-    max-height: min(85vh, 720px);
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
     overflow: auto;
-    padding: 12px 14px;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    padding: 0 14px 10px;
     border: 1px solid var(--line-strong);
     border-radius: 12px;
     background: var(--sheet);
@@ -5561,12 +5564,33 @@
     font-size: 18px;
     margin: 0;
   }
+  .studio-ksmap .mixer-head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    margin: 0;
+    padding: 10px 0 8px;
+    background: var(--sheet);
+  }
+  .studio-ksmap .mixer-note {
+    font-size: 12px;
+    line-height: 1.35;
+  }
   .ksmap-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
-    margin: 8px 0;
+    gap: 4px 8px;
+    margin: 6px 0;
+  }
+  .ksmap-row .studio-menu {
+    padding-top: 3px;
+    padding-bottom: 3px;
+  }
+  .ksmap-rules .tool {
+    min-width: 26px;
+    height: 26px;
+    padding: 0 6px;
   }
   .ksmap-row label {
     display: inline-flex;
@@ -5576,7 +5600,7 @@
   }
   .studio-ksmap input, .studio-ksmap select {
     font: 13px var(--font-sans, inherit);
-    padding: 3px 6px;
+    padding: 2px 6px;
     border: 1px solid var(--line-strong);
     border-radius: 6px;
     background: var(--sheet);
@@ -5598,11 +5622,12 @@
     padding: 2px 4px;
   }
   .ksmap-rules td {
-    padding: 2px 4px;
+    padding: 1px 4px;
   }
   .ksmap-note {
     color: var(--muted);
     font-size: 12px;
+    line-height: 1.4;
     margin: 4px 0;
   }
   .studio-waves {

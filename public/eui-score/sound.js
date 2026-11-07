@@ -433,7 +433,6 @@ export function soundEvents(score, { passes = M.playback(score) } = {}) {
     };
     let lastProgram = null;
     let lastSend = null;
-    let lastRule;
     const emit = (at, send) => {
       if (!send) return;
       if (send.cc != null) out.push({ at, channel, lane, kind: "cc", number: send.cc, value: send.value, order: 1 });
@@ -457,10 +456,9 @@ export function soundEvents(score, { passes = M.playback(score) } = {}) {
         const program = programBefore(from);
         if (program && !programs.some(([t]) => t === from) && JSON.stringify(program.slice(1)) !== lastProgram) sendProgram(place(from), program);
         const was = keyBefore(from);
-        if (was) {
-          lastRule = was.rule;
-          if (was.send && !handKeys.has(from) && JSON.stringify(was.send) !== lastSend) emit(place(from), was.send);
-        }
+        // A hand's keyswitch or the map's change on the bar's first tick is sent there anyway.
+        const there = handKeys.has(from) || changes.some((c) => c.tick === from);
+        if (was?.send && !there && JSON.stringify(was.send) !== lastSend) emit(place(from), was.send);
       }
       const ticks = new Set([...programs.map(([t]) => t), ...keys.map(([t]) => t), ...changes.map((c) => c.tick)].filter((t) => t >= from && t < to));
       for (const tick of [...ticks].sort((a, b) => a - b)) {
@@ -470,12 +468,46 @@ export function soundEvents(score, { passes = M.playback(score) } = {}) {
         const hand = keys.find(([t]) => t === tick);
         const change = changes.find((c) => c.tick === tick);
         if (hand) emit(at, { key: hand[1] });
-        else if (change && change.rule !== lastRule) emit(at, sendFor(map, change.rule));
-        if (change) lastRule = change.rule;
+        // The map's change, unless the instrument is there already: after a
+        // jump back to the very start, what was sent last is the end's.
+        else if (change && JSON.stringify(sendFor(map, change.rule)) !== lastSend) emit(at, sendFor(map, change.rule));
       }
     });
   }
   return out.sort((x, y) => x.at - y.at || x.channel - y.channel || x.order - y.order).map(({ order, ...e }) => e);
+}
+
+/**
+ * When each keyswitch goes out as Play sends it, in seconds of the music as
+ * played (`passes`, as M.playback times them): [{ sec, channel, key }] —
+ * `lead` (ksopt) before its note, as applySound puts it in the file.
+ */
+export function keyswitchTimes(score, { passes = M.playback(score) } = {}) {
+  const starts = [];
+  let total = 0;
+  for (const p of passes) {
+    starts.push(total);
+    total += M.passTicks(score, p);
+  }
+  const { lead } = optionsOf(score);
+  return soundEvents(score, { passes })
+    .filter((e) => e.kind === "key")
+    .map((e) => {
+      const k = Math.max(0, starts.findLastIndex((t) => t <= e.at));
+      return { sec: passes[k].start + M.passSeconds(passes[k], e.at - starts[k]) - lead / 1000, channel: e.channel, key: e.key };
+    });
+}
+
+/**
+ * The keyswitch each staff is in at `sec` (keyswitchTimes' `times`):
+ * [{ channel, key }] — for a device Play starts, loops or seeks past the
+ * start: the player passes over the notes before that point, and a
+ * keyswitch is a note, so it is sent again there.
+ */
+export function keysAt(times, sec) {
+  const last = new Map();
+  for (const t of times) if (t.sec <= sec + 1e-3) last.set(t.channel, t.key);
+  return [...last].map(([channel, key]) => ({ channel, key }));
 }
 
 // ---- Into the MIDI file -----------------------------------------------------------------
@@ -549,7 +581,9 @@ export function applySound(score, bytes, { passes = null, early = 0 } = {}) {
       const from = clock.tickAt(clock.secAt(at) - early / 1000);
       at = Math.min(at, ...(struck.get(e.channel) ?? []).filter((t) => t >= from && t <= at));
     }
-    const on = Math.max(0, Math.min(at, Math.floor(clock.tickAt(clock.secAt(at) - lead / 1000))));
+    // Never before the channel's note struck before its own: on fast notes, that note would take its sound.
+    const previous = (struck.get(e.channel) ?? []).filter((t) => t < at).reduce((max, t) => Math.max(max, t), -1);
+    const on = Math.max(0, Math.min(at, previous + 1), Math.min(at, Math.floor(clock.tickAt(clock.secAt(at) - lead / 1000))));
     if (e.kind === "program") {
       if (e.msb != null) add(e.channel, on, [0xb0 | c, 0, e.msb]);
       if (e.lsb != null) add(e.channel, on, [0xb0 | c, 32, e.lsb]);

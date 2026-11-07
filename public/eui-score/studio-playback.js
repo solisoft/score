@@ -211,6 +211,11 @@ export function install(ctx) {
       return say(tr("The sounds could not be loaded."), true);
     }
     if (!state.handle || st.playing !== state) return;
+    // To a MIDI device: the keyswitches in effect where the music starts, which a seek passes over (#670).
+    if (P.outputPort() && played) {
+      state.keyswitches = { times: Snd.keyswitchTimes(played, { passes }), velocity: Snd.optionsOf(played).velocity };
+      if (at > 0) chaseKeyswitches(state, at);
+    }
     state.handle.rate = state.ramp ? Pr.rampPercent(state.ramp, 0) / 100 : rate();
     if (state.ramp) showRamp(Pr.rampText(state.ramp, 0));
     if (notes.length) {
@@ -240,6 +245,12 @@ export function install(ctx) {
       state.frame = requestAnimationFrame(follow);
     };
     follow();
+  }
+
+  /** After a jump to `sec` (the start, the loop's, a seek): the keyswitches in effect there, again to the MIDI device. */
+  function chaseKeyswitches(state, sec) {
+    const keys = state?.keyswitches;
+    if (keys?.times.length) P.sendKeyswitches(Snd.keysAt(keys.times, sec), keys.velocity);
   }
 
   /** The selected bars as a loop: from their first pass to the end of that pass through the last; null with none selected. */
@@ -278,6 +289,7 @@ export function install(ctx) {
     const now = handle.time;
     if (state.loop && now >= state.loop.end - 0.02) {
       handle.time = state.loop.start;
+      chaseKeyswitches(state, state.loop.start);
       state.next = null;
       if (state.ramp) rampPass(state, handle);
       return;
@@ -349,7 +361,9 @@ export function install(ctx) {
     const handle = st.playing?.handle;
     if (!handle?.duration) return;
     const rect = progress.getBoundingClientRect();
-    handle.time = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) * handle.duration;
+    const sec = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) * handle.duration;
+    handle.time = sec;
+    chaseKeyswitches(st.playing, sec);
   });
 
   const clock = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;

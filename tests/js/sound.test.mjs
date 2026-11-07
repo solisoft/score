@@ -270,3 +270,52 @@ test("a staff with keyswitches keeps a channel of its own, past fifteen staves",
   const now = M.channels(score);
   assert.equal(now.filter((c) => c.channel === now[4].channel).length, 1, "its own");
 });
+
+test("a repeat back to the very start sends the map's keyswitch again when a hand's changed it on the way", () => {
+  const score = read("{ \\repeat volta 2 { c'1 d'1 } e'1 }");
+  Snd.setMap(score, "m", { name: "M", default: { key: 24 }, rules: [] });
+  Snd.setSound(score, 0, { map: "m", keys: [[M.WHOLE, 14]] });
+  const keys = Snd.soundEvents(score).filter((e) => e.kind === "key").map((e) => [e.at / M.WHOLE, e.key]);
+  // Bars as played: 0, 1, 0, 1, 2 — the second pass starts on the default again, not on the hand's 14.
+  assert.deepEqual(keys, [[0, 24], [1, 14], [2, 24], [3, 14]]);
+});
+
+test("on fast notes, a keyswitch never goes before the note struck ahead of its own", () => {
+  const score = read("{ c'32-. d' e'-. f' g'-. a' b'-. c'' }");
+  Snd.setMap(score, "m", { name: "M", default: { key: 24 }, rules: [{ mark: "staccato", key: 25 }] });
+  Snd.setSound(score, 0, { map: "m" });
+  Snd.setOptions(score, { lead: 200 });
+  const out = Snd.applySound(score, played(score));
+  const track = channelEvents(out)[0];
+  const notes = music(track).map(([t]) => t);
+  const keys = switches(track);
+  assert.deepEqual(keys.map(([, k]) => k), [25, 24, 25, 24, 25, 24, 25, 24], "one a note: each changes the rule");
+  // Keyswitch k sounds after note k − 1 is struck, and no later than note k.
+  keys.forEach(([t], k) => {
+    assert.ok(t <= notes[k], `keyswitch ${k} at or before its note`);
+    if (k > 0) assert.ok(t > notes[k - 1], `keyswitch ${k} after the note before`);
+  });
+  // A slow passage keeps the whole lead.
+  const slow = read("{ c'4-. d' }");
+  Snd.setMap(slow, "m", { name: "M", default: { key: 24 }, rules: [{ mark: "staccato", key: 25 }] });
+  Snd.setSound(slow, 0, { map: "m" });
+  const slowOut = Snd.applySound(slow, played(slow));
+  const ppq = F.readSmf(slowOut).division;
+  assert.deepEqual(switches(channelEvents(slowOut)[0]), [[0, 25], [before(slowOut, ppq, Snd.LEAD_MS), 24]]);
+});
+
+test("a device Play starts, loops or seeks past the start is sent the keyswitch in effect there", () => {
+  const score = read("<< \\new Staff { c'4 d' e' f' | g'1 } \\new Staff { \\clef bass c1 | d1 } >>");
+  Snd.setSound(score, 0, { keys: [[0, 12], [2 * Q, 13], [M.WHOLE, 14]] });
+  Snd.setSound(score, 1, { keys: [[0, 30]] });
+  const passes = M.playback(score);
+  const times = Snd.keyswitchTimes(score, { passes });
+  const beat = 60 / passes[0].bpm;
+  const lead = Snd.LEAD_MS / 1000;
+  assert.deepEqual(times.map((t) => [Math.round((t.sec + lead) / beat * 1000) / 1000, t.channel, t.key]), [[0, 0, 12], [0, 1, 30], [2, 0, 13], [4, 0, 14]], "at its note, less the lead");
+  const at = (sec) => Snd.keysAt(times, sec).sort((a, b) => a.channel - b.channel).map((k) => [k.channel, k.key]);
+  assert.deepEqual(at(beat), [[0, 12], [1, 30]]);
+  assert.deepEqual(at(2 * beat), [[0, 13], [1, 30]], "the keyswitch due on the very note started from: sent, the file has it just before");
+  assert.deepEqual(at(5 * beat), [[0, 14], [1, 30]]);
+  assert.deepEqual(Snd.keysAt([], 3), []);
+});

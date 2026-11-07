@@ -102,7 +102,8 @@ const SOUND_MIDI_EVENTS = """
 """
 
 def sound_save_midi
-  evaluate("(() => { HTMLAnchorElement.prototype.click = function () { window.savedBytes = fetch(this.href).then((r) => r.arrayBuffer()); }; })()")
+  evaluate("(() => { HTMLAnchorElement.prototype.click = function () {"
+  + " window.savedBytes = fetch(this.href).then((r) => r.arrayBuffer()); }; })()")
   evaluate("document.querySelector('[data-act=\"save-midi\"]').click()")
   sleep(1)
 end
@@ -195,6 +196,18 @@ describe("The Sound lane, in a browser") do
     wait_for(".studio-ksmap[open]")
     assert_text("Match each one to your library's own keyswitch chart")
     assert_eq(evaluate("document.querySelectorAll('.ksmap-rules tbody tr').length"), 11)
+    # On a laptop's screen, the whole dialog shows, its last row too; on a short window it stays inside and scrolls.
+    fits = "(() => { const box = document.querySelector('.studio-ksmap'); const it = box.getBoundingClientRect();"
+    + " const last = box.querySelector('[data-ksd=\"lead\"]').getBoundingClientRect();"
+    + " return [it.top >= 0, it.bottom <= innerHeight, last.bottom <= it.bottom,"
+    + " box.scrollHeight <= box.clientHeight + 1].join(' '); })()"
+    viewport(1280, 800)
+    sleep(0.3)
+    assert_eq(evaluate(fits), "true true true true")
+    viewport(1280, 600)
+    sleep(0.3)
+    assert_eq(evaluate(fits), "true true false false")
+    viewport(1280, 800)
     sound_set(".ksmap-rules tbody tr:nth-child(9) [data-ksd=\"key\"]", "60")
     staccato = JSON.parse(sound_meta("ksmaps"))[map_id]["rules"].find do |rule|
       rule["mark"] == "staccato"

@@ -440,6 +440,16 @@ function sendNote(channel, key, on, velocity = 90) {
   } catch (error) {}
 }
 
+/** Keyswitches straight to the MIDI device of Sound to, each struck and let go (sound.js `keysAt`, #670): [{ channel, key }] at `velocity`. */
+export function sendKeyswitches(keys, velocity = 1) {
+  if (!output) return false;
+  for (const { channel, key } of keys) {
+    sendNote(channel, key, true, velocity);
+    sendNote(channel, key, false);
+  }
+  return true;
+}
+
 /** Plays to MIDI output `id` from the next Play on, or to this browser with null. */
 export function setOutput(id) {
   output = id && access ? access.outputs.get(id) ?? null : null;
