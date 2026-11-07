@@ -7,6 +7,10 @@
 
 const SCORE_READER_EDGE = 2576
 const SCORE_READER_BYTES = 7000000
+# The most pixels a picture sent may have (#684), read from its header
+# before it is opened: a few megabytes of PNG can hold a picture of
+# gigabytes once decoded. A phone's 48-megapixel photo passes.
+const SCORE_READER_PIXELS = 50000000
 
 const SCORE_READER_PROMPT = """
 Transcribe the music in this picture into LilyPond, for the eui-score engraver.
@@ -57,13 +61,137 @@ Answer with the LilyPond source only: no explanation, no Markdown fence.
 
 class ScoreReader
   # A picture as the models take it: a JPEG no longer than SCORE_READER_EDGE
-  # on its long side, as base64; or nil when the bytes are not a picture.
+  # on its long side, as base64; or nil when the bytes are not a picture,
+  # or one past SCORE_READER_PIXELS — told by its header, before it is
+  # decoded (#684).
   static def picture(data)
+    size = ScoreReader.dimensions(data)
+    return nil if size.nil? || size[0] * size[1] > SCORE_READER_PIXELS
+
     image = Image.from_buffer(data) rescue nil
     return nil if image.nil?
 
     image = image.thumbnail(SCORE_READER_EDGE) if [image.width, image.height].max() > SCORE_READER_EDGE
     image.format("jpeg").quality(90).to_buffer
+  end
+
+  # [width, height] of the picture in `data` (base64), read from its header
+  # alone, never decoded: a PNG's, a WebP's, a JPEG's — the pictures the
+  # site says it reads; nil for anything else, or a header that does not say.
+  static def dimensions(data)
+    head = ScoreReader.bytes_at(data, 0, 30)
+    return nil if head.nil? || head.length < 30
+    if head.slice(0, 8) == [
+      137,
+      80,
+      78,
+      71,
+      13,
+      10,
+      26,
+      10
+    ]
+      return ScoreReader.png_size(head)
+    end
+
+    # "RIFF", then "WEBP".
+    if head.slice(0, 4) == [
+      82,
+      73,
+      70,
+      70
+    ] && head.slice(8, 12) == [
+      87,
+      69,
+      66,
+      80
+    ]
+      return ScoreReader.webp_size(head)
+    end
+
+    return ScoreReader.jpeg_size(data) if head[0] == 255 && head[1] == 216
+
+    nil
+  end
+
+  # `count` bytes of the base64 `data` from byte `offset`, decoding only the
+  # few characters that hold them; nil when they are not base64.
+  static def bytes_at(data, offset, count)
+    first = offset / 3 * 4
+    skip = offset % 3
+    chunk = data.to_s.substring(first, first + (skip + count + 2) / 3 * 4)
+    decoded = Base64.decode(chunk) rescue nil
+    return nil if decoded.nil?
+
+    # Bytes that happen to be UTF-8 come back as a string.
+    bytes = type(decoded) == "string" ? decoded.bytes() : decoded
+    bytes.slice(skip, skip + count)
+  end
+
+  # A PNG's size: its IHDR, the first chunk, gives it.
+  static def png_size(head)
+    [ScoreReader.big_endian(head.slice(16, 20)), ScoreReader.big_endian(head.slice(20, 24))]
+  end
+
+  # A WebP's size, from its first chunk: "VP8 " (lossy), "VP8L" (lossless)
+  # or "VP8X" (extended).
+  static def webp_size(head)
+    chunk = head.slice(12, 16)
+    if chunk == [86, 80, 56, 32]
+      return [head[26] + head[27] % 64 * 256, head[28] + head[29] % 64 * 256]
+    end
+
+    if chunk == [86, 80, 56, 76]
+      width = 1 + head[21] + head[22] % 64 * 256
+      height = 1 + head[22] / 64 + head[23] * 4 + head[24] % 16 * 1024
+      return [width, height]
+    end
+    if chunk == [86, 80, 56, 88]
+      return [1 + head[24] + head[25] * 256 + head[26] * 65536, 1 + head[27] + head[28] * 256
+      + head[29] * 65536]
+    end
+
+    nil
+  end
+
+  # A JPEG's size, from its frame header (SOF): its segments are walked by
+  # their lengths, each read on its own, up to the frame's or the scan's.
+  static def jpeg_size(data)
+    total = data.to_s.length / 4 * 3
+    at = 2
+    steps = 0
+    while at + 9 <= total && steps < 1000
+      steps += 1
+      part = ScoreReader.bytes_at(data, at, 9)
+      return nil if part.nil? || part.length < 9 || part[0] != 255
+
+      marker = part[1]
+      # A fill byte before a marker.
+      if marker == 255
+        at += 1
+        next
+      end
+      # A frame header, but for DHT (196), JPG (200) and DAC (204).
+      if marker >= 192 && marker <= 207 && ![
+        196,
+        200,
+        204
+      ].includes?(marker)
+        return [part[7] * 256 + part[8], part[5] * 256 + part[6]]
+      end
+
+      # The scan starts, or the picture ends, with no frame said.
+      return nil if marker == 218 || marker == 217
+
+      standalone = marker == 1 || (marker >= 208 && marker <= 216)
+      at += standalone ? 2 : 2 + part[2] * 256 + part[3]
+    end
+    nil
+  end
+
+  # The number `bytes` write, most significant first.
+  static def big_endian(bytes)
+    bytes.reduce(fn(total, byte) { total * 256 + byte }, 0)
   end
 
   # The LilyPond an AI is still writing, made whole enough to engrave (#462):

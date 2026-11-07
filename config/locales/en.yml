@@ -1542,3 +1542,8 @@ en:
     viewed_score: "Read the score “{title}”"
     viewed_version: "Read a version of the score “{title}”"
   # ---
+  # (#684) security: what an account may fill and ask for — keys under `security_684:` right below
+  security_684:
+    too_many_scores: "Not created: an account keeps {n} scores at most, those in the trash included. Delete some for good from the trash to make room."
+    too_many_photos: "Too many photos sent this minute: try again in a minute."
+  # ---

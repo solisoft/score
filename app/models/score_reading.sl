@@ -5,6 +5,10 @@
 # (AiClient.refusal, #396). SCORE_READINGS_OWN_PER_DAY in any 24 hours: their
 # provider bills them, so this only stops a runaway loop.
 const SCORE_READINGS_OWN_PER_DAY = 200
+# And so many photos sent a minute (#684), counted before the picture is
+# opened (ScoreReader.picture costs a decoding, a refused one too): six,
+# more than anyone reads by hand.
+const SCORE_READINGS_PER_MINUTE = 6
 # A reading or a suggestion with no news for this many seconds was cut off
 # (a restart, a deploy: their jobs are not retried) and never will finish:
 # DataCleanupJob marks it failed and lets its picture or its text go. A
@@ -72,6 +76,13 @@ class ScoreReading < Model
     return "used_up" if ScoreReading.used_today(user) - counted >= SCORE_READINGS_OWN_PER_DAY
 
     nil
+  end
+
+  # Whether `user` has sent SCORE_READINGS_PER_MINUTE photos this minute
+  # already: each asking counts (RateCount), whether its picture is read or
+  # not.
+  static def held?(user)
+    !RateCount.take("reading-photo:#{user._key}", SCORE_READINGS_PER_MINUTE, 60)
   end
 
   # How many more readings `user` may start now.

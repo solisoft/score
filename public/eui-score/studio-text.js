@@ -8,7 +8,7 @@ const { tr } = await import(`./words.js${V}`);
 
 /** Answers the score's model and text: reading, writing, the undoable edit, opening. */
 export function install(ctx) {
-  const { options, draftKey, sourceBox, status, st, M, Vel, editor_view_lit, score_json, source_spans } = ctx;
+  const { root, options, draftKey, sourceBox, status, st, M, Vel, editor_view_lit, score_json, source_spans } = ctx;
   const { settleHistory, draw, say, mixFromMeta, applyMix } = ctx.call;
 
   // ---- Model ↔ text ----------------------------------------------------------
@@ -37,7 +37,8 @@ export function install(ctx) {
       if (!parsed && !result.score) throw failure;
       st.score = result.score ?? null;
       // The mixer, the velocities…: on the text's last line, a comment the engraver passes over.
-      if (st.score) st.score.meta = M.readMeta(text);
+      // A line that does not read is kept as it is, and said (#683).
+      st.metaNotice = st.score ? M.metaNotice(M.attachMeta(st.score, text)) : "";
       st.unsupported = result.unsupported ?? [];
       st.lost = result.lost ?? [];
       // What the engraver read and passed over (\\override, \\set …): said when the text is opened.
@@ -49,6 +50,7 @@ export function install(ctx) {
       st.unsupported = [];
       st.lost = [];
       st.passed = [];
+      st.metaNotice = "";
     }
     st.lostNotice = "";
     mixFromMeta();
@@ -109,6 +111,8 @@ export function install(ctx) {
 
   /** Runs `fn` on the model as one undoable edit; a refusal leaves everything as it was. */
   function edit(fn, { keepFuture = false } = {}) {
+    // An editor swapped out by instant navigation changes nothing (whatever still calls it).
+    if (!root.isConnected) return false;
     if (!st.score) return say(tr("The score tools wait: this piece is edited in its text below."), true);
     if (st.written) return say(tr("Written pitch is for reading: View ▸ Written pitch again to write, at concert pitch."), true);
     const before = snapshot();
@@ -156,6 +160,8 @@ export function install(ctx) {
   // Every change ends here: the browser's draft (the playground's), and
   // whoever embeds the editor (the app, which saves to the account).
   function saveDraft({ pin = false } = {}) {
+    // Nor is anything kept or saved from it.
+    if (!root.isConnected) return;
     settleHistory({ pin });
     if (draftKey) {
       try {
@@ -163,6 +169,9 @@ export function install(ctx) {
       } catch (error) {}
     }
     options.onChange?.(st.text);
+    // Near the length the server keeps, or past it: said before a save is refused (#683).
+    const tooLong = M.sizeWarning(st.text);
+    if (tooLong) say(tooLong, st.text.length > M.SOURCE_LIMIT);
   }
 
   // New, Open a file, an example: a score of its own where the embedder says
@@ -187,7 +196,8 @@ export function install(ctx) {
     replaceText(text, { keep });
     saveDraft({ pin: remote });
     draw();
-    if (message || st.passed.length) say(`${message ?? ""}${passedText()}`.trim());
+    const notices = openingNotices();
+    if (message || st.passed.length || notices) say(`${message ?? ""}${passedText()}${notices}`.trim(), Boolean(notices));
   }
 
   /** `text` read in place of the score's; `keep` (or `at`, a step's) the selection and the cursor where they still fit. */
@@ -206,12 +216,17 @@ export function install(ctx) {
     }
   }
 
+  /** What to say of a text opened besides: its settings line that does not read, or merged (#683); its length near the limit. */
+  function openingNotices() {
+    return [st.metaNotice, M.sizeWarning(st.text)].filter(Boolean).map((said) => ` ${said}`).join("");
+  }
+
   /** The settings the engraver passed over in the text read, briefly: " Passed over: \\override …", or "". */
   function passedText() {
     return st.passed.length ? ` ${tr("Passed over, not drawn: {what}.", { what: st.passed.join(", ") })}` : "";
   }
 
   return {
-    readText, adoptText, writeText, snapshot, restore, edit, barsEdit, saveDraft, open, load, replaceText, passedText
+    readText, adoptText, writeText, snapshot, restore, edit, barsEdit, saveDraft, open, load, replaceText, passedText, openingNotices
   };
 }

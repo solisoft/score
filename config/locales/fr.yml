@@ -1542,3 +1542,8 @@ fr:
     viewed_score: "A lu la partition « {title} »"
     viewed_version: "A lu une version de la partition « {title} »"
   # ---
+  # (#684) security: what an account may fill and ask for — keys under `security_684:` right below
+  security_684:
+    too_many_scores: "Non créée : un compte garde {n} partitions au plus, celles de la corbeille comprises. Supprimez-en définitivement depuis la corbeille pour faire de la place."
+    too_many_photos: "Trop de photos envoyées cette minute : réessayez dans une minute."
+  # ---

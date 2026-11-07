@@ -17,7 +17,7 @@
 // tests (tests/js/score_model.test.mjs).
 
 const V = new URL(import.meta.url).search;
-const { tr } = await import(`./words.js${V}`);
+const { tr, language } = await import(`./words.js${V}`);
 
 /** Ticks in a whole note, as eui-score counts them: a dotted 128th, and any of them in a triplet, quintuplet, sextuplet or septuplet — or a triplet in a triplet — is a whole number. */
 export const WHOLE = 80640;
@@ -2360,6 +2360,8 @@ export function addVoice(score, s, voice = 2) {
   if (!Number.isInteger(voice) || voice < 2 || voice > MAX_VOICES) throw new Error(tr("a staff holds {most} voices at most", { most: MAX_VOICES }));
   for (let v = voiceLanes(score, u).length + 1; v <= voice; v++) {
     score.staves.splice(u + v - 1, 0, { voice: v, events: rests(score, 0, lengthOf(score.staves[u])) });
+    // The later staves' settings follow them (#683).
+    shiftMetaLanes(score.meta, u + v - 1, 1);
   }
   return laneOfVoice(score, u, voice);
 }
@@ -2381,7 +2383,11 @@ export function removeVoice(score, s, voice = null) {
   score.staves[lane].events = rests(score, 0, lengthOf(score.staves[lanes[0]]));
   // The words sung to it go with it.
   if (lyricsVoiceOf(score, lanes[0]) === v) lyricsBackToFirst(score, lanes[0]);
-  for (let k = lanes.length - 1; k >= 1 && !sounding(score.staves[lanes[k]].events); k--) score.staves.splice(lanes[k], 1);
+  for (let k = lanes.length - 1; k >= 1 && !sounding(score.staves[lanes[k]].events); k--) {
+    score.staves.splice(lanes[k], 1);
+    dropMetaLanes(score.meta, (lane) => lane === lanes[k]);
+    shiftMetaLanes(score.meta, lanes[k] + 1, -1);
+  }
 }
 
 /** A bar of another voice is written when something in it is: a note, or a rest with a mark. */
@@ -2596,13 +2602,8 @@ export function removeStaff(score, s) {
   const count = voiceLanes(score, u).length;
   score.staves.splice(u, count);
   // What the meta line keys by lane: the staff's own go, the later lanes' move back.
-  if (score.meta) {
-    const gone = (lane) => Number(lane) >= u && Number(lane) < u + count;
-    if (score.meta.velocity) score.meta.velocity = Object.fromEntries(Object.entries(score.meta.velocity).filter(([key]) => !gone(key.split(":")[0])));
-    for (const part of [score.meta.cc, score.meta.ks, score.meta.mixer?.tracks, score.meta.synth, score.meta.soundfont]) for (const lane of Object.keys(part ?? {})) if (gone(lane)) delete part[lane];
-    for (const name of ["synth", "soundfont", "ks"]) if (score.meta[name] && !Object.keys(score.meta[name]).length) delete score.meta[name];
-    shiftMetaLanes(score.meta, u + count, -count);
-  }
+  dropMetaLanes(score.meta, (lane) => lane >= u && lane < u + count);
+  shiftMetaLanes(score.meta, u + count, -count);
   if (id) for (const lane of score.staves) for (const ev of lane.events) if (ev.cross === id) delete ev.cross;
   score.groups = (score.groups ?? [])
     .map((g) => ({ ...g, first: g.first > n ? g.first - 1 : g.first, last: g.last >= n ? g.last - 1 : g.last }))
@@ -3064,7 +3065,9 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
   const defs = allDefs.length ? `${allDefs.join("\n")}\n` : "";
   const source = pageText(score) + defs + (header ? `\\header { ${header} }\n` : "") + gathering + body + "\n";
   // What is not notation (the mixer, the notes' velocities…) rides along at the end, as a comment.
-  return { source: unfold || !score.meta ? source : writeMeta(source, score.meta), items };
+  // A settings line that does not read goes back as it was (#683).
+  const kept = score.metaKept ?? [];
+  return { source: unfold || (!score.meta && !kept.length) ? source : writeMeta(source, score.meta, kept), items };
 }
 
 // ---- What is not notation, kept in the text --------------------------------------
@@ -3077,33 +3080,326 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
 // one JSON object whose keys are per feature. History, sharing and saving
 // then keep them with the notes.
 
-const META = /^%% eui-score (.*)$/m;
+//
+// A line that does not read (cut short, edited by hand) is kept as it was,
+// word for word, in `score.metaKept`, and written back so: what it holds is
+// never wiped by the next rewrite (#683). Two lines that read (one pasted
+// in) are merged into one, the later winning key by key.
+
+const META_PREFIX = "%% eui-score ";
+
+/** The server keeps a score's text up to a million characters (Score.bounds_refusal, app/models/score.sl). */
+export const SOURCE_LIMIT = 1000000;
+
+const isPlain = (x) => x !== null && typeof x === "object" && !Array.isArray(x);
+const isLane = (lane) => /^\d+$/.test(String(lane));
+const isTick = (x) => typeof x === "number" && Number.isFinite(x);
+
+/** `value`'s entries that `ok` keeps (an object), or undefined when it is no object. */
+const keptEntries = (value, ok) => (isPlain(value) ? Object.fromEntries(Object.entries(value).filter(([key, entry]) => ok(entry, key))) : undefined);
+
+/** `obj` with `fn` applied to each of its values; undefined stays undefined. */
+const mapEntries = (obj, fn) => obj && Object.fromEntries(Object.entries(obj).map(([key, value]) => [key, fn(value)]));
+
+/** Markers `[tick, …]`: the arrays that start with a tick. */
+const markers = (list) => list.filter((marker) => Array.isArray(marker) && isTick(marker[0]));
+
+/**
+ * A meta key numbered by staff, kept under `meta[name]` as `{ lane: value }`:
+ * how the lanes are found in it, moved and laid out (see META_KEYS). `lay`
+ * answers `[lane, value]` at the merged score's lane (`at.lane`, its ticks by
+ * `at.tick`), or nothing, after `drop` was told what found no place.
+ */
+export function metaByLane(name, more = {}) {
+  return {
+    of: (meta) => meta?.[name],
+    put: (meta, map) => {
+      meta[name] = map;
+    },
+    clear: (meta) => {
+      delete meta[name];
+    },
+    lane: (key) => key,
+    rekey: (key, lane) => String(lane),
+    lay: (key, value, at, drop) => (at.lane == null ? drop(`${name} ${at.where} ${JSON.stringify(value)}`) : [at.lane, value]),
+    channel: "own",
+    ...more,
+  };
+}
+
+/** Points or markers `[tick, …]` moved to the merged score's ticks: those that find no place told to `drop`. */
+function layTicks(list, at, drop, said) {
+  const moved = [];
+  for (const point of Array.isArray(list) ? list : []) {
+    if (!Array.isArray(point)) continue;
+    const t = at.tick(point[0]);
+    if (at.lane == null || t.tick == null) drop(`${said} ${at.where} ${t.where}=${point.slice(1).join("/")}`);
+    else moved.push([t.tick, ...point.slice(1)]);
+  }
+  return moved;
+}
+
+/**
+ * Every key the meta line knows, in one place. Each has its name as shown
+ * (`label`), the shape it must have (`clean`: the value with what does not
+ * fit left out, or undefined when nothing of it does) and, when it is
+ * numbered by staff, `lanes`: how its lanes move when a staff or a voice is
+ * added or taken away (shiftMetaLanes, dropMetaLanes), go with a part
+ * (partOf), are laid out by a merge (merge.js layMeta) and whether a staff
+ * holding one needs a MIDI channel of its own (`channel`: "own", "same" when
+ * staves alike in it may share, "none"). A key added here is handled
+ * everywhere; one not here is kept as it is, unread.
+ */
+export const META_KEYS = {
+  mixer: {
+    label: () => tr("Mixer"),
+    clean: (mixer) => {
+      if (!isPlain(mixer)) return undefined;
+      const out = { ...mixer };
+      if ("master" in out && !isPlain(out.master)) delete out.master;
+      if ("tracks" in out) out.tracks = keptEntries(out.tracks, isPlain);
+      if (out.tracks === undefined) delete out.tracks;
+      return out;
+    },
+    // By lane under `tracks`; an audio track's ("audio-1", #390) is no staff's: it stays as it is.
+    lanes: metaByLane("mixer", {
+      of: (meta) => meta?.mixer?.tracks,
+      put: (meta, tracks) => {
+        meta.mixer = { ...meta.mixer, tracks };
+      },
+      clear: (meta) => {
+        const { tracks, ...rest } = meta.mixer ?? {};
+        if (Object.keys(rest).length) meta.mixer = rest;
+        else delete meta.mixer;
+      },
+      others: "keep",
+      channel: "same",
+    }),
+  },
+  // Each note's velocity, "lane:tick:key".
+  velocity: {
+    label: () => tr("Note velocities"),
+    clean: (velocity) => keptEntries(velocity, (value, id) => isTick(value) && id.split(":").length >= 3),
+    lanes: metaByLane("velocity", {
+      lane: (id) => id.split(":")[0],
+      rekey: (id, lane) => [lane, ...id.split(":").slice(1)].join(":"),
+      lay: (id, value, at, drop) => {
+        const [, tick, ...rest] = id.split(":");
+        const t = at.tick(tick);
+        if (at.lane == null || t.tick == null) return drop(`velocity ${at.where} ${t.where} ${rest.join(":")}=${value}`);
+        return [[at.lane, t.tick, ...rest].join(":"), value];
+      },
+      channel: "none",
+    }),
+  },
+  swing: { label: () => tr("Swing"), clean: (x) => (isPlain(x) ? x : undefined) },
+  humanize: { label: () => tr("Humanize"), clean: (x) => (isPlain(x) ? x : undefined) },
+  // The automation curves (automation.js): { lane: { controller: [[tick, value]] } }.
+  cc: {
+    label: () => tr("Automation curves"),
+    clean: (cc) => mapEntries(keptEntries(cc, isPlain), (curves) => mapEntries(keptEntries(curves, Array.isArray), markers)),
+    lanes: metaByLane("cc", {
+      lay: (lane, curves, at, drop) => {
+        const kept = {};
+        for (const [controller, points] of Object.entries(curves ?? {})) {
+          const moved = layTicks(points, at, drop, `cc ${controller}`);
+          if (moved.length) kept[controller] = moved;
+        }
+        return at.lane != null && Object.keys(kept).length ? [at.lane, kept] : undefined;
+      },
+    }),
+  },
+  // A staff's keyswitches, program changes and articulation map (sound.js, #670).
+  ks: {
+    label: () => tr("Keyswitches and program changes"),
+    clean: (ks) =>
+      mapEntries(keptEntries(ks, isPlain), (sounds) => {
+        const out = { ...sounds };
+        for (const kind of ["keys", "programs"]) if (kind in out) out[kind] = Array.isArray(out[kind]) ? markers(out[kind]) : [];
+        if ("map" in out && typeof out.map !== "string") delete out.map;
+        return out;
+      }),
+    lanes: metaByLane("ks", {
+      lay: (lane, sounds, at, drop) => {
+        const kept = {};
+        for (const kind of ["keys", "programs"]) {
+          const moved = layTicks(sounds?.[kind], at, drop, `ks ${kind}`);
+          if (moved.length) kept[kind] = moved;
+        }
+        if (typeof sounds?.map === "string") {
+          if (at.lane == null) drop(`ks ${at.where} map=${sounds.map}`);
+          else kept.map = sounds.map;
+        }
+        return at.lane != null && Object.keys(kept).length ? [at.lane, kept] : undefined;
+      },
+    }),
+  },
+  ksmaps: { label: () => tr("Articulation maps"), clean: (x) => keptEntries(x, isPlain) },
+  ksopt: { label: () => tr("Keyswitch timing"), clean: (x) => (isPlain(x) ? x : undefined) },
+  // A staff's synthesizer and its own SoundFont's preset (#391); only a staff plays one.
+  synth: { label: () => tr("Synthesizer"), clean: (x) => keptEntries(x, isPlain), lanes: metaByLane("synth", { others: "skip" }) },
+  soundfont: { label: () => tr("Own SoundFont"), clean: (x) => keptEntries(x, isPlain), lanes: metaByLane("soundfont", { others: "skip" }) },
+};
+
+/** The meta keys numbered by staff: [[name, lanes]]. */
+export const metaLaneKeys = () => Object.entries(META_KEYS).filter(([, key]) => key.lanes).map(([name, key]) => [name, key.lanes]);
+
+/**
+ * The `%% eui-score` lines that are the text's own: a line of their own,
+ * outside a string (a title written over lines, a part's name) and a block
+ * comment. [{ start, end, json }], `end` past the line's newline.
+ */
+function metaLines(source) {
+  const text = source ?? "";
+  const found = [];
+  if (!text.includes(META_PREFIX)) return found;
+  let inString = false;
+  let inBlock = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inString) {
+      if (c === "\\") i++;
+      else if (c === '"') inString = false;
+    } else if (inBlock) {
+      if (c === "%" && text[i + 1] === "}") {
+        inBlock = false;
+        i++;
+      }
+    } else if (c === '"') inString = true;
+    else if (c === "%") {
+      if (text[i + 1] === "{") {
+        inBlock = true;
+        i++;
+        continue;
+      }
+      // A comment to the end of its line.
+      let end = text.indexOf("\n", i);
+      if (end < 0) end = text.length;
+      if ((i === 0 || text[i - 1] === "\n") && text.startsWith(META_PREFIX, i)) {
+        found.push({ start: i, end: Math.min(text.length, end + 1), json: text.slice(i + META_PREFIX.length, end).replace(/\r$/, "") });
+      }
+      i = end;
+    }
+  }
+  return found;
+}
+
+/** `b` over `a`, object by object: where both hold an object, merged; elsewhere `b`'s. */
+function deepMerge(a, b) {
+  const out = { ...a };
+  for (const [key, value] of Object.entries(b)) out[key] = isPlain(out[key]) && isPlain(value) ? deepMerge(out[key], value) : value;
+  return out;
+}
+
+/** `meta` in the shapes its keys must have: { meta, dropped } — `dropped` the labels of the keys something was left out of. */
+function cleanMeta(meta) {
+  const out = {};
+  const dropped = [];
+  for (const [name, value] of Object.entries(meta)) {
+    const known = Object.prototype.hasOwnProperty.call(META_KEYS, name) ? META_KEYS[name] : null;
+    if (!known) {
+      out[name] = value;
+      continue;
+    }
+    const kept = known.clean(value);
+    if (kept !== undefined) out[name] = kept;
+    if (JSON.stringify(kept) !== JSON.stringify(value)) dropped.push(known.label());
+  }
+  return { meta: out, dropped };
+}
+
+/**
+ * The text's `%% eui-score` lines read: `{ meta, kept, lines, dropped }` —
+ * `meta` the lines that read, merged (a later one winning key by key), each
+ * key in its shape; `kept` the lines that do not read, as they are; `lines`
+ * how many lines read; `dropped` the keys something was left out of.
+ */
+export function readMetaLines(source) {
+  let meta = {};
+  const kept = [];
+  let lines = 0;
+  for (const line of metaLines(source)) {
+    let read;
+    try {
+      read = JSON.parse(line.json);
+    } catch {
+      read = undefined;
+    }
+    if (!isPlain(read)) {
+      kept.push(`${META_PREFIX}${line.json}`);
+      continue;
+    }
+    meta = lines ? deepMerge(meta, read) : read;
+    lines++;
+  }
+  const cleaned = cleanMeta(meta);
+  return { meta: cleaned.meta, kept, lines, dropped: cleaned.dropped };
+}
 
 /** The object on the text's `%% eui-score` line: {} when there is none, or when it does not read. */
 export function readMeta(source) {
-  const line = META.exec(source ?? "");
-  if (!line) return {};
-  try {
-    const read = JSON.parse(line[1]);
-    return read && typeof read === "object" && !Array.isArray(read) ? read : {};
-  } catch {
-    return {};
-  }
+  return readMetaLines(source).meta;
+}
+
+/**
+ * `score.meta` and `score.metaKept` read from `text` (a line that does not
+ * read is kept, word for word, to be written back): answers what
+ * readMetaLines read.
+ */
+export function attachMeta(score, text) {
+  const read = readMetaLines(text);
+  score.meta = read.meta;
+  if (read.kept.length) score.metaKept = read.kept;
+  else delete score.metaKept;
+  return read;
+}
+
+/**
+ * What to say of a text's settings lines when it is opened, or "": a line
+ * that does not read (kept as it is), lines merged, settings left out.
+ */
+export function metaNotice(read) {
+  const said = [];
+  if (read.kept.length) said.push(tr("This score's hidden settings line (%% eui-score) cannot be read: it is kept as it is, and what it holds (mixer, velocities, curves…) is not applied. Fix it in the text below, or take it away."));
+  if (read.lines > 1) said.push(tr("{n} settings lines (%% eui-score) were found: they are merged into one, the later one winning where they differ.", { n: read.lines }));
+  if (read.dropped.length) said.push(tr("Hidden settings that do not read are left out: {what}.", { what: read.dropped.join(", ") }));
+  return said.join(" ");
 }
 
 /**
  * `source` with `obj`'s keys merged into its `%% eui-score` line, the
  * others kept; a key set to null (or undefined) goes. The line is the last
- * one; no line when nothing is left.
+ * one; no line when nothing is left. A line that does not read — in
+ * `source`, or `kept` (score.metaKept) — is written back as it was, before it.
  */
-export function writeMeta(source, obj) {
-  const meta = { ...readMeta(source) };
+export function writeMeta(source, obj, kept = []) {
+  const read = readMetaLines(source);
+  const meta = { ...read.meta };
   for (const [key, value] of Object.entries(obj ?? {})) {
     if (value == null) delete meta[key];
     else meta[key] = value;
   }
-  const text = (source ?? "").replace(/^%% eui-score .*$\n?/m, "").replace(/\n*$/, "\n");
-  return Object.keys(meta).length ? `${text}%% eui-score ${JSON.stringify(meta)}\n` : text;
+  let text = source ?? "";
+  for (const line of metaLines(text).reverse()) text = text.slice(0, line.start) + text.slice(line.end);
+  text = text.replace(/\n*$/, "\n");
+  const damaged = [...new Set([...read.kept, ...(kept ?? [])])];
+  const lines = damaged.map((line) => `${line}\n`).join("");
+  return `${text}${lines}${Object.keys(meta).length ? `${META_PREFIX}${JSON.stringify(meta)}\n` : ""}`;
+}
+
+/**
+ * How long the text is against what the server keeps: a sentence when it
+ * comes near (nine tenths) or goes past, naming what the settings line
+ * takes of it (long automation recordings), or "".
+ */
+export function sizeWarning(text) {
+  const size = (text ?? "").length;
+  if (size < SOURCE_LIMIT * 0.9) return "";
+  const meta = metaLines(text).reduce((sum, line) => sum + (line.end - line.start), 0);
+  const number = (n) => n.toLocaleString(language() === "fr" ? "fr-FR" : "en-US");
+  const vars = { size: number(size), limit: number(SOURCE_LIMIT), meta: number(meta) };
+  if (size > SOURCE_LIMIT) return tr("Too long to be saved: this score's text has {size} characters, {limit} at most. Its hidden settings (curves, velocities…) take {meta} of them.", vars);
+  return tr("Nearly too long to be saved: this score's text has {size} characters, {limit} at most. Its hidden settings (curves, velocities…) take {meta} of them.", vars);
 }
 
 /**
@@ -4165,17 +4461,32 @@ export function setFretDiagram(score, s, i, text) {
   ev.fret = fretSpec(text);
 }
 
-/** Lanes `at` and after moved by `by` in what the meta line keys by lane: velocities, curves, keyswitches, the mixer's tracks, the synthesizers and own SoundFonts (#391). */
-function shiftMetaLanes(meta, at, by) {
+/** Lanes `at` and after moved by `by` in what the meta line keys by lane (META_KEYS' `lanes`). */
+export function shiftMetaLanes(meta, at, by) {
   if (!meta) return;
-  // An audio track's ("audio-1", #390) is no staff's lane: it stays as it is.
-  const moved = (lane) => (!/^\d+$/.test(String(lane)) ? lane : Number(lane) >= at ? Number(lane) + by : Number(lane));
-  if (meta.velocity) meta.velocity = Object.fromEntries(Object.entries(meta.velocity).map(([id, v]) => [[moved(id.split(":")[0]), ...id.split(":").slice(1)].join(":"), v]));
-  if (meta.cc) meta.cc = Object.fromEntries(Object.entries(meta.cc).map(([lane, v]) => [moved(lane), v]));
-  // A staff's keyswitches, program changes and articulation map (sound.js, #670).
-  if (meta.ks && typeof meta.ks === "object") meta.ks = Object.fromEntries(Object.entries(meta.ks).map(([lane, v]) => [moved(lane), v]));
-  if (meta.mixer?.tracks) meta.mixer.tracks = Object.fromEntries(Object.entries(meta.mixer.tracks).map(([lane, v]) => [moved(lane), v]));
-  for (const name of ["synth", "soundfont"]) if (meta[name]) meta[name] = Object.fromEntries(Object.entries(meta[name]).map(([lane, v]) => [moved(lane), v]));
+  for (const [, lanes] of metaLaneKeys()) {
+    const map = lanes.of(meta);
+    if (!isPlain(map)) continue;
+    // An audio track's ("audio-1", #390) is no staff's lane: it stays as it is.
+    const moved = (key) => {
+      const lane = lanes.lane(key);
+      return isLane(lane) && Number(lane) >= at ? lanes.rekey(key, Number(lane) + by) : key;
+    };
+    lanes.put(meta, Object.fromEntries(Object.entries(map).map(([key, value]) => [moved(key), value])));
+  }
+}
+
+/** What the meta line keys by a lane `gone(lane)` answers true for taken away; a key it empties goes. */
+export function dropMetaLanes(meta, gone) {
+  if (!meta) return;
+  for (const [, lanes] of metaLaneKeys()) {
+    const map = lanes.of(meta);
+    if (!isPlain(map)) continue;
+    const kept = Object.fromEntries(Object.entries(map).filter(([key]) => !(isLane(lanes.lane(key)) && gone(Number(lanes.lane(key))))));
+    if (Object.keys(kept).length === Object.keys(map).length) continue;
+    if (Object.keys(kept).length) lanes.put(meta, kept);
+    else lanes.clear(meta);
+  }
 }
 
 /** A line of chord names over the staff of lane `s`, empty: answers its lane. */
@@ -4646,6 +4957,11 @@ export function partOf(score, s) {
   const part = JSON.parse(JSON.stringify(score));
   const staff = part.staves[upper];
   part.staves = lanes.map((lane) => part.staves[lane]);
+  // Its settings with it, at its lanes there (#683); the other staves' go.
+  if (part.meta) {
+    dropMetaLanes(part.meta, (lane) => !lanes.includes(lane));
+    shiftMetaLanes(part.meta, upper, -upper);
+  }
   part.groups = [];
   part.group = "none";
   part.header = { ...part.header, instrument: staff.name || INSTRUMENTS[instrumentOf(score, upper)]?.name || "" };
@@ -4974,13 +5290,17 @@ const canonical = (x) =>
 
 /** What two pitched staves must have alike to share a channel: the instrument, the mixer's settings, no curves, no keyswitch, no synthesizer or own SoundFont (#391). */
 function sharingKey(score, lane) {
-  const curves = score.meta?.cc?.[lane];
-  if (curves && Object.keys(curves).length) return `lane ${lane}`;
-  // Keyswitches and program changes (sound.js, #670) switch the whole channel.
-  const sounds = score.meta?.ks?.[lane];
-  if (sounds && typeof sounds === "object" && Object.keys(sounds).length) return `lane ${lane}`;
-  if (score.meta?.synth?.[lane] || score.meta?.soundfont?.[lane]) return `lane ${lane}`;
-  return `${score.staves[lane].instrument ?? ""}|${canonical(score.meta?.mixer?.tracks?.[lane] ?? {})}`;
+  const alike = [];
+  for (const [, lanes] of metaLaneKeys()) {
+    if (lanes.channel === "none") continue;
+    const map = lanes.of(score.meta);
+    const value = isPlain(map) ? map[lane] : undefined;
+    // Curves, keyswitches and program changes (#670), a synthesizer, an own SoundFont (#391): the whole channel's.
+    if (lanes.channel === "own") {
+      if (value && (!isPlain(value) || Object.keys(value).length)) return `lane ${lane}`;
+    } else alike.push(canonical(value ?? {}));
+  }
+  return `${score.staves[lane].instrument ?? ""}|${alike.join("|")}`;
 }
 
 /** The synthesizer channel of the `n`th pitched slot: port after port, the tenth left out. */

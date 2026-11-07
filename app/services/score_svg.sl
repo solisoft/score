@@ -16,13 +16,18 @@
 # may have the server make a minute (ScoreSvg.allowed?) — made, not read
 # back from what was kept: a library page asks for 60 previews at once, a
 # read page or the editor for a picture and its MIDI, an MCP client for a
-# check of each source it sends.
+# check of each source it sends; and a score written (#684) — the editor's
+# saves, a new score, a copy, a version restored — for the engraver's
+# reading of its limits (Score.engraving_held?): the editor saves a second
+# and a half after each change, some 30 a minute while one types.
+# Counted in the database (RateCount), by both workers together.
 const ENGRAVINGS_PER_MINUTE = {
   "pdf": 20,
   "midi": 60,
   "preview": 120,
   "page": 60,
-  "mcp": 30
+  "mcp": 30,
+  "save": 60
 }
 # How long a sender held back is told to wait, in seconds (Retry-After).
 const ENGRAVING_RETRY_AFTER = 60
@@ -275,11 +280,12 @@ class ScoreSvg
 
   # Whether `sender` may have one more engraving made; always without one
   # (the site's own pieces, a job's). What was kept is read back without
-  # asking: a source changed each time is what is made anew.
+  # asking: a source changed each time is what is made anew. Counted in the
+  # database (RateCount, #684), not in one worker's memory.
   static def allowed?(sender)
     return true if sender.nil?
 
-    RateLimiter("engrave-#{sender["kind"]}:#{sender["key"]}", ENGRAVINGS_PER_MINUTE[sender["kind"]], 60).allowed()
+    RateCount.take("engrave-#{sender["kind"]}:#{sender["key"]}", ENGRAVINGS_PER_MINUTE[sender["kind"]], 60)
   end
 
   # The answer to a sender past its engravings, `field` ("svg", "file")

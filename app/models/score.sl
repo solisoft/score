@@ -34,6 +34,12 @@ class Score < Model
     "source",
     {"custom": fn(value) { Score.limit_refusal(value) }, "on": "create"}
   )
+  # How many scores an account keeps (#684, Plan.limits "scores"): on
+  # create only, so one past it still renames, trashes or restores.
+  validates(
+    "user_id",
+    {"custom": fn(value) { Score.room_refusal(value) }, "on": "create"}
+  )
   validates(
     "visibility",
     {"inclusion": SCORE_VISIBILITIES, "allow_nil": true}
@@ -273,13 +279,35 @@ class Score < Model
   # score's last saver (saved_by) once it goes through, the refused text's
   # author when it does not; the 409 names who saved last (`saved_by_name`).
   # Answers {"status", "body"}.
-  def save_from_editor(source, base_revision, author = nil)
+  #
+  # The bounds read without the engraver come first, before a conflict
+  # keeps anything (#684): a refused text is kept as a version only when it
+  # could be saved. The engraver's reading of its limits is counted against
+  # `sender`'s engravings of the minute (ScoreSvg.sender, "save"): past
+  # them, 429, and nothing written.
+  def save_from_editor(source, base_revision, author = nil, sender = nil)
+    bounds = Score.bounds_refusal(source)
+    unless bounds.nil?
+      return {"status": 422, "body": {
+        "error": bounds,
+        "revision": @revision
+      }}
+    end
+
     return @_conflict(source, author) if base_revision != @revision
 
     if source.blank?
       return {"status": 422, "body": {
         "error": "Not saved: the score is empty.",
         "revision": @revision
+      }}
+    end
+
+    if Score.engraving_held?(source, sender)
+      return {"status": 429, "body": {
+        "error": SiteText.t("security_540.too_many_engravings"),
+        "revision": @revision,
+        "retry_after": ENGRAVING_RETRY_AFTER
       }}
     end
 
@@ -326,6 +354,42 @@ class Score < Model
     return "Not saved: the title is too long (200 characters at most)." if title.length > 200
 
     nil
+  end
+
+  # Whether `sender` is past its engravings of the minute for the
+  # engraver's reading of `source` before it is written (#684): a save, a
+  # new score, a copy, a version restored. Counted as any engraving is
+  # (ScoreSvg.check): a source read before is read back, not counted; one
+  # past the bounds is refused without the engraver, and not counted
+  # either. Never held without a sender (a job, a spec).
+  static def engraving_held?(source, sender)
+    text = source.to_s
+    return false if sender.nil? || text.blank? || !Score.bounds_refusal(text).nil?
+
+    ScoreSvg.check(text, sender)["throttled"] == true
+  end
+
+  # The validation of an account's room for one more score (#684): true,
+  # or why not, when the scores of the user whose key is `user_id` — those
+  # in the trash too, which the database keeps until they go — reach their
+  # plan's "scores". Counted before the write: two created at the same
+  # instant may both pass, one past the bound.
+  static def room_refusal(user_id)
+    owner = User.find_by("_key", user_id.to_s)
+    return true if owner.nil?
+
+    most = Plan.limits(owner)["scores"]
+    return true if most.nil? || Score.where({"user_id": owner._key}).count < most
+
+    SiteText.t("security_684.too_many_scores", {"n": most})
+  end
+
+  # Why `score`, just created, was not: the first of its errors, said, or
+  # `otherwise`.
+  static def refusal_in(score, otherwise)
+    return otherwise if score._errors.nil? || score._errors.length == 0
+
+    score._errors[0]["message"].to_s.blank? ? otherwise : score._errors[0]["message"].to_s
   end
 
   # The validation of the engraver's limits, for every new score (a blank
@@ -472,9 +536,15 @@ class Score < Model
     Score.create({
       "user_id": user_id,
       "saved_by": user_id,
-      "source": Score.with_title(source, "#{title} (copy)"),
+      "source": Score.copy_source(source, title),
       "title": "#{title} (copy)"
     })
+  end
+
+  # The source of a copy of `source` titled `title`: what `copy_of` writes,
+  # and what the engraver is asked of before it is (engraving_held?).
+  static def copy_source(source, title)
+    Score.with_title(source, "#{title} (copy)")
   end
 
   private
@@ -526,8 +596,12 @@ class Score < Model
   # The 409: `source` kept as a "conflict" version by `author`, and the
   # score as it stands in the answer, with who saved it last ("saved_by":
   # nil when it was `author`, from another window, or nobody is known).
+  # Not kept past SCORE_CONFLICTS_PER_HOUR of the score's in the last hour
+  # (#684): the editor keeps the text in the browser too, and merges it.
   def _conflict(source, author)
-    ScoreVersion.keep(this, source, "conflict", author&._key) unless source.blank?
+    unless source.blank? || ScoreVersion.conflicts_full?(this)
+      ScoreVersion.keep(this, source, "conflict", author&._key)
+    end
     {"status": 409, "body": {
       "error": "changed elsewhere",
       "revision": @revision,

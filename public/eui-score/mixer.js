@@ -371,5 +371,13 @@ export function mixerGraph(ctx, synth, destination = ctx.destination) {
       for (const x of samples) peak = Math.max(peak, Math.abs(x));
       return { peak };
     },
+    /** Off the way out: an editor that is gone is no longer heard through it. */
+    disconnect() {
+      for (const node of [meter, master.output, ...strips.map((s) => s.output)]) {
+        try {
+          node.disconnect();
+        } catch (error) {}
+      }
+    },
   };
 }

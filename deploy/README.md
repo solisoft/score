@@ -2,7 +2,8 @@
 
 `.github/workflows/deploy.yml` verifies every push and pull request (fmt,
 lint, boot, suite with ≥ 90 % coverage) and, on `main`, deploys to the
-server through soli-proxy. The server is set up once, by hand.
+server through soli-proxy. The server is set up once, by hand; how a deploy
+runs, and how to go back, is under [How a deploy runs](#how-a-deploy-runs).
 
 ## On the server (once)
 
@@ -48,8 +49,21 @@ ENV
   (`max-age=63072000; includeSubDomains`), so the app does not send it twice.
 
 - DNS: `score.solisoft.net` → the server (soli-proxy gets the certificate).
-- Soli on the server must be ≥ 2.26.0 (the `eui_score_*` builtins); the
-  workflow pins and tests 2.28.2 and warns when the server differs.
+- Soli on the server must be the version the workflow pins and tests
+  (`SOLI_VERSION` in `deploy.yml`): a deploy stops before it changes anything
+  when the server runs another one. `/usr/local/bin/soli` serves every site on
+  the server, so it is not replaced by the deploy: bump it by hand, after
+  checking the other sites, with the release's own checksum:
+
+  ```bash
+  v=2.32.0; cd "$(mktemp -d)"
+  curl -fsSLO "https://github.com/solisoft/soli_lang/releases/download/v$v/soli-linux-amd64.tar.gz"
+  curl -fsSL "https://github.com/solisoft/soli_lang/releases/download/v$v/soli-linux-amd64.tar.gz.sha256" \
+    | grep -oE '^[0-9a-f]{64}' | sed 's/$/  soli-linux-amd64.tar.gz/' | sha256sum -c -
+  tar -xzf soli-linux-amd64.tar.gz
+  sudo cp -p /usr/local/bin/soli "/usr/local/bin/soli.$(soli --version | grep -oE '[0-9.]+' | head -1)"
+  sudo install -m 0755 "$(find . -type f -name soli -perm -u+x | head -1)" /usr/local/bin/soli
+  ```
 - The app (`/app`: accounts, saved scores) needs SoliDB. Until the `.env`
   below names one, the site works and `/app` answers with its set-up page.
   To open it, create a database and a user on the server's SoliDB, then add:
@@ -73,11 +87,84 @@ ENV
   ENV
   ```
 
-  The next deploy runs the migrations (`soli db:migrate up`) before it
-  switches slots, then fails unless `/health/deep` answers 200 and `/app`
+  The next deploy snapshots the database and runs the migrations
+  (`soli db:migrate up`) before it switches slots, then fails — and goes back
+  to the previous release — unless `/health/deep` answers 200 and `/app`
   answers 200 or a redirect to `/login`.
 
 It is `/health/deep`, not `/health/ready`: soli-proxy answers `/health/ready` itself (a plain `OK`) before the request reaches the app, so a check there proves nothing about the database.
+
+## How a deploy runs
+
+`/home/rocky/sites/score.solisoft.net` is a symlink to the live release
+(#681). Everything that uses that path — soli-proxy, `prod-db.yml`, a
+`cd` by hand — reaches the live release through it.
+
+```
+/home/rocky/sites/score.solisoft.net -> /home/rocky/releases/score.solisoft.net/<id>
+/home/rocky/releases/score.solisoft.net/
+    <yyyymmddHHMMSS>-<commit>/   one release: the app, its own copy of app.infos and .env*
+    release.sh                   the tool below (a copy of deploy/release.sh)
+/home/rocky/backups/score.solisoft.net/<id>.jsonl.gz   the database, before <id>'s migrations
+```
+
+On `main`, after the checks, `deploy.yml`:
+
+1. **uploads** the checkout into a new release directory (`deploy/upload.sh`;
+   unchanged files are hard links to the live release, so a release costs
+   what changed, not 52 MB). The live site is not touched.
+2. runs `deploy/release.sh deploy <id>` on the server, which:
+   - stops if the server's `soli` is not the pinned version;
+   - copies `app.infos` and every `.env*` from the live release into the new
+     one (copies, not links: `prod-db.yml` rewrites the live `.env`, and the
+     next deploy carries it on);
+   - **snapshots the database** (`solidb-dump`, gzipped, mode 600) — and stops
+     if it fails, is empty, or less than 1 GB is free; the 10 newest are kept;
+   - **runs the migrations in the new release**, while the site still runs
+     the previous one. If they fail, nothing is switched;
+   - **switches** the symlink to the new release in one rename, then
+     `soli-proxy deploy`: the idle slot starts on the new release and must
+     pass its health check before it takes the traffic; the old slot stops
+     only then. (The old workflow then ran `soli-proxy restart`, a second
+     full swap of both slots: gone.)
+   - **checks the site through the proxy** (`/health`, `/health/deep`, pages,
+     the engraver, `/app`);
+   - on a failure past the switch, **points the symlink back** at the
+     previous release and `soli-proxy deploy`s it the same way;
+   - keeps the 5 newest releases (and always the live one and the one before).
+
+The database is **never restored automatically**: the live site keeps taking
+writes while the migrations run and while the new slot starts, and a restore
+would erase them. When a deploy fails after its migrations, the log prints the
+snapshot to restore, if the migrations left the data unusable.
+
+By hand, on the server (`deploy/release.sh` says the same):
+
+```bash
+R=/home/rocky/releases/score.solisoft.net/release.sh
+$R status                  # the live release, the others, the snapshots
+$R rollback                # back to the release served before (code only)
+$R rollback <id>           # back to that one; the live .env* go with it
+$R restore-db /home/rocky/backups/score.solisoft.net/<id>.jsonl.gz --yes
+                           # drops and refills the collections the snapshot holds;
+                           # a collection created since is left as it is
+```
+
+`tests/deploy/release_test.sh` plays all of it — the first switch from a plain
+directory, a failed migration, a failed proxy deploy, a broken site, the
+rollback — against a server simulated in a temp directory, with stubs for
+`soli`, `soli-proxy`, `solidb-dump` and `curl`; CI runs it on every push.
+`DRY_RUN=1` before `release.sh` prints what it would change instead.
+
+### The first deploy after #681
+
+The site was a plain directory. The first deploy uploads the release beside
+it, migrates, and then swaps the directory and the new symlink in one
+`renameat2(RENAME_EXCHANGE)` — soli-proxy never sees the site missing — and
+moves the old directory to `releases/score.solisoft.net/00000000000000-before-releases`,
+the release to roll back to. The running slot keeps its working directory
+through the move. Before the swap it checks, on two scratch entries, that the
+filesystem can do it, and stops if not.
 
 ## Client addresses (the per-address limits)
 
