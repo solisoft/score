@@ -14,16 +14,31 @@
 # the two-step code step, paused after wrong codes, #538) and
 # `by_code` (the guesses were at the two-step code, not the password).
 # Answers what it did: {"found" (an account has the address), "due" (a mail
-# was to go), "sent" (it left)}.
+# was to go), "sent" (it left)}. A mail due that could not leave fails the
+# job instead (#671): the queue tries it again, and its row keeps why.
 class AuthMailJob
-  # The mail written in the request's language, and the worker's language
-  # put back as it was afterwards: the next job it runs must not be written
-  # in this one's.
   static def perform(args: Hash)
+    AuthMailJob.in_language_of(args, fn() { AuthMailJob.send_for(args) })
+  end
+
+  # What the job decides for `args`, sending nothing: {"found", "due", and
+  # when a mail is due its "kind", "user" and "letter" (AuthMailJob.letter)},
+  # in the request's language, its link made. The specs read the job here:
+  # `soli test` loads no mailer (app/mailers) in the spec's own process
+  # (#671), so the message is built, and its delivery proven, by the test
+  # server's worker (tests/controllers/account_mail_spec.sl).
+  static def prepare(args)
+    AuthMailJob.in_language_of(args, fn() { AuthMailJob._prepare(args) })
+  end
+
+  # `work` done in the language of the request that asked (`args`), and the
+  # worker's language put back as it was afterwards: the next job it runs
+  # must not be written in this one's.
+  static def in_language_of(args, work)
     previous = I18n.locale()
     I18n.set_locale(AuthMailJob.locale_of(args))
     try
-      return AuthMailJob.send_for(args)
+      return work()
     finally
       I18n.set_locale(previous) unless previous.blank?
     end
@@ -37,30 +52,48 @@ class AuthMailJob
   end
 
   static def send_for(args)
-    user = User.find_by("email", args["email"].to_s.trim.downcase)
-    if user.nil?
+    prepared = AuthMailJob._prepare(args)
+    unless prepared["due"]
       return {
-        "found": false,
+        "found": prepared["found"],
         "due": false,
         "sent": false
       }
+    end
+
+    kind = prepared["kind"]
+    user = prepared["user"]
+    letter = prepared["letter"]
+    sent = MailDelivery.attempt(kind, fn() { AuthMailJob.message(user, letter) })
+    # Not sent, the job fails: the queue tries again later (a mail server
+    # refusing for a moment), and the row says so where the operator and
+    # the specs look, not only in a warning of the log.
+    throw "#{kind} email could not be sent" unless sent
+
+    {
+      "found": true,
+      "due": true,
+      "sent": true
+    }
+  end
+
+  static def _prepare(args)
+    user = User.find_by("email", args["email"].to_s.trim.downcase)
+    if user.nil?
+      return {"found": false, "due": false}
     end
 
     due = AuthMailJob.due(user, args["kind"].to_s, args)
     if due.nil?
-      return {
-        "found": true,
-        "due": false,
-        "sent": false
-      }
+      return {"found": true, "due": false}
     end
 
-    letter = AuthMailJob.letter(user, due)
-    sent = MailDelivery.attempt(due["kind"], fn() { AuthMailJob.message(user, letter) })
     {
       "found": true,
       "due": true,
-      "sent": sent
+      "kind": due["kind"],
+      "user": user,
+      "letter": AuthMailJob.letter(user, due)
     }
   end
 

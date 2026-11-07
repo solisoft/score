@@ -3,11 +3,12 @@
 # the site's own address), and the language it chose not left behind for
 # the next job the worker runs.
 #
-# `soli test` loads no mailer (app/mailers) in the spec's process, and
-# imports none either, so the message itself is not rendered here: what the
-# job decides — the mail due, its subject and links in the request's
-# language (AuthMailJob.letter, which AuthMailer only copies into its view)
-# — is what these specs read.
+# `soli test` loads no mailer (app/mailers) in the spec's process, nor the
+# views a mailer renders (#671), so the message itself is not built here:
+# what the job decides — the mail due, its subject and links in the
+# request's language (AuthMailJob.prepare / letter, which AuthMailer only
+# copies into its view) — is what these specs read. The message, built and
+# handed to delivery by the test server's worker, is account_mail_spec's.
 
 def auth_mail_user(confirmed = true)
   user = User.new()
@@ -157,34 +158,54 @@ describe("AuthMailJob") do
     assert_eq(AuthMailJob.locale_of({}), "en")
   end
 
-  test("leaves the worker's language as it found it") do
+  test("writes in the request's language, and leaves the worker's as it found it") do
     user = auth_mail_user()
-    AuthMailJob.perform_now({
+    french = AuthMailJob.prepare({
       "kind": "reset",
       "email": user.email,
       "locale": "fr"
     })
+    assert_eq(french["kind"], "reset")
+    assert_eq(french["user"]._key, user._key)
+    assert_eq(french["letter"]["subject"], SiteText.t("mail.reset_password.title", {}, "fr"))
     assert_eq(I18n.locale(), "en", "the French job did not leave French behind")
     I18n.set_locale("fr")
-    done = AuthMailJob.perform_now({
+    english = AuthMailJob.prepare({
       "kind": "reset",
       "email": user.email,
       "locale": "en"
     })
-    assert(done["due"])
+    assert_eq(english["letter"]["subject"], SiteText.t("mail.reset_password.title", {}, "en"))
     assert_eq(I18n.locale(), "fr", "restored to what it was")
+    I18n.set_locale("en")
+  end
+
+  test("the language is put back when the job fails too") do
+    I18n.set_locale("fr")
+    assert_raises("on purpose") do
+      AuthMailJob.in_language_of({"locale": "en"}, fn() {
+        assert_eq(I18n.locale(), "en")
+        throw "failed on purpose"
+      })
+    end
+    assert_eq(I18n.locale(), "fr")
     I18n.set_locale("en")
   end
 
   test("sends nothing to an address without an account, nor a kind it does not know") do
     user = auth_mail_user()
-    nobody = AuthMailJob.perform_now({
+    nobody_args = {
       "kind": "reset",
       "email": "nobody-#{uuid_v4}@example.com",
       "locale": "en"
-    })
+    }
     assert_eq(
-      nobody,
+      AuthMailJob.prepare(nobody_args),
+      {"found": false, "due": false}
+    )
+    # Nothing due is not a failure: the job answers, and sends nothing.
+    assert_eq(
+      AuthMailJob.perform_now(nobody_args),
       {
         "found": false,
         "due": false,
@@ -196,8 +217,14 @@ describe("AuthMailJob") do
       "email": user.email,
       "locale": "en"
     })
-    assert(odd["found"])
-    assert_not(odd["due"])
+    assert_eq(
+      odd,
+      {
+        "found": true,
+        "due": false,
+        "sent": false
+      }
+    )
     assert_null(User.find(user._key).reset_token_digest, "no link made")
   end
 end
