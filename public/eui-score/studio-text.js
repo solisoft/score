@@ -8,7 +8,7 @@ const { tr } = await import(`./words.js${V}`);
 
 /** Answers the score's model and text: reading, writing, the undoable edit, opening. */
 export function install(ctx) {
-  const { options, draftKey, sourceBox, status, st, M, Vel, editor_view_lit, score_json, source_spans } = ctx;
+  const { root, options, draftKey, sourceBox, status, st, M, Vel, editor_view_lit, score_json, source_spans } = ctx;
   const { settleHistory, draw, say, mixFromMeta, applyMix } = ctx.call;
 
   // ---- Model ↔ text ----------------------------------------------------------
@@ -109,6 +109,8 @@ export function install(ctx) {
 
   /** Runs `fn` on the model as one undoable edit; a refusal leaves everything as it was. */
   function edit(fn, { keepFuture = false } = {}) {
+    // An editor swapped out by instant navigation changes nothing (whatever still calls it).
+    if (!root.isConnected) return false;
     if (!st.score) return say(tr("The score tools wait: this piece is edited in its text below."), true);
     if (st.written) return say(tr("Written pitch is for reading: View ▸ Written pitch again to write, at concert pitch."), true);
     const before = snapshot();
@@ -156,6 +158,8 @@ export function install(ctx) {
   // Every change ends here: the browser's draft (the playground's), and
   // whoever embeds the editor (the app, which saves to the account).
   function saveDraft({ pin = false } = {}) {
+    // Nor is anything kept or saved from it.
+    if (!root.isConnected) return;
     settleHistory({ pin });
     if (draftKey) {
       try {

@@ -27,6 +27,8 @@ export function install(ctx) {
 
   // The automation lane (automation-ui.js), under the velocity strip.
   st.automation = automationLane({ root: ctx.root, rollHost, rollScroll, st, edit, say, redraw: () => drawRoll(), recordingNow, learnt: () => ctx.sync?.learnt?.list() ?? [] });
+  // The editor gone (instant navigation): the keyboard's knobs no longer reach it.
+  ctx.ends.push(() => st.automation.stop());
 
   /** The velocities the dynamics give, as the MIDI plays them: found once per text, then drawn. */
   function heardVelocities() {

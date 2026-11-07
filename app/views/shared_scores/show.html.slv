@@ -101,7 +101,20 @@
     });
     let delay = 3000;
     let revision = page.revision;
+    // A link followed (instant navigation): the room is left, and not joined again.
+    let left = false;
+    let socket = null;
+    let timer = 0;
+    const leave = new AbortController();
+    document.addEventListener("soli:load", () => {
+      if (roomBox.isConnected) return;
+      left = true;
+      leave.abort();
+      clearTimeout(timer);
+      socket?.close();
+    }, { signal: leave.signal });
     async function listen() {
+      if (left) return;
       let ticket;
       try {
         const answer = await fetch(page.ticket, { headers: { Accept: "application/json" }, credentials: "same-origin" });
@@ -110,11 +123,12 @@
         if (!answer.ok) throw new Error(`ticket: ${answer.status}`);
         ticket = (await answer.json()).ticket;
       } catch (error) {
-        setTimeout(listen, delay);
+        if (!left) timer = setTimeout(listen, delay);
         return;
       }
+      if (left) return;
       const scheme = location.protocol === "https:" ? "wss:" : "ws:";
-      const socket = new WebSocket(`${scheme}//${location.host}/ws/scores?ticket=${encodeURIComponent(ticket)}`);
+      socket = new WebSocket(`${scheme}//${location.host}/ws/scores?ticket=${encodeURIComponent(ticket)}`);
       socket.onopen = () => (delay = 3000);
       socket.onmessage = (message) => {
         let data;
@@ -141,9 +155,10 @@
         }
       };
       socket.onclose = () => {
+        if (left) return;
         people = {};
         showPeople();
-        setTimeout(listen, delay);
+        timer = setTimeout(listen, delay);
       };
     }
     listen();
