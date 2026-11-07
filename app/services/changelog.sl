@@ -12,6 +12,14 @@ class Changelog
     [
       {"date": "2026-11-07", "entries": [
         {
+          "area": "site",
+          "title": "Play on shared pages sounds as in the editor",
+          "text": "Play on a shared score, a section and the examples now follows each note's own force, the swing, "
+          + "the curves you drew and the mixer's levels, mutes and solos, as the editor's Play does, and the MIDI "
+          + "link saves that same file. Play works again on pieces without repeats, and its words are in French on "
+          + "the French pages."
+        },
+        {
           "area": "editor",
           "title": "Leaving a score leaves it alone",
           "text": "After a link took you from one score to another page, a MIDI keyboard could still write notes "
