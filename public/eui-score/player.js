@@ -50,13 +50,27 @@ export function unlock(made) {
 let router = null;
 
 /**
- * `fn(ctx, synth, offline, destination)` connects each synthesizer made
- * from now on (Play's, once; a WAV's, each time) to `destination` — Play's
- * through the MIDI-learn volume, a WAV's straight out; null connects them
- * straight there.
+ * `fn(ctx, synth, offline, destination)` connects the synthesizers to
+ * `destination` — Play's through the MIDI-learn volume, a WAV's straight
+ * out; null connects them straight there. Play's synthesizer is made once a
+ * tab: already made, it is connected again through `fn` at once, so the
+ * editor open now (instant navigation keeps the tab) is the one heard.
+ * Answers the function that lets go of `fn`, if it is still the router.
  */
 export function setRouter(fn) {
   router = fn;
+  if (engine?.done) engine.promise.then(({ ctx, synth, gain }) => router === fn && routeLive(ctx, synth, gain));
+  return () => {
+    if (router === fn) setRouter(null);
+  };
+}
+
+/** Play's synthesizer, taken off what it went through, and connected through the router now. */
+function routeLive(ctx, synth, gain) {
+  try {
+    synth.disconnect();
+  } catch (error) {}
+  route(ctx, synth, false, gain);
 }
 
 function route(ctx, synth, offline, destination = ctx.destination) {
@@ -127,7 +141,7 @@ function start() {
     const gain = ctx.createGain();
     gain.gain.value = volume;
     gain.connect(ctx.destination);
-    route(ctx, synth, false, gain);
+    routeLive(ctx, synth, gain);
     await synth.soundBankManager.addSoundBank(bank, "main");
     // Your own SoundFonts (#391), loaded before the first Play.
     for (const [id, extra] of banks) await synth.soundBankManager.addSoundBank(extra.buffer.slice(0), id, extra.offset);
@@ -371,9 +385,15 @@ export function translate(fn) {
 // #391): `fn(channel, key, on, velocity)` answering true when it did.
 let voicer = null;
 
-/** Sets who sounds the keys of the staves this synthesizer does not play (null: none). */
+/**
+ * Sets who sounds the keys of the staves this synthesizer does not play
+ * (null: none). Answers the function that lets go of `fn`, if it still is.
+ */
 export function setVoicer(fn) {
   voicer = fn;
+  return () => {
+    if (voicer === fn) voicer = null;
+  };
 }
 
 /**
@@ -406,6 +426,7 @@ export function tap(fn) {
 export function listen(id, onKey, onRelease = null) {
   if (input) input.onmidimessage = null;
   input = id && access ? access.inputs.get(id) ?? null : null;
+  listener = input ? onKey : null;
   if (!input) return null;
   const down = new Set();
   input.onmidimessage = (event) => {
@@ -429,6 +450,18 @@ export function listen(id, onKey, onRelease = null) {
     }
   };
   return input;
+}
+
+// Whose keys the keyboard listened to plays: `listen`'s `onKey`.
+let listener = null;
+
+/**
+ * Stops listening to the MIDI keyboard if one of `keys` (`onKey`s given to
+ * `listen`) has it: an editor that is gone lets go of its own, never of
+ * the editor opened after it (instant navigation keeps this module).
+ */
+export function unlisten(...keys) {
+  if (listener && keys.includes(listener)) listen(null);
 }
 
 /** A note on or off, straight to the MIDI device chosen in Sound to. */
@@ -515,10 +548,12 @@ export function preview(keys, program = 0, { drums = false, channel = 0 } = {}) 
     }, 450);
     return true;
   }
-  if (!drums && voicer?.(channel, keys[0], true, 90)) {
-    for (const key of keys.slice(1)) voicer(channel, key, true, 90);
+  // Let go of by its editor meanwhile, the voicer still lets its keys go.
+  const voice = voicer;
+  if (!drums && voice?.(channel, keys[0], true, 90)) {
+    for (const key of keys.slice(1)) voice(channel, key, true, 90);
     setTimeout(() => {
-      for (const key of keys) voicer(channel, key, false, 0);
+      for (const key of keys) voice(channel, key, false, 0);
     }, 450);
     return true;
   }

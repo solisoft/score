@@ -14,11 +14,13 @@ class AppScoreReadingsController < AppBaseController
     return render_json({"error": SiteText.t("app.readings.choose_photo")}, 422) if data.blank?
     return render_json({"error": SiteText.t("app.readings.too_large")}, 422) if data.length > SCORE_READER_BYTES
 
-    picture = ScoreReader.picture(data)
-    return render_json({"error": SiteText.t("app.readings.not_picture")}, 422) if picture.nil?
-
+    # The day's photos, then the minute's, before the picture is opened (#684).
     refusal = ScoreReading.refusal(user)
     return @_refusal_json(refusal) unless refusal.nil?
+    return @_refusal_json("too_fast") if ScoreReading.held?(user)
+
+    picture = ScoreReader.picture(data)
+    return render_json({"error": SiteText.t("app.readings.not_picture")}, 422) if picture.nil?
 
     reading = ScoreReading.start(user, picture)
     return @_refusal_json(reading) if type(reading) == "string"
@@ -87,9 +89,12 @@ class AppScoreReadingsController < AppBaseController
   def keep
     reading = @_own_reading
     halt(422, SiteText.t("app.readings.not_read_yet")) unless reading.state == "done"
+    # Read by the engraver first, counted against the account's engravings (#684).
+    sender = ScoreSvg.sender("save", current_user(), client_ip(req))
+    return ScoreSvg.too_many if Score.engraving_held?(reading.source, sender)
 
     score = Score.start(current_user(), reading.source)
-    halt(422, SiteText.t("app.readings.not_created")) if score._errors
+    halt(422, Score.refusal_in(score, SiteText.t("app.readings.not_created"))) if score._errors
 
     redirect(app_score_path(score))
   end
@@ -126,6 +131,7 @@ class AppScoreReadingsController < AppBaseController
   # the day's used up (429), or the key or the plan (403, with its link).
   def _refusal_json(refusal)
     return render_json({"error": SiteText.t("app.readings.used_up")}, 429) if refusal == "used_up"
+    return render_json({"error": SiteText.t("security_684.too_many_photos")}, 429) if refusal == "too_fast"
 
     @_ai_refused(refusal)
   end

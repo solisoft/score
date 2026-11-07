@@ -14,13 +14,17 @@ describe("public/") do
 end
 
 describe("the deploy") do
-  test("takes off the server a copy of the notes an older deploy left there, and never sends one") do
+  # Since #681 each deploy uploads into a release of its own (deploy/upload.sh)
+  # and deploy/release.sh switches the site to it.
+  test("never sends the notes, and takes any copy out of a release before it goes live") do
     workflow = File.read(".github/workflows/deploy.yml")
-    assert_contains(workflow, "--exclude='/public/js/CLAUDE.md'")
-    sync = workflow.index_of("- name: Sync the files")
-    removal = workflow.index_of("rm -f '$SITES_DIR/$DOMAIN/public/js/CLAUDE.md'")
-    assert(sync > 0, "the sync step")
-    assert(removal > sync, "the notes removed after the sync")
+    assert_contains(workflow, "run: deploy/upload.sh \"$RELEASE\"")
+    assert_contains(File.read("deploy/upload.sh"), "--exclude='/public/js/CLAUDE.md'")
+    release = File.read("deploy/release.sh")
+    removal = release.index_of("run rm -f \"$release/public/js/CLAUDE.md\"")
+    switch = release.index_of("point_site_at \"$release\" ||")
+    assert(removal > 0, "the notes removed from the release")
+    assert(switch > removal, "before the site is switched to it")
   end
 
   test("the csrf action checks the session cookie's new name, and keeps the first .env it replaced") do

@@ -210,6 +210,8 @@ export function install(ctx) {
       if (st.playing === state) stopPlay();
       return say(tr("The sounds could not be loaded."), true);
     }
+    // Stopped while the music was being started (or the editor gone): it must not play on.
+    if (state.handle && st.playing !== state) state.handle.stop();
     if (!state.handle || st.playing !== state) return;
     // To a MIDI device: the keyswitches in effect where the music starts, which a seek passes over (#670).
     if (P.outputPort() && played) {
@@ -344,6 +346,26 @@ export function install(ctx) {
     }
     draw();
   }
+
+  /**
+   * The editor is gone (instant navigation): the music, its timers and its
+   * frames stop. Unlike Stop, nothing is written — a MIDI recording under
+   * way is dropped, the score left as it was saved.
+   */
+  function endPlayback() {
+    const playing = st.playing;
+    st.playing = null;
+    st.recording = null;
+    if (!playing) return;
+    clearInterval(playing.timer);
+    clearInterval(playing.ticker);
+    cancelAnimationFrame(playing.frame);
+    playing.voices?.silence();
+    playing.handle?.stop();
+    if (playing.padChannel != null) P.mute(playing.padChannel, false);
+    st.audio?.stopPlayback();
+  }
+  ctx.ends.push(endPlayback);
 
   // The bar under the menu: how far the music has played, the bar it is in;
   // a click on it plays from there.

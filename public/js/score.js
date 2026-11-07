@@ -14,24 +14,36 @@
   var script = document.currentScript;
   var PLAYER_SRC = (script && script.getAttribute("data-player")) || "/eui-score/player.js";
   var ENGINE_SRC = (script && script.getAttribute("data-engine")) || "/eui-score/eui-score.js";
-  var MODEL_SRC = (script && script.getAttribute("data-model")) || "/eui-score/score-model.js";
+  // What Play hears (heard.js, #682): the editor's model, velocities,
+  // curves, mixer and feel, under heard.js's own version.
+  var HEARD_SRC = (script && script.getAttribute("data-heard")) || "/eui-score/heard.js";
   var MUSICXML_SRC = (script && script.getAttribute("data-musicxml")) || "/eui-score/musicxml.js";
-  var FEEL_SRC = (script && script.getAttribute("data-feel")) || "/eui-score/feel.js";
-  var VELOCITY_SRC = (script && script.getAttribute("data-velocity")) || "/eui-score/velocity.js";
-  // The words of the buttons, in the page's language (#471): read from
-  // <html lang> when they are shown, the page being English or French.
+  // Every word this script shows, in the page's language (#471, #682): read
+  // from <html lang> when they are shown, the page being English or French.
+  // `{name}` is filled from word()'s second argument.
   var WORDS = {
     en: { play: "Play", stop: "Stop", copy: "Copy", copied: "Copied ✓", selected: "Selected: ⌘C / Ctrl+C",
       loading: "Loading the player…", sounds: "Loading the sounds…", once: "(38 MB, once)",
-      failed: "The player could not be loaded." },
+      failed: "The player could not be loaded.", playing: "Playing",
+      midiFailed: "The MIDI file could not be made: {error}",
+      unread: "This piece is written in a way the score editor does not read: its MusicXML and parts are not written from it.",
+      musicxmlFailed: "The MusicXML could not be written: {error}", partsFailed: "The parts could not be read: {error}",
+      partFailed: "The part could not be written: {error}", staff: "Staff {n}", part: "part" },
     fr: { play: "Lecture", stop: "Stop", copy: "Copier", copied: "Copié ✓", selected: "Sélectionné : ⌘C / Ctrl+C",
       loading: "Chargement du lecteur…", sounds: "Chargement des sons…", once: "(38 Mo, une fois)",
-      failed: "Le lecteur n'a pas pu être chargé." }
+      failed: "Le lecteur n'a pas pu être chargé.", playing: "Lecture en cours",
+      midiFailed: "Le fichier MIDI n'a pas pu être fait : {error}",
+      unread: "Cette pièce est écrite d'une façon que l'éditeur de partitions ne lit pas : ni son MusicXML ni ses parties n'en sont écrits.",
+      musicxmlFailed: "Le MusicXML n'a pas pu être écrit : {error}", partsFailed: "Les parties n'ont pas pu être lues : {error}",
+      partFailed: "La partie n'a pas pu être écrite : {error}", staff: "Portée {n}", part: "partie" }
   };
-  function word(key) {
+  function word(key, vars) {
     var lang = (document.documentElement.lang || "en").slice(0, 2);
-    return (WORDS[lang] || WORDS.en)[key];
+    var text = (WORDS[lang] || WORDS.en)[key];
+    Object.keys(vars || {}).forEach(function (name) { text = text.split("{" + name + "}").join(String(vars[name])); });
+    return text;
   }
+  function errorText(error) { return (error && error.message) || String(error); }
   function playLabel() { return '<span aria-hidden="true">▶</span> ' + word("play"); }
   function stopLabel() { return '<span aria-hidden="true">■</span> ' + word("stop"); }
   var player = null;
@@ -45,12 +57,6 @@
     return player;
   }
 
-  /**
-   * The piece's MIDI: the server's, or — for a piece with repeats or a D.S.,
-   * which the server plays once, as written — the browser module's, which
-   * plays every repeat out and takes the jumps, as the editor plays it. A
-   * source the editor's model cannot read is played as written there too.
-   */
   /**
    * The piece's source: its button's data-src, or — a section's card, which
    * holds none — fetched once from its data-section (data.json, #455). A
@@ -75,105 +81,85 @@
       .catch(function () { return src || ""; });
   }
 
-  /** How the piece asks to be played, from its `%% eui-score` line: { swing, humanize, velocity }, or {}. */
-  function feelOf(src) {
-    var line = /^%% eui-score (.*)$/m.exec(src || "");
-    if (!line) return {};
-    try {
-      return JSON.parse(line[1]) || {};
-    } catch (error) {
-      return {};
-    }
-  }
-
-  /** The turns a looped section is played: two minutes or so of music, then it stops. */
-  function turnsOf(bars) {
-    return Math.max(8, Math.ceil(64 / Math.max(1, bars)));
+  /**
+   * The MIDI as it is to be heard, as the editor's Play makes it (heard.js,
+   * #682): each note at the force set for it, the curves drawn, the mixer's
+   * levels, swung and humanized as the piece asks — and, with `loop`, a
+   * section played over and over (#457). Answers { bytes, turns }; the
+   * server's file, as written, when the browser cannot make it.
+   */
+  function midiOf(button, loop) {
+    var server = function () { return writtenMidi(button); };
+    return Promise.all([sourceOf(button), import(HEARD_SRC), engine().catch(function () { return null; })])
+      .then(function (got) {
+        var src = got[0], H = got[1], E = got[2];
+        var bars = Number(button.getAttribute("data-bars")) || 0;
+        var looped = loop && button.hasAttribute("data-loop") && bars > 0;
+        return H.heardMidi(src, {
+          midi: function (source, options) {
+            if (!E || !src) return server();
+            return E.toMidi(source, options).catch(server);
+          },
+          parse: function (text) {
+            if (!E || !src) throw new Error("not read here");
+            return withSpans(E.engine, text);
+          },
+          loop: looped ? { bars: bars, time: button.getAttribute("data-time") || "4/4" } : null,
+        });
+      })
+      .catch(function () {
+        return server().then(function (bytes) { return { bytes: bytes, turns: 1 }; });
+      });
   }
 
   /**
-   * The MIDI as it is to be heard: as written, then each note at the force
-   * set for it (velocity.js), played in a loop when asked (#457), swung and
-   * humanized as the piece asks (feel.js) — the editor's own modules
-   * (#453, #455). Answers { bytes, turns }.
+   * The server's MIDI of the piece, as written. A data: URL (a page's
+   * figure) is read here: the Content-Security-Policy's connect-src lets no
+   * fetch reach one (#544).
    */
-  function midiOf(button) {
-    return sourceOf(button).then(function (src) {
-      var meta = feelOf(src);
-      var bars = Number(button.getAttribute("data-bars")) || 0;
-      var loop = button.hasAttribute("data-loop") && bars > 0;
-      if (!meta.swing && !meta.humanize && !meta.velocity && !loop) {
-        return writtenMidi(button).then(function (bytes) { return { bytes: bytes, turns: 1 }; });
-      }
-      var parts = [writtenMidi(button), import(FEEL_SRC)];
-      if (meta.velocity) parts.push(import(VELOCITY_SRC), import(ENGINE_SRC), import(MODEL_SRC));
-      return Promise.all(parts).then(function (got) {
-        var bytes = new Uint8Array(got[0]);
-        var F = got[1];
-        var ready = Promise.resolve(bytes);
-        if (meta.velocity) {
-          var Vel = got[2], E = got[3], M = got[4];
-          ready = E.loaded().then(function () {
-            var score = M.fromParsed(JSON.parse(E.engine.score_json(src))).score;
-            return Vel.applyVelocities(score, bytes);
-          }).catch(function () { return bytes; });
-        }
-        return ready.then(function (played) {
-          var turns = 1;
-          if (loop) {
-            turns = turnsOf(bars);
-            var turn = bars * F.barTicks(button.getAttribute("data-time") || "4/4", F.readSmf(played).division);
-            played = F.loopSmf(played, turn, turns);
-          }
-          // Swung and humanized after the loop: no two turns quite alike.
-          return { bytes: F.feel(played, { swing: meta.swing || null, humanize: meta.humanize || null }), turns: turns };
-        });
-      });
-    });
-  }
-
   function writtenMidi(button) {
-    var server = function () {
-      return fetch(button.getAttribute("data-midi")).then(function (r) {
-        return r.arrayBuffer();
-      });
-    };
-    var src = button.getAttribute("data-src");
-    if (!src || !needsBrowser(src)) return server();
-    // The model under its own address: each file here is versioned by itself.
-    return Promise.all([import(ENGINE_SRC), import(MODEL_SRC)])
-      .then(function (mods) {
-        var E = mods[0];
-        var M = mods[1];
-        return E.loaded().then(function () {
-          return E.toMidi(M.playedSource(src, E.engine.score_json), { unfold: false });
-        });
-      })
-      .catch(server);
+    var url = button.getAttribute("data-midi") || "";
+    var inline = /^data:[^,]*;base64,(.*)$/.exec(url);
+    if (inline) {
+      try {
+        var text = atob(inline[1]);
+        var bytes = new Uint8Array(text.length);
+        for (var i = 0; i < text.length; i++) bytes[i] = text.charCodeAt(i);
+        return Promise.resolve(bytes);
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    }
+    return fetch(url).then(function (r) {
+      if (!r.ok) throw new Error(String(r.status));
+      return r.arrayBuffer();
+    }).then(function (buffer) { return new Uint8Array(buffer); });
   }
 
-  // Repeats and jumps, which the server's file plays once, and what it
-  // leaves out that the browser's module plays: arpeggios, glissandi, ornaments.
-  function needsBrowser(src) {
-    return /\\(repeat|jump|arpeggio|glissando|trill|prall|mordent|turn)\b/.test(src);
+  /** The engraver's reading of `text`, with where each note is written: what the editor's model reads. */
+  function withSpans(E, text) {
+    var parsed = JSON.parse(E.score_json(text));
+    parsed.spans = JSON.parse(E.source_spans(text));
+    return parsed;
   }
 
-  /** The MIDI link: the file as Play plays it, repeats and all. */
+  /**
+   * The MIDI link: the file as Play plays it, repeats, velocities and all
+   * (a section once, not looped); a word under the buttons when it cannot
+   * be made.
+   */
   function saveMidi(link, event) {
     var button = link.parentElement.querySelector("[data-score-play]");
-    if (!button || !needsBrowser(button.getAttribute("data-src") || "")) return;
+    if (!button || !button.getAttribute("data-src")) return;
     event.preventDefault();
-    midiOf(button).then(function (made) {
-      var bytes = made.bytes;
-      var url = URL.createObjectURL(new Blob([bytes], { type: "audio/midi" }));
-      var save = document.createElement("a");
-      save.href = url;
-      save.download = link.getAttribute("download") || "score.mid";
-      document.body.appendChild(save);
-      save.click();
-      save.remove();
-      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
-    });
+    midiOf(button, false)
+      .then(function (made) { save(made.bytes, link.getAttribute("download") || "score.mid", "audio/midi"); })
+      .catch(function (error) {
+        var slot = link.parentElement.querySelector("[data-score-player]");
+        if (!slot) return;
+        slot.innerHTML = '<span class="score-player-note" role="status"></span>';
+        slot.firstChild.textContent = word("midiFailed", { error: errorText(error) });
+      });
   }
 
   /** Bytes or a string saved as a file, through a temporary link. */
@@ -219,17 +205,13 @@
    */
   function readScore(section) {
     if (!section.__score) {
-      section.__score = Promise.all([engine(), import(MODEL_SRC), fetch(section.getAttribute("data-source-url"))])
+      // The model heard.js plays with: one copy of it on the page.
+      section.__score = Promise.all([engine(), import(HEARD_SRC), fetch(section.getAttribute("data-source-url"))])
         .then(function (all) {
           return all[2].text().then(function (src) {
-            var M = all[1];
-            var E = all[0].engine;
-            var withSpans = function (text) {
-              var parsed = JSON.parse(E.score_json(text));
-              parsed.spans = JSON.parse(E.source_spans(text));
-              return parsed;
-            };
-            var read = M.fromParsed(withSpans(src), src, { parse: withSpans });
+            var M = all[1].M;
+            var parse = function (text) { return withSpans(all[0].engine, text); };
+            var read = M.fromParsed(parse(src), src, { parse: parse });
             return { E: all[0], M: M, score: read.score || null };
           });
         });
@@ -243,51 +225,49 @@
     if (note) note.textContent = text;
   }
 
-  var UNREAD = "This piece is written in a way the score editor does not read: its MusicXML and parts are not written from it.";
-
   function saveMusicXml(section) {
     readScore(section)
       .then(function (read) {
-        if (!read.score) return say(section, UNREAD);
+        if (!read.score) return say(section, word("unread"));
         return import(MUSICXML_SRC).then(function (X) {
           save(X.toMusicXML(read.score), section.getAttribute("data-file") + ".musicxml", "application/vnd.recordare.musicxml+xml");
           say(section, "");
         });
       })
-      .catch(function (error) { say(section, "The MusicXML could not be written: " + (error.message || error)); });
+      .catch(function (error) { say(section, word("musicxmlFailed", { error: errorText(error) })); });
   }
 
   /** "A part…": the staves offered, each as its player reads it. */
   function openParts(section) {
     readScore(section)
       .then(function (read) {
-        if (!read.score) return say(section, UNREAD);
+        if (!read.score) return say(section, word("unread"));
         var M = read.M;
         var select = section.querySelector("[data-read-part-staff]");
         select.innerHTML = "";
         M.staffLanes(read.score).forEach(function (s, n) {
           var staff = read.score.staves[s];
           var known = M.INSTRUMENTS[M.instrumentOf(read.score, s)];
-          select.appendChild(new Option(staff.name || (known && known.name) || "Staff " + (n + 1), String(s)));
+          select.appendChild(new Option(staff.name || (known && known.name) || word("staff", { n: n + 1 }), String(s)));
         });
         section.querySelector("[data-read-part]").hidden = false;
         section.querySelector("[data-read-parts]").hidden = true;
         say(section, "");
       })
-      .catch(function (error) { say(section, "The parts could not be read: " + (error.message || error)); });
+      .catch(function (error) { say(section, word("partsFailed", { error: errorText(error) })); });
   }
 
   function savePart(section, asPdf) {
     readScore(section).then(function (read) {
       var select = section.querySelector("[data-read-part-staff]");
-      var name = select.selectedOptions[0] ? select.selectedOptions[0].textContent : "part";
+      var name = select.selectedOptions[0] ? select.selectedOptions[0].textContent : word("part");
       var src = read.M.toLilyPond(read.M.partOf(read.score, Number(select.value)), { written: true }).source;
       var file = section.getAttribute("data-file") + " - " + name;
       if (!asPdf) return save(src, file + ".ly", "text/x-lilypond");
       return read.E.toPdf(src, section.getAttribute("data-title") + " — " + name).then(function (pdf) {
         save(pdf, file + ".pdf", "application/pdf");
       });
-    }).catch(function (error) { say(section, "The part could not be written: " + (error.message || error)); });
+    }).catch(function (error) { say(section, word("partFailed", { error: errorText(error) })); });
   }
 
   // ---- Printing (Ctrl/Cmd+P) --------------------------------------------------------
@@ -351,7 +331,7 @@
     var bar = state.slot.querySelector(".score-progress");
     if (!bar) {
       state.slot.innerHTML =
-        '<div class="score-progress" role="progressbar" aria-label="Playing">' +
+        '<div class="score-progress" role="progressbar" aria-label="' + word("playing") + '">' +
         '<div class="score-progress-fill"></div><span class="score-progress-text"></span></div>';
       bar = state.slot.firstChild;
       bar.addEventListener("click", function (event) {
@@ -386,6 +366,12 @@
     else if (playing) reset(playing);
   }
 
+  /** The click's AudioContext, never handed to the player: closed. */
+  function dropContext(state) {
+    if (state.context) state.context.close().catch(function () {});
+    state.context = null;
+  }
+
   function play(button) {
     var slot = button.parentElement.querySelector("[data-score-player]");
     if (!slot) return;
@@ -400,23 +386,24 @@
       return;
     }
     stopAll();
-    var state = { button: button, slot: slot, handle: null, timer: 0 };
-    playing = state;
     // A context made inside the click may play; one made after a download may
-    // not: the player is given this one.
-    var context = window.AudioContext ? new AudioContext() : null;
+    // not: the player is given this one. Until then it is this click's, closed
+    // when the player is not reached (stopped meanwhile, or failed to load).
+    var state = { button: button, slot: slot, handle: null, timer: 0, context: window.AudioContext ? new AudioContext() : null };
+    playing = state;
     button.innerHTML = stopLabel();
     slot.innerHTML = '<span class="score-player-note">' + word("loading") + "</span>";
-    Promise.all([loadPlayer(), midiOf(button)])
+    Promise.all([loadPlayer(), midiOf(button, true)])
       .then(function (both) {
         state.turns = both[1].turns;
         both[1] = both[1].bytes;
         var p = both[0];
         if (playing !== state) {
-          if (context) context.close();
+          dropContext(state);
           return null;
         }
-        p.unlock(context || undefined);
+        p.unlock(state.context || undefined);
+        state.context = null;
         if (!p.isReady()) slot.innerHTML = '<span class="score-player-note">' + word("sounds") + " " + word("once") + "</span>";
         return p.play(both[1], {
           onStop: function () { reset(state); },
@@ -432,6 +419,7 @@
         state.timer = setInterval(function () { showProgress(state); }, 250);
       })
       .catch(function () {
+        dropContext(state);
         reset(state);
         button.title = word("failed");
         slot.innerHTML = '<span class="score-player-note">' + word("failed") + "</span>";

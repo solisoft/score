@@ -1,7 +1,8 @@
 # The plans (#393): Free, what the site has always offered, and Pro, paid
 # through Stripe (StripeBilling). Every limit a plan sets is read here,
 # through `Plan.limits(user)`: whether the AI may run on one's own key, the
-# audio takes, the people a score is shared with. The site has no AI of its
+# audio takes, the people a score is shared with, the scores an account
+# keeps (#684: far past any library, so that none fills the database). The site has no AI of its
 # own (#396, AiClient): "own_key_ai" says whether a person's own key may be
 # used. Its day (ScoreReading / ScoreSuggestion, 200 each) is not the plan's:
 # it guards against a runaway loop, the provider's bill being theirs.
@@ -55,12 +56,13 @@ class Plan
       "own_key_ai": true,
       "take_tracks": SCORE_TAKE_TRACKS,
       "take_bytes": Plan.pro_limits["take_bytes"],
-      "people_per_score": nil
+      "people_per_score": nil,
+      "scores": Plan.pro_limits["scores"]
     }
   end
 
   # Free, once payments are open: no AI, one audio track a score and 50 MB
-  # of takes, three people a score.
+  # of takes, three people a score, 1,000 scores.
   static def free_limits
     {
       "plan": "free",
@@ -68,12 +70,13 @@ class Plan
       "own_key_ai": false,
       "take_tracks": 1,
       "take_bytes": 50 * PLAN_MEGABYTE,
-      "people_per_score": 3
+      "people_per_score": 3,
+      "scores": 1000
     }
   end
 
   # Pro: AI with one's own key, every audio track (SCORE_TAKE_TRACKS) and
-  # 2 GB of takes, anyone a score is shared with.
+  # 2 GB of takes, anyone a score is shared with, 10,000 scores.
   static def pro_limits
     {
       "plan": "pro",
@@ -81,7 +84,8 @@ class Plan
       "own_key_ai": true,
       "take_tracks": SCORE_TAKE_TRACKS,
       "take_bytes": 2000 * PLAN_MEGABYTE,
-      "people_per_score": nil
+      "people_per_score": nil,
+      "scores": 10000
     }
   end
 

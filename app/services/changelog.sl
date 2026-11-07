@@ -21,12 +21,47 @@ class Changelog
           "app": true
         },
         {
+          "area": "site",
+          "title": "Play on shared pages sounds as in the editor",
+          "text": "Play on a shared score, a section and the examples now follows each note's own force, the swing, "
+          + "the curves you drew and the mixer's levels, mutes and solos, as the editor's Play does, and the MIDI "
+          + "link saves that same file. Play works again on pieces without repeats, and its words are in French on "
+          + "the French pages."
+        },
+        {
+          "area": "editor",
+          "title": "Leaving a score leaves it alone",
+          "text": "After a link took you from one score to another page, a MIDI keyboard could still write notes "
+          + "into the score you had left, and save them; its music, the tuner's microphone and the mixer's meter "
+          + "went on, and the next score played without its mixer. Leaving a score now stops all of it, and the "
+          + "next score is heard through its own mixer.",
+          "app": true
+        },
+        {
+          "area": "editor",
+          "title": "A damaged settings line is kept, never wiped",
+          "text": "A score keeps its mixer, note velocities and curves on a hidden last line of its text. When "
+          + "that line is damaged, cut short or edited by hand, the editor now keeps it word for word and says "
+          + "so, instead of wiping it at the next edit. Two such lines, one pasted in, are merged into one, and "
+          + "the editor warns before a score grows past the million characters a save keeps.",
+          "app": true
+        },
+        {
+          "area": "site",
+          "title": "Limits on what one account can fill",
+          "text": "An account now keeps up to 10,000 scores, trash included (1,000 on the Free plan once Pro is "
+          + "on sale), and a score keeps up to 20 refused saves an hour in its history. Saves, copies and "
+          + "restores count against the engravings a minute: past 60, the editor waits a minute and saves again "
+          + "by itself. Six photos a minute can be sent to be read, of 50 megapixels at most.",
+          "app": true
+        },
+        {
           "area": "editor",
           "title": "Keyswitches for virtual instruments",
           "text": "Playing through a sample library in your DAW? Under the MIDI view, the automation lane now takes "
-          + "any controller (CC 0–127), and its Keyswitches and programs mode places keyswitches and program changes "
-          + "on a staff. An articulation map sends the right keyswitch before each staccato, pizz., tremolo or slurred "
-          + "note. They go to the device of Sound to and into Save as MIDI, never onto the page.",
+          + "any controller (CC 0–127), and its Keyswitches and programs mode places keyswitches and program "
+          + "changes on a staff. An articulation map sends the right keyswitch before each staccato, pizz., "
+          + "tremolo or slurred note. They go to the device of Sound to and into Save as MIDI, never onto the page.",
           "app": true
         }
       ]},

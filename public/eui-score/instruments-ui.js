@@ -291,7 +291,7 @@ export function installInstruments({ root, st, M, P, edit, say }) {
     },
     destinationOf: () => st.liveMixer?.master.input ?? P.unlock().destination,
   });
-  P.setVoicer((channel, key, on, velocity) => (on ? live.on(channel, key, velocity) : live.off(channel, key)));
+  const unvoice = P.setVoicer((channel, key, on, velocity) => (on ? live.on(channel, key, velocity) : live.off(channel, key)));
 
   // ---- MPE -----------------------------------------------------------------------------
 
@@ -314,7 +314,7 @@ export function installInstruments({ root, st, M, P, edit, say }) {
   // Each message of the keyboard, read for MPE first: a note's own bend and
   // pressure sound on its voice; the others hear them folded into the
   // staff's (the bend of the note struck last, the hardest pressure).
-  P.translate((data) => {
+  const untranslate = P.translate((data) => {
     const events = mpe.message(data);
     for (const e of events) {
       if (e.type === "zone") {
@@ -350,6 +350,11 @@ export function installInstruments({ root, st, M, P, edit, say }) {
     forSound,
     settingsFor,
     loadFile,
+    /** The editor is gone (instant navigation): the keyboard's messages and keys no longer come here. */
+    end() {
+      untranslate();
+      unvoice();
+    },
     get mpe() {
       return mpe;
     },

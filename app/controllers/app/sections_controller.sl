@@ -29,8 +29,12 @@ class AppSectionsController < AppBaseController
   def add_to_score
     section = @_visible
     if params["score_id"].to_s == "new"
+      # Read by the engraver first, counted against the account's engravings (#684).
+      sender = ScoreSvg.sender("save", current_user(), client_ip(req))
+      return ScoreSvg.too_many if Score.engraving_held?(section.source, sender)
+
       score = Score.start(current_user(), section.source)
-      halt(422, "That score could not be created.") if score._errors
+      halt(422, Score.refusal_in(score, "That score could not be created.")) if score._errors
 
       return redirect(app_score_path(score))
     end

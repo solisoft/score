@@ -36,11 +36,11 @@ const { tr } = await import(`./words.js${V}`);
 const SIDES = ["mine", "theirs"];
 const ABSENT = "∅";
 
-/** The names the meta line's keys are shown under. */
-const META_NAMES = () => ({ mixer: tr("Mixer"), velocity: tr("Note velocities"), swing: tr("Swing"), humanize: tr("Humanize"), cc: tr("Automation curves"), ks: tr("Keyswitches and program changes"), ksmaps: tr("Articulation maps"), ksopt: tr("Keyswitch timing"), synth: tr("Synthesizer"), soundfont: tr("Own SoundFont") });
+/** The names the meta line's keys are shown under: the registry's (score-model.js META_KEYS). */
+const META_NAMES = () => Object.fromEntries(Object.entries(M.META_KEYS).map(([name, key]) => [name, key.label()]));
 
 /** The names the score's fields are shown under. */
-const SCORE_NAMES = () => ({ key: tr("Key"), mode: tr("Key"), time: tr("Time signature"), tempo: tr("Tempo"), pickup: tr("Pickup"), group: tr("Staff groups"), groups: tr("Staff groups"), repeats: tr("Repeats"), paper: tr("Page layout"), compress: tr("Bars of rest"), timeParts: tr("Time signature") });
+const SCORE_NAMES = () => ({ metaKept: tr("Settings line that does not read"), key: tr("Key"), mode: tr("Key"), time: tr("Time signature"), tempo: tr("Tempo"), pickup: tr("Pickup"), group: tr("Staff groups"), groups: tr("Staff groups"), repeats: tr("Repeats"), paper: tr("Page layout"), compress: tr("Bars of rest"), timeParts: tr("Time signature") });
 
 /** `text` read into the model, its meta line on it; null when the model cannot hold it. */
 function read(text, parse) {
@@ -52,7 +52,8 @@ function read(text, parse) {
     } catch {}
     const { score } = M.fromParsed(parsed, text, { parse: parsedOf });
     if (!score) return null;
-    score.meta = M.readMeta(text);
+    // A settings line that does not read rides along as it is (score.metaKept, #683).
+    M.attachMeta(score, text);
     return score;
   } catch {
     return null;
@@ -427,12 +428,11 @@ export function mergeScores(base, mine, theirs, { parse, prefer = null } = {}) {
 /**
  * Side `side`'s meta line (`meta`, of its model `score`) laid out as the
  * merged score `out` is: a lane goes to its staff's (by `staffMap`) same
- * voice there, a tick to the same place in its bar's (by `barMap`). The
- * velocities (`"lane:tick:key"`), the curves (`{ lane: { controller:
- * [[tick, value]] } }`), the keyswitches and program changes (`ks`), the mixer's tracks, the synthesizers and the own
- * SoundFonts' presets (by lane) move; the rest
- * stays. Answers `{ meta, dropped }`: `dropped` what found no place, named
- * by staff, voice, bar and offset (the same on two sides of one shape).
+ * voice there, a tick to the same place in its bar's (by `barMap`). What
+ * the registry numbers by staff (score-model.js META_KEYS: the velocities,
+ * the curves, the keyswitches, the mixer's tracks…) moves; the rest stays.
+ * Answers `{ meta, dropped }`: `dropped` what found no place, named by
+ * staff, voice, bar and offset (the same on two sides of one shape).
  */
 function layMeta(score, meta, side, staffMap, barMap, laneAt, out) {
   const dropped = [];
@@ -458,87 +458,26 @@ function layMeta(score, meta, side, staffMap, barMap, laneAt, out) {
     return { tick: k == null ? null : M.barStart(out, k) + offset, where: `${b}+${offset}` };
   };
   const laidOut = { ...meta };
-  if (meta.velocity && typeof meta.velocity === "object") {
-    laidOut.velocity = {};
-    for (const [id, value] of Object.entries(meta.velocity)) {
-      const [lane, tick, ...rest] = id.split(":");
-      const l = laneOf(lane);
-      const t = tickOf(tick);
-      if (l.lane == null || t.tick == null) dropped.push(`velocity ${l.where} ${t.where} ${rest.join(":")}=${value}`);
-      else laidOut.velocity[[l.lane, t.tick, ...rest].join(":")] = value;
-    }
-  }
-  if (meta.cc && typeof meta.cc === "object") {
-    laidOut.cc = {};
-    for (const [lane, curves] of Object.entries(meta.cc)) {
-      const l = laneOf(lane);
-      const kept = {};
-      for (const [controller, points] of Object.entries(curves ?? {})) {
-        const moved = [];
-        for (const point of Array.isArray(points) ? points : []) {
-          const t = tickOf(point[0]);
-          if (l.lane == null || t.tick == null) dropped.push(`cc ${l.where} ${controller} ${t.where}=${point[1]}`);
-          else moved.push([t.tick, ...point.slice(1)]);
-        }
-        if (moved.length) kept[controller] = moved;
-      }
-      if (l.lane != null && Object.keys(kept).length) laidOut.cc[l.lane] = kept;
-    }
-  }
-  // A staff's keyswitches and program changes (sound.js, #670): by lane, each at its tick; its map by lane.
-  if (meta.ks && typeof meta.ks === "object") {
-    laidOut.ks = {};
-    for (const [lane, sounds] of Object.entries(meta.ks)) {
-      const l = laneOf(lane);
-      const kept = {};
-      for (const kind of ["keys", "programs"]) {
-        const moved = [];
-        for (const marker of Array.isArray(sounds?.[kind]) ? sounds[kind] : []) {
-          if (!Array.isArray(marker)) continue;
-          const t = tickOf(marker[0]);
-          if (l.lane == null || t.tick == null) dropped.push(`ks ${l.where} ${kind} ${t.where}=${marker.slice(1).join("/")}`);
-          else moved.push([t.tick, ...marker.slice(1)]);
-        }
-        if (moved.length) kept[kind] = moved;
-      }
-      if (typeof sounds?.map === "string") {
-        if (l.lane == null) dropped.push(`ks ${l.where} map=${sounds.map}`);
-        else kept.map = sounds.map;
-      }
-      if (l.lane != null && Object.keys(kept).length) laidOut.ks[l.lane] = kept;
-    }
-  }
-  if (meta.mixer?.tracks && typeof meta.mixer.tracks === "object") {
-    const tracks = {};
-    for (const [lane, settings] of Object.entries(meta.mixer.tracks)) {
-      // An audio track's (#390, "audio-1") is not a staff's: it stays as it is.
-      if (!/^\d+$/.test(lane)) {
-        tracks[lane] = settings;
+  // Every key numbered by staff, as the registry says (score-model.js META_KEYS).
+  for (const [, byLane] of M.metaLaneKeys()) {
+    const map = byLane.of(meta);
+    if (!map || typeof map !== "object" || Array.isArray(map)) continue;
+    const moved = {};
+    for (const [key, value] of Object.entries(map)) {
+      const lane = byLane.lane(key);
+      // An audio track's ("audio-1", #390) is no staff's: kept as it is, or gone, as the key says.
+      if (!/^\d+$/.test(lane) && byLane.others) {
+        if (byLane.others === "keep") moved[key] = value;
         continue;
       }
-      const l = laneOf(lane);
-      if (l.lane == null) dropped.push(`mixer ${l.where} ${JSON.stringify(settings)}`);
-      else tracks[l.lane] = settings;
+      const entry = byLane.lay(key, value, { ...laneOf(lane), tick: tickOf }, (what) => {
+        dropped.push(what);
+      });
+      if (entry) moved[entry[0]] = entry[1];
     }
-    laidOut.mixer = { ...meta.mixer, tracks };
-    if (!Object.keys(tracks).length) delete laidOut.mixer.tracks;
-    if (!Object.keys(laidOut.mixer).length) delete laidOut.mixer;
-  }
-  // A staff's synthesizer and its own SoundFont's preset (#391): by lane, as the mixer's tracks.
-  for (const name of ["synth", "soundfont"]) {
-    if (!meta[name] || typeof meta[name] !== "object") continue;
-    laidOut[name] = {};
-    for (const [lane, settings] of Object.entries(meta[name])) {
-      // Only a staff plays one: an audio track's name ("audio-1", #390) is no lane of theirs, and goes.
-      if (!/^\d+$/.test(lane)) continue;
-      const l = laneOf(lane);
-      if (l.lane == null) dropped.push(`${name} ${l.where} ${JSON.stringify(settings)}`);
-      else laidOut[name][l.lane] = settings;
-    }
-  }
-  // Emptied by what went: gone, as the editor leaves them.
-  for (const name of ["velocity", "cc", "ks", "synth", "soundfont"]) {
-    if (laidOut[name] && !Object.keys(laidOut[name]).length && Object.keys(meta[name]).length) delete laidOut[name];
+    // Emptied by what went: gone, as the editor leaves it.
+    if (Object.keys(moved).length || !Object.keys(map).length) byLane.put(laidOut, moved);
+    else byLane.clear(laidOut);
   }
   return { meta: laidOut, dropped: dropped.sort() };
 }
