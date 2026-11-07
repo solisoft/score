@@ -322,11 +322,22 @@ export function startStudio(root, options = {}) {
   Object.assign(ctx, Recording.install(ctx));
   // The MIDI clock, sent and followed, and MIDI learn (midi-sync.js).
   ctx.sync = S.attach({ root, st, M, P, act, say });
+  ctx.ends.push(() => ctx.sync.stop());
 
-  // Once a swap has taken this editor away, its listeners and observers go with it.
+  // Once a swap has taken this editor away, its listeners and observers go
+  // with it, and each part's `ctx.ends` let go of what outlives a page: the
+  // tab's MIDI keyboard and synthesizer (player.js), the music playing, the
+  // microphone, the mixer's meter.
   document.addEventListener("soli:load", () => {
     if (root.isConnected) return;
-    for (const end of ctx.ends) end();
+    for (const end of ctx.ends) {
+      try {
+        end();
+      } catch (error) {
+        // One part failing to let go leaves the others to.
+        console.error(error);
+      }
+    }
     for (const observer of ctx.observers) observer.disconnect();
     lifetime.abort();
     // For a test: this editor has let go of the page.
