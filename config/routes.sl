@@ -43,7 +43,8 @@ def site_routes(named)
   site_page("/limits", "pages#limits", "limits", named)
   site_page("/claude", "pages#claude", "claude", named)
   site_page("/changelog", "pages#changelog", "changelog", named)
-  # The plans, Free and Pro (#393): what each allows, read from Plan.
+  # The plans, Free and Pro (#393): what each allows, read from Plan; a 301
+  # to the home page while the site is free (#699).
   site_page("/pricing", "pages#pricing", "pricing", named)
   site_page("/examples", "examples#index", "examples", named)
   site_page("/examples/:category", "examples#category", "example_category", named)
@@ -150,7 +151,8 @@ middleware("require_app_database", fn() {
     post("/app/account/email", "app/account#change_email", name: "app_account_email")
     post("/app/account/email/cancel", "app/account#cancel_email_change", name: "app_account_email_cancel")
     delete("/app/account", "app/account#destroy")
-    # Paying for Pro (#393): to Stripe's Checkout and customer portal.
+    # Paying for Pro (#393): to Stripe's Checkout and customer portal; 404
+    # while the site is free (#699).
     post("/app/billing/checkout", "app/billing#checkout", name: "app_billing_checkout")
     post("/app/billing/portal", "app/billing#portal", name: "app_billing_portal")
     get("/app/billing/done", "app/billing#done", name: "app_billing_done")

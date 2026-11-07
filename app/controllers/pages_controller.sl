@@ -51,14 +51,23 @@ class PagesController < Controller
     @_in_language("limits")
   end
 
-  # GET /pricing — the plans, Free and Pro (#393), each limit read from Plan
+  # GET /pricing — the plans, Free and Pro (#393), each limit read from Plan;
+  # while the site is free (#699), 301 to the home page in the same language
   def pricing
+    if Plan.free?
+      return {
+        "status": 301,
+        "headers": {"Location": SiteLocale.path(root_path())},
+        "body": ""
+      }
+    end
+
     @monthly = Plan.price("monthly")
     @_page_texts("pricing")
     @description = @description.replace("{price}", @monthly["label"])
     @plans = Plan.catalog
     @annual = Plan.price("annual")
-    @payments_open = Stripe.configured?
+    @payments_open = Plan.open?
     @ai_note = Plan.ai_note(@payments_open)
     @_in_language("pricing")
   end
@@ -69,7 +78,7 @@ class PagesController < Controller
     pages = {
       "playground": playground_path(),
       "limits": SiteLocale.path(limits_path()),
-      "pricing": SiteLocale.path(pricing_path()),
+      "pricing": SiteLocale.path(Plan.free? ? root_path() : pricing_path()),
       "claude": SiteLocale.path(claude_path()),
       "home": SiteLocale.path(root_path()),
       "app": app_home_path()

@@ -60,6 +60,49 @@ def plan_take(score, user, track, bytes)
 end
 
 describe("Plan") do
+  describe("while the site is free (#699)") do
+    test("nothing is on sale, Stripe set up or not; the switch alone would sell Pro again") do
+      assert(Plan.free?)
+      assert_not(Plan.open?)
+      assert_not(Plan.selling?(true, true), "free, even with Stripe's keys and prices")
+      assert_not(Plan.selling?(true, false))
+      assert(Plan.selling?(false, true), "not free and Stripe set up: on sale")
+      assert_not(Plan.selling?(false, false), "not free, but no Stripe: not on sale")
+    end
+
+    test("a plain account, a guest and a lapsed Pro each get every one of Pro's limits") do
+      pro = Plan.pro_limits
+      [plan_user(), nil, plan_pro("past_due"), plan_pro("active", -60)].each do |user|
+        limits = Plan.limits(user)
+        # Every one of Pro's limits, whatever it is: only the name differs.
+        assert_eq(limits.merge({"plan": "pro"}), pro)
+        assert_eq(limits["own_key_ai"], true)
+        assert_eq(limits["take_tracks"], SCORE_TAKE_TRACKS)
+        assert_eq(limits["take_bytes"], 2000 * PLAN_MEGABYTE)
+        assert_null(limits["people_per_score"])
+        assert_eq(limits["scores"], 10000)
+        assert_eq(limits["upgrade"], false, "never a way to Pro")
+      end
+      # Under no plan's name: the account page names none.
+      assert_eq(Plan.limits(plan_user())["plan"], "free")
+      assert_not(plan_user().plans_shown?)
+    end
+
+    test("so the refusals that sent people to Pricing never come: AI, tracks, people, scores") do
+      user = plan_user()
+      assert_eq(AiClient.refusal(user), "no_key", "only a key of their own is missing, not a plan")
+      assert_null(user.ai_plan_note())
+      score = Score.start(user, Score.blank_source("Free"))
+      plan_take(score, user, 1, 60000000)
+      assert_null(ScoreTake.plan_refusal(score, user, SCORE_TAKE_TRACKS, 8000000), "every track, past 50 MB")
+      (0 .. 5).each do |n|
+        assert_not_null(ScoreShare.invite_by(user, score, "free#{n}-#{uuid_v4}@example.com", "read")._key)
+      end
+      assert_null(ScoreShare.plan_refusal(score, "sixth-#{uuid_v4}@example.com"))
+      assert_eq(Score.room_refusal(user._key), true, "far from 10,000 scores")
+    end
+  end
+
   describe("User#pro?") do
     test("is Pro while an active or trialing subscription's period runs") do
       assert(plan_pro("active").pro?)
@@ -181,7 +224,7 @@ describe("Plan") do
       plan_take(score, user, 1, room - 8000000)
       assert_null(ScoreTake.plan_refusal(score, user, 2, 8000000, false), "up to the limit")
       refused = ScoreTake.plan_refusal(score, user, 2, 8000001, false)
-      assert_contains(refused["error"], "would pass the 2 GB your plan keeps")
+      assert_contains(refused["error"], "would pass the 2 GB an account keeps")
       assert_null(refused["upgrade"])
       # The take it replaces does not count.
       assert_null(ScoreTake.plan_refusal(score, user, 1, room, false))
@@ -292,7 +335,7 @@ describe("Plan") do
       plan_take(score, user, 1, 1999000000)
       assert_null(ScoreTake.plan_refusal(score, user, 2, 1000000, true))
       refused = ScoreTake.plan_refusal(score, user, 2, 1000001, true)
-      assert_eq(refused["error"], "Your takes would pass the 2 GB your plan keeps: delete some first.")
+      assert_eq(refused["error"], "Your takes would pass the 2 GB an account keeps: delete some first.")
       assert_null(refused["upgrade"])
     end
   end

@@ -96,7 +96,7 @@ en:
     lead: "Score is where you write music: with the mouse or the keyboard, heard as you go, practised with your microphone, and worked on with others, live. Nothing to install."
     start: "Start for free"
     playground: "Open the playground"
-    note: "Free to write with, no card. <a href=\"{pricing}\">Pro</a> adds AI on your own key, more audio, and sharing with anyone."
+    note: "Free, all of it: no plan, no card."
     hero_alt: "The Score editor: Au clair de la lune for voice and piano, with chord names and lyrics."
     index_label: "What the app does"
     developers: "For developers"
@@ -107,17 +107,12 @@ en:
     the_syntax: "The syntax"
     embed_it: "Embed it"
     examples: "The {n} examples"
-    plans: "Plans"
-    plans_title: "Free to write with. Pro for more."
-    for_good: "for good"
-    free_text: "The editor, playback, PDF and MIDI, versions, comments and sharing. No card."
-    per_month: "a month"
-    pro_text: "AI on your own key, every audio track and more room for takes, a score shared with anyone."
-    compare: "Compare the plans"
+    free: "Free"
+    free_title: "Free, all of it."
+    free_text: "The editor, playback, PDF and MIDI, versions and comments, every audio track, a score shared with as many people as you like, and AI on your own key. No plan, no card."
     cta: "Your next score starts here."
-    see_pricing: "See pricing"
     title: "Write, play and share scores, together"
-    description: "Score is a score editor in the browser: write with the mouse or the keyboard, play it, edit it together live, practise with the microphone, and share it. Free to start."
+    description: "Score is a score editor in the browser: write with the mouse or the keyboard, play it, edit it together live, practise with the microphone, and share it. Free."
     features:
       editor:
         eyebrow: "The editor"
@@ -157,12 +152,12 @@ en:
         alt: "The tuner reading an A a few cents sharp, over the string quartet it tunes for."
         label: "Start practising"
       ai:
-        eyebrow: "AI, with Pro"
+        eyebrow: "AI, on your own key"
         title: "A photo becomes a score."
         l1: "Photograph printed or handwritten music: an AI model reads it into a score you can edit."
         l2: "An assistant suggests chords, an accompaniment, improvements, on your own AI key."
         alt: "The Start page: new score templates, Import a file, and From a photo."
-        label: "See Pro"
+        label: "Read your first photo"
       files:
         eyebrow: "Import and export"
         title: "In and out, in the formats you use."
@@ -1496,7 +1491,7 @@ en:
     push_test_limited: "Too many test messages: try again in an hour."
     push_queued_one: "On its way to {n} device."
     push_queued_other: "On its way to {n} devices."
-    take_room_full: "Your takes would pass the {room} your plan keeps: delete some first."
+    take_room_full: "Your takes would pass the {room} an account keeps: delete some first."
   # ---
   # (#544) security: CSP, configuration and admin — keys under `security_544:` right below
   security_544:

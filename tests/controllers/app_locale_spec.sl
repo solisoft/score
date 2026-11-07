@@ -94,7 +94,7 @@ describe("The app's language") do
 
   test("the site's pages keep the language of their address") do
     set_request_cookie("locale", "fr")
-    assert_contains(res_body(get("/pricing")), "<html lang=\"en\">")
+    assert_contains(res_body(get("/guide")), "<html lang=\"en\">")
   end
 end
 

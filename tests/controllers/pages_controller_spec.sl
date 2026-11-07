@@ -200,7 +200,8 @@ describe("PagesController") do
       assert_gt(signin_at, nav_end, "Sign in after the nav")
       assert_gt(start_at, signin_at, "Start free after Sign in")
       links = body.substring(nav_start, nav_end)
-      ["/app", "/pricing", "/guide", "/changelog"].each do |path|
+      assert_not(links.includes?("/pricing"), "no Pricing while the site is free (#699)")
+      ["/app", "/guide", "/changelog"].each do |path|
         assert_contains(links, "href=\"#{path}\"")
       end
       ["/syntax", "/examples", "/embed", "/limits", "/playground", "/claude"].each do |path|
@@ -211,7 +212,6 @@ describe("PagesController") do
       every_page = [
         "/app",
         "/playground",
-        "/pricing",
         "/changelog",
         "/guide",
         "/syntax",
@@ -220,6 +220,7 @@ describe("PagesController") do
         "/limits",
         "/claude"
       ]
+      assert_not(footer.includes?("href=\"/pricing\""), "no Pricing in the footer (#699)")
       every_page.each do |path|
         assert_contains(footer, "href=\"#{path}\"")
       end

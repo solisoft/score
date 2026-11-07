@@ -775,7 +775,7 @@ ${problem.linkText}?`)) location.href = problem.link;
   aiPart("form").addEventListener("submit", async (event) => {
     event.preventDefault();
     if (aiRefused) return;
-    // `link`: the page that lifts a refusal (Account for a key, Pricing for Pro, #396).
+    // `link`: the page that lifts a refusal (the account, for a key: #396).
     const fail = (message, link, linkText) => {
       aiPart("status").hidden = true;
       aiPart("error").textContent = message;

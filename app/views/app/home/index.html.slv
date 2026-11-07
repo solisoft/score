@@ -263,7 +263,7 @@
       error.hidden = keep.hidden = true;
       reading.hidden = false;
       reading.scrollIntoView({ behavior: "smooth", block: "start" });
-      // `link`: the page that lifts the refusal (Account for a key, Pricing for Pro, #396).
+      // `link`: the page that lifts the refusal (the account, for a key: #396).
       const fail = (message, link, linkText) => {
         error.textContent = message;
         if (link) error.append(" ", Object.assign(document.createElement("a"), { href: link, textContent: linkText || words.see_plans }));

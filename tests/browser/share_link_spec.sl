@@ -13,7 +13,7 @@ end
 
 # The same, the text made in the page by the script `made`.
 def share_open_made(made)
-  visit("/pricing")
+  visit("/limits")
   code = evaluate("(async () => { const bytes = new Uint8Array(await new Response(new Blob([#{made}])"
   + ".stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer()); let binary = '';"
   + " for (const b of bytes) binary += String.fromCharCode(b);"

@@ -1,7 +1,9 @@
 <section class="admin" data-admin="dashboard">
   <%- partial("admin/head", {"heading": "Admin", "current": "dashboard"}) %>
 
-  <% unless payments_open %>
+  <% if site_free %>
+    <p class="admin-note" data-site-free>The site is free (#699, PLAN_SITE_FREE in app/services/plan.sl): no plan is sold, every account has Pro's limits, and checkout is closed. Plans and Stripe's events below are history.</p>
+  <% elsif !payments_open %>
     <p class="admin-note">Payments are not open: Stripe's key or Pro's prices are not set on this server, so no one can buy Pro yet.</p>
   <% end %>
 

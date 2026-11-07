@@ -30,7 +30,7 @@ class Billing
   # Where to send `user` to pay for Pro every `interval`: {"url"}, or
   # {"error"} to show them.
   static def checkout(user, interval, success_url, cancel_url)
-    return {"error": SiteText.t("app.account.billing_not_open")} unless Stripe.configured?
+    return {"error": SiteText.t("app.account.billing_not_open")} unless Plan.open?
 
     Billing.start_checkout(user, Stripe.price_id(interval), Plan.interval(interval), success_url, cancel_url)
   end
@@ -75,7 +75,7 @@ class Billing
   # Stripe's customer portal for `user`, to come back to `return_url`:
   # {"url"}, or {"error"}.
   static def portal(user, return_url)
-    return {"error": SiteText.t("app.account.billing_not_open")} unless Stripe.configured?
+    return {"error": SiteText.t("app.account.billing_not_open")} unless Plan.open?
 
     Billing.open_portal(user, return_url)
   end

@@ -74,7 +74,7 @@ describe("The Content-Security-Policy, in a browser") do
     visit("/")
     wait_for(".hero-app")
     csp_watch()
-    ["/pricing", "/sections", "/embed", "/login", "/signup", "/guide", "/"].each do |path|
+    ["/limits", "/sections", "/embed", "/login", "/signup", "/guide", "/"].each do |path|
       csp_go(path)
       csp_none_refused(path)
     end
@@ -216,20 +216,20 @@ describe("The OAuth consent under the form policy, in a browser") do
     user.confirmed_at = DateTime.utc.to_unix
     user.save
     login(email, CSP_BROWSER_PASSWORD)
-    visit("/pricing")
+    visit("/limits")
     port = evaluate("location.port")
     client_host = "localhost:#{port}"
-    redirect_uri = "http://#{client_host}/pricing"
+    redirect_uri = "http://#{client_host}/limits"
 
     csp_consent_for(redirect_uri)
     click("[data-oauth-allow]")
     landed = csp_wait_for_host(client_host)
-    assert_match(landed, "^http://localhost:#{port}/pricing\\?code=[^&]+&state=st4te&iss=")
+    assert_match(landed, "^http://localhost:#{port}/limits\\?code=[^&]+&state=st4te&iss=")
     code = Regex.capture("code=(?P<code>[^&]+)", landed)["code"]
     assert_not_null(OauthCode.find_by("code_digest", Crypto.sha256(code)), "the code sent is one issued")
 
     csp_consent_for(redirect_uri)
     click("[data-oauth-deny]")
-    assert_eq(csp_wait_for_host(client_host), "http://localhost:#{port}/pricing?error=access_denied&state=st4te")
+    assert_eq(csp_wait_for_host(client_host), "http://localhost:#{port}/limits?error=access_denied&state=st4te")
   end
 end

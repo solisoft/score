@@ -1,6 +1,7 @@
 <%# The home page (#397): the app first, feature by feature, each with a
     screenshot of the real app (public/images/home/, HomeFeatures); then
-    the engraver for developers, and the plans. No script of its own. %>
+    the engraver for developers, and that it is free (#699: no plan is
+    sold, Plan.free?). No script of its own. %>
 <% start_href = app_open ? lp(signup_path()) : playground_path() %>
 <div class="wrap">
   <section class="hero hero-app">
@@ -14,7 +15,7 @@
         <% end %>
         <a class="btn btn-ghost" href="<%= playground_path() %>"><%= t("home.playground") %></a>
       </div>
-      <p class="hero-note"><%- t("home.note", {"pricing": lp(pricing_path())}) %></p>
+      <p class="hero-note"><%= t("home.note") %></p>
     </div>
     <figure class="app-shot app-shot-hero">
       <img src="<%= public_path("images/home/hero-editor.jpg") %>" width="<%= shot_width %>" height="<%= shot_height %>" fetchpriority="high"
@@ -69,31 +70,18 @@
     </div>
   </section>
 
-  <section class="section" id="plans">
+  <section class="section" id="free" data-home-free>
     <div class="section-head">
-      <span class="eyebrow"><%= t("home.plans") %></span>
-      <h2><%= t("home.plans_title") %></h2>
+      <span class="eyebrow"><%= t("home.free") %></span>
+      <h2><%= t("home.free_title") %></h2>
     </div>
-    <div class="plans-teaser">
-      <div class="plan-teaser">
-        <h3>Free</h3>
-        <p class="plan-teaser-price">0 € <small><%= t("home.for_good") %></small></p>
-        <p><%= t("home.free_text") %></p>
-      </div>
-      <div class="plan-teaser plan-teaser-pro">
-        <h3>Pro</h3>
-        <p class="plan-teaser-price"><%= pro_price["label"] %> <small><%= t("home.per_month") %></small></p>
-        <p><%= t("home.pro_text") %></p>
-      </div>
-    </div>
-    <p><a class="btn btn-ghost" href="<%= lp(pricing_path()) %>" data-home-pricing><%= t("home.compare") %></a></p>
+    <p class="lead"><%= t("home.free_text") %></p>
   </section>
 
   <section class="cta-band">
     <h2><%= t("home.cta") %></h2>
     <div class="hero-actions">
       <a class="btn btn-primary" href="<%= start_href %>"><%= app_open ? t("home.start") : t("home.playground") %></a>
-      <a class="btn btn-ghost" href="<%= lp(pricing_path()) %>"><%= t("home.see_pricing") %></a>
     </div>
   </section>
 </div>
