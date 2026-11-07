@@ -24,6 +24,6 @@ class AppLocale
     return false if user.locale == locale
 
     user.locale = locale
-    user.save
+    user.save_changes
   end
 end

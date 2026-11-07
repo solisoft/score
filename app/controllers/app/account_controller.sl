@@ -283,7 +283,7 @@ class AppAccountController < AppBaseController
     sent = MailDelivery.attempt("email change", fn() { AuthMailer.confirm_new_email(user, token) })
     unless sent
       user.forget_email_change()
-      user.update()
+      user.save_changes
       return @_refuse(user, SiteText.t("app.account.email_not_sent", {"email": params["email"].to_s.trim}), 503)
     end
 
@@ -299,7 +299,7 @@ class AppAccountController < AppBaseController
   def cancel_email_change
     user = current_user()
     user.forget_email_change()
-    user.update()
+    user.save_changes
     flash("notice", SiteText.t("app.account.email_change_cancelled"))
     redirect(app_account_path())
   end

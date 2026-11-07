@@ -74,19 +74,36 @@ class ScoreThread < Model
     @resolved = true
     @resolved_by = user._key
     @resolved_at = DateTime.utc.to_unix
-    @touch
+    @_write({
+      "resolved": @resolved,
+      "resolved_by": @resolved_by,
+      "resolved_at": @resolved_at
+    })
   end
 
   def reopen
     @resolved = false
     @resolved_by = nil
     @resolved_at = nil
-    @touch
+    @_write({
+      "resolved": false,
+      "resolved_by": nil,
+      "resolved_at": nil
+    })
   end
 
   def touch
+    @_write({})
+  end
+
+  # `fields` and the time written into the stored thread, they alone
+  # (#685): `save` writes the whole copy, and a thread resolved while an
+  # editor's save moved it was moved back, or reopened.
+  def _write(fields)
     @updated_at = DateTime.utc.to_unix
-    @save
+    fields["updated_at"] = @updated_at
+    ScoreThread.where({"_key": @_key}).update_all(fields)
+    true
   end
 
   # Its messages, the first first.
@@ -263,7 +280,7 @@ class ScoreThread < Model
     bars = lane.nil? ? nil : ScoreThread.bars_after(@bars, moves)
     if bars.nil?
       @detached = lane.nil? ? "staff" : "bars"
-      @save
+      ScoreThread.where({"_key": @_key}).update_all({"detached": @detached})
       return true
     end
     return false if lane == @lane && bars == @bars
@@ -271,7 +288,12 @@ class ScoreThread < Model
     @label = ScoreThread.label_moved(@label, @bars, bars, @lane, lane)
     @lane = lane
     @bars = bars
-    @save
+    # Where it is, alone (#685): not whether it is resolved.
+    ScoreThread.where({"_key": @_key}).update_all({
+      "label": @label,
+      "lane": @lane,
+      "bars": @bars
+    })
     true
   end
 

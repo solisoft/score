@@ -13,6 +13,15 @@ class Changelog
       {"date": "2026-11-07", "entries": [
         {
           "area": "site",
+          "title": "Two changes at once no longer undo each other",
+          "text": "Renaming, sharing or trashing a score while it was being saved could bring back its older text, "
+          + "resolving a comment while the music moved could reopen it, and a rating could show a section an "
+          + "admin had just hidden. Each change now keeps the other's, a notification e-mail is sent once, and a "
+          + "name given with a section or a comment that is refused is no longer kept.",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "Two-step setup and invitations, tightened",
           "text": "Turning on two-step sign-in now waits 15 minutes for the first code of your app, then asks for your "
           + "password again, and wrong codes there count like those at sign-in. A score's title stays on one line "

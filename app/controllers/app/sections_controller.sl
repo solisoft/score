@@ -10,11 +10,14 @@ class AppSectionsController < AppBaseController
   # with nothing written
   def create
     body = req["json"] ?? params
-    named = current_user().name_as(body["author_name"])
+    named = current_user().name_error(body["author_name"])
     return render_json({"error": named}, 422) unless named.nil?
 
     published = SharedSection.publish(current_user(), body)
     return render_json({"error": published["error"]}, 422) unless published["error"].nil?
+
+    # The name kept once the section is: a refused one renames nobody (#685).
+    current_user().name_as(body["author_name"])
 
     section = published["section"]
     render_json(
@@ -53,10 +56,11 @@ class AppSectionsController < AppBaseController
   # POST /app/sections/:id/comments — `body`, and `author_name` while the account has none
   def comment
     section = @_visible
-    named = current_user().name_as(params["author_name"])
+    named = current_user().name_error(params["author_name"])
     return @_back(section, named) unless named.nil?
 
     written = SectionComment.write(section, current_user(), params["body"])
+    current_user().name_as(params["author_name"]) if written["error"].nil?
     @_back(section, written["error"] ?? "Your comment is posted.")
   end
 

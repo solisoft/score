@@ -204,15 +204,13 @@ class User < Model
     Crypto.password_verify(plaintext, this.password_digest)
   end
 
-  # The count of passwords typed on the signed-in pages (#539), the
-  # current round's: a right one starts a new round (`limiter.reset()` does
-  # not empty a count, so a fresh key does it).
+  # The name the passwords typed on the signed-in pages (#539) are counted
+  # under, the current round's: a right one starts a new round, so a fresh
+  # name. Counted in the database (RateCount, #685), not in a worker's
+  # memory: the other worker, the other deploy slot and a restart count
+  # the same tries.
   def _password_tries
-    RateLimiter(
-      "password-check:#{this._key}:#{this._password_round}",
-      ACCOUNT_PASSWORD_TRIES,
-      ACCOUNT_PASSWORD_WINDOW
-    )
+    "password-check:#{this._key}:#{this._password_round}"
   end
 
   def _password_round
@@ -230,7 +228,7 @@ class User < Model
   # Whether the signed-in pages have had ACCOUNT_PASSWORD_TRIES wrong
   # passwords lately: they then check none, the right one included.
   def password_tries_spent?
-    @_password_tries.throttle() > 0
+    RateCount.spent?(@_password_tries, ACCOUNT_PASSWORD_TRIES, ACCOUNT_PASSWORD_WINDOW)
   end
 
   # Whether `plaintext` is the password, asked by a signed-in page: false,
@@ -243,8 +241,7 @@ class User < Model
   # code after the right password cost no try, and the codes could be
   # guessed there without end.
   def confirms_password?(plaintext, new_round = true)
-    tries = @_password_tries
-    return false unless tries.allowed()
+    return false unless RateCount.take(@_password_tries, ACCOUNT_PASSWORD_TRIES, ACCOUNT_PASSWORD_WINDOW)
     return false unless @authenticate(plaintext.to_s)
 
     @_next_password_round if new_round
@@ -312,16 +309,27 @@ class User < Model
     this.role == "admin"
   end
 
+  # Why `text` may not become the name others see this person by, or nil.
+  def name_error(text)
+    return "A name holds 60 characters at most." if text.to_s.trim.chars().length > 60
+
+    nil
+  end
+
   # `text` as the name others see this person by — in the shared library
   # (#444), in comments — when they give one: nil once done, else why not.
-  # A blank name leaves the one they have.
+  # A blank name leaves the one they have. Asked once what it names is
+  # written (#685): `name_error` first, so that a refused publish or comment
+  # renames nobody.
   def name_as(text)
+    problem = @name_error(text)
+    return problem unless problem.nil?
+
     name = text.to_s.trim
     return nil if name.blank? || name == @name.to_s
-    return "A name holds 60 characters at most." if name.chars().length > 60
 
     @name = name
-    @update()
+    @save_changes
     nil
   end
 
@@ -420,8 +428,7 @@ class User < Model
     # `load_current_user` refuses one that is behind. Without this, an attacker
     # who was already signed in stayed signed in through the victim's reset —
     # which is the one thing a password reset is supposed to stop.
-    this.session_version = (this.session_version ?? 0) + 1
-    this.update()
+    @save_changes(true)
     # The access tokens too (#539): the MCP clients and the apps connected
     # by OAuth would otherwise keep acting as the account, sessions or not.
     @_revoke_access
@@ -456,8 +463,7 @@ class User < Model
     this.remember_token_digest = null
     this.forget_email_change()
     this.forget_password_reset()
-    this.session_version = (this.session_version ?? 0) + 1
-    this.update()
+    @save_changes(true)
     @_revoke_access
   end
 
@@ -511,7 +517,7 @@ class User < Model
     this.confirmed_at = DateTime.utc().to_unix()
     this.confirmation_token_digest = null
     this.confirmation_sent_at = null
-    this.update()
+    @save_changes
   end
 
   def confirmed?
@@ -548,7 +554,7 @@ class User < Model
     this.email_change_to = new_email.to_s.trim.downcase
     this.email_change_digest = Crypto.sha256(token)
     this.email_change_sent_at = DateTime.utc.to_unix
-    this.update()
+    @save_changes
     token
   end
 
@@ -604,7 +610,7 @@ class User < Model
     address = this.email_change_to
     unless User.find_by("email", address).nil?
       this.forget_email_change()
-      this.update()
+      @save_changes
       return nil
     end
 
@@ -615,8 +621,7 @@ class User < Model
     this.forget_email_change()
     this.forget_password_reset()
     this.remember_token_digest = null
-    this.session_version = (this.session_version ?? 0) + 1
-    this.update()
+    @save_changes(true)
     @_revoke_access
     ScoreShare.move_address(old, address, this)
     old
@@ -632,7 +637,7 @@ class User < Model
   def start_remember_me
     token = uuid_v4()
     this.remember_token_digest = Crypto.sha256(token)
-    this.update()
+    @save_changes
     token
   end
 
@@ -640,7 +645,7 @@ class User < Model
     return true if this.remember_token_digest.blank?
 
     this.remember_token_digest = null
-    this.update()
+    @save_changes
   end
 
   def remembered_by?(token)
@@ -957,6 +962,40 @@ class User < Model
     @_read_lock_fields(User.find_by("_key", this._key))
   end
 
+  # What this copy changed since it was read, written alone, field by field
+  # (#685): the rest of the stored account stays as the database has it.
+  # `save` and `update` write the whole copy, every field it read included,
+  # and so put back whatever another request changed since — a password, the
+  # sessions' version, the lockout counts, a plan. With `new_sessions`, the
+  # stored sessions' version moves on by one in the same statement, from
+  # what is stored: from this copy's, two changes at once could leave it
+  # where one of them had already put it. No validation runs: the writes
+  # that go through here change no address (the change of address checks
+  # its own). This copy is then read again. True.
+  def save_changes(new_sessions = false)
+    changed = this.changes
+    patch = {}
+    changed.keys().each do |name|
+      patch[name] = changed[name][1]
+    end
+    return true if patch.keys().length == 0 && !new_sessions
+
+    key = this._key
+    written = @sdbql{
+      FOR u IN users
+      FILTER u._key == #{key}
+      UPDATE u WITH MERGE(
+        #{patch},
+        #{new_sessions} ? {session_version: (u.session_version == null ? 0 : u.session_version) + 1} : {}
+      ) IN users
+      RETURN NEW._key
+    }
+    throw "User#save_changes: #{written}" if type(written) == "string"
+
+    @reload
+    true
+  end
+
   # This copy's lockout fields, as `stored` (the account read again) has them.
   def _read_lock_fields(stored)
     return true if stored.nil?
@@ -1001,7 +1040,7 @@ class User < Model
     end.join("")
     this.totp_pending = Crypto.encrypt(secret, getenv("SOLI_ENCRYPTION_KEY"))
     this.totp_pending_at = DateTime.utc.to_unix
-    this.update()
+    @save_changes
     secret
   end
 
@@ -1056,9 +1095,8 @@ class User < Model
     # signed out (#538): turned on because the password may be known, it
     # would otherwise leave in whoever got in with it. The browser that
     # turned it on is stamped again by the controller.
-    this.session_version = (this.session_version ?? 0) + 1
     this.remember_token_digest = null
-    this.update()
+    @save_changes(true)
     codes
   end
 
@@ -1160,7 +1198,7 @@ class User < Model
     this.totp_backup = null
     this.totp_last_step = null
     this.totp_enabled_at = null
-    this.update()
+    @save_changes
   end
 
   # An AI key of one's own, for reading photos of scores and the editor's
@@ -1179,7 +1217,7 @@ class User < Model
     typed = key.to_s.trim
     this.ai_key = Crypto.encrypt(typed, getenv("SOLI_ENCRYPTION_KEY"))
     this.ai_key_hint = typed.substring(typed.length - 4, typed.length)
-    this.update()
+    @save_changes
     nil
   end
 
@@ -1207,7 +1245,7 @@ class User < Model
     this.ai_model = null
     this.ai_key = null
     this.ai_key_hint = null
-    this.update()
+    @save_changes
   end
 
   # This person's own provider, model and key; nil without one. The site
@@ -1256,7 +1294,7 @@ class User < Model
       prefs[kind] = chosen.includes?(kind)
     end
     @mail_prefs = prefs
-    @save
+    @save_changes
   end
 
   # Whether a push notification of `kind` (#400) goes to their devices:
@@ -1280,7 +1318,7 @@ class User < Model
       prefs[kind] = chosen.includes?(kind)
     end
     @push_prefs = prefs
-    @save
+    @save_changes
   end
 
   # --- The plan (#393) --------------------------------------------------------
@@ -1322,7 +1360,7 @@ class User < Model
     @plan_gift = true
     @cancel_at_period_end = false
     @current_period_end = starts + days * 86400
-    @update()
+    @save_changes
     nil
   end
 
@@ -1334,7 +1372,7 @@ class User < Model
     @plan_status = "canceled"
     @plan_gift = false
     @current_period_end = nil
-    @update()
+    @save_changes
     nil
   end
 
@@ -1348,7 +1386,7 @@ class User < Model
     @sign_in_failures = nil
     @account_failures = nil
     @account_locked_at = nil
-    @update()
+    @save_changes
   end
 
   # The plan's name, as the account page shows it.
