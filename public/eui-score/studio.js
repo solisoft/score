@@ -220,6 +220,7 @@ export function startStudio(root, options = {}) {
     lost: [], // what the text holds that the model does not keep: the first rewrite drops it
     passed: [], // the settings the engraver read and passed over in the text: said when it is opened
     lostNotice: "", // said once it has been dropped
+    metaNotice: "", // the settings line that does not read, or lines merged: said when the text is opened (#683)
     items: [], // item number → { staff, index }
     view: null,
     sel: null, // { staff, t0, t1, head } — times, so an edit that merges rests keeps it
@@ -265,7 +266,7 @@ export function startStudio(root, options = {}) {
   const asked = new Set();
   ctx.call = new Proxy({}, { get: (_, name) => (asked.add(name), (...args) => ctx[name](...args)) });
   const {
-    readText, adoptText, restoreHistory, saveDraft, load, passedText, act, draw, place, setMarkers, placeLabel,
+    readText, adoptText, restoreHistory, saveDraft, load, passedText, openingNotices, act, draw, place, setMarkers, placeLabel,
     selectPlace, setPeers, keptHistoryNote
   } = ctx.call;
 
@@ -380,6 +381,9 @@ export function startStudio(root, options = {}) {
     // Otherwise nothing: the bar beside it already says how to start (#419).
     // After what was said on opening, not in its place.
     if (keptHistoryNote()) say(`${status.textContent} ${keptHistoryNote()}`.trim(), status.classList.contains("studio-error"));
+    // A settings line that does not read, lines merged, a text near the length kept (#683): said last, as a warning.
+    const notices = openingNotices();
+    if (notices) say(`${status.textContent}${notices}`.trim(), true);
   }).then(() => (options.importSection ? importFromLibrary(options.importSection) : null));
 
   /**
