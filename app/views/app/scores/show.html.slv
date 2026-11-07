@@ -135,6 +135,8 @@
   let saving = false;
   let conflict = false;
   let timer = 0;
+  // Held back (429, #684): too many saves engraved this minute; tried again when the server says.
+  let heldUntil = 0;
   // This editor, for the room: its own saves come back to it, and are skipped.
   const origin = crypto.randomUUID?.() ?? String(Math.random()).slice(2);
   let applyingRemote = false;
@@ -315,7 +317,7 @@
   });
 
   async function save() {
-    if (saving || conflict || stopped || pending == null) return;
+    if (saving || conflict || stopped || pending == null || Date.now() < heldUntil) return;
     const text = pending;
     pending = null;
     saving = true;
@@ -350,6 +352,14 @@
         theirs = answer;
         keepLocally(studio.source());
         openConflict();
+      } else if (response.status === 429) {
+        // Too many saves engraved this minute: kept here, sent again once the server allows.
+        pending ??= text;
+        keepLocally(pending);
+        const wait = (Number(answer.retry_after) || 60) * 1000;
+        heldUntil = Date.now() + wait;
+        show(answer.error ?? say("not_saved"), "offline");
+        setTimeout(save, wait + 50);
       } else if (!response.ok) {
         show(answer.error ?? say("not_saved"), "conflict");
       } else {

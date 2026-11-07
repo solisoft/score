@@ -30,6 +30,15 @@ class Changelog
           "app": true
         },
         {
+          "area": "site",
+          "title": "Limits on what one account can fill",
+          "text": "An account now keeps up to 10,000 scores, trash included (1,000 on the Free plan once Pro is "
+          + "on sale), and a score keeps up to 20 refused saves an hour in its history. Saves, copies and "
+          + "restores count against the engravings a minute: past 60, the editor waits a minute and saves again "
+          + "by itself. Six photos a minute can be sent to be read, of 50 megapixels at most.",
+          "app": true
+        },
+        {
           "area": "editor",
           "title": "Keyswitches for virtual instruments",
           "text": "Playing through a sample library in your DAW? Under the MIDI view, the automation lane now takes "

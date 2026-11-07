@@ -420,7 +420,9 @@ class ScoreMcp
     return ScoreMcp.refused("Not created: #{refusal}") unless refusal.nil?
 
     score = Score.start(user, source)
-    return ScoreMcp.refused("Not created: the score could not be saved.") unless score._errors.nil?
+    unless score._errors.nil?
+      return ScoreMcp.refused("Not created: #{Score.refusal_in(score, "the score could not be saved.")}")
+    end
 
     data = {
       "id": score._key,
@@ -476,12 +478,18 @@ class ScoreMcp
     return ScoreMcp.refused("Send the picture as base64 in image_base64.") if data.blank?
     return ScoreMcp.refused("The picture is too large: 5 MB at most.") if data.length > SCORE_READER_BYTES
 
-    picture = ScoreReader.picture(data)
-    return ScoreMcp.refused("That is not a picture this reads: send a JPEG, PNG or WebP.") if picture.nil?
-
+    # The day's photos, then the minute's, before the picture is opened (#684).
     refusal = ScoreReading.refusal(user)
     return ScoreMcp.refused("All of today's photos are read: try again tomorrow.") if refusal == "used_up"
     return ScoreMcp.refused(AiClient.refusal_text(refusal)) unless refusal.nil?
+    if ScoreReading.held?(user)
+      return ScoreMcp.refused("#{SCORE_READINGS_PER_MINUTE} photos a minute at most: try again in a minute.")
+    end
+
+    picture = ScoreReader.picture(data)
+    if picture.nil?
+      return ScoreMcp.refused("That is not a picture this reads: send a JPEG, PNG or WebP of 50 megapixels at most.")
+    end
 
     reading = ScoreReading.start(user, picture)
     return ScoreMcp.refused(reading.to_s) if type(reading) == "string"
@@ -519,8 +527,13 @@ class ScoreMcp
       return ScoreMcp.done("Read:\n\n#{source}", data)
     end
 
+    checked = ScoreMcp.engraver_check(user, source)
+    return ScoreMcp.refused("Read, but not saved: #{checked["error"]}") if checked["throttled"] == true
+
     score = Score.start(user, source)
-    return ScoreMcp.refused("Read, but not saved: the score could not be saved.") unless score._errors.nil?
+    unless score._errors.nil?
+      return ScoreMcp.refused("Read, but not saved: #{Score.refusal_in(score, "the score could not be saved.")}")
+    end
 
     data["id"] = score._key
     data["url"] = ScoreMcp.address(score)
