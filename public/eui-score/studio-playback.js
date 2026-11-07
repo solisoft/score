@@ -9,7 +9,7 @@ const { tr } = await import(`./words.js${V}`);
 export function install(ctx) {
   const { root, state, playhead, st, toMidi, M, P, X, Vel, Pr, Sy, F, A, Snd, Ch, G } = ctx;
   const {
-    barNo, changeBar, selectedBarsOrNull, selectedBars, draw, showState, say, followPlaying, mixHeard, applyMix,
+    barNo, changeBar, selectedBarsOrNull, selectedBars, draw, showState, say, showPlaying, mixHeard, applyMix,
     finishRecording, chooseOutput
   } = ctx.call;
 
@@ -241,6 +241,11 @@ export function install(ctx) {
     showState();
     state.timer = setInterval(showProgress, 200);
     state.ticker = setInterval(tick, 25);
+    // The MIDI clock sent with the music, when it is on (midi-sync.js).
+    ctx.sync?.wake();
+    // Drawn once as it is while playing (no palette, no comment button); then
+    // only the notes playing are lit, over that drawing (showPlaying, #689).
+    draw();
     const follow = () => {
       if (st.playing !== state) return;
       light(state.handle.heard);
@@ -309,16 +314,14 @@ export function install(ctx) {
     }
   }
 
-  /** Lights the notes that started last, at `sec`; draws only when they change. */
+  /** Lights the notes that started last, at `sec`; only when they change, over the drawing as it is (#689). */
   function light(sec) {
     const playing = st.playing;
-    const times = playing.times;
-    let k = -1;
-    while (k + 1 < times.length && times[k + 1].sec <= sec + 0.01) k++;
+    const k = M.litAt(playing.times, sec, playing.lit);
     if (k === playing.lit) return;
     playing.lit = k;
-    playing.now = k < 0 ? [] : times[k].items;
-    draw().then(followPlaying);
+    playing.now = k < 0 ? [] : playing.times[k].items;
+    showPlaying();
   }
 
   function stopPlay() {

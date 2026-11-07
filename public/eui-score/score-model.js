@@ -5063,11 +5063,11 @@ function repeatOrder(score) {
 }
 
 /** The beat and its speed in bar `b`, as secondsAt counts them: 100 a quarter when none is set. */
-function speedAt(score, b) {
+function speedAt(score, b, marks = tempoMarks(score)) {
   let bpm = score.tempo?.bpm || DEFAULT_BPM;
   let base = score.tempo?.base || 4;
   // A speed set inside a bar holds from the next bar on (its own bar's rest is a ramp's: see tempoRamps).
-  for (const m of tempoMarks(score)) {
+  for (const m of marks) {
     if (m.bar > b || (m.bar === b && m.pos > 0) || !m.tempo?.bpm) continue;
     bpm = m.tempo.bpm;
     base = m.tempo.base || base;
@@ -5081,20 +5081,39 @@ function speedAt(score, b) {
  * the longest, when several end together. [{ at, ticks }]: `at` ticks into
  * the bar.
  */
-function holdsIn(score, b) {
+function holdsIn(score, b, fermatas = fermataNotes(score)) {
   const from = barStart(score, b);
   const to = from + barLength(score, b);
   const byEnd = new Map();
+  for (const { at, ticks } of fermatas.get(b) ?? []) {
+    if (at < from || at >= to) continue;
+    const end = at + ticks - from;
+    byEnd.set(end, Math.max(byEnd.get(end) ?? 0, ticks));
+  }
+  return [...byEnd].map(([at, ticks]) => ({ at, ticks })).sort((x, y) => x.at - y.at);
+}
+
+/**
+ * The notes under a fermata, by the bars they may start in: Map bar → [{ at,
+ * ticks }], staff by staff, in order. Read once for every pass (#689): each
+ * note is listed beside the bar it starts in and the bars either side of it,
+ * which holdsIn narrows to the bar's own.
+ */
+function fermataNotes(score) {
+  const out = new Map();
   for (const staff of score.staves) {
     const at = starts(staff);
     staff.events.forEach((ev, k) => {
-      if (ev.rest || !ev.arts.includes("fermata") || at[k] < from || at[k] >= to) return;
-      const ticks = ticksOf(ev);
-      const end = at[k] + ticks - from;
-      byEnd.set(end, Math.max(byEnd.get(end) ?? 0, ticks));
+      if (ev.rest || !ev.arts.includes("fermata")) return;
+      const note = { at: at[k], ticks: ticksOf(ev) };
+      const bar = barAt(score, at[k]);
+      for (const b of [bar - 1, bar, bar + 1]) {
+        if (!out.has(b)) out.set(b, []);
+        out.get(b).push(note);
+      }
     });
   }
-  return [...byEnd].map(([at, ticks]) => ({ at, ticks })).sort((x, y) => x.at - y.at);
+  return out;
 }
 
 /** Seconds from a pass's start to `into` ticks into its bar, the fermatas before it held. */
@@ -5146,10 +5165,13 @@ export function playback(score) {
   // A rit. or an accel. on the way: the bars it touches glide (`curve`), and give their clock's steps.
   const ramps = tempoRamps(score);
   const curves = new Map();
+  // Read once, not again for every bar (#689).
+  const marks = tempoMarks(score);
+  const fermatas = fermataNotes(score);
   return playOrder(score).map((bar) => {
-    const { bpm, base } = speedAt(score, bar);
+    const { bpm, base } = speedAt(score, bar, marks);
     const start = sec;
-    const pass = { bar, start, end: 0, bpm, base, holds: holdsIn(score, bar) };
+    const pass = { bar, start, end: 0, bpm, base, holds: holdsIn(score, bar, fermatas) };
     if (ramps.length) {
       if (!curves.has(bar)) curves.set(bar, curveOf(score, ramps, bar));
       if (curves.get(bar)) pass.curve = curves.get(bar);
@@ -5166,7 +5188,25 @@ export function playback(score) {
 export function playedAt(score, passes, t) {
   const bar = barAt(score, t);
   const into = t - barStart(score, bar);
-  return passes.filter((p) => p.bar === bar).map((p) => p.start + intoPass(p, into));
+  return passesThrough(passes, bar).map((p) => p.start + intoPass(p, into));
+}
+
+// The passes by their bar, for each playback read: asked for every note, a
+// filter of every pass made lighting a long score's notes take seconds (#689).
+const passesByBar = new WeakMap();
+
+/** The passes of `passes` through bar `bar`, in order. */
+export function passesThrough(passes, bar) {
+  let known = passesByBar.get(passes);
+  if (!known || known.length !== passes.length) {
+    known = { length: passes.length, bars: new Map() };
+    for (const p of passes) {
+      if (!known.bars.has(p.bar)) known.bars.set(p.bar, []);
+      known.bars.get(p.bar).push(p);
+    }
+    passesByBar.set(passes, known);
+  }
+  return known.bars.get(bar) ?? [];
 }
 
 /**
@@ -5179,7 +5219,7 @@ export function heardAt(score, passes, s, i, t = starts(score.staves[s])[i]) {
   const graces = (ev.graces ?? []).reduce((sum, g) => sum + notated(g.base, g.dots), 0);
   const stolen = graces > 0 ? Math.max(1, Math.min(graces, Math.floor(ticksOf(ev) / 2))) : 0;
   return playedAt(score, passes, t).map((sec, k) => {
-    const p = passes.filter((x) => x.bar === barAt(score, t))[k];
+    const p = passesThrough(passes, barAt(score, t))[k];
     return sec + (stolen / M_TICKS(p.base)) * (60 / p.bpm);
   });
 }
@@ -5195,9 +5235,45 @@ export function heardUntil(score, passes, s, i, t = starts(score.staves[s])[i]) 
   const heard = heardAt(score, passes, s, i, t);
   if (ev.rest || !(ev.afterGraces?.length || ev.arts.includes("trill"))) return heard;
   return heard.map((sec, k) => {
-    const p = passes.filter((x) => x.bar === barAt(score, t))[k];
+    const p = passesThrough(passes, barAt(score, t))[k];
     return playedAt(score, passes, t)[k] + (ticksOf(ev) / M_TICKS(p.base)) * (60 / p.bpm);
   });
+}
+
+/**
+ * Which of `times` (when notes start, [{ sec }], in order) has started last at
+ * `sec` — within 10 ms ahead — or −1 before the first; `from`, the one found
+ * the frame before. The music mostly moves on a little, so the search starts
+ * there; after a jump back (a seek, the loop) it halves the list. Asked every
+ * frame while the music plays: never a walk from the first note (#689).
+ */
+export function litAt(times, sec, from = -1) {
+  const started = (k) => times[k].sec <= sec + 0.01;
+  let k = from >= 0 && from < times.length && started(from) ? from : -1;
+  if (k < 0 && from >= 0 && times.length && started(0)) {
+    // Gone back: the last that has started, halving.
+    let [lo, hi] = [0, Math.min(from, times.length - 1)];
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      if (started(mid)) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo;
+  }
+  for (let steps = 0; k + 1 < times.length && started(k + 1); steps++) {
+    // Gone far ahead (a seek): halving the rest is quicker than walking it.
+    if (steps === 8) {
+      let [lo, hi] = [k + 1, times.length - 1];
+      while (lo < hi) {
+        const mid = Math.ceil((lo + hi) / 2);
+        if (started(mid)) lo = mid;
+        else hi = mid - 1;
+      }
+      return lo;
+    }
+    k++;
+  }
+  return k;
 }
 
 /** The pass sounding at `sec`, or the last one when the music is over; null for an empty score. */
@@ -6725,6 +6801,17 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
   const pending = moments.filter((m) => m.at > 0);
   // The engraver's numbers for the notes of every staff but the ossias: an ossia's own are the others.
   const musicNumbers = new Set(parsed.staves.filter((st) => st.kind !== "Ossia").flatMap((st) => st.events.map((ev) => ev.i)));
+  // Each lane's length so far, kept as it grows: while the text is read, a lane's events are only ever
+  // added to, so its length is counted once, not again from its first note at every note (#689).
+  const lengths = new WeakMap();
+  const laneLength = (target) => {
+    const events = target.events;
+    const known = lengths.get(events) ?? { n: 0, sum: 0 };
+    for (let i = known.n; i < events.length; i++) known.sum += ticksOf(events[i]);
+    known.n = events.length;
+    lengths.set(events, known);
+    return known.sum;
+  };
   for (const k of order) {
     const staff = parsed.staves[k];
     if (staff.kind === "ChordNames" || staff.kind === "Figures") {
@@ -6748,7 +6835,7 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
     const laneFor = (voice) => (voice >= 2 ? others[voice - 2] : out);
     let lane = out;
     let voices = 0;
-    const pad = (target, upto, spacer = false) => target.events.push(...rests(score, lengthOf(target), upto - lengthOf(target), spacer));
+    const pad = (target, upto, spacer = false) => target.events.push(...rests(score, laneLength(target), upto - laneLength(target), spacer));
     // The lanes a block of voices writes in: one it leaves out is drawn as nothing there (voices inside a voice, #408).
     const inBlock = new Set();
     let started = false;
@@ -6781,7 +6868,7 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
     let cadenzaAt = null;
     for (const ev of staff.events) {
       // The metre's changes up to here, wherever they are written.
-      if (first && started) while (pending.length && pending[0].at <= lengthOf(lane) + 1e-6) applyMoment(score, pending.shift());
+      if (first && started) while (pending.length && pending[0].at <= laneLength(lane) + 1e-6) applyMoment(score, pending.shift());
       // A cadenza is kept as a bar of its own length.
       // A cadenza is kept as a bar of its own length; cue notes as notes drawn small (`cue`).
       // Notes set smaller (\\tiny …) are kept with the command that sets them, read from the text.
@@ -6790,7 +6877,7 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
       const k = ev.k;
       // A change after the first note is the bar's it starts: the first staff
       // writes the score's changes, the others must change with it.
-      const here = lengthOf(lane);
+      const here = laneLength(lane);
       const bar = isBarLine(score, here) ? barAt(score, here) : -1;
       // A \\break or \\pageBreak: the first staff's say where lines and pages end.
       if (k === "Break") {
@@ -6924,14 +7011,14 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
         if (voices) unsupported.add("voices inside voices");
         voices = 1;
         inBlock.clear();
-        for (const other of others) pad(other, lengthOf(out));
+        for (const other of others) pad(other, laneLength(out));
       } else if (k === "VoiceNext") {
         voices++;
         lane = laneFor(voices);
       } else if (k === "VoicesEnd") {
         voices = 0;
         lane = out;
-        const upto = Math.max(lengthOf(out), ...others.map(lengthOf));
+        const upto = Math.max(laneLength(out), ...others.map(laneLength));
         pad(out, upto);
         for (const other of others) pad(other, upto, !inBlock.has(other));
       } else if (["RepeatStart", "RepeatEnd", "VoltaStart", "VoltaEnd", "Bar"].includes(k)) {
@@ -6987,7 +7074,7 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
         const ottava = ottavas.get(lane);
         ottavas.delete(lane);
         if (k === "Rest" && ev.full) {
-          const whole = rests(score, lengthOf(lane), ev.ticks * Math.max(1, ev.count));
+          const whole = rests(score, laneLength(lane), ev.ticks * Math.max(1, ev.count));
           if (ottava != null && whole.length) whole[0].ottava = ottava;
           // A breath or a text span on a bar's rest: on its first rest, or its last.
           if (whole.length && ev.span_start != null) whole[0].spanStart = ev.span_start;
@@ -7001,7 +7088,7 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
         }
         // A spacer or a rest stretched by a factor (s8*7, r4*3): rests filling its time, spacers stay spacers.
         if (k === "Rest" && !ev.tuplet && !ev.scale && ev.ticks !== notated(ev.base, ev.dots) && ev.ticks > 0) {
-          const filled = rests(score, lengthOf(lane), ev.ticks, Boolean(ev.spacer));
+          const filled = rests(score, laneLength(lane), ev.ticks, Boolean(ev.spacer));
           if (filled.length && ev.cross) for (const r of filled) r.cross = ev.cross;
           if (filled.length && before.get(ev.i)?.length) filled[0].before = [...before.get(ev.i)];
           if (ossia && musicNumbers.has(ev.i)) for (const r of filled) r.mirror = true;
@@ -7090,7 +7177,7 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
           switches.set(lane, { stem: ev.stem ?? 0, beam: Boolean(ev.no_autobeam) });
         }
         // A note past its bar line, as the engraver cuts it: tied pieces.
-        const at = lengthOf(lane);
+        const at = laneLength(lane);
         if (!tuplet && !read.scale && at + ev.ticks > nextBarLine(score, at) + 1e-6) lane.events.push(...pieces(score, read, at, ev.ticks, "whole"));
         else lane.events.push(read);
       }
@@ -7131,7 +7218,7 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
     // Beside cue notes, a voice of rests is the part's own: its rests are kept.
     const besideCue = out.events.some((x) => x.cue);
     while (kept > 0 && !(others[kept - 1].events.length && (sounding(others[kept - 1].events) || (besideCue && kept === 1 && others[0].events.some((x) => x.rest && !x.spacer))))) kept--;
-    for (const other of others.slice(0, kept)) pad(other, lengthOf(out));
+    for (const other of others.slice(0, kept)) pad(other, laneLength(out));
     placed[k] = [out, ...others.slice(0, kept)];
     // What other staves write after the first one ends.
     if (first && started) while (pending.length) applyMoment(score, pending.shift());
