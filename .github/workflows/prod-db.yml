@@ -104,9 +104,13 @@ concurrency:
   group: deploy-refs/heads/main
   cancel-in-progress: false
 
+# It only talks to the server over SSH: no token needed.
+permissions: {}
+
 jobs:
   run:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment: production
     env:
       HOST: ${{ secrets.DEPLOY_HOST }}
@@ -114,13 +118,18 @@ jobs:
       SITES_DIR: ${{ vars.DEPLOY_SITES_DIR || '/home/rocky/sites' }}
       DOMAIN: ${{ vars.DEPLOY_DOMAIN || 'score.solisoft.net' }}
     steps:
+      # The secrets reach the script through its environment, never pasted
+      # into its text.
       - name: Prepare SSH
+        env:
+          SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
           install -d -m 700 ~/.ssh
-          printf '%s\n' "${{ secrets.SSH_DEPLOY_KEY }}" > ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_DEPLOY_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          printf '%s\n' "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
       - name: Inspect

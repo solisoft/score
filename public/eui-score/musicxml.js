@@ -138,8 +138,13 @@ function pitchText(step, alter, octave) {
   return name + (marks > 0 ? "'".repeat(marks) : ",".repeat(-marks));
 }
 
+/**
+ * `text` as a LilyPond string, on one line: a line break in a part's name or
+ * a title goes as a space — written over lines, a string could hold a line
+ * that reads as the score's own settings line (`%% eui-score`, #683).
+ */
 function quoted(text) {
-  return `"${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  return `"${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\s*(\r\n|\r|\n)\s*/g, " ")}"`;
 }
 
 // ---- MusicXML → LilyPond ------------------------------------------------------------

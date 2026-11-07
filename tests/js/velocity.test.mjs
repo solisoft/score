@@ -180,7 +180,9 @@ test("a velocity on the meta line that is no number is dropped, and draws no mar
   const payload = "<img src=x onerror=alert(1)>";
   const meta = { velocity: { [V.noteId(0, 0, 60)]: payload, [V.noteId(0, Q, 62)]: 300, [V.noteId(0, 2 * Q, 64)]: 70, [V.noteId(0, 3 * Q, 65)]: "96" } };
   const score = read(`{ c'4 d' e' f' }\n%% eui-score ${JSON.stringify(meta)}\n`);
-  assert.equal(score.meta.velocity[V.noteId(0, 0, 60)], payload, "the line as written");
+  // Read, the line keeps only numbers (#683): the rest is left out as it is read.
+  assert.equal(score.meta.velocity[V.noteId(0, 0, 60)], undefined, "no markup read");
+  assert.equal(score.meta.velocity[V.noteId(0, Q, 62)], 300, "a number kept as written");
   const set = V.velocitiesOf(score);
   assert.deepEqual(set, { [V.noteId(0, Q, 62)]: 127, [V.noteId(0, 2 * Q, 64)]: 70 }, "numbers only, clamped to 1–127");
   const geo = R.rollLayout(score);
@@ -189,7 +191,7 @@ test("a velocity on the meta line that is no number is dropped, and draws no mar
   assert.match(svg, /<title>127<\/title>/);
   assert.match(svg, /<title>70<\/title>/);
   // Handed a raw map all the same, the strip still writes text, not markup.
-  const raw = V.drawStrip(score, geo, { set: score.meta.velocity });
+  const raw = V.drawStrip(score, geo, { set: meta.velocity });
   assert.doesNotMatch(raw, /<img/);
   assert.equal(raw.match(/class="vel-note[ "]/g).length, 4);
   // Nor does the MIDI get a velocity that is no number.

@@ -146,6 +146,13 @@
   // on them follow.
   let barOps = [];
   const keepKey = `eui-score-pending:${page.key}`;
+  // This page's lifetime. Instant navigation swaps the page out without
+  // unloading it: once a link has taken the visitor elsewhere, what this
+  // script added to `window` and `document` goes (this signal), the room's
+  // socket closes and is not opened again (`left`). A save under way, or
+  // due, still goes through; the score is not written to after that.
+  const lifetime = new AbortController();
+  let left = false;
 
   const keepLocally = (text) => {
     try {
@@ -230,6 +237,9 @@
   };
 
   const openConflict = () => {
+    // Met by the last save of a page left since: the text is kept in this
+    // browser, and the next visit asks (a dialog no longer on the page cannot).
+    if (left) return;
     const by = theirs?.saved_by ? shortName(theirs.saved_by) : null;
     conflictWho.textContent = by ? say("saved_by", { name: by }) : say("saved_elsewhere");
     show(by ? say("changed_by", { name: by }) : say("changed_elsewhere"), "conflict");
@@ -368,7 +378,8 @@
     } catch (error) {
       pending ??= text;
       show(say("offline"), "offline");
-      setTimeout(save, 5000);
+      // Left meanwhile: the text is kept in this browser (keepLocally), and sent from the next visit.
+      if (!left) setTimeout(save, 5000);
     } finally {
       saving = false;
       // Not saved: what was done since `base` still is.
@@ -429,7 +440,7 @@
     form.submit();
   }
 
-  window.addEventListener("online", save);
+  window.addEventListener("online", save, { signal: lifetime.signal });
 
   // The score's room: who else has it open, and their saves as they happen.
   // A save from elsewhere is applied here only while this editor has no
@@ -500,7 +511,12 @@
   // score is no longer shared with this person, or is in the trash, none
   // comes, and the editor stops trying.
   let roomDelay = 3000;
+  let roomTimer = 0;
+  const joinLater = () => {
+    if (!left) roomTimer = setTimeout(joinRoom, roomDelay);
+  };
   async function joinRoom() {
+    if (left) return;
     let ticket;
     try {
       const answer = await fetch(page.ticket, {
@@ -515,9 +531,11 @@
       if (!answer.ok) throw new Error(`ticket: ${answer.status}`);
       ticket = (await answer.json()).ticket;
     } catch (error) {
-      setTimeout(joinRoom, roomDelay);
+      joinLater();
       return;
     }
+    // Left while the ticket came.
+    if (left) return;
     const scheme = location.protocol === "https:" ? "wss:" : "ws:";
     socket = new WebSocket(`${scheme}//${location.host}/ws/scores?ticket=${encodeURIComponent(ticket)}`);
     socket.onopen = () => {
@@ -585,10 +603,15 @@
       }
     };
     socket.onclose = () => {
+      // For a test: the room let go of once the page was left.
+      if (left) {
+        root.dataset.room = "closed";
+        return;
+      }
       people = {};
       cursors = {};
       showPeople();
-      setTimeout(joinRoom, roomDelay);
+      joinLater();
     };
   }
 
@@ -657,7 +680,18 @@
   window.addEventListener("beforeunload", (event) => {
     if (stopped === "leaving") return;
     if (pending != null || saving || conflict) event.preventDefault();
-  });
+  }, { signal: lifetime.signal });
+
+  // A link followed (instant navigation): once the new page is in, this one
+  // lets go — its listeners, the room, the cursor's message on its way.
+  document.addEventListener("soli:load", () => {
+    if (root.isConnected) return;
+    left = true;
+    lifetime.abort();
+    clearTimeout(roomTimer);
+    clearTimeout(placeTimer);
+    socket?.close();
+  }, { signal: lifetime.signal });
   document.querySelector("[data-keep-version]").addEventListener("click", async (event) => {
     await save();
     const response = await fetch(`${url}/versions`, { method: "POST", headers: { Accept: "application/json" } });
@@ -759,7 +793,7 @@ ${problem.linkText}?`)) location.href = problem.link;
       // Five minutes, then the page stops waiting.
       for (let tries = 0; tries < 100; tries++) {
         await new Promise((done) => setTimeout(done, 3000));
-        if (!ai.open) return;
+        if (!ai.open || left) return;
         const answer = await (await fetch(page.suggestion.replace("ID", started.id), { headers: { Accept: "application/json" } })).json();
         if (answer.state === "working") continue;
         if (answer.state === "failed") return fail(answer.error);

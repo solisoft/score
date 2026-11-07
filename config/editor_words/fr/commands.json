@@ -536,5 +536,6 @@
   "Show resolved ({n})": "Afficher les résolus ({n})",
   "No comments yet.": "Pas encore de commentaires.",
   "No comments yet. Select some bars, then Edit › Comment on the selection.": "Pas encore de commentaires. Sélectionnez des mesures, puis Édition › Commenter la sélection.",
-  "New comment": "Nouveau commentaire"
+  "New comment": "Nouveau commentaire",
+  "Settings line that does not read": "Ligne de réglages illisible"
 }

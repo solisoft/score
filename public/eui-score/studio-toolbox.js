@@ -283,10 +283,12 @@ export function install(ctx) {
     // File ▸ Print as PDF names the paper the PDF is printed on: the score's \paper.
     const paper = root.querySelector("[data-pdf-paper]");
     if (paper) paper.textContent = M.paperLabel(st.text);
-    notice.hidden = (Boolean(st.score) || !st.unsupported.length) && !(st.score && st.lostNotice);
+    // A settings line that does not read stays said while it is there (#683).
+    const damaged = st.score?.metaKept?.length ? M.metaNotice({ kept: st.score.metaKept, lines: 0, dropped: [] }) : "";
+    notice.hidden = (Boolean(st.score) || !st.unsupported.length) && !(st.score && (st.lostNotice || damaged));
     if (!st.score && st.unsupported.length) {
       notice.textContent = tr("This piece uses {what}: the score editor does not edit those yet. It is engraved, and its text below can be edited.", { what: st.unsupported.join(", ") });
-    } else if (st.score && st.lostNotice) notice.textContent = st.lostNotice;
+    } else if (st.score && (st.lostNotice || damaged)) notice.textContent = [st.lostNotice, damaged].filter(Boolean).join(" ");
     for (const button of root.querySelectorAll('[data-act="duration"]')) button.classList.toggle("on", Number(button.dataset.base) === st.input.base);
     const dot = root.querySelector('.studio-toolbox [data-act="dot"]');
     if (dot) {
