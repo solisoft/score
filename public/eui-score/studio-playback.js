@@ -7,7 +7,7 @@ const { tr } = await import(`./words.js${V}`);
 
 /** The Playback section set up; answers Play, Stop, the loop, and the MIDI heard. */
 export function install(ctx) {
-  const { root, state, playhead, st, toMidi, M, P, X, Vel, Pr, Sy, F, A, Ch, G } = ctx;
+  const { root, state, playhead, st, toMidi, M, P, X, Vel, Pr, Sy, F, A, Snd, Ch, G } = ctx;
   const {
     barNo, changeBar, selectedBarsOrNull, selectedBars, draw, showState, say, followPlaying, mixHeard, applyMix,
     finishRecording, chooseOutput
@@ -38,9 +38,12 @@ export function install(ctx) {
    * those velocities, its rit. and accel. gliding. Play, Save as MIDI and
    * Save the sound all play this; `mix` (Save as MIDI) writes the mixer's
    * volume and pan in too; `practice` transposes it, and sets its speed (a
-   * saved file's, when asked: practice.js).
+   * saved file's, when asked: practice.js). `sound` (Save as MIDI, Play to
+   * a MIDI device) adds the keyswitches and program changes (sound.js, #670)
+   * last, untransposed and unswung, each a little before its note: this
+   * browser's synthesizer never gets them — a keyswitch would be a low note.
    */
-  const heardMidi = (score, passes = score ? M.playback(score) : [], { mix = null, practice = null } = {}) =>
+  const heardMidi = (score, passes = score ? M.playback(score) : [], { mix = null, practice = null, sound = false } = {}) =>
     engraved(score).then((bytes) => {
       const velocities = score ? Vel.applyVelocities(score, bytes) : bytes;
       // Past fifteen channels, two staves may go through one mixer strip: their volume and pan in the file (#389).
@@ -48,8 +51,10 @@ export function install(ctx) {
       const fileMix = mix ?? (shared.length ? mixHeard() : null);
       const curves = score ? A.applyAutomation(score, velocities, { passes, mix: fileMix, mixLanes: mix ? null : shared, volumeMin: X.VOLUME_MIN }) : velocities;
       const graced = score ? G.applyGraces(score, curves, { passes }) : curves;
-      const felt = F.feel(graced, { score, passes, ...F.feelOf(score ? score.meta : M.readMeta(st.text)) });
-      return practice ? Pr.applyPractice(felt, practice) : felt;
+      const feel = F.feelOf(score ? score.meta : M.readMeta(st.text));
+      const felt = F.feel(graced, { score, passes, ...feel });
+      const practised = practice ? Pr.applyPractice(felt, practice) : felt;
+      return sound && score ? Snd.applySound(score, practised, { passes, early: F.humanizeOf(feel.humanize)?.time ?? 0 }) : practised;
     });
 
   /** The engraver's MIDI of what is heard, each staff on its own channel (channels.js, #389). */
@@ -174,7 +179,8 @@ export function install(ctx) {
     let sound = null;
     let notes = [];
     try {
-      bytes = await heardMidi(played, passes, { practice: { transpose: transposeNow() } });
+      // To a MIDI device (Sound to): the keyswitches and program changes too (#670).
+      bytes = await heardMidi(played, passes, { practice: { transpose: transposeNow() }, sound: Boolean(P.outputPort()) });
       // The synthesizer's staves and the own SoundFonts' (#391): in this browser only, not to a MIDI device.
       if (!P.outputPort()) {
         sound = await st.instruments.prepare(played);

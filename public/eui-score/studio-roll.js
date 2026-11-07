@@ -77,7 +77,7 @@ export function install(ctx) {
   }
 
   rollHost.addEventListener("pointerdown", (event) => {
-    if (event.target.closest(".studio-roll-bar, .studio-velocity-bar, .vel-strip, .studio-cc-bar, .cc-strip") || !st.score) return;
+    if (event.target.closest(".studio-roll-bar, .studio-velocity-bar, .vel-strip, .studio-cc-bar, .cc-strip, .ks-strip") || !st.score) return;
     rollHost.focus({ preventScroll: true });
     const p = rollPoint(event);
     if (!p) return;

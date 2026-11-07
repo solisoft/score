@@ -8,17 +8,19 @@
 //   fromMidi(bytes, { title, grid }) → { source, score, warnings } the score, as LilyPond
 //   isMidi(name)                  → whether a file's name is a MIDI one
 //
-// Nothing leaves the page. The controllers the editor's automation follows
-// (modulation, expression, volume, pan, the sustain pedal) and pitch bend
-// are kept as its curves (automation.js), on their staff. What a file
-// holds that the score does not keep (other controllers, tempo changes
-// after the first…) is left out, and each such thing is named once in
-// `warnings`. Fetched only when a MIDI file is opened.
+// Nothing leaves the page. The controllers (any but bank select, the data
+// entry and the channel's modes) and pitch bend are kept as the editor's
+// automation curves (automation.js), on their staff; a track's program
+// changes after its first as the staff's program changes (sound.js, #670).
+// What a file holds that the score does not keep (tempo changes after the
+// first…) is left out, and each such thing is named once in `warnings`.
+// Fetched only when a MIDI file is opened.
 
 const V = new URL(import.meta.url).search;
 const M = await import(`./score-model.js${V}`);
 const { tr } = await import(`./words.js${V}`);
 const A = await import(`./automation.js${V}`);
+const Snd = await import(`./sound.js${V}`);
 
 /** The most staves an imported score is given; the tracks after them are left out, and named. */
 export const MAX_STAVES = 16;
@@ -174,10 +176,12 @@ function partsOf(midi, warnings) {
       }
     }
     for (const [channel, notes] of [...byChannel].sort((x, y) => x[0] - y[0])) {
-      // Program changes across the music: the first one keeps its sound.
+      // Program changes across the music: the first one is the staff's
+      // instrument; the others are kept as program changes, sent to a MIDI
+      // device and saved again (sound.js, #670).
       const changes = new Set(track.events.filter((e) => e.kind === "program" && e.channel === channel).map((e) => e.program));
-      if (changes.size > 1) warnings.add(tr("instrument changes in a track, its first instrument kept"));
-      parts.push({ track: t, channel, name, program: programs.get(channel)?.program ?? 0, notes: notes.sort((x, y) => x.t0 - y.t0 || x.key - y.key), curves: curvesOf(track, channel, warnings) });
+      if (changes.size > 1) warnings.add(tr("instrument changes in a track: the staff plays its first instrument, the others are kept as program changes for a MIDI device"));
+      parts.push({ track: t, channel, name, program: programs.get(channel)?.program ?? 0, notes: notes.sort((x, y) => x.t0 - y.t0 || x.key - y.key), curves: curvesOf(track, channel), programs: programChanges(track, channel) });
     }
   });
   return parts;
@@ -189,22 +193,43 @@ function partsOf(midi, warnings) {
  * or a curve that never moves from its first value at the start, is
  * nothing. Other controllers are named in `warnings`.
  */
-function curvesOf(track, channel, warnings) {
+function curvesOf(track, channel) {
   const out = {};
   for (const e of track.events) {
     if (e.channel !== channel) continue;
     if (e.kind === "bend") (out.bend ??= []).push([e.tick, e.value]);
     else if (e.kind === "controller") {
+      // Every controller (#670) but bank select, the data entry around a
+      // program and the channel's modes, which are not music played.
       const id = A.idOfNumber(e.controller);
       if (id) (out[id] ??= []).push([e.tick, e.value]);
-      // Bank select and the data entry around a program are not music played.
-      else if (![0, 32, 6, 38, 98, 99, 100, 101, 121].includes(e.controller)) warnings.add(tr("controllers other than modulation, expression, volume, pan and the sustain pedal"));
     }
   }
   for (const id of Object.keys(out)) {
     const points = out[id];
     if (id === "bend" && points.every(([, v]) => v === 0)) delete out[id];
     else if (points.every(([t, v]) => t === 0 && v === points[0][1]) && id !== "7" && id !== "10") delete out[id];
+  }
+  return out;
+}
+
+/**
+ * A track's program changes on `channel` after its first, each with the
+ * bank (CC 0, CC 32) set before it: [[tick, program, msb, lsb]] in the
+ * file's ticks — the first is the staff's instrument.
+ */
+function programChanges(track, channel) {
+  const out = [];
+  const bank = { msb: null, lsb: null };
+  let first = true;
+  for (const e of track.events) {
+    if (e.channel !== channel) continue;
+    if (e.kind === "controller" && e.controller === 0) bank.msb = e.value;
+    else if (e.kind === "controller" && e.controller === 32) bank.lsb = e.value;
+    else if (e.kind === "program") {
+      if (!first) out.push([e.tick, e.program, bank.msb, bank.lsb]);
+      first = false;
+    }
   }
   return out;
 }
@@ -281,7 +306,7 @@ export function fromMidi(bytes, { title = "", grid = "sixteenth" } = {}) {
     const notes = part.notes.map((n) => ({ key: n.key, t0: n.t0 * scale, t1: n.t1 * scale, velocity: n.velocity })).filter((n) => n.t0 < limit);
     if (part.channel === DRUM_CHANNEL) {
       if (notes.some((n) => !M.drumByKey(n.key))) warnings.add(tr("drums this editor does not name, left out"));
-      lanes.push({ staff: { name: part.name || "Drum kit", short: "Dr.", instrument: "", clef: "percussion", drums: true, events: [] }, notes, curves: part.curves });
+      lanes.push({ staff: { name: part.name || "Drum kit", short: "Dr.", instrument: "", clef: "percussion", drums: true, events: [] }, notes, curves: part.curves, programs: part.programs });
       continue;
     }
     const it = instrumentFor(part.program);
@@ -290,13 +315,13 @@ export function fromMidi(bytes, { title = "", grid = "sixteenth" } = {}) {
     const high = notes.filter((n) => n.key >= 60);
     const wide = !it.clef && low.some((n) => n.key < 53) && high.some((n) => n.key > 67);
     if (wide) {
-      lanes.push({ staff: { name: "", short: "", instrument: it.sound, clef: "treble", events: [] }, notes: high, brace: { name, short: it.short }, curves: part.curves });
+      lanes.push({ staff: { name: "", short: "", instrument: it.sound, clef: "treble", events: [] }, notes: high, brace: { name, short: it.short }, curves: part.curves, programs: part.programs });
       lanes.push({ staff: { name: "", short: "", instrument: it.sound, clef: "bass", events: [] }, notes: low });
       continue;
     }
     const average = notes.reduce((sum, n) => sum + n.key, 0) / Math.max(1, notes.length);
     const clef = it.clef ?? (average < 57 ? "bass" : "treble");
-    lanes.push({ staff: { name, short: it.short, instrument: it.sound, clef, events: [] }, notes, curves: part.curves });
+    lanes.push({ staff: { name, short: it.short, instrument: it.sound, clef, events: [] }, notes, curves: part.curves, programs: part.programs });
   }
   // A brace split across the limit is not left with one staff.
   let kept = lanes.length;
@@ -320,6 +345,8 @@ export function fromMidi(bytes, { title = "", grid = "sixteenth" } = {}) {
       const inside = points.map(([t, v]) => [t * scale, v]).filter(([t]) => t < length);
       A.setCurve(score, s, id, A.thin(id, inside));
     }
+    const programs = (lane.programs ?? []).map(([t, ...rest]) => [Math.round(t * scale), ...rest]).filter(([t]) => t < length);
+    if (programs.length) Snd.setSound(score, s, { programs });
   });
   return { source: M.toLilyPond(score).source, score, warnings: [...warnings] };
 }

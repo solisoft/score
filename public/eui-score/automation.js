@@ -12,7 +12,8 @@
 // - `<lane>`: the staff's lane, as the mixer keys its tracks (a staff's
 //   first lane; its other voices play on its channel);
 // - `<controller>`: "1" modulation, "11" expression, "7" volume, "10" pan,
-//   "64" the sustain pedal, "bend" pitch bend, "pressure" channel pressure;
+//   "64" the sustain pedal, "bend" pitch bend, "pressure" channel pressure,
+//   and any other controller by its number: "21" (#670);
 // - `tick`: score time (score-model.js WHOLE ticks to a whole note) from
 //   the start, as written: a repeat plays its bars' curve again;
 // - `value`: 0–127 for a controller (the pedal 0 or 127), −8192–8191 for
@@ -42,7 +43,7 @@ const { tr } = await import(`./words.js${SEARCH}`);
 // words.js's `tr` says it in the page's language (config/editor_words/fr/).
 const english = { tr: (text) => text };
 
-/** The controllers a lane can follow. */
+/** The controllers a lane offers first: those a sound is most often shaped with. */
 export const CONTROLLERS = [
   { id: "1", name: english.tr("Modulation"), number: 1, min: 0, max: 127 },
   { id: "11", name: english.tr("Expression"), number: 11, min: 0, max: 127 },
@@ -54,14 +55,45 @@ export const CONTROLLERS = [
   { id: "pressure", name: english.tr("Pressure"), number: null, min: 0, max: 127 },
 ];
 
-/** A controller by its id ("1", "bend"…); null for one not followed. */
+// Any other controller, 0–127 (#670): a virtual instrument's dynamics on
+// CC 21, its vibrato on CC 2… kept as the seven are, its number its id.
+// General MIDI names a few; the others are "CC 21". The switches (65–69)
+// step, as the sustain pedal does.
+const NAMED = {
+  2: english.tr("Breath"), 4: english.tr("Foot controller"), 5: english.tr("Portamento time"), 8: english.tr("Balance"),
+  65: english.tr("Portamento"), 66: english.tr("Sostenuto pedal"), 67: english.tr("Soft pedal"), 68: english.tr("Legato pedal"), 69: english.tr("Hold 2"),
+  71: english.tr("Resonance"), 72: english.tr("Release time"), 73: english.tr("Attack time"), 74: english.tr("Brightness"),
+};
+const SWITCHES = new Set([65, 66, 67, 68, 69]);
+
+/**
+ * The controller numbers no curve is kept for: bank select (0, 32) and the
+ * data entry around a program (6, 38, 98–101) belong to a program change
+ * (sound.js); 120–127 are the channel's modes (all notes off…).
+ */
+export const NOT_CURVES = new Set([0, 32, 6, 38, 98, 99, 100, 101, 120, 121, 122, 123, 124, 125, 126, 127]);
+
+/** A controller by its id ("1", "bend", "21"…): the seven, or any number 0–127; null for anything else. */
 export function controller(id) {
-  return CONTROLLERS.find((c) => c.id === String(id)) ?? null;
+  const known = CONTROLLERS.find((c) => c.id === String(id));
+  if (known) return known;
+  const text = String(id);
+  if (!/^(0|[1-9]\d{0,2})$/.test(text) || Number(text) > 127) return null;
+  const number = Number(text);
+  return { id: text, name: NAMED[number] ?? null, number, min: 0, max: 127, ...(SWITCHES.has(number) ? { step: true } : {}) };
 }
 
-/** A controller's id from a MIDI controller number; null for one not followed. */
+/** A controller's name in the page's language: its own, else "CC 21". */
+export function controllerName(id) {
+  const c = controller(id);
+  if (!c) return String(id);
+  return c.name ? tr(c.name) : tr("CC {number}", { number: c.number });
+}
+
+/** A controller's id from a MIDI controller number; null for one no curve is kept for (NOT_CURVES). */
 export function idOfNumber(number) {
-  return CONTROLLERS.find((c) => c.number != null && c.number === number)?.id ?? null;
+  if (!Number.isInteger(number) || number < 0 || number > 127 || NOT_CURVES.has(number)) return null;
+  return String(number);
 }
 
 /** On a ramp, a value every sixteenth. */
@@ -339,12 +371,7 @@ export function panCc(pan) {
 export function applyAutomation(score, bytes, { passes = null, mix = null, mixLanes = null, volumeMin = -60 } = {}) {
   if (!score || (!Object.keys(curvesOf(score)).length && !mix)) return bytes;
   const smf = F.readSmf(bytes);
-  // Each synthesizer channel's track: port × 16 + channel (channels.js).
-  const trackOf = new Map();
-  const ports = smf.tracks.map((track) => 16 * (track.find((e) => e.data[0] === 0xff && e.data[1] === 0x21)?.data[3] ?? 0));
-  smf.tracks.forEach((track, k) => {
-    for (const e of track) if (isChannel(e.data) && !trackOf.has(ports[k] + (e.data[0] & 15))) trackOf.set(ports[k] + (e.data[0] & 15), k);
-  });
+  const { trackOf, ports } = channelTracks(smf);
   // The pedal written in the notes: its staff's curve is left out.
   const pedalled = new Set(smf.tracks.flatMap((track, k) => track.filter((e) => (e.data[0] & 0xf0) === 0xb0 && e.data[1] === 64).map((e) => ports[k] + (e.data[0] & 15))));
   // The score's ticks in the file's: its quarter over the file's.
@@ -372,6 +399,29 @@ export function applyAutomation(score, bytes, { passes = null, mix = null, mixLa
     add(e.channel, Math.round(e.at / ratio), data);
   }
   if (!added.size) return bytes;
+  return F.writeSmf(addToChannels(smf, trackOf, added));
+}
+
+/**
+ * Each synthesizer channel's track in `smf` (as feel.js reads it): port × 16
+ * + channel (channels.js) → the first track that plays on it; `ports` each
+ * track's port × 16.
+ */
+export function channelTracks(smf) {
+  const trackOf = new Map();
+  const ports = smf.tracks.map((track) => 16 * (track.find((e) => e.data[0] === 0xff && e.data[1] === 0x21)?.data[3] ?? 0));
+  smf.tracks.forEach((track, k) => {
+    for (const e of track) if (isChannel(e.data) && !trackOf.has(ports[k] + (e.data[0] & 15))) trackOf.set(ports[k] + (e.data[0] & 15), k);
+  });
+  return { trackOf, ports };
+}
+
+/**
+ * `smf` with `added` (channel → [{ tick, data }]) laid into each channel's
+ * track (mergeEvents); a channel no track plays on gets one of its own, on
+ * its port. `trackOf` (channelTracks) learns those new tracks.
+ */
+export function addToChannels(smf, trackOf, added) {
   const tracks = smf.tracks.map((t) => t.slice());
   for (const [channel, list] of added) {
     list.sort((x, y) => x.tick - y.tick);
@@ -383,7 +433,7 @@ export function applyAutomation(score, bytes, { passes = null, mix = null, mixLa
     }
     tracks[k] = mergeEvents(tracks[k], list);
   }
-  return F.writeSmf({ ...smf, tracks });
+  return { ...smf, tracks };
 }
 
 // ---- The lane under the roll ------------------------------------------------------------
@@ -426,7 +476,7 @@ const escape = (text) => String(text).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;"
 
 /** A value as words: "64", "on"/"off" for the pedal, "+2048" for a bend. */
 export function valueText(id, v) {
-  if (id === "64") return v >= 64 ? "on" : "off";
+  if (controller(id)?.step) return v >= 64 ? "on" : "off";
   if (id === "bend") return v > 0 ? `+${v}` : String(v);
   return String(v);
 }
@@ -446,7 +496,7 @@ export function drawLane(score, geo, id, points, { label = "", colour = "#2563c9
     const bx = geo.x(M.barStart(score, bar));
     parts.push(`<line class="cc-bar-line" x1="${bx}" x2="${bx}" y1="0" y2="${LANE_H}"/>`);
   }
-  parts.push(`<text class="cc-label" x="8" y="16">${tr(c.name)}</text>`);
+  parts.push(`<text class="cc-label" x="8" y="16">${escape(controllerName(id))}</text>`);
   if (label) parts.push(`<text class="cc-scale" x="8" y="30">${escape(label)}</text>`);
   parts.push(`<text class="cc-scale" x="${geo.left - 6}" y="${yOfValue(id, c.max) + 8}" text-anchor="end">${valueText(id, c.max)}</text><text class="cc-scale" x="${geo.left - 6}" y="${LANE_H - PAD}" text-anchor="end">${valueText(id, c.min)}</text>`);
   if (points.length) {
@@ -464,5 +514,5 @@ export function drawLane(score, geo, id, points, { label = "", colour = "#2563c9
     });
   } else parts.push(`<text class="cc-empty" x="${geo.left + 12}" y="${LANE_H / 2 + 4}">${tr("Click to add a point")}</text>`);
   if (muted) parts.push(`<text class="cc-muted" x="${geo.left + 12}" y="${LANE_H - 12}">${muted}</text>`);
-  return `<svg xmlns="http://www.w3.org/2000/svg" class="cc-strip" width="${geo.width}" height="${LANE_H}" viewBox="0 0 ${geo.width} ${LANE_H}" role="img" aria-label="${tr("{name}: {count} points", { name: tr(c.name), count: points.length })}">${parts.join("")}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" class="cc-strip" width="${geo.width}" height="${LANE_H}" viewBox="0 0 ${geo.width} ${LANE_H}" role="img" aria-label="${escape(tr("{name}: {count} points", { name: controllerName(id), count: points.length }))}">${parts.join("")}</svg>`;
 }

@@ -189,7 +189,7 @@ export function install(ctx) {
         if (edit((score) => M.transpose(score, { ...by, s: r.s, a: r.a, b: r.b }))) say(tr("{n} selected, {words}.", { n: r.b - r.a + 1, words }));
         return;
       }
-      case "save-midi": return heardMidi(st.score, undefined, { mix: X.mixOf(st.score), practice: exportPractice() }).then((m) => download(m, `${fileName()}.mid`, "audio/midi")).catch((e) => refuse(e));
+      case "save-midi": return heardMidi(st.score, undefined, { mix: X.mixOf(st.score), practice: exportPractice(), sound: true }).then((m) => download(m, `${fileName()}.mid`, "audio/midi")).catch((e) => refuse(e));
       case "save-wav": return saveWav();
       case "save-mp3": return saveSound("mp3");
       case "save-stems": return saveSound("stems");

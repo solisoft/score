@@ -26,7 +26,7 @@ export function install(ctx) {
   rollHost.append(velBar);
 
   // The automation lane (automation-ui.js), under the velocity strip.
-  st.automation = automationLane({ rollHost, rollScroll, st, edit, say, redraw: () => drawRoll(), recordingNow, learnt: () => ctx.sync?.learnt?.list() ?? [] });
+  st.automation = automationLane({ root: ctx.root, rollHost, rollScroll, st, edit, say, redraw: () => drawRoll(), recordingNow, learnt: () => ctx.sync?.learnt?.list() ?? [] });
 
   /** The velocities the dynamics give, as the MIDI plays them: found once per text, then drawn. */
   function heardVelocities() {

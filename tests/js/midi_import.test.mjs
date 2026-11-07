@@ -145,12 +145,14 @@ test("midi import: what the score does not keep is named once each", () => {
     [0, 0xb0, 64, 127], [0, 0xe0, 0, 80], [DIVISION, 0xe0, 0, 90],
     ...note(0, 60, 0, 4), ...note(0, 62, 4, 3),
     ...note(9, 81, 0, 1),
-    [DIVISION, 0xc0, 0], [2 * DIVISION, 0xc0, 40],
+    [DIVISION, 0xc0, 0], [DIVISION + 1, 0xb0, 0, 3], [2 * DIVISION, 0xc0, 40],
   ]);
-  const { warnings } = I.fromMidi(file(1, [conductor, piano]));
+  const { warnings, source } = I.fromMidi(file(1, [conductor, piano]));
+  // The program change after the first is kept, with its bank, for a MIDI device (#670).
+  assert.deepEqual(M.readMeta(source).ks?.["0"]?.programs, [[M.WHOLE / 2, 40, 3]]);
   assert.deepEqual(warnings.sort(), [
     "drums this editor does not name, left out",
-    "instrument changes in a track, its first instrument kept",
+    "instrument changes in a track: the staff plays its first instrument, the others are kept as program changes for a MIDI device",
     "metre changes, the first metre kept",
     "tempo changes, the first tempo kept",
   ]);
@@ -165,13 +167,16 @@ test("midi import: the controllers and the bends are kept as the staff's curves"
     ...Array.from({ length: 16 }, (_, k) => [(k * DIVISION) / 4, 0xb0, 1, k * 8]),
     [DIVISION, 0xe0, 0, 80], [3 * DIVISION, 0xe0, 0, 64],
     [0, 0xb0, 7, 90],
-    // A controller the editor does not follow: named.
-    [0, 0xb0, 74, 30],
+    // Any other controller (#670): kept too, by its number; bank select is not a curve.
+    [0, 0xb0, 74, 30], [DIVISION, 0xb0, 74, 90], [0, 0xb0, 0, 1], [0, 0xb0, 21, 5], [2 * DIVISION, 0xb0, 21, 100],
     ...note(0, 60, 0, 4),
   ]);
   const { source, warnings } = I.fromMidi(file(0, [piano]));
-  assert.deepEqual(warnings, ["controllers other than modulation, expression, volume, pan and the sustain pedal"]);
+  assert.deepEqual(warnings, [], "nothing left out");
   const cc = M.readMeta(source).cc;
+  assert.deepEqual(cc["0"]["74"], [[0, 30], [Q, 90]], "brightness, by its number");
+  assert.deepEqual(cc["0"]["21"], [[0, 5], [2 * Q, 100]], "CC 21, which General MIDI does not name");
+  assert.equal(cc["0"]["0"], undefined, "bank select belongs to the program");
   assert.deepEqual(cc["0"]["64"], [[0, 127], [2 * Q, 0]], "the pedal, pressed and let go");
   assert.deepEqual(cc["0"].bend, [[Q, 2048], [3 * Q, 0]], "the bend up a quarter of its range, and back");
   assert.deepEqual(cc["0"]["7"], [[0, 90]], "the volume set at the start is kept");

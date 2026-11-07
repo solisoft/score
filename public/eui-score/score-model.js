@@ -2599,8 +2599,8 @@ export function removeStaff(score, s) {
   if (score.meta) {
     const gone = (lane) => Number(lane) >= u && Number(lane) < u + count;
     if (score.meta.velocity) score.meta.velocity = Object.fromEntries(Object.entries(score.meta.velocity).filter(([key]) => !gone(key.split(":")[0])));
-    for (const part of [score.meta.cc, score.meta.mixer?.tracks, score.meta.synth, score.meta.soundfont]) for (const lane of Object.keys(part ?? {})) if (gone(lane)) delete part[lane];
-    for (const name of ["synth", "soundfont"]) if (score.meta[name] && !Object.keys(score.meta[name]).length) delete score.meta[name];
+    for (const part of [score.meta.cc, score.meta.ks, score.meta.mixer?.tracks, score.meta.synth, score.meta.soundfont]) for (const lane of Object.keys(part ?? {})) if (gone(lane)) delete part[lane];
+    for (const name of ["synth", "soundfont", "ks"]) if (score.meta[name] && !Object.keys(score.meta[name]).length) delete score.meta[name];
     shiftMetaLanes(score.meta, u + count, -count);
   }
   if (id) for (const lane of score.staves) for (const ev of lane.events) if (ev.cross === id) delete ev.cross;
@@ -4165,13 +4165,15 @@ export function setFretDiagram(score, s, i, text) {
   ev.fret = fretSpec(text);
 }
 
-/** Lanes `at` and after moved by `by` in what the meta line keys by lane: velocities, curves, the mixer's tracks, the synthesizers and own SoundFonts (#391). */
+/** Lanes `at` and after moved by `by` in what the meta line keys by lane: velocities, curves, keyswitches, the mixer's tracks, the synthesizers and own SoundFonts (#391). */
 function shiftMetaLanes(meta, at, by) {
   if (!meta) return;
   // An audio track's ("audio-1", #390) is no staff's lane: it stays as it is.
   const moved = (lane) => (!/^\d+$/.test(String(lane)) ? lane : Number(lane) >= at ? Number(lane) + by : Number(lane));
   if (meta.velocity) meta.velocity = Object.fromEntries(Object.entries(meta.velocity).map(([id, v]) => [[moved(id.split(":")[0]), ...id.split(":").slice(1)].join(":"), v]));
   if (meta.cc) meta.cc = Object.fromEntries(Object.entries(meta.cc).map(([lane, v]) => [moved(lane), v]));
+  // A staff's keyswitches, program changes and articulation map (sound.js, #670).
+  if (meta.ks && typeof meta.ks === "object") meta.ks = Object.fromEntries(Object.entries(meta.ks).map(([lane, v]) => [moved(lane), v]));
   if (meta.mixer?.tracks) meta.mixer.tracks = Object.fromEntries(Object.entries(meta.mixer.tracks).map(([lane, v]) => [moved(lane), v]));
   for (const name of ["synth", "soundfont"]) if (meta[name]) meta[name] = Object.fromEntries(Object.entries(meta[name]).map(([lane, v]) => [moved(lane), v]));
 }
@@ -4970,10 +4972,13 @@ const canonical = (x) =>
       ? `{${Object.keys(x).sort().map((k) => `${JSON.stringify(k)}:${canonical(x[k])}`).join(",")}}`
       : JSON.stringify(x ?? null);
 
-/** What two pitched staves must have alike to share a channel: the instrument, the mixer's settings, no curves, no synthesizer or own SoundFont (#391). */
+/** What two pitched staves must have alike to share a channel: the instrument, the mixer's settings, no curves, no keyswitch, no synthesizer or own SoundFont (#391). */
 function sharingKey(score, lane) {
   const curves = score.meta?.cc?.[lane];
   if (curves && Object.keys(curves).length) return `lane ${lane}`;
+  // Keyswitches and program changes (sound.js, #670) switch the whole channel.
+  const sounds = score.meta?.ks?.[lane];
+  if (sounds && typeof sounds === "object" && Object.keys(sounds).length) return `lane ${lane}`;
   if (score.meta?.synth?.[lane] || score.meta?.soundfont?.[lane]) return `lane ${lane}`;
   return `${score.staves[lane].instrument ?? ""}|${canonical(score.meta?.mixer?.tracks?.[lane] ?? {})}`;
 }

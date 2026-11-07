@@ -9,12 +9,17 @@
 // A click on the lane adds a point (on a 32nd grid; Alt, anywhere) and a
 // drag moves it; a point dragged moves; a double click, or a right click,
 // takes one away.
+//
+// Its Curve menu offers the usual controllers, then any other by its
+// number (CC 0–127, #670), then "Keyswitches and programs": the Sound lane
+// (sound-ui.js) in its place, for a virtual instrument.
 
 const SEARCH = new URL(import.meta.url).search;
 const M = await import(`./score-model.js${SEARCH}`);
 const R = await import(`./piano-roll.js${SEARCH}`);
 const A = await import(`./automation.js${SEARCH}`);
 const P = await import(`./player.js${SEARCH}`);
+const { soundLane } = await import(`./sound-ui.js${SEARCH}`);
 // The lane's words in the page's language (#508).
 const { tr } = await import(`./words.js${SEARCH}`);
 
@@ -24,16 +29,32 @@ const { tr } = await import(`./words.js${SEARCH}`);
  * when a message came, while recording (null otherwise); `learnt()` the
  * MIDI-learn controls (midi-sync.js), whose knobs are not recorded.
  */
-export function automationLane({ rollHost, rollScroll, st, edit, say, redraw, recordingNow, learnt = () => [] }) {
+export function automationLane({ root = null, rollHost, rollScroll, st, edit, say, redraw, recordingNow, learnt = () => [] }) {
   st.cc = { lane: null, id: "1", chosen: -1, drag: null };
   const bar = Object.assign(document.createElement("div"), { className: "studio-cc-bar" });
   bar.setAttribute("role", "toolbar");
   bar.setAttribute("aria-label", tr("Automation"));
-  const options = A.CONTROLLERS.map((c) => `<option value="${c.id}">${tr(c.name)}${c.number != null ? ` (CC ${c.number})` : ""}</option>`).join("");
-  bar.innerHTML = `<span class="studio-velocity-what">${tr("Automation")}</span><label class="studio-cc-field">${tr("Staff")} <select data-cc-lane aria-label="${tr("The staff whose curve is drawn")}"></select></label><label class="studio-cc-field">${tr("Curve")} <select data-cc-id aria-label="${tr("The controller drawn")}">${options}</select></label><button type="button" class="studio-menu" data-cc-clear>${tr("Clear the curve")}</button><span class="studio-roll-hint">${tr("Click to add a point, drag one to move it, double-click to take it away; Alt places it off the grid.")}</span>`;
+  bar.innerHTML = `<span class="studio-velocity-what">${tr("Automation")}</span><label class="studio-cc-field">${tr("Staff")} <select data-cc-lane aria-label="${tr("The staff whose curve is drawn")}"></select></label><label class="studio-cc-field">${tr("Curve")} <select data-cc-id aria-label="${tr("The controller drawn")}"></select></label><label class="studio-cc-field" data-cc-other hidden>CC <input type="number" min="1" max="119" step="1" value="21" data-cc-number aria-label="${tr("The controller's number, 1 to 119")}"></label><button type="button" class="studio-menu" data-cc-clear>${tr("Clear the curve")}</button><span class="studio-roll-hint" data-cc-hint>${tr("Click to add a point, drag one to move it, double-click to take it away; Alt places it off the grid.")}</span>`;
   rollHost.append(bar);
   const laneBox = bar.querySelector("[data-cc-lane]");
   const idBox = bar.querySelector("[data-cc-id]");
+  const otherBox = bar.querySelector("[data-cc-other]");
+  const numberBox = bar.querySelector("[data-cc-number]");
+  // Keyswitches and program changes (#670): the Sound lane, in the curve's place.
+  const sound = soundLane({ root: root ?? rollHost, rollHost, rollScroll, st, edit, say, redraw, laneNow: () => laneNow() });
+
+  /** The Curve menu: the usual controllers, the lane's others, another, the Sound lane. */
+  function curveOptions(lane) {
+    const ids = A.CONTROLLERS.map((c) => c.id);
+    const more = Object.keys(A.curvesOf(st.score)[lane] ?? {}).filter((id) => !ids.includes(id));
+    if (A.controller(st.cc.id) && !ids.includes(st.cc.id) && !more.includes(st.cc.id)) more.push(st.cc.id);
+    more.sort((a, b) => Number(a) - Number(b));
+    const option = (id) => {
+      const c = A.controller(id);
+      return `<option value="${c.id}">${A.controllerName(c.id)}${c.number != null && c.name ? ` (CC ${c.number})` : ""}</option>`;
+    };
+    return [...ids, ...more].map(option).join("") + `<option value="other">${tr("Another controller…")}</option><option value="sound">${tr("Keyswitches and programs")}</option>`;
+  }
 
   /** The staves a curve can be drawn for: [{ lane, name }]. */
   const staves = () => (st.score ? M.channels(st.score) : []);
@@ -66,9 +87,22 @@ export function automationLane({ rollHost, rollScroll, st, edit, say, redraw, re
       laneBox.innerHTML = list.map((c) => `<option value="${c.lane}">${c.name.replace(/[&<>"]/g, "")}</option>`).join("");
     }
     if (lane != null) laneBox.value = String(lane);
-    idBox.value = st.cc.id;
+    const menu = curveOptions(lane);
+    if (idBox.dataset.key !== menu) {
+      idBox.dataset.key = menu;
+      idBox.innerHTML = menu;
+    }
+    if (otherBox.hidden) idBox.value = st.cc.id;
+    const isSound = st.cc.id === "sound";
+    bar.querySelector("[data-cc-clear]").hidden = isSound;
+    bar.querySelector("[data-cc-hint]").hidden = isSound;
+    sound.show(isSound);
     if (lane == null) return "";
     const name = list.find((c) => c.lane === lane)?.name ?? "";
+    if (isSound) {
+      st.cc.geo = geo();
+      return `<div class="studio-cc">${sound.html(lane, { label: name, colour: R.laneColour(st.score, lane), geo: st.cc.geo })}</div>`;
+    }
     const muted = st.cc.id === "64" && A.notatedPedal(st.score, lane) ? tr("This staff's pedal marks (\\sustainOn) play: this curve is not heard.") : "";
     st.cc.geo = geo();
     return `<div class="studio-cc">${A.drawLane(st.score, st.cc.geo, st.cc.id, points(), { label: name, colour: R.laneColour(st.score, lane), chosen: st.cc.chosen, muted })}</div>`;
@@ -135,7 +169,7 @@ export function automationLane({ rollHost, rollScroll, st, edit, say, redraw, re
     const was = A.curveOf(st.score, laneNow(), st.cc.id);
     if (JSON.stringify(next) === JSON.stringify(was)) return redraw();
     const point = next[Math.max(0, st.cc.chosen)];
-    const name = tr(A.controller(st.cc.id).name);
+    const name = A.controllerName(st.cc.id);
     commit(next, point ? tr("{name}: {value}", { name, value: A.valueText(st.cc.id, point[1]) }) : name);
   };
   rollHost.addEventListener("pointerup", end);
@@ -155,14 +189,25 @@ export function automationLane({ rollHost, rollScroll, st, edit, say, redraw, re
     redraw();
   });
   idBox.addEventListener("change", () => {
+    // Another controller: its number asked for beside the menu, its curve drawn once it is given.
+    otherBox.hidden = idBox.value !== "other";
+    if (idBox.value === "other") return numberBox.focus();
     st.cc.id = idBox.value;
+    st.cc.chosen = -1;
+    redraw();
+  });
+  numberBox.addEventListener("change", () => {
+    const id = A.idOfNumber(Number(numberBox.value));
+    if (!id) return say(tr("A curve follows a controller from 1 to 119: bank select (0, 32) and the data entry go with a program change."), true);
+    otherBox.hidden = true;
+    st.cc.id = id;
     st.cc.chosen = -1;
     redraw();
   });
   bar.querySelector("[data-cc-clear]").addEventListener("click", () => {
     if (!st.score || !A.curveOf(st.score, laneNow(), st.cc.id).length) return say(tr("This curve has no point."));
     st.cc.chosen = -1;
-    commit([], tr("{name} cleared", { name: tr(A.controller(st.cc.id).name) }));
+    commit([], tr("{name} cleared", { name: A.controllerName(st.cc.id) }));
   });
 
   // ---- Recording ---------------------------------------------------------------------
