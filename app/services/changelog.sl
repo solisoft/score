@@ -22,6 +22,15 @@ class Changelog
         },
         {
           "area": "site",
+          "title": "Deleting your account deletes everything",
+          "text": "Deleting your account now removes everything you wrote, including on other people's scores and in "
+          + "the library: your comments and replies, your recordings, the sections you shared with what was said of "
+          + "them, your ratings, comments and reports, your notifications, devices, tokens and queued e-mails. A "
+          + "library of any size goes whole, and a deletion cut off half-way is finished the same night.",
+          "app": true
+        },
+        {
+          "area": "site",
           "title": "Signing out clears what the browser kept of your scores",
           "text": "Signing out now also takes the undo history the editor keeps in the browser for each of your "
           + "scores, with their text, besides the pages kept for offline use and the unsent changes. When your "

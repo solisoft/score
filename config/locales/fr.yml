@@ -404,7 +404,7 @@ fr:
       download_part: "Télécharger la partie {part} sur {parts}"
       download: "Télécharger mes données (.zip)"
       delete_title: "Supprimer le compte"
-      delete_lead: "Votre compte et toutes ses partitions sont supprimés définitivement."
+      delete_lead: "Votre compte est supprimé définitivement, avec tout ce qu'il contient : vos partitions, et ce que vous avez écrit sur celles des autres et dans la bibliothèque."
       delete_summary: "Supprimer mon compte…"
       delete_button: "Supprimer mon compte"
       enrol_title: "Connexion en deux étapes"
