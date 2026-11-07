@@ -83,8 +83,9 @@ describe("ScoreLibrary") do
       snippets = ScoreLibrary.snippets
       assert_hash_has_key(snippets, "notes")
       assert_hash_has_key(snippets, "voices")
-      assert_gt(snippets.keys.length, 25)
-      snippets.keys.each do |name|
+      # `keys()`: one snippet is named "keys", which a bare `.keys` would read.
+      assert_gt(snippets.keys().length, 25)
+      snippets.keys().each do |name|
         assert_null(eui_score_layout(snippets[name], 100, {})["error"], name)
       end
     end

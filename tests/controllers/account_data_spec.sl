@@ -19,9 +19,11 @@ def data_sign_in(user)
     "/login",
     {"email": user.email, "password": DATA_PASSWORD}
   )
-  headers = res_headers(response)
-  cookie = (headers["set-cookie"] ?? headers["Set-Cookie"]).to_s.split(";")[0]
-  cookie.split("=")[1]
+  # `set-cookie` is an Array, one line per cookie (Soli 2.30.2, #659).
+  cookie = res_header(response, "set-cookie").find do |line|
+    line.starts_with?("session_id=")
+  end
+  cookie.split(";")[0].split("=")[1]
 end
 
 def data_signed_in?

@@ -243,7 +243,9 @@ class ScoreSvg
   # Each source of `sources` (a hash, name to LilyPond) as a figure.
   static def figures(sources, width, staff_space)
     by_name = {}
-    sources.keys.each do |name|
+    # `keys()`: a snippet is named "keys" (scores/syntax/keys.ly), and a bare
+    # `sources.keys` reads that entry (Soli 2.30, C603: a key outranks a method).
+    sources.keys().each do |name|
       by_name[name] = ScoreSvg.figure(sources[name], width, staff_space)
     end
     by_name
