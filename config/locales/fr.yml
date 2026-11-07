@@ -89,6 +89,7 @@ fr:
     source: "Source LilyPond"
     copy: "Copier"
     play: "Lecture"
+    edit: "Modifier dans le bac à sable →"
   home:
     eyebrow: "Un éditeur de partitions dans votre navigateur"
     headline: "Écrire, jouer et partager des partitions, <em>ensemble</em>, dans le navigateur."

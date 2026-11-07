@@ -10,15 +10,25 @@
 class Changelog
   static def days
     [
-      {"date": "2026-11-07", "entries": [{
-        "area": "editor",
-        "title": "Keyswitches for virtual instruments",
-        "text": "Playing through a sample library in your DAW? Under the MIDI view, the automation lane now takes any "
-        + "controller (CC 0–127), and its Keyswitches and programs mode places keyswitches and program changes on a "
-        + "staff. An articulation map sends the right keyswitch before each staccato, pizz., tremolo or slurred "
-        + "note. They go to the device of Sound to and into Save as MIDI, never onto the page.",
-        "app": true
-      }]},
+      {"date": "2026-11-07", "entries": [
+        {
+          "area": "site",
+          "title": "Play on shared pages sounds as in the editor",
+          "text": "Play on a shared score, a section and the examples now follows each note's own force, the swing, "
+          + "the curves you drew and the mixer's levels, mutes and solos, as the editor's Play does, and the MIDI "
+          + "link saves that same file. Play works again on pieces without repeats, and its words are in French on "
+          + "the French pages."
+        },
+        {
+          "area": "editor",
+          "title": "Keyswitches for virtual instruments",
+          "text": "Playing through a sample library in your DAW? Under the MIDI view, the automation lane now takes "
+          + "any controller (CC 0–127), and its Keyswitches and programs mode places keyswitches and program changes "
+          + "on a staff. An articulation map sends the right keyswitch before each staccato, pizz., tremolo or slurred "
+          + "note. They go to the device of Sound to and into Save as MIDI, never onto the page.",
+          "app": true
+        }
+      ]},
       {"date": "2026-11-06", "entries": [{
         "area": "engine",
         "title": "Words over the staff clear sharps, flats and naturals",

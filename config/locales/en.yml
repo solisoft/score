@@ -89,6 +89,7 @@ en:
     source: "LilyPond source"
     copy: "Copy"
     play: "Play"
+    edit: "Edit in the playground →"
   home:
     eyebrow: "A score editor in your browser"
     headline: "Write, play and share scores, <em>together</em>, in the browser."

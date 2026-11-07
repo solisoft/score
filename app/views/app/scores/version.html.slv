@@ -20,5 +20,5 @@
   <%- score_figure(figure, {"name": file_name, "source": "closed"}) %>
 </section>
 <script defer src="<%= public_path("js/score.js") %>" data-player="<%= public_path("eui-score/player.js") %>"
-  data-engine="<%= public_path("eui-score/eui-score.js") %>" data-model="<%= public_path("eui-score/score-model.js") %>" data-feel="<%= public_path("eui-score/feel.js") %>" data-velocity="<%= public_path("eui-score/velocity.js") %>"
+  data-engine="<%= public_path("eui-score/eui-score.js") %>" data-heard="<%= public_path("eui-score/heard.js") %>"
   data-musicxml="<%= public_path("eui-score/musicxml.js") %>"></script>
