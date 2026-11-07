@@ -12,7 +12,7 @@ const Gh = await import(`./ghost.js${V}`);
 /** Answers the ghost: where a click in note input writes (`ghostAt`), writing there (`writeAtGhost`), and placing it (`placeGhost`). */
 export function install(ctx) {
   const { sheet, st, M } = ctx;
-  const { geometry, inputWrite } = ctx.call;
+  const { geometry, inputWrite, draw } = ctx.call;
 
   const ghost = Object.assign(document.createElement("div"), { className: "studio-ghost", hidden: true });
   ghost.setAttribute("aria-hidden", "true");
@@ -189,8 +189,12 @@ export function install(ctx) {
     return spotAt(event.clientX, event.clientY).spot;
   }
 
-  /** The note written where the ghost is: the cursor put there, then written as its letter would be — one step to undo. */
-  /** Writes the ghost's note at its place; `add`: its pitch joins the note already there, as a chord (#422). */
+  /**
+   * Writes the ghost's note at its place, one step to undo. `add`: on a note of the voice written in,
+   * the pitch joins it as a chord — and a pitch it already has changes nothing, so a click on a note
+   * leaves it be; another voice's note there is not this voice's, so this voice gets the note (#422, #702).
+   * Without `add` (Alt+click) the note is written over.
+   */
   function writeAtGhost(spot, add = false) {
     st.input.staff = spot.lane;
     st.input.t = spot.t;
@@ -201,10 +205,17 @@ export function install(ctx) {
     // On to after that note, as writing it did; the next click or letter goes there.
     st.input.last = { staff: spot.lane, t: under.t0 };
     st.input.t = under.t1;
+    if (has(under.ev, spot)) return draw();
     return inputWrite(what, true);
   }
 
-  /** The note sounding on `lane` at `t` (a chord to add to), as { t0, t1 }, or null on a rest or past the end. */
+  /** Whether the note `ev` already sounds the ghost's pitch (or drum). */
+  function has(ev, spot) {
+    if (spot.drum) return ev.pitches.some((p) => Gh.midiOf(p) === Gh.midiOf(M.drumPitch(spot.drum)));
+    return ev.pitches.some((p) => Gh.midiOf(p) === Gh.midiOf(spot.pitch));
+  }
+
+  /** The note sounding on `lane` at `t` (a chord to add to), as { t0, t1, ev }, or null on a rest or past the end. */
   function chordAt(lane, t) {
     const staff = st.score?.staves[lane];
     if (!staff) return null;
@@ -213,7 +224,7 @@ export function install(ctx) {
     const ev = staff.events[i];
     if (!ev || ev.rest) return null;
     const t1 = at[i] + M.ticksOf(ev);
-    return t < t1 ? { t0: at[i], t1 } : null;
+    return t < t1 ? { t0: at[i], t1, ev } : null;
   }
 
   return { ghostAt, writeAtGhost, placeGhost };
