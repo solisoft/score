@@ -8,8 +8,8 @@ const { tr } = await import(`./words.js${V}`);
 
 /** Answers the score's model and text: reading, writing, the undoable edit, opening. */
 export function install(ctx) {
-  const { root, options, draftKey, sourceBox, status, st, M, Vel, editor_view_lit, score_json, source_spans } = ctx;
-  const { settleHistory, draw, say, mixFromMeta, applyMix } = ctx.call;
+  const { root, options, draftKey, sourceBox, status, st, M, Vel, score_json, source_spans } = ctx;
+  const { settleHistory, draw, engraving, say, mixFromMeta, applyMix } = ctx.call;
 
   // ---- Model ↔ text ----------------------------------------------------------
 
@@ -116,6 +116,8 @@ export function install(ctx) {
     if (!st.score) return say(tr("The score tools wait: this piece is edited in its text below."), true);
     if (st.written) return say(tr("Written pitch is for reading: View ▸ Written pitch again to write, at concert pitch."), true);
     const before = snapshot();
+    // The step Undo goes back to, made now from what the snapshot holds rather than read back from it (#689).
+    const step = { snap: before, text: st.text, after: null, sel: copyOf(st.sel), input: copyOf(st.input) };
     try {
       fn(st.score);
       // A note whose pitch changed in place keeps its velocity; a note gone, its velocity with it.
@@ -126,23 +128,29 @@ export function install(ctx) {
     }
     writeText();
     // Nothing changed: no step to undo.
-    if (st.text === JSON.parse(before).text) {
+    if (st.text === step.text) {
       draw();
       return true;
     }
-    try {
-      JSON.parse(editor_view_lit(st.text, 600, 7, "{}"));
-    } catch (error) {
+    // A text the engraver refuses is not kept. Checked with the drawing itself, which draw()
+    // then puts on the page: a long score is laid out once an edit, not twice (#689).
+    const { error } = engraving({ check: true });
+    if (error) {
       restore(before);
       return say(M.plainRefusal(error.message ?? error), true);
     }
-    st.past.push(before);
+    st.past.push(step);
     if (!keepFuture) st.future = [];
     if (status.dataset.fresh !== "1") say("");
     delete status.dataset.fresh;
     saveDraft();
     draw();
     return true;
+  }
+
+  /** `value` as the snapshot keeps it (a copy through JSON), or null. */
+  function copyOf(value) {
+    return value == null ? null : JSON.parse(JSON.stringify(value));
   }
 
   /**

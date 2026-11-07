@@ -15,11 +15,23 @@ export function install(ctx) {
 
   // ---- Drawing ------------------------------------------------------------------
 
-  function lit() {
+  /** The colours over the drawing: the selection and the cursor (the notes playing go over it: see paintPlaying). */
+  function lit(drawnItems = st.items) {
     const items = {};
     const heads = [];
     // A part's note drawn once for both parts (\\partCombine): lit through the note drawn.
-    const itemOf = (s, i) => M.drawnItem(st.items, st.items.findIndex((it) => it.staff === s && it.index === i));
+    // Each note's item looked up, not searched for among every item for each note selected (#689).
+    let numbers = null;
+    const itemOf = (s, i) => {
+      if (!numbers) {
+        numbers = new Map();
+        drawnItems.forEach((it, k) => {
+          const key = `${it.staff}:${it.index}`;
+          if (!numbers.has(key)) numbers.set(key, k);
+        });
+      }
+      return M.drawnItem(drawnItems, numbers.get(`${s}:${i}`) ?? -1);
+    };
     const r = range();
     if (r && !st.input.on) {
       for (let i = r.a; i <= r.b; i++) items[itemOf(r.s, i)] = COLOURS.selection;
@@ -30,31 +42,62 @@ export function install(ctx) {
       const i = M.starts(staff).findLastIndex((t) => t <= st.input.t);
       if (i >= 0) items[itemOf(st.input.staff, i)] = COLOURS.cursor;
     }
-    if (st.playing?.now) for (const k of st.playing.now) items[k] = COLOURS.playing;
     return JSON.stringify({ items, heads });
+  }
+
+  /** The engraving an edit checked its text with: drawn as it is when nothing has changed since. */
+  let checked = null;
+
+  /**
+   * The score engraved as it is to be drawn: the text shown (with the other
+   * voices' bars opened where the page writes in them), its width, spacing
+   * and colours, and the engraver's answer — `view`, or the `error` it
+   * refused the text with. An edit checks its text with this very engraving
+   * (`check`): the drawing that follows is then that one, or — the selection
+   * moved meanwhile — the same layout, which the engraver keeps, in other
+   * colours. A long score is laid out once an edit, not twice (#689).
+   */
+  function engraving({ check = false } = {}) {
+    let shown = st.text;
+    let items = st.items;
+    if (st.score) ({ source: shown, items } = M.toLilyPond(st.score, { open: openBars(), written: st.written }));
+    const width = Math.max(320, Math.floor(sheet.clientWidth - 2));
+    const space = 8 * st.zoom;
+    const colours = st.score ? lit(items) : "{}";
+    const same = checked && checked.shown === shown && checked.width === width && checked.space === space && checked.colours === colours;
+    const drawing = same ? checked : { shown, items, width, space, colours };
+    checked = check ? drawing : null;
+    if (same) return drawing;
+    // How many times the score was engraved: for a console, or a test.
+    st.engravings = (st.engravings ?? 0) + 1;
+    try {
+      drawing.view = JSON.parse(editor_view_lit(shown, width, space, colours));
+    } catch (error) {
+      drawing.error = error;
+    }
+    return drawing;
   }
 
   async function draw() {
     await loaded();
-    // Drawn: the text, with the other voices' bars opened where the page writes in them.
-    let shown = st.text;
-    if (st.score) {
-      const { source, items } = M.toLilyPond(st.score, { open: openBars(), written: st.written });
-      st.items = items;
-      shown = source;
-    }
-    const width = Math.max(320, Math.floor(sheet.clientWidth - 2));
-    const space = 8 * st.zoom;
-    try {
-      st.view = JSON.parse(editor_view_lit(shown, width, space, st.score ? lit() : "{}"));
+    drawn(engraving());
+  }
+
+  /** `drawing` (an `engraving()`) on the page, and what goes over it. */
+  function drawn(drawing) {
+    st.items = drawing.items;
+    if (drawing.view) {
+      st.view = drawing.view;
       svgHost.innerHTML = st.view.svg;
       sheet.classList.remove("studio-sheet-refused");
-    } catch (error) {
+    } else {
       st.view = null;
       svgHost.innerHTML = "";
       sheet.classList.add("studio-sheet-refused");
-      refuse(error, shown);
+      refuse(drawing.error, drawing.shown);
     }
+    shownAs = drawing;
+    paintPlaying();
     placeWords();
     placeOverlay();
     placePlayhead();
@@ -62,6 +105,62 @@ export function install(ctx) {
     showState();
     if (!st.playing) showInText(false);
     tellPlace();
+  }
+
+  // ---- The notes playing --------------------------------------------------------
+  //
+  // Lit as the music reaches them, many times a second: their coloured copies
+  // put over the drawing as it stands — never the score written and engraved
+  // again, its whole picture replaced, for each note (#689). The copies come
+  // from one engraving of the same text with each note in a colour of its own
+  // (the engraver keeps the layout it has just made: only the colours are
+  // drawn), sorted out by that colour.
+
+  /** What was last drawn (an `engraving()`). */
+  let shownAs = null;
+  /** The notes' copies for a drawing: { shown, width, space, of: Map item → SVG }. */
+  let copies = null;
+
+  /** Each item's copy, in the colour of the notes playing, for the drawing as it now is; null without one. */
+  function playingCopies() {
+    const now = shownAs;
+    if (!now?.view) return null;
+    if (copies && copies.shown === now.shown && copies.width === now.width && copies.space === now.space) return copies.of;
+    const items = {};
+    for (const it of now.view.items) items[it.item] = `#${(it.item + 1).toString(16).padStart(6, "0")}`;
+    const of = new Map();
+    try {
+      const { svg } = JSON.parse(editor_view_lit(now.shown, now.width, now.space, JSON.stringify({ items, heads: [] })));
+      // The drawing itself is in currentColor: what has a colour of its own is an item's copy.
+      for (const [element, colour] of svg.matchAll(/<[a-z]+\b[^<>]*?\bfill="#([0-9a-f]{6})"[^<>]*\/>/g)) {
+        const item = parseInt(colour, 16) - 1;
+        of.set(item, (of.get(item) ?? "") + element.replace(`fill="#${colour}"`, `fill="${COLOURS.playing}"`));
+      }
+    } catch {
+      return null;
+    }
+    copies = { shown: now.shown, width: now.width, space: now.space, of };
+    return of;
+  }
+
+  /** The notes playing now (`st.playing.now`) lit over the drawing, those lit before no longer. */
+  function paintPlaying() {
+    const svg = svgHost.querySelector("svg");
+    svg?.querySelector(":scope > .studio-playing")?.remove();
+    const now = st.playing?.now;
+    if (!svg || !now?.length) return;
+    const of = playingCopies();
+    if (!of) return;
+    const lit = now.map((item) => of.get(item) ?? "").join("");
+    if (lit) svg.insertAdjacentHTML("beforeend", `<g class="studio-playing">${lit}</g>`);
+  }
+
+  /** The notes playing changed: lit, the band over them (and the MIDI view's notes) moved, kept in sight. */
+  function showPlaying() {
+    paintPlaying();
+    placePlayhead();
+    if (st.mode === "midi") drawRoll();
+    followPlaying();
   }
 
   /** Where the drawing is: its origin in the sheet's pixels, and its scale. */
@@ -269,5 +368,5 @@ export function install(ctx) {
   sheetSize.observe(sheet);
   ctx.observers.push(sheetSize);
 
-  return { geometry, draw, placeOverlay, followPlaying };
+  return { geometry, draw, engraving, placeOverlay, followPlaying, showPlaying, playingCopies };
 }

@@ -44,4 +44,4 @@
     <% end %>
   </div>
 </div>
-<script type="module" src="<%= public_path("eui-score/eui-score.js") %>"></script>
+<script type="module" src="<%= eui_module_path("eui-score.js") %>"></script>

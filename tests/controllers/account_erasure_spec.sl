@@ -96,6 +96,11 @@ end
 # A query that finds the same score each time, as one whose delete fails
 # would come back.
 class ErasureStuckQuery
+  # Only the keys are read (Score.erase_each, #689).
+  def select(field)
+    this
+  end
+
   def limit(count)
     this
   end

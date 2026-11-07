@@ -374,6 +374,7 @@ export function attach({ root, st, M, P, act, say }) {
     if (!name) return;
     if (name === "clock-out") {
       settings.clockOut = event.target.checked;
+      wake();
       if (!settings.clockOut) sender?.stop();
       if (!settings.clockOut) say(tr("No MIDI clock sent."));
       else if (P.outputPort?.()) say(tr("The MIDI clock goes with the music to the device chosen in Sound to."));
@@ -388,17 +389,22 @@ export function attach({ root, st, M, P, act, say }) {
     keep(storage, settings);
   });
 
-  // The clock out: driven by the playback, polled.
+  // The clock out: driven by the playback, polled — only while the music
+  // plays with the clock on (`wake`), not every 25 ms for as long as the
+  // page is open (#689).
   let sender = null;
   let line = null;
   let lineOf = null;
-  const loop = setInterval(() => {
+  let loop = 0;
+  function poll() {
     if (!root.isConnected) return stop();
     const playing = st.playing;
     const port = settings.clockOut ? P.outputPort?.() : null;
     if (!port || !playing?.handle) {
       sender?.stop();
       if (!port) sender = null;
+      clearInterval(loop);
+      loop = 0;
       return;
     }
     if (!sender || sender.port !== port) {
@@ -411,7 +417,14 @@ export function attach({ root, st, M, P, act, say }) {
       sender.stop();
     }
     sender.tick(playing.handle.playing ? playing.handle : null, line);
-  }, 25);
+  }
+
+  /** The music started (or the clock was turned on): the clock polled while it plays. */
+  function wake() {
+    if (loop || !settings.clockOut || !root.isConnected) return;
+    loop = setInterval(poll, 25);
+    poll();
+  }
 
   // What comes in on the MIDI keyboard.
   const follower = new ClockFollower({
@@ -548,9 +561,10 @@ export function attach({ root, st, M, P, act, say }) {
 
   function stop() {
     clearInterval(loop);
+    loop = 0;
     sender?.stop();
     untap?.();
   }
 
-  return { open, stop, learnt };
+  return { open, stop, wake, learnt, polling: () => loop !== 0 };
 }

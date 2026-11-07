@@ -221,10 +221,4 @@ class ScoreTake < Model
   static def blobs
     __soli_resolve_solidb_client()
   end
-
-  static def delete_all_for(score)
-    ScoreTake.of(score).each do |take|
-      take.remove
-    end
-  end
 end

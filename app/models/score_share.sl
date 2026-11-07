@@ -18,25 +18,92 @@ class ScoreShare < Model
     {"presence": true, "format": "email"}
   )
   validates("role", {"inclusion": SCORE_SHARE_ROLES})
+  # A share made, changed or taken away: who may work in the score's room is
+  # read again at their next cursor (ScoreRoom.still_allowed?, #689).
+  after_save("forget_room")
+  after_delete("forget_room")
+
+  def forget_room
+    ScoreRoom.forget(@score_id)
+  end
 
   # Share `score` with `email` as `role`; sharing again changes the role.
   # Answers the share, or a hash with "error" when it cannot be.
+  #
+  # A score is shared with an address once: a unique index holds it
+  # (score_id, email; #689). Two invitations at once both find none and
+  # both make one: the second is refused by the index, and changes the one
+  # the first made instead — as if it had come after it.
   static def invite(score, email, role)
     address = email.to_s.trim.downcase
     owner = User.find_by("_key", score.user_id)
     return {"error": SiteText.t("app.scores.invite.own_address")} if !owner.nil? && owner.email == address
     return {"error": SiteText.t("app.scores.invite.choose_role")} unless SCORE_SHARE_ROLES.includes?(role)
 
-    share = ScoreShare.where({"score_id": score._key, "email": address}).first
+    share = ScoreShare.written(score, address, role, ScoreShare.where({
+      "score_id": score._key,
+      "email": address
+    }).first)
+    return share unless share.nil?
+
+    share = ScoreShare.written(score, address, role, ScoreShare.where({
+      "score_id": score._key,
+      "email": address
+    }).first, true)
+    return share unless share.nil?
+
+    {"error": SiteText.t("app.scores.invite.not_an_email")}
+  end
+
+  # `share` (nil: a new one) of `score` with `address` as `role`, saved;
+  # nil when it could not be. `again`: only an existing share, after a new
+  # one was refused (another invitation made it first).
+  static def written(score, address, role, share, again = false)
+    return nil if again && share.nil?
+
     share = ScoreShare.new() if share.nil?
     share.score_id = score._key
     share.owner_id = score.user_id
     share.email = address
     share.role = role
     share.created_at ||= DateTime.utc.to_unix
-    return {"error": SiteText.t("app.scores.invite.not_an_email")} unless share.save
+    share.save ? share : nil
+  end
 
-    share
+  # The shares of one score with one address beyond the first (made before
+  # the unique index, #689), to merge into it: the oldest kept, with the
+  # stronger role ("write" over "read"), the others deleted. `rows`:
+  # {"key", "score_id", "email", "role"}, the oldest first for each score
+  # and address. Answers {"to_write": the keys of the shares kept that
+  # become "write", "gone": the keys of the others}. The migration that adds
+  # the index runs it.
+  static def duplicates_in(rows)
+    groups = {}
+    order = []
+    rows.each do |row|
+      pair = "#{row["score_id"]} #{row["email"]}"
+      unless groups.has_key(pair)
+        groups[pair] = []
+        order.push(pair)
+      end
+      groups[pair].push(row)
+    end
+    to_write = []
+    gone = []
+    order.each do |pair|
+      group = groups[pair]
+      next if group.length < 2
+
+      kept = group[0]
+      writes = group.any? do |row|
+        row["role"] == "write"
+      end
+      to_write.push(kept["key"]) if writes && kept["role"] != "write"
+      gone = gone + group.slice(1, group.length).map do |row|
+        row["key"]
+      end
+    end
+    {"to_write": to_write, "gone": gone}
   end
 
   # Share `score` as `invite` does, on `user`'s say: refused, with nothing
@@ -286,10 +353,6 @@ class ScoreShare < Model
       end
     end
     moving.length
-  end
-
-  static def delete_all_for(score)
-    ScoreShare.where({"score_id": score._key}).delete_all
   end
 
   # Everything shared by or with `user`: their account is going.

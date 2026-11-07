@@ -98,10 +98,6 @@ class ScoreVersion < Model
     ScoreVersion.where("doc.score_id == @score", {"score": score._key})
   end
 
-  static def delete_all_for(score)
-    ScoreVersion.where("doc.score_id == @score", {"score": score._key}).delete_all
-  end
-
   static def delete_all_of(user)
     ScoreVersion.where("doc.user_id == @user", {"user": user._key}).delete_all
   end

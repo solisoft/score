@@ -151,6 +151,18 @@ describe("HomeController") do
       assert_not(body.contains("html-midi-player"))
     end
 
+    test("names every engraver module Play loads at the set's one version, so each is loaded once (#689)") do
+      body = res_body(get("/"))
+      version = ScoreAssets.version
+      # The modules name those they import at their own version: the page's must be that one too, or
+      # score-model.js, imported by heard.js and by player.js's imports, is fetched and run twice.
+      ["player", "engine", "heard", "musicxml"].each do |name|
+        found = Regex.capture("data-#{name}=\"(?P<href>[^\"]+)\"", body)
+        assert_not_null(found, "data-#{name}")
+        assert_match(found["href"], "^/eui-score/[a-z-]+\\.js\\?v=#{version}$")
+      end
+    end
+
     test("names the site once in its title, and carries its share tags") do
       body = res_body(get("/"))
       title = "Write, play and share scores, together · Score"

@@ -23,6 +23,6 @@
     <div class="score-code"><pre data-admin-source><code><%- score_highlight(version.source) %></code></pre></div>
   </section>
 </section>
-<script defer src="<%= public_path("js/score.js") %>" data-player="<%= public_path("eui-score/player.js") %>"
-  data-engine="<%= public_path("eui-score/eui-score.js") %>" data-heard="<%= public_path("eui-score/heard.js") %>"
-  data-musicxml="<%= public_path("eui-score/musicxml.js") %>"></script>
+<script defer src="<%= public_path("js/score.js") %>" data-player="<%= eui_module_path("player.js") %>"
+  data-engine="<%= eui_module_path("eui-score.js") %>" data-heard="<%= eui_module_path("heard.js") %>"
+  data-musicxml="<%= eui_module_path("musicxml.js") %>"></script>

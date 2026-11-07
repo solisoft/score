@@ -319,10 +319,4 @@ class ScoreThread < Model
       keys.includes?(view["id"])
     end
   end
-
-  # Gone with their score (Score#erase).
-  static def delete_all_for(score)
-    ScoreComment.where({"score_id": score._key}).delete_all
-    ScoreThread.where({"score_id": score._key}).delete_all
-  end
 end

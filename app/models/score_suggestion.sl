@@ -97,11 +97,6 @@ class ScoreSuggestion < Model
     stuck.length
   end
 
-  # What was asked of `score`: it is going.
-  static def delete_all_for(score)
-    ScoreSuggestion.where({"score_id": score._key}).delete_all
-  end
-
   # Every request `user` made, scores' texts included: their account is going.
   static def delete_all_of(user)
     ScoreSuggestion.where({"user_id": user._key}).delete_all

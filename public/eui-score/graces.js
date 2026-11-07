@@ -143,8 +143,7 @@ export function heardAt(score, passes, s, i, t = M.starts(score.staves[s])[i]) {
   if (!ev.graces?.length || ev.rest) return M.playedAt(score, passes, t);
   const bar = M.barAt(score, t);
   const before = noteBefore(score, s, i);
-  return passes
-    .filter((p) => p.bar === bar)
+  return M.passesThrough(passes, bar)
     .map((p) => {
       const timing = timingIn(score, s, i, t, p, before ? M.ticksOf(before) / 2 : t);
       return M.playedAt(score, [p], timing.main)[0];

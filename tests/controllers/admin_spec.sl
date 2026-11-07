@@ -372,6 +372,17 @@ describe("The admin section") do
       assert_eq(res_status(get("/admin")), 200)
     end
 
+    test("reads its counts together: the overview's queries do not grow with its figures (#689)") do
+      admin = admin_spec_user("admin")
+      admin_spec_sign_in(admin)
+      response = get("/admin")
+      assert_eq(res_status(response), 200)
+      assert_eq(assigns()["figures"]["accounts"], User.count)
+      assert_eq(assigns()["figures"]["scores"], Score.where("doc.trashed_at == null").count)
+      # The nine counts in one round-trip, then the revenue, the weeks, the newest and the events.
+      assert_max_queries(response, 7)
+    end
+
     test("puts each sign-up in its week, the oldest first") do
       now = 100 * 7 * ADMIN_SPEC_DAY
       weeks = AdminReport.weeks([
@@ -408,6 +419,25 @@ describe("The admin section") do
 
       nobody = res_body(get("/admin/customers?q=no-such-account-#{uuid_v4}"))
       assert_contains(nobody, "data-no-customer")
+    end
+
+    test("counts each customer's scores out of the trash, a row a customer (#689)") do
+      admin = admin_spec_user("admin")
+      composer = admin_spec_user("member", "Fanny Mendelssohn-#{uuid_v4}")
+      Score.start(composer, Score.blank_source("One"))
+      Score.start(composer, Score.blank_source("Two"))
+      Score.start(composer, Score.blank_source("Binned")).move_to_trash
+      quiet = admin_spec_user("member", "Quiet-#{uuid_v4}")
+      assert_eq(AdminReport.score_counts([
+        composer,
+        quiet,
+        admin
+      ]), {composer._key: 2})
+      assert_eq(AdminReport.score_counts([]), {})
+      admin_spec_sign_in(admin)
+      response = get("/admin/customers?q=#{url_encode(composer.name.downcase)}")
+      assert_eq(assigns()["scores"][composer._key], 2)
+      assert_no_n_plus_one(response)
     end
 
     test("an unknown filter shows everyone") do

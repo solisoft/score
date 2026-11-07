@@ -238,15 +238,22 @@ class AppAccountController < AppBaseController
   end
 
   # POST /app/account/export — a zip of everything in the account (?part=N
-  # of a big one: AccountExport)
+  # of a big one: AccountExport). Asked for without a part, a big one is
+  # listed first, part by part, on the account page (#689).
   def download_data
     user = current_user()
+    parts = nil
+    if params["part"].blank?
+      parts = AccountExport.parts(user)
+      return @_export_parts(user, parts.length) if parts.length > 1
+    end
+
     unless AccountExport.allowed?(user)
       @export_error = SiteText.t("app.account.exports_too_many", {"n": EXPORTS_PER_WINDOW})
       return @_refuse(user, "", 429)
     end
 
-    parts = AccountExport.parts(user)
+    parts ||= AccountExport.parts(user)
     number = params["part"].blank? ? 1 : params["part"].to_s.to_i
     halt(404, SiteText.t("app.account.export_no_part")) if number < 1 || number > parts.length
 
@@ -314,6 +321,18 @@ class AppAccountController < AppBaseController
     @email_error = message
     @typed_email = params["email"].to_s.trim
     render("app/account/show", {}, {"status": status})
+  end
+
+  # The account page again, its export in `count` parts, each to download.
+  def _export_parts(user, count)
+    @user = user
+    @title = SiteText.t("app.account.page_title")
+    @description = SiteText.t("app.account.page_description")
+    @error = ""
+    @tokens = AccessToken.of(user)
+    @mcp_url = auth_base_url() + "/mcp"
+    @export_parts = count
+    render("app/account/show")
   end
 
   # The account page again, when the wrong passwords typed lately leave no

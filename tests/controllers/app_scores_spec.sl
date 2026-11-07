@@ -19,6 +19,40 @@ def library_sign_in(user)
   )
 end
 
+# The queries of the second save, in the hour, of a score shared with
+# `people` people: everyone already told, its owner already named (#689).
+def shared_save_queries(people)
+  owner = library_user()
+  score = Score.start(owner, Score.blank_source("Shared #{people}"))
+  (0 .. people).each do |_|
+    ScoreShare.invite(score, library_user().email, "write")
+  end
+  library_sign_in(owner)
+  source = "\\header { title = \"Shared #{people}\" }\n{ c'1 }"
+  first = put(
+    "/app/scores/#{score._key}",
+    {"source": source, "revision": score.revision}
+  )
+  assert_eq(res_status(first), 200)
+  second = put(
+    "/app/scores/#{score._key}",
+    {
+      "source": source.replace("c'1", "d'1"),
+      "revision": score.revision + 1
+    }
+  )
+  assert_eq(res_status(second), 200)
+  assert_eq(res_json(second)["revision"], score.revision + 2)
+  assert_no_n_plus_one(second)
+  # Who may see it and this hour's notifications, read together: one query, not three.
+  assert_max_queries(second, 7)
+  assert_eq(UserNotification.where({
+    "score_id": score._key,
+    "kind": "changed"
+  }).count, people)
+  second["query_count"]
+end
+
 describe("AppScoresController") do
   before_each() do
     as_guest()
@@ -311,6 +345,11 @@ describe("AppScoresController") do
       end
       assert_eq(conflicts.length, 1)
       assert_contains(ScoreVersion.find(conflicts[0]._key).source, "f'1")
+    end
+
+    test("a save of a score shared with many reads no more than one shared with one (#689)") do
+      one = shared_save_queries(1)
+      assert_eq(shared_save_queries(6), one, "as many queries for six people as for one")
     end
 
     test("a signed-out save that wants JSON is answered 401 JSON, and writes nothing") do
