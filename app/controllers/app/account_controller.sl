@@ -91,11 +91,23 @@ class AppAccountController < AppBaseController
     @_show_enrolment(@user.start_two_step(), "")
   end
 
-  # POST /app/account/two-step/confirm — a first code from the app turns it on
+  # POST /app/account/two-step/confirm — a first code from the app turns it
+  # on: within TWO_STEP_PENDING_SECONDS of the setup, each code counted
+  # (#687, User#confirm_two_step)
   def confirm_two_step
     @user = current_user()
+    if @user.two_step_setup_expired?
+      expired = SiteText.t("security_687.enrol_expired", {"minutes": TWO_STEP_PENDING_SECONDS / 60})
+      return @_refuse_two_step(expired, 422)
+    end
+
     secret = @user.pending_two_step()
     return redirect(app_account_path()) if secret.nil?
+
+    if @user.codes_locked?
+      paused = SiteText.t("security_538.too_many_codes", {"minutes": TWO_STEP_LOCK_SECONDS / 60})
+      return @_show_enrolment(secret, paused, 429)
+    end
 
     codes = @user.confirm_two_step(params["code"])
     wrong = SiteText.t("app.account.enrol_wrong_code")
@@ -328,12 +340,12 @@ class AppAccountController < AppBaseController
   end
 
   # The page that sets an authenticator app up: the QR code and the secret.
-  def _show_enrolment(secret, error)
+  def _show_enrolment(secret, error, status = nil)
     @secret = secret
     @uri = @user.two_step_uri(secret)
     @error = error
     @title = SiteText.t("app.account.enrol_title")
     @description = SiteText.t("app.account.enrol_description")
-    render("app/account/two_step", {}, {"status": error.blank? ? 200 : 422})
+    render("app/account/two_step", {}, {"status": status ?? (error.blank? ? 200 : 422)})
   end
 end

@@ -234,6 +234,8 @@ middleware("require_app_database", fn() {
     # An admin without two-step sign-in is sent here by `require_admin`
     # (#544): what to turn on, and where. Anyone else is answered 404.
     get("/admin/two-step", "admin/two_step#show", name: "admin_two_step")
+    # Its code asked again there, when the session's ran out (#687).
+    post("/admin/two-step", "admin/two_step#create", name: "admin_two_step_code")
 
     # The admin section (#399): the accounts, the plans, the payments.
     # Admins only (User#admin?), with two-step on: anyone else is answered 404.

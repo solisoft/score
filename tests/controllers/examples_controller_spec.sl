@@ -27,6 +27,15 @@ describe("ExamplesController") do
   end
 
   describe("GET /examples/:category/:slug") do
+    test("words the player's buttons in the page's language, the sandbox link too (#682)") do
+      french = res_body(get("/fr/examples/piano/waltz"))
+      assert_contains(french, "<span aria-hidden=\"true\">▶</span> Lecture</button>")
+      assert_contains(french, "?source=piano/waltz\">Modifier dans le bac à sable →</a>")
+      assert_not(french.contains("Edit in the playground"))
+      english = res_body(get("/examples/piano/waltz"))
+      assert_contains(english, "?source=piano/waltz\">Edit in the playground →</a>")
+    end
+
     test("engraves the piece with its source, MIDI, PDF and neighbours") do
       response = get("/examples/piano/waltz")
       assert_eq(res_status(response), 200)

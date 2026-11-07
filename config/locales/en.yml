@@ -89,6 +89,7 @@ en:
     source: "LilyPond source"
     copy: "Copy"
     play: "Play"
+    edit: "Edit in the playground →"
   home:
     eyebrow: "A score editor in your browser"
     headline: "Write, play and share scores, <em>together</em>, in the browser."
@@ -1505,7 +1506,7 @@ en:
     admin_two_step_do: "Turn on two-step sign-in in your account to use the admin."
     admin_two_step_button: "Turn on two-step sign-in"
     admin_two_step_unavailable: "This server cannot keep two-step secrets yet: whoever runs it must set SOLI_ENCRYPTION_KEY first."
-    admin_two_step_again: "This session was opened without your code: before two-step sign-in was turned on, or on a remembered browser. Sign out, then sign in again with the code of your authenticator app to use the admin."
+    admin_two_step_again: "This session gave no code yet, or gave it more than 12 hours ago (signed in before two-step was turned on, or on a remembered browser): type the code of your authenticator app to use the admin."
     admin_two_step_sign_out: "Sign out"
   # ---
   # (#626) admin: a customer's scores, read only — keys under `admin_626:` right below
@@ -1552,4 +1553,12 @@ en:
   security_684:
     too_many_scores: "Not created: an account keeps {n} scores at most, those in the trash included. Delete some for good from the trash to make room."
     too_many_photos: "Too many photos sent this minute: try again in a minute."
+  # (#687) security: admin powers, two-step setup — keys under `security_687:` right below
+  security_687:
+    removed_section: "Took the section “{title}” away from the library"
+    removed_comment: "Took away a comment on the section “{title}”"
+    enrol_expired: "That setup ran out after {minutes} minutes: type your password to start again."
+    admin_code_label: "Code of your authenticator app"
+    admin_code_submit: "Open the admin"
+    admin_code_wrong: "That code is not right, or it was already used."
   # ---

@@ -150,6 +150,43 @@ describe("Two-step sign-in") do
       assert_not(User.find(account[0]._key).two_step?)
     end
 
+    test("its first code cannot be guessed without end (#687): wrong ones pause it with a 429, nothing turned on") do
+      account = step_account(false)
+      password_step(account[0])
+      post("/app/account/two-step", {"password": STEP_PASSWORD})
+      secret = User.find(account[0]._key).pending_two_step
+      (0 .. TWO_STEP_MAX_WRONG).each do |_|
+        assert_eq(res_status(post("/app/account/two-step/confirm", {"code": "000000"})), 422)
+      end
+      paused = post("/app/account/two-step/confirm", {"code": step_code(secret, 0)})
+      assert_eq(res_status(paused), 429)
+      assert_contains(res_body(paused), "Too many wrong codes for this account: no code is taken for 30 minutes.")
+      stored = User.find(account[0]._key)
+      assert_not(stored.two_step?, "the right code, paused, turns nothing on")
+      assert_null(stored.totp_secret)
+    end
+
+    test("a setup left past 15 minutes takes no code (#687): started again with the password") do
+      account = step_account(false)
+      password_step(account[0])
+      post("/app/account/two-step", {"password": STEP_PASSWORD})
+      secret = User.find(account[0]._key).pending_two_step
+      stored = User.find(account[0]._key)
+      stored.totp_pending_at = DateTime.utc.to_unix - TWO_STEP_PENDING_SECONDS - 1
+      stored.update()
+      late = post("/app/account/two-step/confirm", {"code": step_code(secret, 0)})
+      assert_eq(res_status(late), 422)
+      assert_contains(res_body(late), "That setup ran out after 15 minutes: type your password to start again.")
+      assert_not(User.find(account[0]._key).two_step?)
+      # Started again, a code of the new secret turns it on.
+      post("/app/account/two-step", {"password": STEP_PASSWORD})
+      fresh = User.find(account[0]._key).pending_two_step
+      assert_ne(fresh, secret)
+      turned_on = post("/app/account/two-step/confirm", {"code": step_code(fresh, 0)})
+      assert_contains(res_body(turned_on), "Two-step sign-in is on")
+      assert(User.find(account[0]._key).two_step?)
+    end
+
     test("a guest cannot reach any of it") do
       assert_eq(res_status(post("/app/account/two-step", {})), 401)
       assert_eq(res_status(post("/app/account/two-step/confirm", {"code": "123456"})), 401)

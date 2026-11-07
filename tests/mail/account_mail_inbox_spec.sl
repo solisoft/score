@@ -167,4 +167,24 @@ describe("The e-mails as they left") do
     assert_contains(mail["html"], "href=\"#{auth_base_url}/app/scores/#{score._key}\"")
     assert_contains(mail["html"], "href=\"#{auth_base_url}/signup\"")
   end
+
+  test("an invitation's subject is one line (#687), even for a title kept with line breaks before") do
+    owner = inbox_user()
+    invitee = "invited-#{uuid_v4}@example.com"
+    score = Score.start(owner, Score.blank_source("Plain"))
+    # A title kept with its line breaks, as one could be before #687.
+    Score.where("doc._key == @key", {"key": score._key}).update_all({"title": "Win\r\nBcc: spam@example.com\n\nnow"})
+    post(
+      "/login",
+      {"email": owner.email, "password": INBOX_PASSWORD}
+    )
+    invited = post(
+      "/app/scores/#{score._key}/invitations",
+      {"email": invitee, "role": "read"}
+    )
+    assert_eq(res_status(invited), 302)
+    mail = inbox_mail(invitee)
+    assert_eq(mail["subject"], "#{owner.email} shared “Win Bcc: spam@example.com now” with you")
+    assert_eq(inbox_rows("spam@example.com"), [])
+  end
 end
