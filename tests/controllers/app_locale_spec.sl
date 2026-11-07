@@ -61,7 +61,8 @@ describe("The app's language") do
     assert_eq(res_status(response), 302)
     assert_eq(res_location(response), "/app/account#language")
     assert_eq(User.find(user._key).locale, "fr")
-    assert_contains(res_header(response, "Set-Cookie").to_s, "locale=fr")
+    # `set-cookie` is an Array, one line per cookie (Soli 2.30.2, #659).
+    assert_contains(res_header(response, "Set-Cookie").join("\n"), "locale=fr")
   end
 
   test("refuses a language it does not speak, and changes nothing") do
@@ -76,7 +77,7 @@ describe("The app's language") do
   test("refuses a guest") do
     response = post("/app/account/language", {"locale": "fr"})
     assert_eq(res_status(response), 401)
-    assert_not(res_header(response, "Set-Cookie").to_s.includes?("locale=fr"))
+    assert_not((res_header(response, "Set-Cookie") ?? []).join("\n").includes?("locale=fr"))
   end
 
   test("its pages vary on the cookie, so a copy prefetched in one language is not shown in the other") do

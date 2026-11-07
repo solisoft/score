@@ -10,6 +10,13 @@
 class Changelog
   static def days
     [
+      {"date": "2026-11-06", "entries": [{
+        "area": "engine",
+        "title": "Words over the staff clear sharps, flats and naturals",
+        "text": "Words above the staff, such as “Al Coda” at a double bar line, were drawn through the natural, "
+        + "sharp or flat of the next bar's first note, and sometimes through its slur. They now stand above the "
+        + "sign and the slur, and so do rehearsal marks, segno and coda signs, and tempo marks."
+      }]},
       {"date": "2026-11-01", "entries": [
         {
           "area": "site",

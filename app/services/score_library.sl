@@ -317,7 +317,8 @@ class ScoreLibrary
     ScoreLibrary.source(example)
   end
 
-  # Every snippet of the syntax page, by its file's name.
+  # Every snippet of the syntax page, by its file's name. One is named "keys":
+  # read the names with `keys()`, a bare `.keys` reads that snippet.
   static def snippets
     snippets_by_name = {}
     File.glob("scores/syntax/*.ly").each do |path|
