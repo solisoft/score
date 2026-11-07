@@ -199,9 +199,10 @@ export function install(ctx) {
       case "duration": return duration(Number(data.base), st.input.on ? st.input.dots : 0);
       case "dot": return toggleDot();
       case "letter": {
-        // Ticked, Add to the chord adds to the note just written; with none
-        // yet, the letter writes the chord's first note (#422).
-        const ticked = root.querySelector("[data-chord-mode]")?.checked && (!st.input.on || Boolean(st.input.last));
+        // Ticked, Add to the chord adds to the note just written, else to the
+        // note the cursor is on; on a rest or past the music, the letter
+        // writes the chord's first note (#422, #702).
+        const ticked = root.querySelector("[data-chord-mode]")?.checked && (!st.input.on || Boolean(st.input.last) || noteAtCursor());
         const add = data.add || ticked;
         if (st.input.on) return inputWrite(Number(data.step), add);
         return edit((score) => {
@@ -562,6 +563,14 @@ export function install(ctx) {
   root.querySelector("[data-keys]")?.addEventListener("click", (event) => {
     if (event.target === event.currentTarget) event.currentTarget.close();
   });
+
+  /** In note input, whether a note (not a rest) starts at the cursor (#702). */
+  function noteAtCursor() {
+    const staff = st.score?.staves[st.input.staff];
+    if (!staff) return false;
+    const i = M.starts(staff).indexOf(st.input.t);
+    return i >= 0 && !staff.events[i].rest;
+  }
 
   function currentAlter() {
     const t = target();

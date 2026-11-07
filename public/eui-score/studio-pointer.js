@@ -146,11 +146,12 @@ export function install(ctx) {
       return;
     }
     // Note input: a click writes the ghost's note there (studio-ghost.js); Shift+click moves the cursor, as a click did before.
-    // With Add to the chord ticked, or Alt held, the click adds its pitch to the note there (#422).
+    // A click on a note adds its pitch to it, a chord; on a rest or past the end it writes a note.
+    // Alt+click writes over the note instead (#422, #702).
     const spot = st.input.on && !event.shiftKey ? ghostAt(event) : null;
     if (spot) {
       event.preventDefault();
-      return writeAtGhost(spot, event.altKey || Boolean(root.querySelector("[data-chord-mode]")?.checked));
+      return writeAtGhost(spot, !event.altKey);
     }
     // A chord diagram drawn on the score: a click opens it large, its grid to click on (#436).
     const diagram = p && !st.input.on ? wordHit(p) : null;

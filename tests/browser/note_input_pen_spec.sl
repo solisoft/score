@@ -219,24 +219,53 @@ describe("Note input's pen and ghost note, in a browser") do
     sleep(0.4)
     assert_contains(pen_text(), "f'4 | r1")
     evaluate("document.querySelector('[data-chord-mode]').click()")
-    # Unticked, a click over a note writes over it, as before.
-    pen_pointer("pointerdown", first)
-    pen_pointer("pointerup", first)
-    assert_not(pen_text().includes?("<c' g' d''>4 d'4"), "the chord is written over: #{pen_text}")
     assert_no_page_errors()
   end
 
-  test("Alt+click adds to the chord without the box (#422)") do
+  test("a click adds to a chord, on a pitch it has changes nothing, Alt+click writes over (#702)") do
     press("n")
     sleep(0.3)
     first = pen_point(0, 0.12, 2)
-    pen_pointer("pointerdown", first, false, true)
-    pen_pointer("pointerup", first, false, true)
+    # Box unticked: G joins C all the same.
+    pen_pointer("pointermove", first)
+    pen_pointer("pointerdown", first)
+    pen_pointer("pointerup", first)
     assert_contains(pen_text(), "<c' g'>4 d'4")
+    # On the note again (G is there already): nothing changes.
+    before = pen_text()
+    pen_pointer("pointerdown", first)
+    pen_pointer("pointerup", first)
+    assert_eq(pen_text(), before)
+    # On C itself, the chord's other note: nothing changes either.
+    on_c = pen_point(0, 0.12, -2)
+    pen_pointer("pointerdown", on_c)
+    pen_pointer("pointerup", on_c)
+    assert_eq(pen_text(), before)
+    # Alt+click writes over the chord: one note, the clicked pitch.
+    higher = pen_point(0, 0.12, 6)
+    pen_pointer("pointerdown", higher, false, true)
+    pen_pointer("pointerup", higher, false, true)
+    assert_contains(pen_text(), "d''4 d'4")
+    assert_not(pen_text().includes?("<c' g'>"), "written over: #{pen_text}")
     assert_no_page_errors()
   end
 
-  test("with Add to the chord ticked, the letter buttons write a chord's first note, then add to it (#422)") do
+  test("in another voice, a click on a pitch the first voice has writes that voice's note (#702)") do
+    press("n")
+    sleep(0.3)
+    evaluate("document.querySelector(\"[data-act='voice'][data-voice='2']\").click()")
+    sleep(0.4)
+    # C4 is voice 1's; voice 2 has nothing there: the click writes C4 in voice 2.
+    on_c = pen_point(0, 0.12, -2)
+    pen_pointer("pointermove", on_c)
+    pen_pointer("pointerdown", on_c)
+    pen_pointer("pointerup", on_c)
+    text = pen_text()
+    assert_contains(text, "<< { c'4 d'4 e'4 f'4 } \\\\ { c'4 r2. } >>", "the source: #{text}")
+    assert_no_page_errors()
+  end
+
+  test("with Add to the chord ticked, the letter buttons add to the note at the cursor, never over it (#422, #702)") do
     press("n")
     sleep(0.3)
     evaluate("document.querySelector('[data-chord-mode]').click()")
@@ -244,8 +273,26 @@ describe("Note input's pen and ghost note, in a browser") do
       evaluate("document.querySelector(\".studio-toolbox [data-act='letter'][data-step='#{step}']\").click()")
       sleep(0.3)
     end
-    # G written over the first note, then B and D on it: G B D.
-    assert_contains(pen_text(), "<g' b' d''>4 d'4")
+    # The cursor is on C: G, B and D join it, C stays (#702; it was written over before).
+    assert_contains(pen_text(), "<c' g' b' d''>4 d'4")
+    evaluate("document.querySelector('[data-chord-mode]').click()")
+    assert_no_page_errors()
+  end
+
+  test("with Add to the chord ticked, a letter typed on a note moved to adds to it; on a rest it writes (#702)") do
+    press("n")
+    sleep(0.3)
+    evaluate("document.querySelector('[data-chord-mode]').click()")
+    # The cursor is on C, nothing written yet: G joins C instead of replacing it.
+    press("g")
+    sleep(0.4)
+    assert_contains(pen_text(), "<c' g'>4 d'4")
+    # Moved onto D with the arrow: A joins D, C's chord stays.
+    press("ArrowRight")
+    sleep(0.3)
+    press("a")
+    sleep(0.4)
+    assert_contains(pen_text(), "<c' g'>4 <d' a'>4")
     evaluate("document.querySelector('[data-chord-mode]').click()")
     assert_no_page_errors()
   end

@@ -12,6 +12,15 @@ class Changelog
     [
       {"date": "2026-11-07", "entries": [
         {
+          "area": "editor",
+          "title": "Chords with a click",
+          "text": "In note input, a click on a note adds the pitch clicked to it, as a chord, instead of writing "
+          + "over it; a click on a pitch the note already has changes nothing, and in another voice it writes that "
+          + "voice's note. Alt+click still writes over. With Add to the chord ticked, a letter typed on a note joins "
+          + "it too.",
+          "app": true
+        },
+        {
           "area": "site",
           "title": "Score is free",
           "text": "Everything on the site is now free, for everyone: no plan to choose and nothing to pay. Every "
