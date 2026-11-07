@@ -43,12 +43,12 @@
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Music&display=swap" rel="stylesheet">
 </head>
 <body>
-    <%# The header leads with the app (#397): App, Pricing, Guide, Changelog;
+    <%# The header leads with the app (#397): App, Sections, Guide, Changelog (no
+        Pricing while the site is free, #699);
         the engraver's own pages (Syntax, Examples, Embed, Limits) are under
         Guide and in the footer. An item is [label, path, the paths it covers]. %>
     <% app_path = app_open?() ? app_home_path() : playground_path() %>
     <% nav_items = [[t("nav.app"), app_path, [app_path]], [t("nav.sections"), sections_path(), [sections_path()]],
-                    [t("nav.pricing"), lp(pricing_path()), [lp(pricing_path())]],
                     [t("nav.guide"), lp(guide_path()),
                      [lp(guide_path()), lp(syntax_path()), lp(embed_path()), lp(limits_path()), lp(claude_path())]],
                     [t("nav.changelog"), lp(changelog_path()), [lp(changelog_path())]]] %>
@@ -92,7 +92,6 @@
             <nav class="footer-nav" aria-label="<%= t("footer.label") %>">
                 <a href="<%= app_path %>"><%= t("nav.app") %></a>
                 <a href="<%= playground_path() %>"><%= t("nav.playground") %></a>
-                <a href="<%= lp(pricing_path()) %>"><%= t("nav.pricing") %></a>
                 <a href="<%= lp(changelog_path()) %>"><%= t("nav.changelog") %></a>
                 <a href="<%= lp(guide_path()) %>"><%= t("nav.guide") %></a>
                 <a href="<%= lp(syntax_path()) %>"><%= t("nav.syntax") %></a>

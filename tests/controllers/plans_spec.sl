@@ -1,11 +1,10 @@
-# The plans over HTTP (#393), on a server with no Stripe set up (as the
-# specs run, and as the site runs until payments open): the Pricing page and
-# the account's Subscription section show the plans; Upgrade and Manage
-# billing need a sign-in and say payments are not open yet; coming back
-# from Stripe changes no plan; the webhook refuses everything while no
-# secret is set. Until payments open, the Free plan's new limits do not
-# apply: nothing that worked before is refused (Plan.limits). And
-# deleting an account with a subscription still deletes it.
+# The plans over HTTP (#393), while the site is free (#699, Plan.free?) and
+# with no Stripe set up (as the specs run): the Pricing page leads to the
+# home page, the account says nothing of plans, Upgrade, Manage billing and
+# the way back from Stripe are 404 behind a sign-in; the webhook refuses
+# everything while no secret is set. The Free plan's limits do not apply:
+# everyone has Pro's (Plan.limits). And deleting an account with a
+# subscription still deletes it.
 
 const PLANS_PASSWORD = "correct horse battery"
 const PLANS_WAV = "RIFF....WAVEfmt data of a short take"
@@ -38,11 +37,6 @@ def plans_sign_in(user)
   )
 end
 
-# The page a redirect leads to (where its flash is shown).
-def plans_followed(response)
-  res_body(get(res_location(response)))
-end
-
 def plans_upload(score, track)
   boundary = "----soli-plans-spec"
   fields = {
@@ -71,72 +65,55 @@ describe("The plans") do
     clear_headers()
   end
 
-  describe("GET /pricing") do
-    test("shows both plans, their limits read from Plan, and that payments are not open yet") do
+  describe("GET /pricing, while the site is free (#699)") do
+    test("answers 301 to the home page, in the page's language, and shows no plan") do
       response = get("/pricing")
-      assert_eq(res_status(response), 200)
-      page = res_body(response)
-      assert_contains(page, "data-plan=\"free\"")
-      assert_contains(page, "data-plan=\"pro\"")
-      # The site's own AI is gone (#396): Free has none, Pro's runs on one's own key.
-      assert_contains(page, "<li data-plan-ai>No AI</li>")
-      assert_contains(
-        page,
-        "<li data-plan-ai>AI (photo reading, assistant) with your own key from Anthropic, OpenAI, Gemini, "
-        + "Mistral, DeepSeek, Kimi…</li>"
-      )
-      assert_not(page.contains("site's AI"))
-      assert_not(page.contains("photos read a day"))
-      # Payments closed: anyone may use their own key today.
-      assert_contains(
-        page,
-        "<p class=\"muted\" data-ai-today>Until payments open, anyone signed in can use the AI with their own key.</p>"
-      )
-      assert_eq(assigns()["ai_note"], Plan.ai_note(false))
-      # Once open, the note goes: the cards say who has the AI.
-      assert_null(Plan.ai_note(true))
-      assert_contains(page, "1 audio track a score")
-      assert_contains(page, "2 GB of audio takes")
-      assert_contains(page, "Share a score with up to 3 people")
-      assert_contains(page, "6 € <small>a month</small>")
-      assert_contains(page, "or 60 € a year")
-      assert_contains(page, "data-payments-closed")
-      assert_eq(assigns()["payments_open"], false)
-      assert_eq(assigns()["plans"].length, 2)
+      assert_eq(res_status(response), 301)
+      assert_eq(res_location(response), "/")
+      assert_not(res_body(response).contains("data-plan"), "no plan card")
+      assert_null(assigns()["plans"], "no catalog read")
+      french = get("/fr/pricing")
+      assert_eq(res_status(french), 301)
+      assert_eq(res_location(french), "/fr")
     end
 
-    test("is linked from the site's navigation") do
-      assert_contains(res_body(get("/guide")), "<a href=\"/pricing\">Pricing</a>")
-      assert_contains(res_body(get("/pricing")), "<a href=\"/pricing\" aria-current=\"page\">Pricing</a>")
+    test("is linked from no page: neither the header, the footer, nor the changelog") do
+      guide = res_body(get("/guide"))
+      assert_not(guide.contains("href=\"/pricing\""), "the guide links no Pricing")
+      assert_not(guide.contains(">Pricing</a>"))
+      changelog = res_body(get("/changelog"))
+      assert_not(changelog.contains("href=\"/pricing\""), "old entries link the home page instead")
+      assert_not(res_body(get("/fr/guide")).contains(">Tarifs</a>"))
     end
   end
 
-  describe("the account's Subscription section") do
-    test("on Free: the plan, Upgrade monthly and yearly, the way to Pricing, payments not open") do
+  describe("the account, while the site is free (#699)") do
+    test("on Free: no plan named, no Subscription section, no Upgrade, no way to Pricing") do
       user = plans_user()
       plans_sign_in(user)
-      page = res_body(get("/app/account"))
-      assert_contains(page, "id=\"plan\"")
-      assert_contains(page, "You are on <strong>Free</strong>.")
-      assert_contains(page, "action=\"/app/billing/checkout\"")
-      assert_contains(page, "name=\"interval\" value=\"monthly\"")
-      assert_contains(page, "name=\"interval\" value=\"annual\"")
-      assert_contains(page, "Upgrade: 6 € a month")
-      assert_contains(page, "Upgrade: 60 € a year")
-      assert_contains(page, "href=\"/pricing\"")
-      assert_contains(page, "data-payments-closed")
-      assert_not(page.includes?("Manage billing"), "no billing to manage")
+      response = get("/app/account")
+      assert_eq(res_status(response), 200)
+      page = res_body(response)
+      assert_contains(page, "<h1>Your account</h1>")
+      assert_not(page.includes?("id=\"plan\""), "no Subscription section")
+      assert_not(page.includes?("href=\"#plan\""), "nothing in the side menu")
+      assert_not(page.includes?("You are on"), "no plan named")
+      assert_not(page.includes?("/app/billing/"), "no form to Stripe")
+      assert_not(page.includes?("Upgrade"), "no Upgrade")
+      assert_not(page.includes?("Compare the plans"))
+      assert_not(page.includes?("/pricing"), "no way to Pricing")
+      assert_not(page.includes?("data-payments-closed"))
+      assert_not(page.includes?("data-ai-plan"), "the AI is not Pro's")
     end
 
-    test("on Pro: the plan, when it renews, Manage billing, and no Upgrade") do
+    test("on Pro, Stripe's customer and all: no plan named either, and no Manage billing") do
       user = plans_make_pro(plans_user(), 10 * 86400)
       plans_sign_in(user)
       page = res_body(get("/app/account"))
-      renews = DateTime.from_unix(user.current_period_end).format("%B %-d, %Y")
-      assert_contains(page, "You are on <strong>Pro</strong>. Renews on #{renews}.")
-      assert_contains(page, "action=\"/app/billing/portal\"")
-      assert_contains(page, "Manage billing")
-      assert_not(page.includes?("action=\"/app/billing/checkout\""), "no Upgrade on Pro")
+      assert_not(page.includes?("id=\"plan\""), "no Subscription section")
+      assert_not(page.includes?("<strong>Pro</strong>"), "no plan named")
+      assert_not(page.includes?("Manage billing"), "no billing to manage")
+      assert_not(page.includes?("/app/billing/"), "no form to Stripe")
     end
 
     test("cancelled at the period's end, or lapsed: says when it ends or ended") do
@@ -174,29 +151,31 @@ describe("The plans") do
       assert_eq(res_status(post("/app/billing/checkout", {"interval": "monthly"})), 401)
     end
 
-    test("with no Stripe here: a clear refusal, back on the account, and nothing kept") do
+    test("signed in, while the site is free (#699): 404, no Stripe customer, no plan") do
       user = plans_user()
       plans_sign_in(user)
       ["monthly", "annual", "weekly"].each do |interval|
         response = post("/app/billing/checkout", {"interval": interval})
-        assert_eq(res_status(response), 302)
-        assert_eq(res_location(response), "/app/account#plan")
-        assert_contains(plans_followed(response), BILLING_NOT_OPEN)
+        assert_eq(res_status(response), 404, interval)
+        assert_null(res_location(response), "not sent to Stripe or anywhere")
       end
-      portal = post("/app/billing/portal", {})
-      assert_eq(res_location(portal), "/app/account#plan")
-      assert_contains(plans_followed(portal), BILLING_NOT_OPEN)
+      assert_eq(res_status(post("/app/billing/portal", {})), 404)
       stored = User.find(user._key)
       assert_null(stored.stripe_customer_id)
       assert_null(stored.plan)
+      # A Pro account, with a customer at Stripe, has no portal either.
+      pro = plans_make_pro(plans_user())
+      plans_sign_in(pro)
+      assert_eq(res_status(post("/app/billing/portal", {})), 404)
+      assert_eq(res_status(post("/app/billing/checkout", {"interval": "annual"})), 404)
     end
 
-    test("back from Stripe: thanks, and the plan is still the webhook's to set") do
+    test("back from Stripe, while the site is free: 404, no thanks, and the plan unchanged") do
       user = plans_user()
       plans_sign_in(user)
       response = get("/app/billing/done?session_id=cs_forged")
-      assert_eq(res_location(response), "/app/account#plan")
-      assert_contains(plans_followed(response), "as soon as Stripe confirms the payment")
+      assert_eq(res_status(response), 404)
+      assert_not(res_body(response).contains("as soon as Stripe confirms the payment"))
       stored = User.find(user._key)
       assert_null(stored.plan)
       assert_not(stored.pro?)
@@ -229,7 +208,7 @@ describe("The plans") do
     end
   end
 
-  describe("while payments are not open, over HTTP") do
+  describe("while the site is free (#699), over HTTP: Pro's limits for everyone") do
     test("every audio track records, past 50 MB of takes, as before the plans") do
       owner = plans_user()
       score = Score.start(owner, Score.blank_source("Duet"))
@@ -243,7 +222,7 @@ describe("The plans") do
       plans_sign_in(owner)
       listed = res_json(get("/app/scores/#{score._key}/takes"))
       assert_eq(listed["tracks_allowed"], 4)
-      assert_eq(listed["pricing"], "/pricing")
+      assert_null(listed["pricing"], "no way to Pricing for the editor")
       assert_eq(res_status(plans_upload(score, "2")), 201)
       assert_eq(res_status(plans_upload(score, "4")), 201)
       assert_eq(ScoreTake.where({"score_id": score._key}).count, 3)

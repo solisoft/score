@@ -126,7 +126,7 @@ describe("The Content-Security-Policy") do
 
   describe("on the pages") do
     test("the site's pages carry it, and each of their inline scripts is named") do
-      ["/", "/playground", "/embed", "/fr/embed", "/pricing", "/sections", "/login"].each do |path|
+      ["/", "/playground", "/embed", "/fr/embed", "/guide", "/sections", "/login"].each do |path|
         response = get(path)
         assert_eq(res_status(response), 200, path)
         csp_spec_scripts_allowed(response)

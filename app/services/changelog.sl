@@ -12,6 +12,15 @@ class Changelog
     [
       {"date": "2026-11-07", "entries": [
         {
+          "area": "site",
+          "title": "Score is free",
+          "text": "Everything on the site is now free, for everyone: no plan to choose and nothing to pay. Every "
+          + "account has what Pro was to offer: the AI on your own key, all four audio tracks with 2 GB of takes, a "
+          + "score shared with as many people as you like, and room for 10,000 scores. The Pricing page is gone: "
+          + "its address leads to the home page.",
+          "link": "home"
+        },
+        {
           "area": "editor",
           "title": "Long scores edit and play faster",
           "text": "On a long score, each change is now drawn once instead of twice, and the notes light up as the "

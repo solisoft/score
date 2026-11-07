@@ -21,16 +21,20 @@ const PLAN_PRICES = {"monthly": {
   "per": "year"
 }}
 const PLAN_MEGABYTE = 1000000
+# Whether the site is free (#699): no plan is sold, everyone has Pro's
+# limits, and nothing on the site or in the app speaks of plans. The plans
+# and Stripe stay in the code, switched off: false sells them again (once
+# Stripe is set up), and the pages that offered them come back.
+const PLAN_SITE_FREE = true
 
 class Plan
   # What `user` may do (a guest, nil, as on Free): each limit a number, or
   # nil for no limit. "plan" says which plan it is; "upgrade" whether Pro
   # would give more and can be bought now.
   #
-  # Until payments are open (`open`, Stripe.configured? when nil), no one
-  # can move to Pro, so the Free plan's new limits do not apply yet: those
-  # not on Pro keep what the site allowed before, but for the room for
-  # takes, Pro's (`today_limits`, #543).
+  # Until payments are open (`open`, Plan.open? when nil), no one can move
+  # to Pro, so the Free plan's limits do not apply: everyone has Pro's
+  # (`today_limits`). While the site is free (#699), payments never open.
   static def limits(user, open = nil)
     return Plan.pro_limits if !user.nil? && user.pro?
 
@@ -40,25 +44,30 @@ class Plan
     Plan.today_limits
   end
 
-  # Whether Pro can be bought here: Stripe's key and both Prices are set.
+  # Whether Pro can be bought here: the site is not free (#699), and
+  # Stripe's key and both Prices are set.
   static def open?
-    Stripe.configured?
+    Plan.selling?(Plan.free?, Stripe.configured?)
   end
 
-  # What everyone not on Pro has while payments are not open: the site as it
-  # was before the plans (AI with one's own key, every audio track, anyone a
-  # score is shared with), and the room Pro keeps for takes: not without end
-  # (#543), since no one could pay for it.
+  # Whether the site is free (#699, PLAN_SITE_FREE): nothing is sold, and
+  # the pages say nothing of plans.
+  static def free?
+    PLAN_SITE_FREE
+  end
+
+  # Whether Pro is on sale when the site is `free` or not, and Stripe
+  # `configured` or not.
+  static def selling?(free, configured)
+    !free && configured
+  end
+
+  # What everyone not on Pro has while payments are not open, and so while
+  # the site is free (#699): Pro's limits, every one of them (AI with one's
+  # own key, every audio track, anyone a score is shared with, Pro's room
+  # for takes and scores), under no plan's name: no "upgrade".
   static def today_limits
-    {
-      "plan": "free",
-      "upgrade": false,
-      "own_key_ai": true,
-      "take_tracks": SCORE_TAKE_TRACKS,
-      "take_bytes": Plan.pro_limits["take_bytes"],
-      "people_per_score": nil,
-      "scores": Plan.pro_limits["scores"]
-    }
+    Plan.pro_limits.merge({"plan": "free"})
   end
 
   # Free, once payments are open: no AI, one audio track a score and 50 MB

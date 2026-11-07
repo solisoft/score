@@ -23,7 +23,9 @@
       </div>
     </div>
     <ul class="account-glance" aria-label="<%- t("app.account.at_a_glance") %>">
-      <li><span><%- t("app.account.plan") %></span><strong><%= user.plan_name() %></strong></li>
+      <% if user.plans_shown?() %>
+        <li><span><%- t("app.account.plan") %></span><strong><%= user.plan_name() %></strong></li>
+      <% end %>
       <li><span><%- t("app.account.two_step") %></span><strong class="<%= two_step_on ? "is-on" : "is-off" %>"><%= two_step_on ? t("app.account.state_on") : t("app.account.state_off") %></strong></li>
       <li><span><%- t("app.account.ai_key") %></span><strong class="<%= user.own_ai?() ? "is-on" : "is-off" %>"><%= user.own_ai?() ? user.ai_provider_name() : t("app.account.none") %></strong></li>
       <li><span><%- t("app.account.apps_connected") %></span><strong><%= connections %></strong></li>
@@ -37,7 +39,9 @@
     <nav class="account-nav" aria-label="<%- t("app.account.sections") %>">
       <a href="#security"><%= t("app.account.security") %></a>
       <a href="#notifications"><%- t("app.account.notifications") %></a>
-      <a href="#plan"><%- t("app.account.plan") %></a>
+      <% if user.plans_shown?() %>
+        <a href="#plan"><%- t("app.account.plan") %></a>
+      <% end %>
       <a href="#ai"><%- t("app.account.ai_key") %></a>
       <a href="#tokens"><%= t("app.account.claude_apps") %></a>
       <a href="#data"><%- t("app.account.your_data") %></a>
@@ -335,7 +339,9 @@
       </section>
 
       <%# ---- Plan (#393): set by Stripe's webhook only; Upgrade and Manage
-          billing go to Stripe's own pages. ----------------------------------- %>
+          billing go to Stripe's own pages. None of it while the site is
+          free (#699, User#plans_shown?). ------------------------------------ %>
+      <% if user.plans_shown?() %>
       <section class="account-panel" id="plan" aria-labelledby="plan-title">
         <h2 id="plan-title"><%- t("app.account.plan") %></h2>
         <% offer = user.plan_offer() %>
@@ -367,6 +373,7 @@
           </form>
         <% end %>
       </section>
+      <% end %>
 
       <%# ---- AI key (#396) ------------------------------------------------ %>
       <section class="account-panel" id="ai" aria-labelledby="ai-title">

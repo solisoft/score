@@ -70,7 +70,7 @@ end
 describe("What the browser keeps, once signed out (#688)") do
   before_each() do
     logout()
-    visit("/pricing")
+    visit("/limits")
     evaluate("(async () => { indexedDB.deleteDatabase('eui-score-history');"
     + " for (const name of await caches.keys()) await caches.delete(name); return true; })()")
   end

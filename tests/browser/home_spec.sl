@@ -14,12 +14,17 @@ describe("The home page, in a browser") do
     assert(evaluate("document.querySelector('.app-shot-hero img').naturalWidth") > 0, "the hero's picture")
     click(".feature-index a[href='#together']")
     sleep(0.4)
-    click(".site-nav a[href='/pricing']")
-    wait_for_text("Free to write with. Pro for more.")
-    assert_page_path("/pricing")
+    click(".site-nav a[href='/changelog']")
+    wait_for_text("Score is free")
+    assert_page_path("/changelog")
     click("a.brand")
     wait_for(".hero-app")
     assert_eq(evaluate("document.querySelectorAll('section.feature').length"), 8)
+    # The site is free (#699): an old link to Pricing lands on the home page.
+    visit("/pricing")
+    wait_for(".hero-app")
+    assert_page_path("/")
+    assert_eq(evaluate("document.querySelector('[data-home-free]') !== null"), true)
     assert_no_page_errors()
   end
 

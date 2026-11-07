@@ -144,7 +144,7 @@ export function audioTracks({ root, st, studio, options = {} }) {
     for (let track = 1; track <= trackCount; track++) {
       const t = takes.get(track);
       const taking = st.taking?.track === track;
-      const status = taking ? tr("● Recording…") : t?.unsaved ? tr("Not saved: {why}", { why: t.unsaved }) : t ? `${clock(t.samples.length / t.rate)} · ${T.sizeText(t.take.size ?? 0)}` : track > tracksAllowed ? tr("With Pro") : tr("Empty");
+      const status = taking ? tr("● Recording…") : t?.unsaved ? tr("Not saved: {why}", { why: t.unsaved }) : t ? `${clock(t.samples.length / t.rate)} · ${T.sizeText(t.take.size ?? 0)}` : track > tracksAllowed ? tr("Not available") : tr("Empty");
       rows.push(`<div class="audio-track" data-track="${track}">
         <input class="audio-name" data-audio-name="${track}" value="${escape(nameOf(track))}" maxlength="60" aria-label="${escape(tr("The name of audio track {n}", { n: track }))}"${writable ? "" : " disabled"}>
         <span class="audio-status${t?.unsaved ? " audio-unsaved" : ""}">${escape(status)}</span>
@@ -246,7 +246,7 @@ export function audioTracks({ root, st, studio, options = {} }) {
     if (st.taking) return studio.stop();
     if (!url) return say(tr("Audio tracks are kept with the score in the app: sign up to record them."), true);
     if (!writable) return say(tr("This score is shared with you to read: its audio tracks are its editors'."), true);
-    if (track > tracksAllowed) return say(tracksAllowed === 1 ? tr("On the Free plan a score has {n} audio track: Pro records on {all}.", { n: tracksAllowed, all: trackCount }) : tr("On the Free plan a score has {n} audio tracks: Pro records on {all}.", { n: tracksAllowed, all: trackCount }), true, plans(pricing));
+    if (track > tracksAllowed) return say(tracksAllowed === 1 ? tr("This score records on {n} audio track.", { n: tracksAllowed }) : tr("This score records on {n} audio tracks.", { n: tracksAllowed }), true, plans(pricing));
     if (!st.score) return say(tr("Recording needs the score tools: this piece is edited in its text."), true);
     if (st.recording) return say(tr("A MIDI recording is under way: stop it first."), true);
     if (practising || tuning) stopListening();

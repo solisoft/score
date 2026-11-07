@@ -1,7 +1,7 @@
 # What the home page shows of the app (#397), one section a feature group:
 # its anchor, eyebrow, heading, one to three short lines, a screenshot of
 # the real app (public/images/home/, 1600×1010 JPEG) and where its link goes
-# ("playground", "signup" or "pricing": HomeController#index makes it a path).
+# ("playground" or "signup": HomeController#index makes it a path).
 # The lines say what the changelog's "app" entries say, shorter. Its words
 # are the locale files' (home.features.<id>.*, #471): eyebrow, title, l1…,
 # alt and label, in the request's language.
@@ -45,7 +45,7 @@ class HomeFeatures
         "id": "ai",
         "lines": 2,
         "image": "start-photo.jpg",
-        "link": "pricing"
+        "link": "signup"
       },
       {
         "id": "files",

@@ -5,9 +5,10 @@
 # with to change it record and delete (ScorePolicy update?); those it is
 # shared with to read list and listen (show?).
 class AppTakesController < AppBaseController
-  # GET /app/scores/:id/takes — {takes, tracks, tracks_allowed, pricing,
-  # max_bytes, writable}: the tracks a score records on are its owner's
-  # plan's (#393); the others keep what was recorded there
+  # GET /app/scores/:id/takes — {takes, tracks, tracks_allowed, pricing (nil
+  # while the site is free, #699), max_bytes, writable}: the tracks a score
+  # records on are its owner's plan's (#393); the others keep what was
+  # recorded there
   def index
     score = @_score("show")
     owner = User.find_by("_key", score.user_id)
@@ -15,7 +16,7 @@ class AppTakesController < AppBaseController
       "takes": ScoreTake.of(score).map(&:shown),
       "tracks": SCORE_TAKE_TRACKS,
       "tracks_allowed": Plan.limits(owner)["take_tracks"],
-      "pricing": pricing_path(),
+      "pricing": Plan.free? ? nil : pricing_path(),
       "max_bytes": SCORE_TAKE_MAX_BYTES,
       "writable": score.writable_by?(current_user())
     })

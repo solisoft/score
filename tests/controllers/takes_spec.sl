@@ -192,7 +192,7 @@ describe("AppTakesController") do
       take_sign_in(owner)
       answer = take_upload(score)
       assert_eq(res_status(answer), 422)
-      assert_eq(res_json(answer)["error"], "Your takes would pass the 2 GB your plan keeps: delete some first.")
+      assert_eq(res_json(answer)["error"], "Your takes would pass the 2 GB an account keeps: delete some first.")
       assert_eq(take_count(score), 1)
       assert_eq(ScoreTake.where({
         "score_id": score._key,
@@ -219,7 +219,7 @@ describe("AppTakesController") do
       assert_eq(res_status(answer), 422)
       assert_eq(
         res_json(answer)["error"],
-        "Vos prises dépasseraient les 2 GB que garde votre offre : supprimez-en d'abord."
+        "Vos prises dépasseraient les 2 GB que garde un compte : supprimez-en d'abord."
       )
       assert_eq(take_count(score), 1)
     end

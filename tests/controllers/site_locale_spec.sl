@@ -10,19 +10,19 @@ describe("The site in two languages") do
   end
 
   test("/fr pages are in French, the others in English, each naming its twin") do
-    french = get("/fr/pricing")
+    french = get("/fr/limits")
     assert_eq(res_status(french), 200)
     body = res_body(french)
     assert_contains(body, "<html lang=\"fr\">")
     assert_contains(body, "hreflang=\"en\" href=\"")
-    assert_contains(body, "/pricing\">")
-    assert_contains(body, ">Tarifs</a>")
+    assert_contains(body, "/limits\">")
+    assert_contains(body, "<title>Limites · Score</title>")
     assert_contains(body, "href=\"/fr/guide\"")
-    assert_contains(body, "class=\"nav-lang\" data-no-nav href=\"/pricing\"")
-    english = res_body(get("/pricing"))
+    assert_contains(body, "class=\"nav-lang\" data-no-nav href=\"/limits\"")
+    english = res_body(get("/limits"))
     assert_contains(english, "<html lang=\"en\">")
-    assert_contains(english, ">Pricing</a>")
-    assert_contains(english, "class=\"nav-lang\" data-no-nav href=\"/fr/pricing\"")
+    assert_contains(english, "<title>Limits · Score</title>")
+    assert_contains(english, "class=\"nav-lang\" data-no-nav href=\"/fr/limits\"")
     assert_contains(english, "hreflang=\"fr\" href=\"")
     assert_eq(res_status(get("/fr")), 200)
     assert_contains(res_body(get("/fr")), "<html lang=\"fr\">")
@@ -30,22 +30,22 @@ describe("The site in two languages") do
 
   test("a first visit with a French browser goes to the French page; a choice made is kept") do
     set_header("Accept-Language", "fr-FR,fr;q=0.9,en;q=0.8")
-    first = get("/pricing")
+    first = get("/limits")
     assert_eq(res_status(first), 302)
-    assert_eq(res_location(first), "/fr/pricing")
+    assert_eq(res_location(first), "/fr/limits")
     # Chose English: kept, no redirect.
     set_request_cookie("locale", "en")
-    assert_eq(res_status(get("/pricing")), 200)
+    assert_eq(res_status(get("/limits")), 200)
     # A client that takes anything, or names neither language, stays in English.
     clear_cookies()
     set_header("Accept-Language", "*")
-    assert_eq(res_status(get("/pricing")), 200, "* is not French")
+    assert_eq(res_status(get("/limits")), 200, "* is not French")
     set_header("Accept-Language", "de-DE,de;q=0.9")
-    assert_eq(res_status(get("/pricing")), 200)
+    assert_eq(res_status(get("/limits")), 200)
     # An English browser stays in English.
     clear_cookies()
     set_header("Accept-Language", "en-GB,en;q=0.9")
-    assert_eq(res_status(get("/pricing")), 200)
+    assert_eq(res_status(get("/limits")), 200)
   end
 
   test("pages that have no French twin are never redirected") do
@@ -85,7 +85,6 @@ describe("The site in two languages") do
       ["/fr/embed", "Intégrer · Score"],
       ["/fr/limits", "Limites · Score"],
       ["/fr/claude", "Score dans Claude · Score"],
-      ["/fr/pricing", "Tarifs · Score"],
       ["/fr/changelog", "Nouveautés · Score"],
       ["/fr/examples", "Exemples · Score"]
     ].each do |page|
@@ -103,10 +102,11 @@ describe("The site in two languages") do
     changelog = res_body(get("/fr/changelog"))
     assert_contains(changelog, "Quoi de neuf")
     assert_contains(changelog, "octobre 2026")
-    assert_contains(res_body(get("/fr/pricing")), "pistes audio par partition")
+    # Tarifs is gone while the site is free (#699): its address leads home.
+    assert_eq(res_location(get("/fr/pricing")), "/fr")
     home = res_body(get("/fr"))
     assert_contains(home, "Micro et pratique")
-    assert_contains(home, "href=\"/fr/pricing\"")
+    assert_not(home.includes?("href=\"/fr/pricing\""), "no link to Tarifs")
   end
 
   test("signing in in French: the form, its refusals and its links stay in French") do

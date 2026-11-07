@@ -1,7 +1,7 @@
 # The landing page, and the probe soli-proxy health-checks.
 class HomeController < Controller
   # GET / — the app and what it does, section by section (HOME_FEATURES),
-  # then the engraver for developers and the plans
+  # then the engraver for developers, and that it is free (#699)
   def index
     @title = SiteText.t("home.title")
     @description = SiteText.t("home.description")
@@ -13,7 +13,6 @@ class HomeController < Controller
     @shot_height = HOME_SHOT_HEIGHT
     @engraved = ScoreSvg.figure(ScoreLibrary.source_named("syntax/home"), 520, 8)
     @example_count = ScoreLibrary.examples.length
-    @pro_price = Plan.price("monthly")
   end
 
   # GET /health — liveness: the process answers (soli-proxy's slot check)
@@ -38,10 +37,9 @@ class HomeController < Controller
 
   private
 
-  # Where a feature's link goes: "pricing", "signup" (the playground where
+  # Where a feature's link goes: "signup" (the playground where
   # the app is not open: there is no account to make) or "playground".
   def _href(link, open)
-    return SiteLocale.path(pricing_path()) if link == "pricing"
     return SiteLocale.path(signup_path()) if link == "signup" && open
 
     playground_path()

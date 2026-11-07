@@ -96,7 +96,7 @@ fr:
     lead: "Score, c'est là où vous écrivez la musique : à la souris ou au clavier, entendue au fur et à mesure, travaillée avec votre micro, et partagée avec d'autres, en direct. Rien à installer."
     start: "Commencer gratuitement"
     playground: "Ouvrir le bac à sable"
-    note: "Gratuit pour écrire, sans carte. <a href=\"{pricing}\">Pro</a> ajoute l'IA avec votre propre clé, plus d'audio, et le partage avec tout le monde."
+    note: "Gratuit, entièrement : pas d'offre, pas de carte."
     hero_alt: "L'éditeur Score : Au clair de la lune pour voix et piano, avec accords et paroles."
     index_label: "Ce que fait l'app"
     developers: "Pour les développeurs"
@@ -107,17 +107,12 @@ fr:
     the_syntax: "La syntaxe"
     embed_it: "L'intégrer"
     examples: "Les {n} exemples"
-    plans: "Offres"
-    plans_title: "Gratuit pour écrire. Pro pour aller plus loin."
-    for_good: "pour toujours"
-    free_text: "L'éditeur, la lecture, le PDF et le MIDI, les versions, les commentaires et le partage. Sans carte."
-    per_month: "par mois"
-    pro_text: "L'IA avec votre propre clé, toutes les pistes audio et plus de place pour les prises, une partition partagée avec tout le monde."
-    compare: "Comparer les offres"
+    free: "Gratuit"
+    free_title: "Gratuit, entièrement."
+    free_text: "L'éditeur, la lecture, le PDF et le MIDI, les versions et les commentaires, toutes les pistes audio, une partition partagée avec autant de personnes que vous voulez, et l'IA avec votre propre clé. Pas d'offre, pas de carte."
     cta: "Votre prochaine partition commence ici."
-    see_pricing: "Voir les tarifs"
     title: "Écrire, jouer et partager des partitions, ensemble"
-    description: "Score est un éditeur de partitions dans le navigateur : écrivez à la souris ou au clavier, écoutez, travaillez à plusieurs en direct, pratiquez avec le micro, et partagez. Gratuit pour commencer."
+    description: "Score est un éditeur de partitions dans le navigateur : écrivez à la souris ou au clavier, écoutez, travaillez à plusieurs en direct, pratiquez avec le micro, et partagez. Gratuit."
     features:
       editor:
         eyebrow: "L'éditeur"
@@ -157,12 +152,12 @@ fr:
         alt: "L'accordeur lit un la quelques cents trop haut, au-dessus du quatuor à cordes qu'il accorde."
         label: "Commencer à travailler"
       ai:
-        eyebrow: "L'IA, avec Pro"
+        eyebrow: "L'IA, avec votre propre clé"
         title: "Une photo devient une partition."
         l1: "Photographiez une partition imprimée ou manuscrite : un modèle d'IA la lit et en fait une partition modifiable."
         l2: "Un assistant propose des accords, un accompagnement, des améliorations, avec votre propre clé d'IA."
         alt: "La page Démarrer : modèles de nouvelle partition, Importer un fichier, et Depuis une photo."
-        label: "Voir Pro"
+        label: "Lire votre première photo"
       files:
         eyebrow: "Import et export"
         title: "Entrée et sortie, dans les formats que vous utilisez."
@@ -1496,7 +1491,7 @@ fr:
     push_test_limited: "Trop de messages de test : réessayez dans une heure."
     push_queued_one: "En route vers {n} appareil."
     push_queued_other: "En route vers {n} appareils."
-    take_room_full: "Vos prises dépasseraient les {room} que garde votre offre : supprimez-en d'abord."
+    take_room_full: "Vos prises dépasseraient les {room} que garde un compte : supprimez-en d'abord."
   # ---
   # (#544) security: CSP, configuration and admin — keys under `security_544:` right below
   security_544:

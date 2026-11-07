@@ -345,7 +345,9 @@ describe("The admin section") do
       assert_contains(page, "data-admin=\"dashboard\"")
       assert_contains(page, "data-admin-link")
       assert_contains(page, "data-figure=\"accounts\"")
-      assert_contains(page, "Payments are not open")
+      # The site is free (#699): the overview says so, not that Stripe is missing.
+      assert_contains(page, "data-site-free")
+      assert_not(page.includes?("Payments are not open"), "no closed-payments note")
     end
   end
 

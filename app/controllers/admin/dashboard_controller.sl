@@ -11,7 +11,8 @@ class AdminDashboardController < AdminBaseController
     @newest = AdminReport.newest(8)
     @events = AdminReport.recent_events(8)
     @names = User.names_of(@events.map(&:user_id))
-    @payments_open = Stripe.configured?
+    @payments_open = Plan.open?
+    @site_free = Plan.free?
     @title = "Admin"
     @description = "The site's accounts, plans and payments."
   end

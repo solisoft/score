@@ -40,7 +40,9 @@ describe("HomeController") do
       playground_at = hero.index_of("<a class=\"btn btn-ghost\" href=\"/playground\">Open the playground</a>")
       assert_gt(start_at, -1, "Start for free, to sign up")
       assert_gt(playground_at, start_at, "the playground after it")
-      assert_contains(hero, "href=\"/pricing\">Pro</a>")
+      # The site is free (#699): the note says so, and links to no plan.
+      assert_contains(hero, "<p class=\"hero-note\">Free, all of it: no plan, no card.</p>")
+      assert_not(hero.contains("/pricing"), "no way to Pricing")
       # The hero's screenshot comes at once; the others wait to be scrolled to.
       assert_contains(hero, "images/home/hero-editor.jpg")
       assert_not(hero.contains("loading=\"lazy\""), "the hero's image is not lazy")
@@ -73,7 +75,7 @@ describe("HomeController") do
       assert_eq(body.split("<section class=\"feature").length - 1, HOME_FEATURE_IDS.length)
     end
 
-    test("sends each feature's link where it says: sign-up, the playground or pricing") do
+    test("sends each feature's link where it says: sign-up or the playground, never pricing") do
       get("/")
       links = {}
       assigns()["features"].each do |feature|
@@ -82,12 +84,18 @@ describe("HomeController") do
       assert_eq(links["together"], "/signup")
       assert_eq(links["sharing"], "/signup")
       assert_eq(links["practice"], "/signup")
-      assert_eq(links["ai"], "/pricing")
+      # The AI is no longer Pro's (#699): it leads to signing up, as the rest.
+      assert_eq(links["ai"], "/signup")
       assert_eq(links["editor"], "/playground")
       assert_eq(links["midi"], "/signup")
       HOME_FEATURE_IDS.each do |id|
-        assert(["/signup", "/playground", "/pricing"].includes?(links[id]), "#{id}: #{links[id]}")
+        assert(["/signup", "/playground"].includes?(links[id]), "#{id}: #{links[id]}")
       end
+      ai = assigns()["features"].find do |feature|
+        feature["id"] == "ai"
+      end
+      assert_eq(ai["eyebrow"], "AI, on your own key")
+      assert_eq(ai["label"], "Read your first photo")
     end
 
     test("every screenshot is on disk, web-sized, and the alt texts name no real address") do
@@ -120,17 +128,34 @@ describe("HomeController") do
       assert_eq(assigns()["example_count"], ScoreLibrary.examples.length)
     end
 
-    test("teases the plans with Pro's price from Plan, and links to /pricing") do
+    test("says it is free, all of it, with no plan, no price and no way to Pricing (#699)") do
       body = res_body(get("/"))
-      plans = home_part(body, "<section class=\"section\" id=\"plans\">", "</section>")
-      assert_contains(plans, "<h3>Free</h3>")
-      assert_contains(plans, "<h3>Pro</h3>")
-      price = Plan.price("monthly")
-      assert_contains(plans, "#{h(price["label"])} <small>a #{price["per"]}</small>")
-      assert_contains(plans, "<a class=\"btn btn-ghost\" href=\"/pricing\" data-home-pricing>Compare the plans</a>")
+      free = home_part(body, "<section class=\"section\" id=\"free\" data-home-free>", "</section>")
+      assert_contains(free, "<h2>Free, all of it.</h2>")
+      assert_contains(
+        free,
+        "every audio track, a score shared with as many people as you like, and AI on your own key"
+      )
+      assert_not(body.contains("id=\"plans\""), "no plans section")
+      assert_not(body.contains("data-home-pricing"), "no Compare the plans")
+      assert_not(body.contains(Plan.price("monthly")["label"]), "no price")
+      assert_not(body.contains("/pricing"), "no link to Pricing anywhere")
       band = home_part(body, "<section class=\"cta-band\">", "</section>")
       assert_contains(band, "href=\"/signup\">Start for free</a>")
-      assert_contains(band, "href=\"/pricing\">See pricing</a>")
+      assert_not(band.contains("See pricing"))
+    end
+
+    test("in French too: gratuit, entièrement, and no offer to compare") do
+      body = res_body(get("/fr"))
+      # The whole body: the offsets of home_part count bytes past the accents.
+      assert_contains(body, "<section class=\"section\" id=\"free\" data-home-free>")
+      assert_contains(body, "<h2>Gratuit, entièrement.</h2>")
+      assert_contains(body, "<p class=\"hero-note\">Gratuit, entièrement : pas d&#x27;offre, pas de carte.</p>")
+      assert_not(body.contains("/fr/pricing"), "no link to Tarifs")
+      assert_not(body.contains("Tarifs"))
+      assert_not(body.contains("Comparer les offres"))
+      assert_not(body.contains("avec Pro"))
+      assert_contains(body, "avec votre propre clé")
     end
 
     test("the changelog says the home page shows the app") do
@@ -181,17 +206,20 @@ describe("HomeController") do
       assert_not(body.contains("name=\"robots\""), "the home page may be indexed")
     end
 
-    test("its header shows the app: App, Pricing, Guide, Changelog, then Sign in and Start free") do
+    test("its header shows the app: App, Guide, Changelog, then Sign in and Start free; no Pricing (#699)") do
       body = res_body(get("/"))
       nav = home_part(body, "<nav class=\"site-nav\"", "</nav>")
-      labels = ["App", "Pricing", "Guide", "Changelog"]
-      paths = ["/app", "/pricing", "/guide", "/changelog"]
+      labels = ["App", "Guide", "Changelog"]
+      paths = ["/app", "/guide", "/changelog"]
       last_at = -1
-      [0, 1, 2, 3].each do |index|
+      [0, 1, 2].each do |index|
         at = nav.index_of("<a href=\"#{paths[index]}\">#{labels[index]}</a>")
         assert_gt(at, last_at, labels[index])
         last_at = at
       end
+      assert_not(nav.contains("Pricing"), "no Pricing in the header")
+      footer = home_part(body, "<nav class=\"footer-nav\"", "</nav>")
+      assert_not(footer.contains("Pricing"), "no Pricing in the footer")
       account = home_part(body, "<div class=\"nav-account\">", "</div>")
       assert_contains(account, "<a class=\"nav-signin\" href=\"/login\">Sign in</a>")
       assert_contains(account, "<a class=\"nav-cta\" href=\"/signup\">Start free</a>")

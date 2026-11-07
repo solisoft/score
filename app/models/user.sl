@@ -1429,6 +1429,12 @@ class User < Model
     @stripe_customer_id.present?
   end
 
+  # Whether the account page speaks of plans at all: not while the site is
+  # free (#699, Plan.free?), when no plan is sold.
+  def plans_shown?
+    !Plan.free?
+  end
+
   # What the account page offers (Plan, Stripe): the prices, and whether
   # payments are open. A page cannot reach those classes; it asks here.
   def plan_offer
