@@ -12,6 +12,14 @@ def share_user
   user
 end
 
+# An account confirmed long ago: past the new accounts' lower cap (#687).
+def share_settled_user
+  user = share_user()
+  user.confirmed_at = DateTime.utc.to_unix - 30 * 86400
+  user.update()
+  User.find(user._key)
+end
+
 def share_sign_in(user)
   clear_cookies()
   post(
@@ -464,7 +472,7 @@ describe("Sharing") do
 
   describe("the day's invitations") do
     test("the 50th goes, the 51st is refused with nothing written; taking one back gives none back") do
-      owner = share_user()
+      owner = share_settled_user()
       score = Score.start(owner, Score.blank_source("Chorus"))
       assert_eq(SCORE_INVITATIONS_PER_DAY, 50)
       now = DateTime.utc.to_unix
@@ -498,7 +506,7 @@ describe("Sharing") do
     end
 
     test("a refused invitation is not counted, and another person's day is their own") do
-      owner = share_user()
+      owner = share_settled_user()
       score = Score.start(owner, Score.blank_source("Canon"))
       share_sign_in(owner)
       bad = post(
@@ -507,7 +515,44 @@ describe("Sharing") do
       )
       assert_eq(res_status(bad), 422)
       assert_eq(ScoreShare.invitations_left(User.find(owner._key)), SCORE_INVITATIONS_PER_DAY)
-      assert_eq(ScoreShare.invitations_left(share_user()), SCORE_INVITATIONS_PER_DAY)
+      assert_eq(ScoreShare.invitations_left(share_settled_user()), SCORE_INVITATIONS_PER_DAY)
+    end
+
+    test("a new account sends 10 a day (#687): the 11th is refused with nothing written or mailed") do
+      assert_eq(SCORE_INVITATIONS_NEW_ACCOUNT_PER_DAY, 10)
+      owner = share_user()
+      assert_eq(ScoreShare.invitations_per_day(owner), SCORE_INVITATIONS_NEW_ACCOUNT_PER_DAY)
+      # Confirmed six days ago: still new. Seven: settled. Never: new.
+      owner.confirmed_at = DateTime.utc.to_unix - 6 * 86400
+      assert_eq(ScoreShare.invitations_per_day(owner), SCORE_INVITATIONS_NEW_ACCOUNT_PER_DAY)
+      owner.confirmed_at = DateTime.utc.to_unix - 7 * 86400
+      assert_eq(ScoreShare.invitations_per_day(owner), SCORE_INVITATIONS_PER_DAY)
+      owner.confirmed_at = nil
+      assert_eq(ScoreShare.invitations_per_day(owner), SCORE_INVITATIONS_NEW_ACCOUNT_PER_DAY)
+
+      owner = share_user()
+      score = Score.start(owner, Score.blank_source("Spam chorus"))
+      now = DateTime.utc.to_unix
+      owner.invitations_sent = (0 .. SCORE_INVITATIONS_NEW_ACCOUNT_PER_DAY - 1).map do |_|
+        now - 60
+      end
+      owner.update()
+      assert_eq(ScoreShare.invitations_left(User.find(owner._key)), 1)
+      share_sign_in(owner)
+      tenth = post(
+        "/app/scores/#{score._key}/invitations",
+        {"email": "tenth-#{uuid_v4}@example.com", "role": "read"}
+      )
+      assert_eq(res_status(tenth), 302)
+      stranger = "eleventh-#{uuid_v4}@example.com"
+      refused = post(
+        "/app/scores/#{score._key}/invitations",
+        {"email": stranger, "role": "read"}
+      )
+      assert_eq(res_status(refused), 429)
+      assert_contains(res_body(refused), "You have sent the 10 invitations a day allows: try again tomorrow.")
+      assert_eq(ScoreShare.where({"email": stranger}).count, 0)
+      assert_eq(User.find(owner._key).invitations_sent.length, SCORE_INVITATIONS_NEW_ACCOUNT_PER_DAY)
     end
   end
 

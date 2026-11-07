@@ -466,4 +466,97 @@ describe("SectionsController and AppSectionsController") do
       assert_eq(AdminAction.about(report._key).map(&:action), ["report_dismiss"])
     end
   end
+
+  describe("an admin's powers in the library (#687)") do
+    test("an admin signed in with the password alone takes nothing away and sees nothing hidden") do
+      author = lib_user("Ana")
+      section = lib_section(author)
+      SectionComment.write(section, author, "Mine")
+      comment = SectionComment.where({"section_id": section._key}).first
+      hidden = lib_section(author, "Hidden strum")
+      hidden.hidden = true
+      hidden.update()
+      # An admin without two-step: signed in on the password, no second step.
+      admin = lib_user("Admin")
+      admin.role = "admin"
+      admin.update()
+      lib_sign_in(User.find(admin._key))
+      assert_eq(res_status(get("/app/account")), 200, "signed in")
+      page = res_body(get("/sections/#{section._key}"))
+      assert_not(page.contains("data-section-remove"), "no Remove button")
+      assert_not(page.contains("/comments/#{comment._key}/remove"), "no Delete button")
+      refused = post("/app/sections/#{section._key}/comments/#{comment._key}/remove", {})
+      assert_eq(res_status(refused), 403)
+      assert_not_null(SectionComment.find_by("_key", comment._key))
+      assert_eq(res_status(post("/app/sections/#{section._key}/remove", {})), 403)
+      assert_not_null(SharedSection.find_by("_key", section._key))
+      assert_eq(res_status(get("/sections/#{hidden._key}")), 404)
+      assert_eq(res_status(get("/sections/#{hidden._key}/data.json")), 404)
+      assert_eq(res_status(post("/app/sections/#{hidden._key}/rating", {"stars": "5"})), 404)
+      assert_eq(AdminAction.about(author._key).length, 0)
+    end
+
+    test("an admin with the second step takes a member's comment and section away, each kept in the admins' log") do
+      author = lib_user("Ana")
+      section = lib_section(author, "Bossa strum")
+      SectionComment.write(section, author, "Mine")
+      comment = SectionComment.where({"section_id": section._key}).first
+      admin = lib_user("Admin", "admin")
+      lib_sign_in(admin)
+      page = res_body(get("/sections/#{section._key}"))
+      assert_contains(page, "/comments/#{comment._key}/remove", "a Delete button")
+      response = post("/app/sections/#{section._key}/comments/#{comment._key}/remove", {})
+      assert_eq(res_status(response), 302)
+      assert_null(SectionComment.find_by("_key", comment._key))
+      removed = AdminAction.about(comment._key)
+      assert_eq(removed.length, 1)
+      assert_eq(removed[0].action, "comment_remove")
+      assert_eq(removed[0].admin_id, admin._key)
+      assert_eq(removed[0].details["owner"], author._key)
+      assert_eq(removed[0].details["body"], "Mine")
+      assert_eq(removed[0].account_key, author._key)
+      assert_eq(removed[0].summary, "Took away a comment on the section “Bossa strum”")
+
+      post("/app/sections/#{section._key}/remove", {})
+      assert_null(SharedSection.find_by("_key", section._key))
+      on_author = AdminAction.about(author._key)
+      assert_eq(on_author.map(&:action), ["section_remove", "comment_remove"])
+      assert_eq(on_author[0].target_id, section._key)
+      assert_eq(on_author[0].summary, "Took the section “Bossa strum” away from the library")
+      # The author's page in the admin lists both, linked to the account.
+      listed = res_body(get("/admin/customers/#{author._key}"))
+      assert_contains(listed, "data-admin-action=\"section_remove\"")
+      assert_contains(listed, "data-admin-action=\"comment_remove\"")
+    end
+
+    test("an admin taking away their own section or comment is no admin act: nothing logged") do
+      admin = lib_user("Admin", "admin")
+      section = lib_section(admin, "Admin strum")
+      SectionComment.write(section, admin, "Own")
+      comment = SectionComment.where({"section_id": section._key}).first
+      lib_sign_in(admin)
+      post("/app/sections/#{section._key}/comments/#{comment._key}/remove", {})
+      assert_null(SectionComment.find_by("_key", comment._key))
+      post("/app/sections/#{section._key}/remove", {})
+      assert_null(SharedSection.find_by("_key", section._key))
+      assert_eq(AdminAction.about(admin._key).length, 0)
+      assert_eq(AdminAction.about(section._key).length, 0)
+    end
+
+    test("AdminAction.kept: a line that cannot be written stops the request (503), and nothing is written") do
+      admin = lib_user("Admin", "admin")
+      before = AdminAction.where({"admin_id": admin._key}).count
+      message = assert_raises("could not be written") do
+        AdminAction.kept(admin, "not-a-kind", "section", "some-section", {})
+      end
+      assert_contains(message, "nothing was done")
+      assert_eq(AdminAction.where({"admin_id": admin._key}).count, before)
+      kept = AdminAction.kept(admin, "section_remove", "section", "some-section", {
+        "owner": "x",
+        "title": "T"
+      })
+      assert_null(kept._errors)
+      assert_eq(AdminAction.where({"admin_id": admin._key}).count, before + 1)
+    end
+  end
 end

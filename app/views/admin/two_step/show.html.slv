@@ -1,12 +1,23 @@
-<%# An admin whose session passed no second step, sent here by
-    `require_admin` (#544): why the admin section is closed to them, and how
-    to open it — turn two-step on, or sign in again with the code. %>
+<%# An admin whose session passed no second step, or passed it too long
+    ago, sent here by `require_admin` (#544, #687): why the admin section is
+    closed to them, and how to open it — turn two-step on, or type the code
+    here (or sign out and in again with it). %>
 <section class="auth" data-admin-two-step>
   <h1><%- t("security_544.admin_two_step_title") %></h1>
   <p><%- t("security_544.admin_two_step_lead") %></p>
   <% if sign_in_again %>
     <p><strong><%- t("security_544.admin_two_step_again") %></strong></p>
-    <p data-sign-in-again><%- button_to(t("security_544.admin_two_step_sign_out"), logout_path(), {"method": "delete", "class": "btn btn-primary"}) %></p>
+    <% if error.present? %>
+      <p class="form-error" role="alert" data-admin-code-error><%= error %></p>
+    <% end %>
+    <form action="<%= admin_two_step_path() %>" method="POST" class="auth-form" data-admin-code>
+      <%- csrf_field() %>
+      <label class="field"><%= t("security_687.admin_code_label") %>
+        <input id="code" name="code" type="text" required autofocus autocomplete="one-time-code" inputmode="text" maxlength="12" spellcheck="false">
+      </label>
+      <button type="submit" class="btn btn-primary"><%= t("security_687.admin_code_submit") %></button>
+    </form>
+    <p data-sign-in-again><%- button_to(t("security_544.admin_two_step_sign_out"), logout_path(), {"method": "delete", "class": "btn"}) %></p>
   <% else %>
     <p><strong><%- t("security_544.admin_two_step_do") %></strong></p>
     <% if available %>

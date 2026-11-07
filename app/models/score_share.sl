@@ -2,8 +2,14 @@
 # lets them change it too. The address need not have an account yet: the
 # share is theirs once they sign up with it.
 const SCORE_SHARE_ROLES = ["read", "write"]
-# A person may send SCORE_INVITATIONS_PER_DAY invitations in any 24 hours.
+# A person may send SCORE_INVITATIONS_PER_DAY invitations in any 24 hours;
+# an account confirmed less than SCORE_NEW_ACCOUNT_DAYS ago,
+# SCORE_INVITATIONS_NEW_ACCOUNT_PER_DAY (#687): an invitation mails a
+# stranger words its sender chose (the score's title), and an account made
+# for that should not send many.
 const SCORE_INVITATIONS_PER_DAY = 50
+const SCORE_INVITATIONS_NEW_ACCOUNT_PER_DAY = 10
+const SCORE_NEW_ACCOUNT_DAYS = 7
 
 class ScoreShare < Model
   validates("score_id", {"presence": true})
@@ -40,7 +46,7 @@ class ScoreShare < Model
   # payments are open (Plan.limits); nil asks Stripe's settings.
   static def invite_by(user, score, email, role, open = nil)
     if ScoreShare.invitations_left(user) <= 0
-      used_up = SiteText.t("app.scores.invite.used_up", {"n": SCORE_INVITATIONS_PER_DAY})
+      used_up = SiteText.t("app.scores.invite.used_up", {"n": ScoreShare.invitations_per_day(user)})
       return {"error": used_up, "limit": true}
     end
 
@@ -77,7 +83,16 @@ class ScoreShare < Model
 
   # How many more invitations `user` may send now.
   static def invitations_left(user)
-    [SCORE_INVITATIONS_PER_DAY - ScoreShare.sent_today(user).length, 0].max()
+    [ScoreShare.invitations_per_day(user) - ScoreShare.sent_today(user).length, 0].max()
+  end
+
+  # How many invitations `user` may send in 24 hours: fewer while the
+  # account is new — its address confirmed less than SCORE_NEW_ACCOUNT_DAYS
+  # ago, or not at all.
+  static def invitations_per_day(user)
+    confirmed = user.confirmed_at.to_s.to_i
+    settled = confirmed > 0 && DateTime.utc.to_unix - confirmed >= SCORE_NEW_ACCOUNT_DAYS * 86400
+    settled ? SCORE_INVITATIONS_PER_DAY : SCORE_INVITATIONS_NEW_ACCOUNT_PER_DAY
   end
 
   # When `user` sent the invitations of the last 24 hours (unix seconds).

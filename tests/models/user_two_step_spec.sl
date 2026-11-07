@@ -207,6 +207,9 @@ describe("User two-step sign-in") do
     user = two_step_user()
     secret = user.start_two_step
     codes = User.find(user._key).confirm_two_step(app_code(secret, 0))
+    # Turning it on counts its code there now (#687): the row taken away,
+    # as an account from before #538 has none.
+    TwoStepGuard.delete_of(user)
     assert_null(TwoStepGuard.find_by("user_id", user._key), "no row yet")
     # The step its enrolment used, kept on the account only.
     assert_not(User.find(user._key).second_step?(app_code(secret, 0)), "the step used before")
@@ -308,5 +311,59 @@ describe("User two-step sign-in") do
   test("the server offers it only with a key to encrypt the secrets") do
     assert(User.two_step_available?())
     assert(two_step_user().can_use_two_step?)
+  end
+
+  test("a setup's codes are counted (#687): wrong ones pause it, and then not even the right one turns it on") do
+    user = two_step_user()
+    secret = user.start_two_step
+    (0 .. TWO_STEP_MAX_WRONG).each do |_|
+      assert_null(User.find(user._key).confirm_two_step("000000"))
+    end
+    assert(User.find(user._key).codes_locked?)
+    assert_null(User.find(user._key).confirm_two_step(app_code(secret, 0)), "paused: the right code too")
+    stored = User.find(user._key)
+    assert_not(stored.two_step?)
+    assert_not_null(stored.pending_two_step, "still to confirm, once the pause is over")
+    # The pause over (and the wrong codes with it), the count starts again,
+    # and the right code turns it on.
+    guard = TwoStepGuard.find_by("user_id", user._key)
+    guard.locked_at = DateTime.utc.to_unix - TWO_STEP_LOCK_SECONDS - 1
+    guard.wrong_at = DateTime.utc.to_unix - TWO_STEP_LOCK_SECONDS - 1
+    guard.save
+    assert_eq(User.find(user._key).confirm_two_step("000000"), nil)
+    assert_eq(TwoStepGuard.find_by("user_id", user._key).wrong, 1)
+    codes = User.find(user._key).confirm_two_step(app_code(secret, 0))
+    assert_eq(codes.length, TOTP_BACKUP_COUNT)
+    assert(User.find(user._key).two_step?)
+    assert_eq(TwoStepGuard.find_by("user_id", user._key).wrong, 0)
+  end
+
+  test("a setup left TWO_STEP_PENDING_SECONDS takes no code (#687), and one from before kept no time") do
+    assert_eq(TWO_STEP_PENDING_SECONDS, 900)
+    user = two_step_user()
+    secret = user.start_two_step
+    stored = User.find(user._key)
+    assert_not(stored.two_step_setup_expired?)
+    assert_eq(stored.pending_two_step, secret)
+    stored.totp_pending_at = DateTime.utc.to_unix - TWO_STEP_PENDING_SECONDS + 5
+    stored.update()
+    assert_not(User.find(user._key).two_step_setup_expired?, "just in time")
+    stored.totp_pending_at = DateTime.utc.to_unix - TWO_STEP_PENDING_SECONDS - 1
+    stored.update()
+    late = User.find(user._key)
+    assert(late.two_step_setup_expired?)
+    assert_null(late.pending_two_step)
+    assert_null(late.confirm_two_step(app_code(secret, 0)))
+    assert_not(User.find(user._key).two_step?)
+    # A setup started before #687 has no time (read as 0; a nil written
+    # would be merged away): run out.
+    stored.totp_pending_at = 0
+    stored.update()
+    assert(User.find(user._key).two_step_setup_expired?)
+    # None started: nothing to run out.
+    assert_not(two_step_user().two_step_setup_expired?)
+    # Started again, it takes its code.
+    fresh = User.find(user._key).start_two_step
+    assert_eq(User.find(user._key).confirm_two_step(app_code(fresh, 0)).length, TOTP_BACKUP_COUNT)
   end
 end
