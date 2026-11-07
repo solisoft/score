@@ -234,6 +234,7 @@ const MIDI_MARCH = """
     [0, 0xff, 0x03, 12, ...text('Little March')],
     [0, 0xff, 0x51, 3, us >> 16, (us >> 8) & 255, us & 255],
     [0, 0xff, 0x58, 4, 3, 2, 24, 8],
+    [3 * q, 0xff, 0x51, 3, us >> 16, (us >> 8) & 255, (us & 255) ^ 1],
   ]);
   const flute = track([
     [0, 0xc0, 73], [q, 0xe0, 0, 90], [q, 0xb0, 74, 30],
@@ -560,7 +561,8 @@ describe("The app, in a browser") do
   test("import a MIDI file: its tracks become staves, its bends curves, what it leaves out is named first") do
     sign_up_in_browser(journey_email())
     import_bytes_in_browser("march.mid", MIDI_MARCH)
-    wait_for_text("Left out of march.mid: controllers other than modulation, expression")
+    # Any controller is kept now (#670): a later tempo change is what it leaves out.
+    wait_for_text("Left out of march.mid: tempo changes, the first tempo kept")
     assert_page_path("/app")
     click_button("Create the score anyway")
     wait_for("[data-save-state]")
@@ -575,6 +577,8 @@ describe("The app, in a browser") do
     assert_contains(source, "bd4 sn4 hh4")
     # The bend is kept, as the flute's automation curve.
     assert_contains(source, "\"bend\":[[20160,3328]]")
+    # And its brightness (CC 74), as a curve of its own.
+    assert_contains(source, "\"74\":[[20160,30]]")
     assert_no_page_errors()
   end
 
