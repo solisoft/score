@@ -188,6 +188,12 @@ describe("HomeController") do
       end
     end
 
+    test("answers a HEAD as it answers a GET, not with an error (#821)") do
+      # An uptime probe asks HEAD /: the layout names the engraver's modules for it too.
+      assert_eq(res_status(head("/")), 200)
+      assert_eq(res_status(head("/fr")), 200)
+    end
+
     test("names the site once in its title, and carries its share tags") do
       body = res_body(get("/"))
       title = "Write, play and share scores, together · Score"

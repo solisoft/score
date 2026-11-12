@@ -176,3 +176,9 @@ describe("paper_label") do
     )
   end
 end
+
+describe("eui_module_path") do
+  test("outside a request, names the module's file with no version (#821)") do
+    assert_eq(eui_module_path("player.js"), "/eui-score/player.js")
+  end
+end
