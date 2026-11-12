@@ -10,13 +10,31 @@
 class Changelog
   static def days
     [
-      {"date": "2026-11-12", "entries": [{
-        "area": "site",
-        "title": "Pages answer every kind of request",
-        "text": "A page asked for without its content, as uptime monitors do, or a form sent back with its "
-        + "errors, could answer with a server error instead of the page. They now answer as the page does.",
-        "link": "home"
-      }]},
+      {"date": "2026-11-12", "entries": [
+        {
+          "area": "site",
+          "title": "A shared score in written pitch",
+          "text": "A shared score with clarinets, saxophones, trumpets or horns now has a Written pitch button: the "
+          + "score is redrawn as its players read it, a clarinet a tone up, an alto saxophone a sixth, and its PDF "
+          + "is printed that way. The page's address follows, so a link ending in ?pitch=written opens the score "
+          + "in written pitch for the people it is sent to. Play still plays it as it sounds.",
+          "link": "home"
+        },
+        {
+          "area": "site",
+          "title": "Play a shared score from the top",
+          "text": "On a shared score's page, Play, MIDI and PDF now sit over the score instead of under its last "
+          + "page, and stay in sight under the site's header while a long score scrolls, with how far it has played.",
+          "link": "home"
+        },
+        {
+          "area": "site",
+          "title": "Pages answer every kind of request",
+          "text": "A page asked for without its content, as uptime monitors do, or a form sent back with its "
+          + "errors, could answer with a server error instead of the page. They now answer as the page does.",
+          "link": "home"
+        }
+      ]},
       {"date": "2026-11-07", "entries": [
         {
           "area": "editor",

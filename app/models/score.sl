@@ -21,6 +21,19 @@ const SCORE_VISIBILITIES = [
   "public"
 ]
 
+# The sounds whose players read them written apart from how they sound
+# (Score.transposing?, #831).
+const SCORE_TRANSPOSING_SOUNDS = [
+  "clarinet",
+  "trumpet",
+  "french horn",
+  "english horn",
+  "soprano sax",
+  "alto sax",
+  "tenor sax",
+  "baritone sax"
+]
+
 class Score < Model
   validates("user_id", {"presence": true})
   validates(
@@ -546,6 +559,18 @@ class Score < Model
 
   def trashed?
     !@trashed_at.nil?
+  end
+
+  # Whether a staff of `source` is played by an instrument its player reads
+  # written apart from how it sounds (#831): a clarinet, a trumpet, a horn,
+  # a saxophone, an English horn, as `midiInstrument` names it. The read
+  # page offers Written pitch for it. The same list as transpositionOf in
+  # public/eui-score/score-model.js, which writes the parts: a change goes
+  # to both.
+  static def transposing?(source)
+    Regex.find_all("midiInstrument\\s*=\\s*#?\"([^\"]+)\"", source.to_s).any? do |found|
+      SCORE_TRANSPOSING_SOUNDS.includes?(Regex.replace("^.*\"([^\"]+)\"$", found["match"], "$1"))
+    end
   end
 
   # The title as a downloaded file's name, before its extension: its letters

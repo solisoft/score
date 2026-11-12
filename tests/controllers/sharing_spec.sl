@@ -35,6 +35,46 @@ describe("Sharing") do
   end
 
   describe("the read page") do
+    test("Play and the files sit over the score, before its pages (#830)") do
+      owner = share_user()
+      score = Score.start(owner, Score.blank_source("Long one"))
+      score.make_visible("link")
+      clear_cookies()
+      body = res_body(get("/s/#{score.share_token}"))
+      bar = body.index_of("class=\"score-actions score-actions-top\"")
+      assert_gt(bar, 0)
+      assert_lt(bar, body.index_of("class=\"score-sheet\""))
+      assert_gt(body.index_of("data-score-play "), bar)
+      assert_lt(body.index_of("data-score-play "), body.index_of("class=\"score-sheet\""))
+    end
+
+    test("Written pitch is offered for a transposing instrument, and ?pitch=written opens in it (#831)") do
+      owner = share_user()
+      band = "\\new Staff \\with { midiInstrument = \"clarinet\" } { c'1 }"
+      score = Score.start(owner, band)
+      score.make_visible("link")
+      clear_cookies()
+      body = res_body(get("/s/#{score.share_token}"))
+      assert_eq(assigns()["written"], "offered")
+      assert_contains(body, "data-score-written aria-pressed=\"false\">Written pitch</button>")
+      assert_not(body.contains("data-start-written"))
+      written = res_body(get("/s/#{score.share_token}?pitch=written"))
+      assert_eq(assigns()["written"], "on")
+      assert_contains(written, "data-score-written aria-pressed=\"false\" data-start-written>")
+      res_body(get("/s/#{score.share_token}?pitch=concert"))
+      assert_eq(assigns()["written"], "offered", "only written opens in it")
+    end
+
+    test("Written pitch is not offered where everything is written as it sounds, even when asked (#831)") do
+      owner = share_user()
+      score = Score.start(owner, "\\new Staff \\with { midiInstrument = \"flute\" } { c'1 }")
+      score.make_visible("link")
+      clear_cookies()
+      body = res_body(get("/s/#{score.share_token}?pitch=written"))
+      assert_null(assigns()["written"])
+      assert_not(body.contains("data-score-written"))
+    end
+
     test("a private score's link opens for nobody but its owner") do
       owner = share_user()
       score = Score.start(owner, Score.blank_source("Secret"))

@@ -49,6 +49,40 @@ describe("score_figure") do
     assert_contains(html, "<details class=\"score-source\" open>")
   end
 
+  test("puts its buttons under the score, unless asked over it (#830)") do
+    figure = ScoreSvg.figure("{ c'4 d' }", 600, 7)
+    under = score_figure(figure, {"name": "piano/waltz"})
+    assert_lt(under.index_of("class=\"score-sheet\""), under.index_of("class=\"score-actions\""))
+    assert_not(under.contains("score-actions-top"))
+    over = score_figure(
+      figure,
+      {"name": "piano/waltz", "actions": "top"}
+    )
+    assert_lt(over.index_of("class=\"score-actions score-actions-top\""), over.index_of("class=\"score-sheet\""))
+    assert_eq(over.split("data-score-play ").length, 2, "one Play, over the score")
+  end
+
+  test("offers Written pitch only when asked, pressed on load when on (#831)") do
+    figure = ScoreSvg.figure("{ c'4 d' }", 600, 7)
+    assert_not(score_figure(figure, {"name": "x"}).contains("data-score-written"))
+    offered = score_figure(
+      figure,
+      {"name": "x", "written": "offered"}
+    )
+    assert_contains(offered, "data-score-written aria-pressed=\"false\">")
+    assert_not(offered.contains("data-start-written"))
+    on = score_figure(
+      figure,
+      {"name": "x", "written": "on"}
+    )
+    assert_contains(on, "data-score-written aria-pressed=\"false\" data-start-written>")
+    refused = ScoreSvg.figure("{ c'4 \\nope }", 600, 7)
+    assert_not(score_figure(
+      refused,
+      {"name": "x", "written": "on"}
+    ).contains("data-score-written"), "no buttons when refused")
+  end
+
   test("hands Play the source, escaped, even when the source is not shown") do
     figure = ScoreSvg.figure("\\header { title = \"<b>A & B</b>\" } { \\repeat volta 2 { c'4 d' e' f' } }", 600, 7)
     html = score_figure(figure, {"source": "none"})

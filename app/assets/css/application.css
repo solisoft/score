@@ -166,6 +166,12 @@
   .score-player { flex-basis: 100%; }
   .score-player:empty { display: none; }
   .score-player-note { display: block; margin-top: 4px; font-size: 13px; color: var(--muted); }
+  /* The read page's buttons over the score (#830): kept in sight under the
+     site's header while a long score scrolls, Play and its progress with them. */
+  .score-actions-top { position: sticky; top: 64px; z-index: 15; margin: 0 0 12px; padding: 10px 0; background: var(--paper); border-bottom: 1px solid var(--line); }
+  /* Written pitch, when on (#831). */
+  .score-btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .score-btn:disabled { opacity: .6; cursor: progress; }
   .score-progress { position: relative; margin-top: 4px; height: 26px; border: 1px solid var(--line); border-radius: 999px; background: var(--paper-deep); overflow: hidden; cursor: pointer; }
   .score-progress-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: color-mix(in srgb, #16803c 22%, transparent); border-right: 2px solid #16803c; transition: width .25s linear; }
   .score-progress-text { position: relative; display: block; padding: 0 14px; font: 600 12px/26px var(--font-sans); color: #135f2e; font-variant-numeric: tabular-nums; }
@@ -1177,6 +1183,8 @@
     /* The taller header still clears a heading jumped to from a link. */
     html { scroll-padding-top: 140px; }
     body:has(.studio) .site-header { position: static; }
+    /* The header, taller here, would hide the read page's buttons: they stay over the score, not stuck. */
+    .score-actions-top { position: static; }
     .studio-menubar { top: 0; padding: 6px 10px; gap: 2px 10px; }
     /* Two rows: Tools and the menus, then Undo, MIDI, Play, Rec and the
        zoom on a row of their own — each scrolled sideways when it is too

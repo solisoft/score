@@ -28,14 +28,18 @@
       midiFailed: "The MIDI file could not be made: {error}",
       unread: "This piece is written in a way the score editor does not read: its MusicXML and parts are not written from it.",
       musicxmlFailed: "The MusicXML could not be written: {error}", partsFailed: "The parts could not be read: {error}",
-      partFailed: "The part could not be written: {error}", staff: "Staff {n}", part: "part" },
+      partFailed: "The part could not be written: {error}", staff: "Staff {n}", part: "part",
+      writing: "Writing it as its players read it…", writtenFailed: "Written pitch could not be drawn: {error}",
+      unmoved: "No instrument here is written apart from how it sounds." },
     fr: { play: "Lecture", stop: "Stop", copy: "Copier", copied: "Copié ✓", selected: "Sélectionné : ⌘C / Ctrl+C",
       loading: "Chargement du lecteur…", sounds: "Chargement des sons…", once: "(38 Mo, une fois)",
       failed: "Le lecteur n'a pas pu être chargé.", playing: "Lecture en cours",
       midiFailed: "Le fichier MIDI n'a pas pu être fait : {error}",
       unread: "Cette pièce est écrite d'une façon que l'éditeur de partitions ne lit pas : ni son MusicXML ni ses parties n'en sont écrits.",
       musicxmlFailed: "Le MusicXML n'a pas pu être écrit : {error}", partsFailed: "Les parties n'ont pas pu être lues : {error}",
-      partFailed: "La partie n'a pas pu être écrite : {error}", staff: "Portée {n}", part: "partie" }
+      partFailed: "La partie n'a pas pu être écrite : {error}", staff: "Portée {n}", part: "partie",
+      writing: "Écriture telle que ses musiciens la lisent…", writtenFailed: "La hauteur écrite n'a pas pu être dessinée : {error}",
+      unmoved: "Aucun instrument ici ne s'écrit autrement qu'il ne sonne." }
   };
   function word(key, vars) {
     var lang = (document.documentElement.lang || "en").slice(0, 2);
@@ -187,7 +191,10 @@
    */
   function savePdf(link, event) {
     var button = link.parentElement.querySelector("[data-score-play]");
-    var src = button && button.getAttribute("data-src");
+    var figure = link.closest(".score-figure");
+    // In written pitch (#831), printed as it is shown.
+    var shown = figure && figure.getAttribute("data-pitch") === "written" && figure.__writtenSrc;
+    var src = shown || (button && button.getAttribute("data-src"));
     if (!src) return;
     event.preventDefault();
     engine()
@@ -269,6 +276,90 @@
       });
     }).catch(function (error) { say(section, word("partFailed", { error: errorText(error) })); });
   }
+
+  // ---- Written pitch on the read page (#831) ---------------------------------------
+  //
+  // The page is engraved at concert pitch, as the score sounds; Written pitch
+  // draws it here as its players read it — a clarinet a tone up, an alto
+  // saxophone a sixth — from the editor's model (M.toLilyPond, written), as
+  // the editor's View ▸ Written pitch and the parts do. Play still plays it
+  // as it sounds. The address follows (?pitch=written), the link to send;
+  // the page opens in it when the server marks the button data-start-written.
+
+  /** The figure's score at written pitch: {svg, src, moved}, made once. */
+  function writtenOf(figure) {
+    if (!figure.__written) {
+      var button = figure.querySelector("[data-score-play]");
+      var src = (button && button.getAttribute("data-src")) || "";
+      figure.__written = Promise.all([engine(), import(HEARD_SRC)])
+        .then(function (both) {
+          var E = both[0], M = both[1].M;
+          var parse = function (text) { return withSpans(E.engine, text); };
+          var score = M.fromParsed(parse(src), src, { parse: parse }).score;
+          if (!score) throw new Error(word("unread"));
+          var moved = M.staffLanes(score).some(function (s) { return Boolean(M.transpositionOf(score.staves[s])); });
+          var written = M.toLilyPond(score, { written: true }).source;
+          return E.render(written, { width: 1040, staffSpace: 7 }).then(function (svg) {
+            return { svg: svg, src: written, moved: moved };
+          });
+        });
+      figure.__written.catch(function () { figure.__written = null; });
+    }
+    return figure.__written;
+  }
+
+  /** A word under the buttons, unless the player is using the place. */
+  function sayUnder(figure, text) {
+    var slot = figure.querySelector("[data-score-player]");
+    if (!slot || (playing && playing.slot === slot)) return;
+    slot.innerHTML = text ? '<span class="score-player-note" role="status"></span>' : "";
+    if (text) slot.firstChild.textContent = text;
+  }
+
+  function pitchInAddress(written) {
+    var url = new URL(location.href);
+    if (written) url.searchParams.set("pitch", "written");
+    else url.searchParams.delete("pitch");
+    history.replaceState(history.state, "", url.pathname + url.search + url.hash);
+  }
+
+  function showWritten(button, on) {
+    var figure = button.closest(".score-figure");
+    var sheet = figure && figure.querySelector(".score-sheet");
+    if (!sheet) return;
+    if (figure.__concert == null) figure.__concert = sheet.innerHTML;
+    if (!on) {
+      sheet.innerHTML = figure.__concert;
+      figure.removeAttribute("data-pitch");
+      button.setAttribute("aria-pressed", "false");
+      pitchInAddress(false);
+      sayUnder(figure, "");
+      return;
+    }
+    button.disabled = true;
+    sayUnder(figure, word("writing"));
+    writtenOf(figure)
+      .then(function (written) {
+        sheet.innerHTML = written.svg;
+        figure.__writtenSrc = written.src;
+        figure.setAttribute("data-pitch", "written");
+        button.setAttribute("aria-pressed", "true");
+        pitchInAddress(true);
+        sayUnder(figure, written.moved ? "" : word("unmoved"));
+      })
+      .catch(function (error) { sayUnder(figure, word("writtenFailed", { error: errorText(error) })); })
+      .then(function () { button.disabled = false; });
+  }
+
+  /** A page opened in written pitch: on load, and after each instant navigation. */
+  function openWritten() {
+    document.querySelectorAll("[data-score-written][data-start-written]").forEach(function (button) {
+      button.removeAttribute("data-start-written");
+      showWritten(button, true);
+    });
+  }
+  openWritten();
+  document.addEventListener("soli:load", openWritten);
 
   // ---- Printing (Ctrl/Cmd+P) --------------------------------------------------------
   //
@@ -452,6 +543,11 @@
     var playButton = event.target.closest("[data-score-play]");
     if (playButton) {
       play(playButton);
+      return;
+    }
+    var writtenButton = event.target.closest("[data-score-written]");
+    if (writtenButton) {
+      showWritten(writtenButton, writtenButton.getAttribute("aria-pressed") !== "true");
       return;
     }
     var midiLink = event.target.closest("[data-score-midi]");

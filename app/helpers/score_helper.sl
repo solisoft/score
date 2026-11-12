@@ -95,8 +95,13 @@ end
 #   "title"    the PDF's footer, for a source whose \header names none
 #   "source"   "open" (default), "closed" or "none"
 #   "caption"  a line under the score
+#   "actions"  "top": the buttons over the score, kept in sight while it
+#              scrolls (#830) — under it otherwise
+#   "written"  "offered" or "on": a Written pitch button, pressed on load
+#              when "on" (#831; public/js/score.js draws it)
 def score_figure(figure, opts)
   html = ["<figure class=\"score-figure\">"]
+  html.push(_score_actions(figure, opts)) if opts["actions"] == "top"
   if figure["error"].nil?
     html.push("<div class=\"score-sheet\">#{figure["svg"]}</div>")
   else
@@ -104,7 +109,7 @@ def score_figure(figure, opts)
     html.push("<div class=\"score-sheet score-sheet-refused\"><p class=\"score-error\">#{message}</p></div>")
   end
   html.push("<figcaption>#{html_escape(opts["caption"])}</figcaption>") unless opts["caption"].blank?
-  html.push(_score_actions(figure, opts))
+  html.push(_score_actions(figure, opts)) unless opts["actions"] == "top"
   source_mode = opts["source"] ?? "open"
   unless source_mode == "none"
     open_attr = source_mode == "open" ? " open" : ""
@@ -144,11 +149,18 @@ def _score_actions(figure, opts)
     pdf_attrs += " data-title=\"#{html_escape(opts["title"])}\"" unless opts["title"].blank?
     buttons.push("<a class=\"score-btn\" #{pdf_attrs}>#{paper_label(figure["src"])} PDF</a>")
   end
+  unless opts["written"].blank?
+    pressed = opts["written"] == "on" ? " data-start-written" : ""
+    label = I18n.translate("score.written")
+    written_attrs = "type=\"button\" class=\"score-btn\" data-score-written aria-pressed=\"false\"#{pressed}"
+    buttons.push("<button #{written_attrs}>#{label}</button>")
+  end
   unless name.blank? || opts["sandbox"].blank?
     href = "#{html_escape(opts["sandbox"])}?source=#{html_escape(name)}"
     buttons.push("<a class=\"score-btn score-btn-ghost\" href=\"#{href}\">#{I18n.translate("score.edit")}</a>")
   end
-  "<div class=\"score-actions\">#{buttons.join("")}<div class=\"score-player\" data-score-player></div></div>"
+  where = opts["actions"] == "top" ? " score-actions-top" : ""
+  "<div class=\"score-actions#{where}\">#{buttons.join("")}<div class=\"score-player\" data-score-player></div></div>"
 end
 
 # A snippet of the syntax page: `figures` is the page's, `name` the

@@ -4953,7 +4953,9 @@ export function setMetre(score, text) {
 /**
  * Where middle C of staff `staff`'s concert pitch is written, as LilyPond's
  * \transpose c <this> says it — "d" a tone higher (B♭), "g" a fifth (F) — or
- * null for a staff written as it sounds.
+ * null for a staff written as it sounds. The instruments it moves are
+ * Score.transposing?'s too (app/models/score.sl, the read page's Written
+ * pitch button, #831): a change goes to both.
  */
 export function transpositionOf(staff) {
   if (!staff || staff.drums) return null;

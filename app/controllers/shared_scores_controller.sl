@@ -19,6 +19,9 @@ class SharedScoresController < Controller
     # The downloads' name: the title's (score.pdf, score.mid… say nothing once saved).
     @file_name = @score.file_name
     @can_edit = @score.writable_by?(current_user())
+    # Written pitch (#831): offered when an instrument is read apart from how
+    # it sounds; `?pitch=written` opens the page in it, the link to send.
+    @written = Score.transposing?(@score.source) ? (params["pitch"] == "written" ? "on" : "offered") : nil
     # Its comments (#385), for those who may see it through their account:
     # the readers it is shared with comment here, the editors in the editor.
     @comments_url = @score.access_of(current_user()).nil? ? nil : app_score_comments_path(@score)

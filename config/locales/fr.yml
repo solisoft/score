@@ -89,6 +89,7 @@ fr:
     source: "Source LilyPond"
     copy: "Copier"
     play: "Lecture"
+    written: "Hauteur écrite"
     edit: "Modifier dans le bac à sable →"
   home:
     eyebrow: "Un éditeur de partitions dans votre navigateur"

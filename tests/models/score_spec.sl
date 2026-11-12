@@ -508,3 +508,27 @@ describe("Score, its composer and its pages") do
     assert_eq(Score.erase_keys([]), 0)
   end
 end
+
+describe("Score.transposing? (#831)") do
+  test("names a staff read apart from how it sounds, however midiInstrument is set") do
+    assert(Score.transposing?("\\new Staff \\with { midiInstrument = \"alto sax\" } { c'1 }"))
+    assert(Score.transposing?("\\new Staff { \\set Staff.midiInstrument = #\"clarinet\" c'1 }"))
+    assert(Score.transposing?("\\new Staff \\with { midiInstrument=\"french horn\" } { c'1 }"))
+    flute = "\\new Staff \\with { midiInstrument = \"flute\" } { c'1 }"
+    trumpet = "\\new Staff \\with { midiInstrument = \"trumpet\" } { c'1 }"
+    assert(Score.transposing?("<< #{flute} #{trumpet} >>"), "one staff of several is enough")
+  end
+
+  test("answers no for instruments written as they sound, words that only name one, and nothing") do
+    assert_not(Score.transposing?("\\new Staff \\with { midiInstrument = \"flute\" } { c'1 }"))
+    named = "\\new Staff \\with { instrumentName = \"Clarinette\" midiInstrument = \"oboe\" } { c'1 }"
+    assert_not(Score.transposing?(named), "the sound decides, not the name shown")
+    assert_not(Score.transposing?("\\header { title = \"For clarinet\" } { c'1 }"), "a title is not a staff")
+    assert_not(
+      Score.transposing?("\\new Staff \\with { midiInstrument = \"alto saxophone\" } { c'1 }"),
+      "only the General MIDI names"
+    )
+    assert_not(Score.transposing?(""))
+    assert_not(Score.transposing?(nil))
+  end
+end

@@ -1579,6 +1579,24 @@
     font-size: 13px;
     color: var(--muted);
   }
+  .score-actions-top {
+    position: sticky;
+    top: 64px;
+    z-index: 15;
+    margin: 0 0 12px;
+    padding: 10px 0;
+    background: var(--paper);
+    border-bottom: 1px solid var(--line);
+  }
+  .score-btn[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .score-btn:disabled {
+    opacity: .6;
+    cursor: progress;
+  }
   .score-progress {
     position: relative;
     margin-top: 4px;
@@ -6029,6 +6047,9 @@
       scroll-padding-top: 140px;
     }
     body:has(.studio) .site-header {
+      position: static;
+    }
+    .score-actions-top {
       position: static;
     }
     .studio-menubar {
