@@ -9,7 +9,12 @@
     <p class="read-room" data-read-room hidden></p>
     <p class="read-updated" data-read-updated hidden role="status">This score was just changed. <a href="" data-read-reload>See it as it is now</a></p>
   </header>
-  <%- score_figure(figure, {"name": file_name, "pdf": pdf_url, "title": score.title, "source": "closed", "actions": "top", "written": written}) %>
+  <%# The buttons over the score (#830); Written pitch when an instrument
+      is read apart from how it sounds (#831). %>
+  <%- score_figure(figure, {
+    "name": file_name, "pdf": pdf_url, "title": score.title, "source": "closed",
+    "actions": "top", "written": written
+  }) %>
   <%# The score in other programs' files, written in the browser from its
       source (public/js/score.js): nothing here can change the score. %>
   <% if figure["error"].nil? %>
