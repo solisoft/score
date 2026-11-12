@@ -3,11 +3,13 @@
 # and the version pages name every module at it (`eui_module_path`), as the
 # modules name the ones they import — so a module two others import is one
 # module, not a second copy of score-model.js fetched, read and run.
+# On every request, not only GET: a HEAD (an uptime probe) or a form sent
+# back with its errors renders the same layout (#821).
 
 # order: 5
 # global_only: true
 
 def set_eui_version(req)
-  req["eui_version"] = ScoreAssets.version if req["method"] == "GET"
+  req["eui_version"] = ScoreAssets.version
   req
 end

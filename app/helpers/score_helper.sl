@@ -167,10 +167,11 @@ end
 # version, which the eui_version middleware puts on the request (#689): the
 # modules name the ones they import at their own version, so pages that load
 # several (Play: player.js, heard.js; musicxml.js) load each module once.
-# Outside a request, the file's own address.
+# Outside a request (no `req` then), the file's address with no version:
+# `public_path` is a view's, not callable from a helper (#821).
 def eui_module_path(name)
-  version = req ? req["eui_version"].to_s : ""
-  return public_path("eui-score/#{name}") if version.blank?
+  version = (req["eui_version"] rescue nil).to_s
+  return "/eui-score/#{name}" if version.blank?
 
   "/eui-score/#{name}?v=#{version}"
 end

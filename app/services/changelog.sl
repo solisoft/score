@@ -10,6 +10,13 @@
 class Changelog
   static def days
     [
+      {"date": "2026-11-12", "entries": [{
+        "area": "site",
+        "title": "Pages answer every kind of request",
+        "text": "A page asked for without its content, as uptime monitors do, or a form sent back with its "
+        + "errors, could answer with a server error instead of the page. They now answer as the page does.",
+        "link": "home"
+      }]},
       {"date": "2026-11-07", "entries": [
         {
           "area": "editor",
