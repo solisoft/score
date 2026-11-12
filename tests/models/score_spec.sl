@@ -330,7 +330,7 @@ describe("Score") do
       too_long = score.save_from_editor("{ c'1 }" + "x" * 1000000, base)
       assert_eq(too_long["status"], 422)
       assert_eq(too_long["body"]["error"], "Not saved: the score is too long to keep (a million characters at most).")
-      titled = score.save_from_editor("\\header { title = \"#{"t" * 201}\" }\n{ c'1 }", base)
+      titled = score.save_from_editor("\\header { title = \"" + "t" * 201 + "\" }\n{ c'1 }", base)
       assert_eq(titled["status"], 422)
       assert_eq(titled["body"]["error"], "Not saved: the title is too long (200 characters at most).")
       empty = score.save_from_editor("  ", base)
@@ -346,7 +346,7 @@ describe("Score") do
       owner = score_owner()
       score = Score.start(owner, Score.blank_source("Short"))
       title = "t" * 200
-      saved = score.save_from_editor("\\header { title = \"#{title}\" }\n{ c'1 }", score.revision)
+      saved = score.save_from_editor("\\header { title = \"" + title + "\" }\n{ c'1 }", score.revision)
       assert_eq(saved["status"], 200)
       assert_eq(Score.find(score._key).title, title)
     end

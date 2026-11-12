@@ -56,7 +56,7 @@ describe("Engraving") do
     end
 
     test("does not read back an engraving past its days: it engraves anew") do
-      src = "\\header { title = \"Stale #{uuid_v4}\" }\n{ g'1 }"
+      src = "\\header { title = \"Stale " + uuid_v4() + "\" }\n{ g'1 }"
       Engraving.upsert(
         ScoreSvg.digest(src, 600, 7, 0, {}),
         {

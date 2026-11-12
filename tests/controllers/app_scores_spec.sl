@@ -28,7 +28,7 @@ def shared_save_queries(people)
     ScoreShare.invite(score, library_user().email, "write")
   end
   library_sign_in(owner)
-  source = "\\header { title = \"Shared #{people}\" }\n{ c'1 }"
+  source = "\\header { title = \"Shared " + people.to_s + "\" }\n{ c'1 }"
   first = put(
     "/app/scores/#{score._key}",
     {"source": source, "revision": score.revision}
