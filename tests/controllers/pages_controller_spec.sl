@@ -61,7 +61,7 @@ describe("PagesController") do
       body = res_body(response)
       assert_contains(body, "https://score.solisoft.net/eui-score.js")
       assert_contains(body, "https://score.solisoft.net/eui-score-editor.js")
-      assert_contains(body, "<eui-score src=\"/examples/ensembles/string-quartet/source.ly\"></eui-score>")
+      assert_contains(body, "<score-sheet src=\"/examples/ensembles/string-quartet/source.ly\"></score-sheet>")
       assert_contains(body, "<script type=\"text/x-lilypond\">")
       assert_contains(body, "id=\"embed-data\">{\"v\":\"#{ScoreAssets.version}\"}</script>")
       assert_contains(body, "await import(`/eui-score/eui-score.js?v=${v}`)")
@@ -106,6 +106,7 @@ describe("PagesController") do
       assert_eq(body.split("class=\"changelog-try\"").length - 1, linked.length)
       assert_contains(body, "href=\"/playground\">Try it")
       assert_contains(body, "href=\"/claude\">Try it")
+      assert_contains(body, "href=\"/embed\">Try it")
     end
 
     test("draws a sample score under an engraver change that names one, in the browser's engraver") do
@@ -119,14 +120,14 @@ describe("PagesController") do
         entry["title"].starts_with?("Four voices on a staff")
       end[0]
       assert_contains(four_voices["sample"], "\\voiceFour")
-      assert_contains(body, "<eui-score staff-space=\"6\"><script type=\"text/x-lilypond\">\\new PianoStaff")
+      assert_contains(body, "<score-sheet staff-space=\"6\"><script type=\"text/x-lilypond\">\\new PianoStaff")
       assert_contains(body, "<script type=\"module\" src=\"/eui-score/eui-score.js")
       named = Changelog.days.map do |day|
         day["entries"]
       end.flatten.filter do |entry|
         !entry["sample"].nil?
       end
-      assert_eq(body.split("<eui-score ").length - 1, named.length)
+      assert_eq(body.split("<score-sheet ").length - 1, named.length)
       # An entry with no sample draws none.
       linked = entries.filter do |entry|
         entry["title"] == "The score and its text, linked"

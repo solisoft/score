@@ -2,11 +2,14 @@
 //
 //   <script type="module" src="https://score.solisoft.net/eui-score/eui-score.js"></script>
 //
-//   <eui-score>
+//   <score-sheet>
 //     <script type="text/x-lilypond">
 //       \relative c' { \key g \major \time 3/4 g'4( a b) | d2. \bar "|." }
 //     </script>
-//   </eui-score>
+//   </score-sheet>
+//
+// <eui-score>, the element's first name, is the same element: pages that
+// embed it keep working (#834).
 //
 // The engraver is EUI's own (the `eui-score` crate) compiled to
 // WebAssembly: ~200 KB gzipped, fetched once, beside this file. Nothing is
@@ -101,20 +104,20 @@ export function download(data, fileName, type) {
 }
 
 const STYLE = `
-  eui-score { display: block; color: inherit; }
-  eui-score > svg { display: block; max-width: 100%; height: auto; }
-  eui-score > .eui-score-error { font: 13px/1.5 ui-monospace, monospace; color: #8b2b2c; margin: 0; white-space: pre-wrap; }
+  score-sheet, eui-score { display: block; color: inherit; }
+  :is(score-sheet, eui-score) > svg { display: block; max-width: 100%; height: auto; }
+  :is(score-sheet, eui-score) > .eui-score-error { font: 13px/1.5 ui-monospace, monospace; color: #8b2b2c; margin: 0; white-space: pre-wrap; }
 `;
 
 /**
- * <eui-score>: engraves its source at its own width, again when it is
+ * <score-sheet>: engraves its source at its own width, again when it is
  * resized. Attributes: `src` (a .ly file to fetch), `staff-space` (px,
  * default 7), `width` (px; default: the element's width). Property
  * `source` reads and replaces the LilyPond; the element fires `render`
  * after each engraving (detail: `width`, and `ms` it took) and `refuse`
  * (detail: the message) on a refusal.
  */
-class EuiScore extends HTMLElement {
+class ScoreSheet extends HTMLElement {
   static get observedAttributes() {
     return ["src", "staff-space", "width"];
   }
@@ -175,7 +178,7 @@ class EuiScore extends HTMLElement {
       this._source = await response.text();
       this._schedule();
     } catch (error) {
-      this._show(`eui-score: ${this.getAttribute("src")} could not be read (${error.message})`);
+      this._show(`${this.localName}: ${this.getAttribute("src")} could not be read (${error.message})`);
     }
   }
 
@@ -213,4 +216,8 @@ class EuiScore extends HTMLElement {
   }
 }
 
+/** <eui-score>, its first name: the same element, under a class of its own — a registry takes a class once. */
+class EuiScore extends ScoreSheet {}
+
+if (!customElements.get("score-sheet")) customElements.define("score-sheet", ScoreSheet);
 if (!customElements.get("eui-score")) customElements.define("eui-score", EuiScore);

@@ -37,7 +37,7 @@
 # Styles stay 'unsafe-inline': the views and the engraver's components set
 # style attributes, and a style cannot run a script.
 #
-# The <eui-score> component other sites embed runs under *their* policy, not
+# The <score-sheet> component other sites embed runs under *their* policy, not
 # this one. HSTS is sent by soli-proxy in front of the app, not from here.
 
 const CSP_VIEWS_DIR = "app/views"

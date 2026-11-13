@@ -4,7 +4,7 @@
     <h1>Des partitions sur n'importe quel site</h1>
     <p class="lead">
       eui-score existe aussi en <strong>WebAssembly</strong> : le même graveur, compilé pour le navigateur. Une
-      balise <code>&lt;script&gt;</code>, une balise <code>&lt;eui-score&gt;</code>, et votre page grave le LilyPond
+      balise <code>&lt;script&gt;</code>, une balise <code>&lt;score-sheet&gt;</code>, et votre page grave le LilyPond
       toute seule — sans serveur, sans compte, rien à installer. Chaque partition de cette page est gravée ainsi, dans
       votre navigateur.
     </p>
@@ -34,26 +34,30 @@
         <p>Chargez le module une fois, n'importe où dans la page :</p>
 <pre class="code-block"><code>&lt;script type="module" src="https://score.solisoft.net/eui-score.js"&gt;&lt;/script&gt;</code></pre>
         <p>Puis placez une partition là où elle doit apparaître :</p>
-<pre class="code-block"><code>&lt;eui-score&gt;
+<pre class="code-block"><code>&lt;score-sheet&gt;
   &lt;script type="text/x-lilypond"&gt;
     \header { title = "Minuet" composer = "J. S. Bach" }
     \relative c'' { \key g \major \time 3/4
       d4( g,8 a b c | d4) g,-. g-. | e'4( c8 d e fis | g4) g,-. g-. \bar "|." }
   &lt;/script&gt;
-&lt;/eui-score&gt;</code></pre>
+&lt;/score-sheet&gt;</code></pre>
         <p>Ce qui donne, gravé à l'instant par votre navigateur :</p>
         <div class="score-sheet">
-          <eui-score>
+          <score-sheet>
             <script type="text/x-lilypond">
               \header { title = "Minuet" composer = "J. S. Bach" }
               \relative c'' { \key g \major \time 3/4
                 d4( g,8 a b c | d4) g,-. g-. | e'4( c8 d e fis | g4) g,-. g-. \bar "|." }
             </script>
-          </eui-score>
+          </score-sheet>
         </div>
         <p>
           Le module pèse 26 Ko de JavaScript ; le graveur, <strong>826 Ko de WebAssembly (290 Ko compressé en gzip)</strong>,
           est téléchargé une fois puis mis en cache, quel que soit le nombre de partitions de la page.
+        </p>
+        <p>
+          L'élément s'appelait d'abord <code>&lt;eui-score&gt;</code> : ce nom marche toujours, avec les mêmes
+          attributs ; une page qui intègre déjà une partition n'a rien à changer.
         </p>
       </section>
 
@@ -65,8 +69,8 @@
           source arriverait abîmée. Le contenu d'un <code>&lt;script&gt;</code> de type inconnu n'est ni exécuté ni
           analysé : il arrive intact. Une source sans chevrons peut aussi être le texte même de l'élément.
         </p>
-<pre class="code-block"><code>&lt;eui-score&gt;\relative c' { c4 d e f | g1 \bar "|." }&lt;/eui-score&gt;</code></pre>
-        <div class="score-sheet"><eui-score>\relative c' { c4 d e f | g1 \bar "|." }</eui-score></div>
+<pre class="code-block"><code>&lt;score-sheet&gt;\relative c' { c4 d e f | g1 \bar "|." }&lt;/score-sheet&gt;</code></pre>
+        <div class="score-sheet"><score-sheet>\relative c' { c4 d e f | g1 \bar "|." }</score-sheet></div>
       </section>
 
       <section class="doc-section" id="file">
@@ -76,8 +80,8 @@
           cross-origin. Les pièces de la galerie sont servies ainsi, à
           <code>/examples/&lt;family&gt;/&lt;piece&gt;/source.ly</code> :
         </p>
-<pre class="code-block"><code>&lt;eui-score src="https://score.solisoft.net/examples/ensembles/string-quartet/source.ly"&gt;&lt;/eui-score&gt;</code></pre>
-        <div class="score-sheet"><eui-score src="<%= example_source_path("ensembles", "string-quartet") %>"></eui-score></div>
+<pre class="code-block"><code>&lt;score-sheet src="https://score.solisoft.net/examples/ensembles/string-quartet/source.ly"&gt;&lt;/score-sheet&gt;</code></pre>
+        <div class="score-sheet"><score-sheet src="<%= example_source_path("ensembles", "string-quartet") %>"></score-sheet></div>
       </section>
 
       <section class="doc-section" id="size">
@@ -87,13 +91,13 @@
           mesures sont réparties en systèmes qui tiennent. <code>staff-space</code> règle la taille (en px entre deux
           lignes de portée, 7 par défaut) ; <code>width</code> fixe une largeur en px.
         </p>
-<pre class="code-block"><code>&lt;eui-score staff-space="10" src="…"&gt;&lt;/eui-score&gt;
-&lt;eui-score width="420" src="…"&gt;&lt;/eui-score&gt;</code></pre>
+<pre class="code-block"><code>&lt;score-sheet staff-space="10" src="…"&gt;&lt;/score-sheet&gt;
+&lt;score-sheet width="420" src="…"&gt;&lt;/score-sheet&gt;</code></pre>
         <p>
           <label for="embed-size">staff-space : <strong id="embed-size-value">7</strong> px</label><br>
           <input id="embed-size" type="range" min="4" max="14" step="0.5" value="7" style="width: 100%; max-width: 360px">
         </p>
-        <div class="score-sheet"><eui-score id="embed-sized" src="<%= example_source_path("piano", "minuet-in-g") %>"></eui-score></div>
+        <div class="score-sheet"><score-sheet id="embed-sized" src="<%= example_source_path("piano", "minuet-in-g") %>"></score-sheet></div>
       </section>
 
       <section class="doc-section" id="colour">
@@ -102,12 +106,12 @@
           L'encre est <code>currentColor</code> : la partition prend la couleur du texte qui l'entoure, et suit donc un
           thème clair ou sombre sans rien faire.
         </p>
-<pre class="code-block"><code>&lt;eui-score style="color: #8b2b2c"&gt;…&lt;/eui-score&gt;</code></pre>
+<pre class="code-block"><code>&lt;score-sheet style="color: #8b2b2c"&gt;…&lt;/score-sheet&gt;</code></pre>
         <div class="score-sheet" style="color: #8b2b2c">
-          <eui-score><script type="text/x-lilypond">\relative c'' { \key d \major fis4\mf fis g a | a g fis e | d d e fis | e4. d8 d2 \bar "|." }</script></eui-score>
+          <score-sheet><script type="text/x-lilypond">\relative c'' { \key d \major fis4\mf fis g a | a g fis e | d d e fis | e4. d8 d2 \bar "|." }</script></score-sheet>
         </div>
         <div class="score-sheet" style="background: #1d1914; color: #f3efe6; margin-top: 12px">
-          <eui-score><script type="text/x-lilypond">\relative c'' { \key d \major fis4\mf fis g a | a g fis e | d d e fis | e4. d8 d2 \bar "|." }</script></eui-score>
+          <score-sheet><script type="text/x-lilypond">\relative c'' { \key d \major fis4\mf fis g a | a g fis e | d d e fis | e4. d8 d2 \bar "|." }</script></score-sheet>
         </div>
       </section>
 
@@ -154,11 +158,11 @@ await check("{ c'64 }");   // "score: the duration 64 is not one this draws (…
           le message, qui s'affiche aussi à la place de la partition). Sa propriété <code>source</code> lit et
           remplace le LilyPond : c'est tout ce qu'il faut à un éditeur en direct, comme le <a href="<%= playground_path() %>">bac à sable</a>.
         </p>
-<pre class="code-block"><code>const score = document.querySelector("eui-score");
+<pre class="code-block"><code>const score = document.querySelector("score-sheet");
 textarea.addEventListener("input", () =&gt; { score.source = textarea.value; });
 score.addEventListener("refuse", (event) =&gt; console.warn(event.detail));</code></pre>
         <div class="score-sheet score-sheet-refused">
-          <eui-score><script type="text/x-lilypond">{ c'4 d'4 \glissando e'4 }</script></eui-score>
+          <score-sheet><script type="text/x-lilypond">{ c'4 d'4 \glissando e'4 }</script></score-sheet>
         </div>
       </section>
 
@@ -207,7 +211,7 @@ editor.edit({ op: "move", item: 0, how: "step", by: 1 });   // or edit it from c
       <section class="doc-section" id="frameworks">
         <h2>React, Vue, Svelte…<a class="anchor" href="#frameworks">#</a></h2>
         <p>
-          <code>&lt;eui-score&gt;</code> est un élément HTML standard (un <em>custom element</em>) : tout framework
+          <code>&lt;score-sheet&gt;</code> est un élément HTML standard (un <em>custom element</em>) : tout framework
           capable d'écrire du HTML peut s'en servir. Passez la source par la propriété <code>source</code>, ou appelez
           <code>render()</code> et placez le SVG vous-même.
         </p>
@@ -215,7 +219,7 @@ editor.edit({ op: "move", item: 0, how: "step", by: 1 });   // or edit it from c
 function Score({ source }) {
   const ref = useRef(null);
   useEffect(() =&gt; { ref.current.source = source; }, [source]);
-  return &lt;eui-score ref={ref} /&gt;;
+  return &lt;score-sheet ref={ref} /&gt;;
 }</code></pre>
       </section>
 

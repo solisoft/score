@@ -33,7 +33,7 @@ en:
       description: "The LilyPond subset eui-score reads, construct by construct, every example engraved."
     embed:
       title: "Embed"
-      description: "Scores on any website: one script, one <eui-score> tag, nothing to install."
+      description: "Scores on any website: one script, one <score-sheet> tag, nothing to install."
     claude:
       title: "Score in Claude"
       description: "Connect Claude to Score: it writes, reads and changes your scores, and reads photos of scores."

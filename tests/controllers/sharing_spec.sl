@@ -88,6 +88,18 @@ describe("Sharing") do
       assert_eq(res_status(get("/s/#{score.share_token}")), 200)
     end
 
+    test("the embed code offered names the element <score-sheet>, and none for a private score (#834)") do
+      owner = share_user()
+      score = Score.start(owner, Score.blank_source("Embedded"))
+      share_sign_in(owner)
+      assert_not(res_body(get("/app/scores/#{score._key}/share")).contains("id=\"embed-code\""), "private: no code")
+      post("/app/scores/#{score._key}/share", {"visibility": "link"})
+      body = res_body(get("/app/scores/#{score._key}/share"))
+      assert_contains(body, "&lt;score-sheet src=&quot;")
+      assert_contains(body, "/s/#{score.share_token}/source.ly&quot;&gt;&lt;/score-sheet&gt;")
+      assert_not(body.contains("&lt;eui-score"), "the former name is not offered any more")
+    end
+
     test("by link: anyone reads, plays and prints it, and search engines are asked to stay out") do
       owner = share_user()
       score = Score.start(owner, Score.blank_source("Open air"))

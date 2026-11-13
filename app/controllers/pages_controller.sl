@@ -80,6 +80,7 @@ class PagesController < Controller
       "limits": SiteLocale.path(limits_path()),
       "pricing": SiteLocale.path(Plan.free? ? root_path() : pricing_path()),
       "claude": SiteLocale.path(claude_path()),
+      "embed": SiteLocale.path(embed_path()),
       "home": SiteLocale.path(root_path()),
       "app": app_home_path()
     }

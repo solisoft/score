@@ -41,7 +41,7 @@
       <h2><%= t("app.scores.share.elsewhere") %></h2>
       <p class="muted"><%= t("app.scores.share.elsewhere_lead") %></p>
       <% script_tag = "<script type=\"module\" src=\"#{absolute_url("/eui-score.js")}\"></script>" %>
-      <% embed = script_tag + "\n<eui-score src=\"#{absolute_url(source_path)}\"></eui-score>" %>
+      <% embed = script_tag + "\n<score-sheet src=\"#{absolute_url(source_path)}\"></score-sheet>" %>
       <textarea id="embed-code" class="share-embed" readonly rows="3" aria-label="<%= t("app.scores.share.embed_label") %>"><%= embed %></textarea>
       <button type="button" class="btn btn-ghost" data-copy="embed-code" data-copied="<%= t("app.scores.share.copied") %>"><%= t("app.scores.share.copy_code") %></button>
     </div>

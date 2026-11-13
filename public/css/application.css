@@ -3899,7 +3899,7 @@
   .changelog-sample {
     margin: 12px 0 0;
   }
-  .changelog-sample eui-score {
+  .changelog-sample score-sheet {
     display: block;
     min-height: 60px;
     color: var(--ink);

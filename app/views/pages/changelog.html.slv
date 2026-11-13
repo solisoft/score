@@ -24,7 +24,7 @@
               <p><%= entry["text"] %></p>
               <% unless entry["sample"].nil? %>
                 <figure class="changelog-sample">
-                  <eui-score staff-space="6"><script type="text/x-lilypond"><%- entry["sample"] %></script></eui-score>
+                  <score-sheet staff-space="6"><script type="text/x-lilypond"><%- entry["sample"] %></script></score-sheet>
                   <details class="score-source">
                     <summary><%= t("score.source") %></summary>
                     <div class="score-code">

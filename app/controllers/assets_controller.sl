@@ -1,6 +1,6 @@
 # The browser engraver at stable addresses, for other sites to link to.
 class AssetsController < Controller
-  # GET /eui-score.js — <eui-score> and the engraving API, current version
+  # GET /eui-score.js — <score-sheet> and the engraving API, current version
   def element
     ScoreAssets.entry("eui-score.js")
   end

@@ -4,7 +4,7 @@
     <h1>Scores on any website</h1>
     <p class="lead">
       eui-score also comes as <strong>WebAssembly</strong>: the same engraver, compiled for the browser. One
-      <code>&lt;script&gt;</code> tag, one <code>&lt;eui-score&gt;</code> tag, and your page engraves LilyPond by
+      <code>&lt;script&gt;</code> tag, one <code>&lt;score-sheet&gt;</code> tag, and your page engraves LilyPond by
       itself — no server, no account, nothing to install. Every score on this page is engraved that way, in your
       browser.
     </p>
@@ -34,26 +34,30 @@
         <p>Load the module once, anywhere in the page:</p>
 <pre class="code-block"><code>&lt;script type="module" src="https://score.solisoft.net/eui-score.js"&gt;&lt;/script&gt;</code></pre>
         <p>Then put a score where it should appear:</p>
-<pre class="code-block"><code>&lt;eui-score&gt;
+<pre class="code-block"><code>&lt;score-sheet&gt;
   &lt;script type="text/x-lilypond"&gt;
     \header { title = "Minuet" composer = "J. S. Bach" }
     \relative c'' { \key g \major \time 3/4
       d4( g,8 a b c | d4) g,-. g-. | e'4( c8 d e fis | g4) g,-. g-. \bar "|." }
   &lt;/script&gt;
-&lt;/eui-score&gt;</code></pre>
+&lt;/score-sheet&gt;</code></pre>
         <p>Which gives, engraved just now by your browser:</p>
         <div class="score-sheet">
-          <eui-score>
+          <score-sheet>
             <script type="text/x-lilypond">
               \header { title = "Minuet" composer = "J. S. Bach" }
               \relative c'' { \key g \major \time 3/4
                 d4( g,8 a b c | d4) g,-. g-. | e'4( c8 d e fis | g4) g,-. g-. \bar "|." }
             </script>
-          </eui-score>
+          </score-sheet>
         </div>
         <p>
           The module is 26 KB of JavaScript; the engraver, <strong>826 KB of WebAssembly (290 KB gzipped)</strong>,
           is downloaded once and cached, however many scores the page holds.
+        </p>
+        <p>
+          The element was first called <code>&lt;eui-score&gt;</code>: that name still works, with the same
+          attributes, so a page that already embeds a score needs no change.
         </p>
       </section>
 
@@ -65,8 +69,8 @@
           arrive mangled. The content of a <code>&lt;script&gt;</code> of an unknown type is neither run nor parsed:
           it arrives intact. A source without angle brackets may also be the element's own text.
         </p>
-<pre class="code-block"><code>&lt;eui-score&gt;\relative c' { c4 d e f | g1 \bar "|." }&lt;/eui-score&gt;</code></pre>
-        <div class="score-sheet"><eui-score>\relative c' { c4 d e f | g1 \bar "|." }</eui-score></div>
+<pre class="code-block"><code>&lt;score-sheet&gt;\relative c' { c4 d e f | g1 \bar "|." }&lt;/score-sheet&gt;</code></pre>
+        <div class="score-sheet"><score-sheet>\relative c' { c4 d e f | g1 \bar "|." }</score-sheet></div>
       </section>
 
       <section class="doc-section" id="file">
@@ -76,8 +80,8 @@
           reads. The gallery's pieces are served that way, at
           <code>/examples/&lt;family&gt;/&lt;piece&gt;/source.ly</code>:
         </p>
-<pre class="code-block"><code>&lt;eui-score src="https://score.solisoft.net/examples/ensembles/string-quartet/source.ly"&gt;&lt;/eui-score&gt;</code></pre>
-        <div class="score-sheet"><eui-score src="<%= example_source_path("ensembles", "string-quartet") %>"></eui-score></div>
+<pre class="code-block"><code>&lt;score-sheet src="https://score.solisoft.net/examples/ensembles/string-quartet/source.ly"&gt;&lt;/score-sheet&gt;</code></pre>
+        <div class="score-sheet"><score-sheet src="<%= example_source_path("ensembles", "string-quartet") %>"></score-sheet></div>
       </section>
 
       <section class="doc-section" id="size">
@@ -87,13 +91,13 @@
           broken into systems that fit. <code>staff-space</code> sets the size (px between two staff lines, 7 by
           default); <code>width</code> fixes a width in px.
         </p>
-<pre class="code-block"><code>&lt;eui-score staff-space="10" src="…"&gt;&lt;/eui-score&gt;
-&lt;eui-score width="420" src="…"&gt;&lt;/eui-score&gt;</code></pre>
+<pre class="code-block"><code>&lt;score-sheet staff-space="10" src="…"&gt;&lt;/score-sheet&gt;
+&lt;score-sheet width="420" src="…"&gt;&lt;/score-sheet&gt;</code></pre>
         <p>
           <label for="embed-size">staff-space: <strong id="embed-size-value">7</strong> px</label><br>
           <input id="embed-size" type="range" min="4" max="14" step="0.5" value="7" style="width: 100%; max-width: 360px">
         </p>
-        <div class="score-sheet"><eui-score id="embed-sized" src="<%= example_source_path("piano", "minuet-in-g") %>"></eui-score></div>
+        <div class="score-sheet"><score-sheet id="embed-sized" src="<%= example_source_path("piano", "minuet-in-g") %>"></score-sheet></div>
       </section>
 
       <section class="doc-section" id="colour">
@@ -102,12 +106,12 @@
           The ink is <code>currentColor</code>: the score takes the colour of the text around it, so it follows a
           light or dark theme with nothing to do.
         </p>
-<pre class="code-block"><code>&lt;eui-score style="color: #8b2b2c"&gt;…&lt;/eui-score&gt;</code></pre>
+<pre class="code-block"><code>&lt;score-sheet style="color: #8b2b2c"&gt;…&lt;/score-sheet&gt;</code></pre>
         <div class="score-sheet" style="color: #8b2b2c">
-          <eui-score><script type="text/x-lilypond">\relative c'' { \key d \major fis4\mf fis g a | a g fis e | d d e fis | e4. d8 d2 \bar "|." }</script></eui-score>
+          <score-sheet><script type="text/x-lilypond">\relative c'' { \key d \major fis4\mf fis g a | a g fis e | d d e fis | e4. d8 d2 \bar "|." }</script></score-sheet>
         </div>
         <div class="score-sheet" style="background: #1d1914; color: #f3efe6; margin-top: 12px">
-          <eui-score><script type="text/x-lilypond">\relative c'' { \key d \major fis4\mf fis g a | a g fis e | d d e fis | e4. d8 d2 \bar "|." }</script></eui-score>
+          <score-sheet><script type="text/x-lilypond">\relative c'' { \key d \major fis4\mf fis g a | a g fis e | d d e fis | e4. d8 d2 \bar "|." }</script></score-sheet>
         </div>
       </section>
 
@@ -154,11 +158,11 @@ await check("{ c'64 }");   // "score: the duration 64 is not one this draws (…
           the message, which is also shown in place of the score). Its <code>source</code> property reads and
           replaces the LilyPond: that is all a live editor needs, like the <a href="<%= playground_path() %>">playground</a>.
         </p>
-<pre class="code-block"><code>const score = document.querySelector("eui-score");
+<pre class="code-block"><code>const score = document.querySelector("score-sheet");
 textarea.addEventListener("input", () =&gt; { score.source = textarea.value; });
 score.addEventListener("refuse", (event) =&gt; console.warn(event.detail));</code></pre>
         <div class="score-sheet score-sheet-refused">
-          <eui-score><script type="text/x-lilypond">{ c'4 d'4 \glissando e'4 }</script></eui-score>
+          <score-sheet><script type="text/x-lilypond">{ c'4 d'4 \glissando e'4 }</script></score-sheet>
         </div>
       </section>
 
@@ -206,7 +210,7 @@ editor.edit({ op: "move", item: 0, how: "step", by: 1 });   // or edit it from c
       <section class="doc-section" id="frameworks">
         <h2>React, Vue, Svelte…<a class="anchor" href="#frameworks">#</a></h2>
         <p>
-          <code>&lt;eui-score&gt;</code> is a standard HTML element (a <em>custom element</em>): any framework that
+          <code>&lt;score-sheet&gt;</code> is a standard HTML element (a <em>custom element</em>): any framework that
           can write HTML can use it. Pass the source through the <code>source</code> property, or call
           <code>render()</code> and place the SVG yourself.
         </p>
@@ -214,7 +218,7 @@ editor.edit({ op: "move", item: 0, how: "step", by: 1 });   // or edit it from c
 function Score({ source }) {
   const ref = useRef(null);
   useEffect(() =&gt; { ref.current.source = source; }, [source]);
-  return &lt;eui-score ref={ref} /&gt;;
+  return &lt;score-sheet ref={ref} /&gt;;
 }</code></pre>
       </section>
 

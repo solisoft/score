@@ -33,7 +33,7 @@ fr:
       description: "La part de LilyPond que lit eui-score, construction par construction, chaque exemple gravé."
     embed:
       title: "Intégrer"
-      description: "Des partitions sur n'importe quel site : un script, une balise <eui-score>, rien à installer."
+      description: "Des partitions sur n'importe quel site : un script, une balise <score-sheet>, rien à installer."
     claude:
       title: "Score dans Claude"
       description: "Connectez Claude à Score : il écrit, lit et modifie vos partitions, et lit les photos de partitions."

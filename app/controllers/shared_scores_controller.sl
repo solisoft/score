@@ -38,7 +38,7 @@ class SharedScoresController < Controller
     @description = "#{this.score.title}, engraved by Score: play it, print it."
   end
 
-  # GET /s/:token/source.ly — the LilyPond, for <eui-score src="…"> on any site
+  # GET /s/:token/source.ly — the LilyPond, for <score-sheet src="…"> on any site
   def source
     score = @_readable_score
     {

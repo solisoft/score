@@ -10,14 +10,26 @@
 class Changelog
   static def days
     [
-      {"date": "2026-11-13", "entries": [{
-        "area": "site",
-        "title": "Form fields keep to their column",
-        "text": "On the home page, the New score fields (title, composer, key) ran into one another, and in Your "
-        + "scores a card opened on More pushed its picture, its title box and its buttons out of its frame. Each "
-        + "field now takes the width of its own column.",
-        "app": true
-      }]},
+      {"date": "2026-11-13", "entries": [
+        {
+          "area": "site",
+          "title": "Embed a score with <score-sheet>",
+          "text": "The element that shows a score on any website is now called <score-sheet>: one script, then "
+          + "<score-sheet src=\"…\"></score-sheet>. The Embed page and the code offered under Share use the new "
+          + "name. "
+          + "<eui-score>, its first name, still works the same, so pages that already embed a score need no "
+          + "change.",
+          "link": "embed"
+        },
+        {
+          "area": "site",
+          "title": "Form fields keep to their column",
+          "text": "On the home page, the New score fields (title, composer, key) ran into one another, and in Your "
+          + "scores a card opened on More pushed its picture, its title box and its buttons out of its frame. Each "
+          + "field now takes the width of its own column.",
+          "app": true
+        }
+      ]},
       {"date": "2026-11-12", "entries": [
         {
           "area": "site",

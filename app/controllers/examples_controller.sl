@@ -73,7 +73,7 @@ class ExamplesController < Controller
   end
 
   # GET /examples/:category/:slug/source.ly — the LilyPond itself, for
-  # `<eui-score src="…">` on any site
+  # `<score-sheet src="…">` on any site
   def source
     example = ScoreLibrary.example(params["category"], params["slug"])
     halt(404, "Unknown example") if example.nil?

@@ -3,7 +3,7 @@
 
 # The browser engraver (public/eui-score/) is meant to be loaded by any
 # site: a module script and the WebAssembly it fetches are CORS requests.
-# So are the gallery's .ly sources, which `<eui-score src="…">` fetches.
+# So are the gallery's .ly sources, which `<score-sheet src="…">` fetches.
 cors(
   "/eui-score*",
   {"origins": "*", "methods": ["GET"]}
