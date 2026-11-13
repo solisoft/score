@@ -1,9 +1,12 @@
-// <eui-score-editor>: a score you can edit with the mouse and the keyboard.
+// <score-editor>: a score you can edit with the mouse and the keyboard.
 //
 //   <script type="module" src="https://score.solisoft.net/eui-score/eui-score-editor.js"></script>
-//   <eui-score-editor>
+//   <score-editor>
 //     <script type="text/x-lilypond">{ \time 3/4 g'4 a' b' | d''2 r4 }</script>
-//   </eui-score-editor>
+//   </score-editor>
+//
+// <eui-score-editor>, the element's first name, is the same element: pages
+// that embed it keep working (#840), as <eui-score> beside <score-sheet>.
 //
 // The source is LilyPond text, and stays the only state: every edit is
 // made by eui-score's own edit functions (compiled to WebAssembly with the
@@ -33,27 +36,27 @@ const { loaded, engine } = await import(`./eui-score.js${V}`);
 const { editor_view, editor_apply } = engine;
 
 const STYLE = `
-  eui-score-editor { display: block; outline: none; }
-  eui-score-editor .ese-toolbar { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
-  eui-score-editor .ese-toolbar button {
+  :is(score-editor, eui-score-editor) { display: block; outline: none; }
+  :is(score-editor, eui-score-editor) .ese-toolbar { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+  :is(score-editor, eui-score-editor) .ese-toolbar button {
     font: 600 13px/1 system-ui, sans-serif; min-width: 32px; padding: 7px 9px; border-radius: 8px;
     border: 1px solid #d4cbbb; background: #fff; color: #1d1914; cursor: pointer;
   }
-  eui-score-editor .ese-toolbar button:hover:not(:disabled) { border-color: #1d1914; }
-  eui-score-editor .ese-toolbar button:disabled { opacity: .4; cursor: default; }
-  eui-score-editor .ese-toolbar .ese-gap { width: 10px; }
-  eui-score-editor .ese-sheet { position: relative; cursor: default; touch-action: none; user-select: none; border-radius: 6px; }
-  eui-score-editor:focus-visible .ese-sheet { box-shadow: 0 0 0 2px rgba(180, 55, 58, .35); }
-  eui-score-editor .ese-sheet svg { display: block; max-width: 100%; height: auto; }
-  eui-score-editor .ese-sheet.ese-dragging { cursor: ns-resize; }
-  eui-score-editor .ese-status { min-height: 18px; margin-top: 8px; font: 12.5px/1.4 system-ui, sans-serif; color: #6e665b; }
-  eui-score-editor .ese-status.ese-error { color: #8b2b2c; }
-  eui-score-editor .ese-hint { font: 12px/1.5 system-ui, sans-serif; color: #8a8276; margin-top: 4px; }
+  :is(score-editor, eui-score-editor) .ese-toolbar button:hover:not(:disabled) { border-color: #1d1914; }
+  :is(score-editor, eui-score-editor) .ese-toolbar button:disabled { opacity: .4; cursor: default; }
+  :is(score-editor, eui-score-editor) .ese-toolbar .ese-gap { width: 10px; }
+  :is(score-editor, eui-score-editor) .ese-sheet { position: relative; cursor: default; touch-action: none; user-select: none; border-radius: 6px; }
+  :is(score-editor, eui-score-editor):focus-visible .ese-sheet { box-shadow: 0 0 0 2px rgba(180, 55, 58, .35); }
+  :is(score-editor, eui-score-editor) .ese-sheet svg { display: block; max-width: 100%; height: auto; }
+  :is(score-editor, eui-score-editor) .ese-sheet.ese-dragging { cursor: ns-resize; }
+  :is(score-editor, eui-score-editor) .ese-status { min-height: 18px; margin-top: 8px; font: 12.5px/1.4 system-ui, sans-serif; color: #6e665b; }
+  :is(score-editor, eui-score-editor) .ese-status.ese-error { color: #8b2b2c; }
+  :is(score-editor, eui-score-editor) .ese-hint { font: 12px/1.5 system-ui, sans-serif; color: #8a8276; margin-top: 4px; }
 `;
 
 const LETTERS = { c: 0, d: 1, e: 2, f: 3, g: 4, a: 5, b: 6 };
 
-class EuiScoreEditor extends HTMLElement {
+class ScoreEditor extends HTMLElement {
   constructor() {
     super();
     this._source = null;
@@ -427,4 +430,8 @@ class EuiScoreEditor extends HTMLElement {
   }
 }
 
+/** <eui-score-editor>, its first name: the same element, under a class of its own — a registry takes a class once. */
+class EuiScoreEditor extends ScoreEditor {}
+
+if (!customElements.get("score-editor")) customElements.define("score-editor", ScoreEditor);
 if (!customElements.get("eui-score-editor")) customElements.define("eui-score-editor", EuiScoreEditor);

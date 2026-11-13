@@ -169,16 +169,16 @@ score.addEventListener("refuse", (event) =&gt; console.warn(event.detail));</cod
       <section class="doc-section" id="editor">
         <h2>Une partition modifiable<a class="anchor" href="#editor">#</a></h2>
         <p>
-          <code>&lt;eui-score-editor&gt;</code> est la même partition, modifiable à la souris et au clavier. Cliquez sur
-          une note — celle-ci est active :
+          <code>&lt;score-editor&gt;</code> est la même partition, modifiable à la souris et au clavier. Cliquez sur
+          une note — celle-ci est active. Son premier nom, <code>&lt;eui-score-editor&gt;</code>, marche toujours :
         </p>
 <pre class="code-block"><code>&lt;script type="module" src="https://score.solisoft.net/eui-score-editor.js"&gt;&lt;/script&gt;
 
-&lt;eui-score-editor&gt;
+&lt;score-editor&gt;
   &lt;script type="text/x-lilypond"&gt;{ \key g \major \time 3/4 g'4 a' b' | d''2 r4 | &lt;g' b'&gt;2. \bar "|." }&lt;/script&gt;
-&lt;/eui-score-editor&gt;</code></pre>
+&lt;/score-editor&gt;</code></pre>
         <div class="score-sheet">
-          <eui-score-editor id="embed-editor"><script type="text/x-lilypond">{ \key g \major \time 3/4 g'4 a' b' | d''2 r4 | <g' b'>2. \bar "|." }</script></eui-score-editor>
+          <score-editor id="embed-editor"><script type="text/x-lilypond">{ \key g \major \time 3/4 g'4 a' b' | d''2 r4 | <g' b'>2. \bar "|." }</script></score-editor>
         </div>
         <div class="table-scroll">
           <table class="ref-table">
@@ -202,7 +202,7 @@ score.addEventListener("refuse", (event) =&gt; console.warn(event.detail));</cod
           déborde jamais. Une source en <code>\relative</code> est réécrite en hauteurs absolues à sa première
           modification, puisqu'une hauteur relative dépend des notes qui la précèdent.
         </p>
-<pre class="code-block"><code>const editor = document.querySelector("eui-score-editor");
+<pre class="code-block"><code>const editor = document.querySelector("score-editor");
 editor.addEventListener("change", (event) =&gt; save(event.detail.source));
 editor.source = "{ c'4 d' e' f' }";       // replace the music
 editor.edit({ op: "move", item: 0, how: "step", by: 1 });   // or edit it from code</code></pre>

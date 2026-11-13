@@ -65,7 +65,7 @@ describe("PagesController") do
       assert_contains(body, "<script type=\"text/x-lilypond\">")
       assert_contains(body, "id=\"embed-data\">{\"v\":\"#{ScoreAssets.version}\"}</script>")
       assert_contains(body, "await import(`/eui-score/eui-score.js?v=${v}`)")
-      assert_contains(body, "<eui-score-editor id=\"embed-editor\">")
+      assert_contains(body, "<score-editor id=\"embed-editor\">")
     end
   end
 

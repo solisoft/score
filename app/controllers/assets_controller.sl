@@ -5,7 +5,7 @@ class AssetsController < Controller
     ScoreAssets.entry("eui-score.js")
   end
 
-  # GET /eui-score-editor.js — <eui-score-editor>, current version
+  # GET /eui-score-editor.js — <score-editor> (<eui-score-editor> too), current version
   def editor
     ScoreAssets.entry("eui-score-editor.js")
   end

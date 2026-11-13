@@ -1,6 +1,7 @@
-# The embedded score in a real browser (soli test --browser, #834): the
-# element is <score-sheet>, and <eui-score>, its first name, is the same
-# element — a page that embeds it keeps working.
+# The embedded score in a real browser (soli test --browser, #834, #840):
+# the elements are <score-sheet> and <score-editor>, and their first names,
+# <eui-score> and <eui-score-editor>, the same elements — a page that embeds
+# them keeps working.
 
 # Waits (`seconds` at most) for a JavaScript condition to hold.
 def sheet_wait(condition, seconds = 20)
@@ -43,6 +44,21 @@ describe("<score-sheet> and its first name (#834)") do
     assert_eq(evaluate("document.querySelector('#probe-old') instanceof customElements.get('score-sheet')"), true)
     refused = sheet_engraved("score-sheet", "{ c'4 \\\\nope }", "refused")
     assert_contains(refused, "score:")
+    assert_no_page_errors()
+  end
+
+  test("the embed page's editor is a <score-editor>, and <eui-score-editor> is still one (#840)") do
+    visit("/embed")
+    sheet_wait("document.querySelector('score-editor#embed-editor svg')")
+    assert_eq(evaluate("document.querySelectorAll('eui-score-editor').length"), 0)
+    assert_eq(evaluate("getComputedStyle(document.querySelector('score-editor')).display"), "block")
+    evaluate("(async () => { const v = JSON.parse(document.getElementById('embed-data').textContent).v;"
+    + " await import(`/eui-score/eui-score-editor.js?v=${v}`);"
+    + " const el = document.createElement('eui-score-editor'); el.id = 'probe-editor';"
+    + " el.textContent = \"{ c'4 d' e' f' }\"; document.body.appendChild(el); return 1; })()")
+    sheet_wait("document.querySelector('#probe-editor svg')")
+    assert_eq(evaluate("document.querySelector('#probe-editor') instanceof customElements.get('score-editor')"), true)
+    assert_eq(evaluate("getComputedStyle(document.querySelector('#probe-editor')).display"), "block", "styled alike")
     assert_no_page_errors()
   end
 end

@@ -13,6 +13,14 @@ class Changelog
       {"date": "2026-11-13", "entries": [
         {
           "area": "site",
+          "title": "Embed an editable score with <score-editor>",
+          "text": "The editable score other websites can embed is now called <score-editor>, as the score shown "
+          + "alone is <score-sheet>. The Embed page uses the new name; <eui-score-editor>, its first name, still "
+          + "works the same.",
+          "link": "embed"
+        },
+        {
+          "area": "site",
           "title": "Embed a score with <score-sheet>",
           "text": "The element that shows a score on any website is now called <score-sheet>: one script, then "
           + "<score-sheet src=\"…\"></score-sheet>. The Embed page and the code offered under Share use the new "
