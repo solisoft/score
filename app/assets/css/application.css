@@ -422,8 +422,11 @@
   .auth h2 { font-size: 21px; margin-top: 18px; }
   .auth-form { display: grid; gap: 14px; }
   .auth-form .btn { justify-content: center; }
-  .field { display: grid; gap: 6px; font-size: 14px; font-weight: 600; color: var(--ink); }
-  .field input, .field select { font: 400 16px/1.4 var(--font-sans); padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--sheet); color: var(--ink); }
+  /* A field takes its column's width, never its box's own (about twenty
+     letters): three to a row, or in a narrow card, it would run out of its
+     column into the next one (#832). */
+  .field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; font-size: 14px; font-weight: 600; color: var(--ink); }
+  .field input, .field select { width: 100%; min-width: 0; font: 400 16px/1.4 var(--font-sans); padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--sheet); color: var(--ink); }
   .field input:focus-visible, .field select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .field .muted { font-weight: 400; }
   .check { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
@@ -531,7 +534,7 @@
   .library-empty { border: 1px dashed var(--line-strong); border-radius: var(--radius); padding: 40px 24px; text-align: center; display: grid; gap: 8px; }
   .library-empty h2 { font-size: 22px; }
   .library-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
-  .score-card { background: var(--sheet); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; display: grid; gap: 6px; min-width: 0; }
+  .score-card { background: var(--sheet); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; }
   .score-card-open { display: grid; gap: 8px; color: var(--ink); }
   .score-card-open:hover { text-decoration: none; color: var(--accent); }
   .score-card-open img { width: 100%; height: 140px; object-fit: contain; object-position: center; border-radius: 8px; background: #fff; border: 1px solid var(--line); }

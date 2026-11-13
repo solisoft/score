@@ -2776,12 +2776,16 @@
   }
   .field {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 6px;
+    min-width: 0;
     font-size: 14px;
     font-weight: 600;
     color: var(--ink);
   }
   .field input, .field select {
+    width: 100%;
+    min-width: 0;
     font: 400 16px/1.4 var(--font-sans);
     padding: 10px 12px;
     border: 1px solid var(--line-strong);
@@ -3334,6 +3338,7 @@
     border-radius: var(--radius);
     padding: 12px;
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 6px;
     min-width: 0;
   }
