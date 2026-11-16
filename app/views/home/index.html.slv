@@ -57,7 +57,7 @@
       <h2><%= t("home.dev_title") %></h2>
       <p class="lead"><%- t("home.dev_lead") %></p>
 <pre class="code-block"><code>&lt;script type="module" src="https://score.solisoft.net/eui-score.js"&gt;&lt;/script&gt;
-&lt;eui-score src="my-piece.ly"&gt;&lt;/eui-score&gt;</code></pre>
+&lt;score-sheet src="my-piece.ly"&gt;&lt;/score-sheet&gt;</code></pre>
       <div class="dev-links">
         <a class="btn btn-ghost" href="<%= lp(guide_path()) %>"><%= t("home.the_guide") %></a>
         <a class="btn btn-ghost" href="<%= lp(syntax_path()) %>"><%= t("home.the_syntax") %></a>

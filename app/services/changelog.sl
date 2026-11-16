@@ -10,6 +10,13 @@
 class Changelog
   static def days
     [
+      {"date": "2026-11-16", "entries": [{
+        "area": "site",
+        "title": "The home page embeds a score with <score-sheet>",
+        "text": "The code the home page shows developers, to put a score on their own page, still used the "
+        + "element's first name, <eui-score>. It now shows <score-sheet>, as the Embed page does.",
+        "link": "embed"
+      }]},
       {"date": "2026-11-13", "entries": [
         {
           "area": "site",

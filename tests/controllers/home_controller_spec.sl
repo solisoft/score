@@ -121,7 +121,8 @@ describe("HomeController") do
       assert_contains(developers, "href=\"/syntax\"")
       assert_contains(developers, "href=\"/embed\"")
       assert_contains(developers, "href=\"/examples\">The #{ScoreLibrary.examples.length} examples")
-      assert_contains(developers, "&lt;eui-score src=")
+      assert_contains(developers, "&lt;score-sheet src=\"my-piece.ly\"&gt;&lt;/score-sheet&gt;")
+      assert_not(developers.contains("eui-score src="))
       # One piece engraved on the server, none refused.
       assert_eq(developers.split("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox").length - 1, 1)
       assert_not(body.contains("score-sheet-refused"))
