@@ -390,11 +390,11 @@
         </div>
         <p class="tool-sub"><%= t("app.editor.accidentals") %></p>
         <div class="tool-row" aria-label="<%= t("app.editor.accidentals") %>">
-          <button type="button" class="tool" data-act="alter" data-alter="-2" title="<%= t("app.editor.double_flat") %>">𝄫</button>
-          <button type="button" class="tool" data-act="alter" data-alter="-1" title="<%= t("app.editor.flat_minus") %>">♭</button>
-          <button type="button" class="tool" data-act="alter" data-alter="0" title="<%= t("app.editor.natural") %>">♮</button>
-          <button type="button" class="tool" data-act="alter" data-alter="1" title="<%= t("app.editor.sharp_plus") %>">♯</button>
-          <button type="button" class="tool" data-act="alter" data-alter="2" title="<%= t("app.editor.double_sharp") %>">𝄪</button>
+          <button type="button" class="tool tool-glyph" data-act="alter" data-alter="-2" title="<%= t("app.editor.double_flat") %>">𝄫</button>
+          <button type="button" class="tool tool-glyph" data-act="alter" data-alter="-1" title="<%= t("app.editor.flat_minus") %>">♭</button>
+          <button type="button" class="tool tool-glyph" data-act="alter" data-alter="0" title="<%= t("app.editor.natural") %>">♮</button>
+          <button type="button" class="tool tool-glyph" data-act="alter" data-alter="1" title="<%= t("app.editor.sharp_plus") %>">♯</button>
+          <button type="button" class="tool tool-glyph" data-act="alter" data-alter="2" title="<%= t("app.editor.double_sharp") %>">𝄪</button>
           <button type="button" class="tool" data-act="enharmonic" title="<%= t("app.editor.spell_the_selected_notes_the_other_way_c") %>">♯↔♭</button>
         </div>
         <p class="tool-sub"><%= t("app.editor.accidental_shown") %></p>
@@ -724,6 +724,8 @@
       <%# What is selected, and what was last said (#419): one bar under the score. %>
       <div class="studio-statusbar">
         <div class="studio-state" aria-live="polite" data-state></div>
+        <%# What to do next with what is selected (#918): keys, not sentences. %>
+        <div class="studio-hint" data-hint></div>
         <div class="studio-status" data-status aria-live="polite"></div>
       </div>
     </main>

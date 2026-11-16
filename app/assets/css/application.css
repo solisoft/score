@@ -388,7 +388,7 @@
 
   /* Over the selected note: what is done to a note most. */
   .studio-palette { position: absolute; z-index: 12; display: flex; flex-wrap: wrap; max-width: calc(100% - 8px); gap: 2px; padding: 4px; background: var(--sheet); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: 0 8px 22px rgb(29 25 20 / .16); }
-  .studio-palette button { min-width: 30px; height: 30px; font: 600 16px/1 var(--font-sans); color: var(--ink); background: none; border: 0; border-radius: 7px; cursor: pointer; }
+  .studio-palette button { min-width: 34px; height: 34px; font: 600 20px/1 var(--font-sans); color: var(--ink); background: none; border: 0; border-radius: 7px; cursor: pointer; }
   .studio-palette button:hover, .studio-palette button:focus-visible { background: var(--paper-deep); outline: none; }
 
   .playground-banner {
@@ -749,6 +749,18 @@
   .studio-state { min-width: 0; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
   .studio-input .studio-state, .studio-playing .studio-state { font-weight: 600; }
   .studio-input .studio-state { color: #2563c9; }
+  /* What is selected reads first; what to do with it, beside it (#918). */
+  .studio-state { font-size: 14px; font-weight: 600; color: var(--ink); }
+  .studio-hint { flex: 1 1 auto; min-width: 0; color: var(--ink-soft); }
+  .studio-hint:empty { display: none; }
+  /* A button's tip, at once (#918): its name, and its key. */
+  .studio-tip {
+    position: fixed; z-index: 60; max-width: min(320px, calc(100vw - 12px)); padding: 6px 9px; border-radius: 7px; pointer-events: none;
+    background: var(--ink); color: var(--paper); font: 500 12.5px/1.35 var(--font-sans); box-shadow: 0 6px 18px rgb(29 25 20 / .22);
+  }
+  .studio-tip kbd { margin-left: 8px; padding: 1px 5px; border-radius: 4px; background: rgb(255 255 255 / .18); font: 600 11.5px/1.3 var(--font-sans); }
+  /* Undo and Redo: arrows one can see (#918). */
+  .studio-menu:is([data-act="undo"], [data-act="redo"]) { font-size: 19px; padding: 4px 9px; }
 
   .studio-progress {
     position: sticky; top: 117px; z-index: 14; height: 22px; background: var(--paper-deep); border-bottom: 1px solid var(--line);
@@ -1218,7 +1230,8 @@
     .studio-tools-open .studio-toolbox { transform: none; visibility: visible; transition: transform .2s ease; }
     .studio-tools-open { padding-bottom: 52vh; }
     .studio-tools-toggle { border-color: var(--line-strong); font-weight: 600; }
-    .studio-tools-open .studio-tools-toggle { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+    /* :hover too: the pointer (a finger's kept hover) is still on it once pressed, and the pale hover hid its word (#918). */
+    .studio-tools-open .studio-tools-toggle, .studio-tools-open .studio-tools-toggle:hover:not(:disabled) { background: var(--ink); color: var(--paper); border-color: var(--ink); }
     /* A menu opens as a sheet from the bottom: the bar above scrolls, and would cut it. */
     .studio-dropdown-items {
       position: fixed; top: auto; left: 0; right: 0; bottom: 0; z-index: 45; min-width: 0; max-height: 62vh;

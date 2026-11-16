@@ -10,13 +10,23 @@
 class Changelog
   static def days
     [
-      {"date": "2026-11-16", "entries": [{
-        "area": "site",
-        "title": "The home page embeds a score with <score-sheet>",
-        "text": "The code the home page shows developers, to put a score on their own page, still used the "
-        + "element's first name, <eui-score>. It now shows <score-sheet>, as the Embed page does.",
-        "link": "embed"
-      }]},
+      {"date": "2026-11-16", "entries": [
+        {
+          "area": "site",
+          "title": "The editor's buttons say what they do, at once",
+          "text": "In the score editor, a button's name and its key now show as soon as the pointer is over it, "
+          + "instead of a second later. The flat, natural and sharp buttons are drawn larger, as are Undo and Redo. "
+          + "Under the score, beside what is selected, a line says what to do with it: the arrows move a note, 2 to 7 "
+          + "change its length. On a narrow screen, the Tools button keeps its word once pressed."
+        },
+        {
+          "area": "site",
+          "title": "The home page embeds a score with <score-sheet>",
+          "text": "The code the home page shows developers, to put a score on their own page, still used the "
+          + "element's first name, <eui-score>. It now shows <score-sheet>, as the Embed page does.",
+          "link": "embed"
+        }
+      ]},
       {"date": "2026-11-13", "entries": [
         {
           "area": "site",

@@ -164,6 +164,66 @@ export function install(ctx) {
     if (!button.hasAttribute("aria-label") && !/\p{L}{2}/u.test(button.textContent)) button.setAttribute("aria-label", button.title.replace(/\s*\(.*\)\s*$/, ""));
   }
 
+  // What to do next, beside what is selected (#918): the keys, as the menus write them.
+  const hint = root.querySelector("[data-hint]");
+  const keys = (text) => (K.isMac() ? K.keyLabel(text, true) : text);
+  function showHint() {
+    if (!hint) return;
+    const r = !st.score || st.playing || st.input.on ? null : range();
+    hint.textContent = !st.score || st.playing || st.input.on
+      ? ""
+      : !r
+        ? tr("Space plays · ? shows every key")
+        : r.a !== r.b
+          ? keys(tr("↑ ↓ move them · Ctrl+C copies them · Delete makes rests · Esc lets go"))
+          : keys(tr("↑ ↓ move it · 2–7 change its length · Delete makes a rest · N writes notes"));
+  }
+
+  // A button's tip at once, under it (#918): its title — its name and its key
+  // — shown as the pointer comes over it, not a second later. The title is
+  // taken off while the tip is shown, so the browser's own does not follow,
+  // and put back as the pointer leaves. A finger has no hover: none on touch.
+  const tip = Object.assign(document.createElement("div"), { className: "studio-tip", hidden: true });
+  tip.setAttribute("role", "tooltip");
+  root.appendChild(tip);
+  let tipped = null;
+  function hideTip() {
+    if (tipped?.dataset.tip != null) {
+      if (!tipped.title) tipped.title = tipped.dataset.tip;
+      delete tipped.dataset.tip;
+    }
+    tipped = null;
+    tip.hidden = true;
+  }
+  function showTip(el) {
+    hideTip();
+    if (!el.title) return;
+    tipped = el;
+    el.dataset.tip = el.title;
+    el.removeAttribute("title");
+    // "Flat (−)": the name, then the key on its own.
+    const [, name, key] = el.dataset.tip.match(/^(.*?)(?:\s*\(([^()]{1,24})\))?$/s);
+    tip.replaceChildren(name);
+    if (key) tip.appendChild(Object.assign(document.createElement("kbd"), { textContent: key }));
+    tip.hidden = false;
+    const box = el.getBoundingClientRect();
+    const mine = tip.getBoundingClientRect();
+    const left = Math.max(6, Math.min(box.left + box.width / 2 - mine.width / 2, document.documentElement.clientWidth - mine.width - 6));
+    const under = box.bottom + 6 + mine.height <= document.documentElement.clientHeight;
+    tip.style.left = `${left}px`;
+    tip.style.top = `${under ? box.bottom + 6 : box.top - mine.height - 6}px`;
+  }
+  root.addEventListener("pointerover", (event) => {
+    if (event.pointerType === "touch") return;
+    const el = event.target.closest?.("button[title], button[data-tip], label[title], label[data-tip]");
+    if (el === tipped) return;
+    if (el && root.contains(el)) showTip(el);
+    else hideTip();
+  }, { signal: ctx.signal });
+  for (const gone of ["pointerleave", "pointerdown", "keydown"]) root.addEventListener(gone, hideTip, { signal: ctx.signal, capture: true });
+  window.addEventListener("scroll", hideTip, { signal: ctx.signal, capture: true, passive: true });
+  ctx.ends.push(hideTip);
+
   // On a Mac, the menus and the tools' tips say ⌘ and ⌥ where they say Ctrl and Alt.
   const mac = K.isMac();
   if (mac) {
@@ -321,6 +381,7 @@ export function install(ctx) {
     root.querySelector("[data-zoom-label]").textContent = `${Math.round(st.zoom * 100)} %`;
     for (const tool of root.querySelectorAll(".studio-toolbox .tool, .studio-toolbox input, .studio-toolbox select")) tool.disabled = !st.score;
     fillFields();
+    showHint();
     // What is selected, in words.
     const value = `${valueWord(st.input.base)}${st.input.dots ? `,${M.dotsWord(st.input.dots)}` : ""}`;
     if (st.playing) showProgress();

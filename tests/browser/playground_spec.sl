@@ -521,6 +521,48 @@ describe("The playground, in a browser") do
     assert_no_page_errors()
   end
 
+  test("a button's tip shows at once, its name and its key, and its title comes back (#918)") do
+    viewport(1280, 800)
+    flat = "document.querySelector('.studio-toolbox [data-act=alter][data-alter=\"-1\"]')"
+    tip = "document.querySelector('.studio-tip')"
+    pointer = "new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' })"
+    assert_eq(evaluate(tip + ".hidden"), true)
+    evaluate(flat + ".dispatchEvent(" + pointer + ")")
+    assert_eq(evaluate(tip + ".hidden"), false)
+    assert_eq(evaluate(tip + ".firstChild.textContent"), "Flat")
+    assert_eq(text_of(".studio-tip kbd"), "−")
+    # The browser's own tip does not follow: the title is off while ours shows.
+    assert_eq(evaluate(flat + ".hasAttribute('title')"), false)
+    # Under the button, inside the window.
+    under = tip + ".getBoundingClientRect().top >= " + flat + ".getBoundingClientRect().bottom"
+    assert(evaluate(under), "under its button")
+    # Off the button: gone, and the title is back for a screen reader.
+    evaluate("document.querySelector('[data-sheet]').dispatchEvent(" + pointer + ")")
+    assert_eq(evaluate(tip + ".hidden"), true)
+    assert_eq(evaluate(flat + ".title"), "Flat (−)")
+    # A finger has no hover: no tip.
+    evaluate(flat + ".dispatchEvent(" + pointer.replace("'mouse'", "'touch'") + ")")
+    assert_eq(evaluate(tip + ".hidden"), true)
+    # The accidentals are drawn as large as the note values.
+    assert_eq(evaluate("getComputedStyle(" + flat + ").fontSize"), "20px")
+    assert_no_page_errors()
+  end
+
+  test("the bar under the score says what to do with what is selected (#918)") do
+    assert_contains(text_of("[data-hint]"), "Space plays")
+    evaluate("(() => { const st = document.getElementById('studio').studio; st.sel = { staff: 0, t0: 0, t1: 0 };"
+    + " document.querySelector('[data-act=\"zoom-in\"]').click(); })()")
+    sleep(0.3)
+    assert_contains(text_of("[data-state]"), "Note")
+    assert_contains(text_of("[data-hint]"), "↑ ↓ move it")
+    # Note input says its own keys in the state: no second sentence beside it.
+    click(".studio-toolbox [data-act=\"mode-input\"]")
+    sleep(0.2)
+    assert_eq(text_of("[data-hint]"), "")
+    assert_eq(evaluate("getComputedStyle(document.querySelector('[data-hint]')).display"), "none")
+    assert_no_page_errors()
+  end
+
   test("the toolbox groups its buttons by kind, each row named, the values and the letters on one line (#421)") do
     viewport(1280, 800)
     sleep(0.3)
