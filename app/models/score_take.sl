@@ -194,10 +194,22 @@ class ScoreTake < Model
     }
   end
 
-  # The take gone, its sound with it.
+  # The take gone, its sound with it. A sound the store no longer has (it
+  # answers 404) is gone already: the take goes all the same, or it — and
+  # the score it is of, and the account that score is of — could never be
+  # erased (#925). Any other refusal of the store is raised.
   def remove
     @detach_audio unless @audio_blob_id.nil?
-    @delete
+    try
+      @delete
+    catch error
+      throw error unless str(error).contains("404")
+
+      # Deleting the take asked the store for that sound again: it has none to take away.
+      @audio_blob_id = nil
+      @save
+      @delete
+    end
   end
 
   # The response that streams its sound to `req`, with Range (an audio

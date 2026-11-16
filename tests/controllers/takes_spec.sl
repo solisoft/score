@@ -380,5 +380,21 @@ describe("AppTakesController") do
       Score.find(score._key).erase
       assert_eq(take_count(score), 0)
     end
+
+    test("a take whose sound the store no longer has is removed all the same") do
+      room = take_room()
+      score = room["score"]
+      take_sign_in(room["owner"])
+      take_upload(score)
+      take = ScoreTake.where({"score_id": score._key}).first
+      ScoreTake.blobs.delete_blob(SCORE_TAKE_BLOBS, take.audio_blob_id)
+      # Its sound is gone from the store: asking for it again is a 404 there.
+      assert_raises("404") do
+        ScoreTake.blobs.delete_blob(SCORE_TAKE_BLOBS, take.audio_blob_id)
+      end
+      Score.find(score._key).erase
+      assert_eq(take_count(score), 0)
+      assert_null(Score.find_by("_key", score._key))
+    end
   end
 end

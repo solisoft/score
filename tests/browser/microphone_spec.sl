@@ -127,7 +127,18 @@ async () => {
   const riff = chunk('RIFF', concat([enc.encode('sfbk'), info, sdta, pdta]));
   const cache = await caches.open('eui-score-sounds');
   const where = new URL('/soundfonts/MuseScore_General.sf3?v=0.2', location.href).href;
-  await cache.put(where, new Response(riff, { headers: { 'content-type': 'audio/x-soundfont' } }));
+  // The page (player.js) or its service worker may be putting the real
+  // sounds at this same address just now: Chrome then refuses the second put
+  // ("Entry already exists"). Put again, after theirs: the tiny one stays.
+  for (let tries = 0; ; tries++) {
+    try {
+      await cache.put(where, new Response(riff, { headers: { 'content-type': 'audio/x-soundfont' } }));
+      break;
+    } catch (error) {
+      if (tries >= 5) throw error;
+      await new Promise((done) => setTimeout(done, 200));
+    }
+  }
   return riff.length;
 }
 """
