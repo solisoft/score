@@ -130,6 +130,7 @@
             <button type="button" role="menuitem" data-act="source-side" data-source-side-label><%= t("app.editor.source_beside_the_score") %> <kbd><%= t("app.editor.wide_screens") %></kbd></button>
             <button type="button" role="menuitem" data-act="written" data-written-label><%= t("app.editor.written_pitch") %> <kbd><%= t("app.editor.clarinets_horns_saxes") %></kbd></button>
             <button type="button" role="menuitem" data-act="keys"><%= t("app.editor.keyboard_shortcuts") %> <kbd>?</kbd></button>
+            <button type="button" role="menuitem" data-act="welcome"><%= t("app.editor.getting_started") %></button>
           </div>
         </details>
         <details class="studio-dropdown">
@@ -732,6 +733,20 @@
       <div class="studio-sheet" data-sheet tabindex="0" aria-label="<%= t("app.editor.the_score_click_a_note_to_select_it") %>">
         <%- figure["svg"].to_s %>
       </div>
+      <%# The first gestures, on a first visit (#922): shown by studio-toolbox.js
+          until closed in this browser; View ▸ Getting started brings it back. %>
+      <aside class="studio-welcome" data-welcome hidden aria-labelledby="studio-welcome-title">
+        <div class="studio-welcome-head">
+          <h2 id="studio-welcome-title"><%= t("app.editor.welcome_title") %></h2>
+          <button type="button" class="studio-menu" data-act="welcome" aria-label="<%= t("app.editor.close") %>">×</button>
+        </div>
+        <ol>
+          <li><%- t("app.editor.welcome_select") %></li>
+          <li><%- t("app.editor.welcome_write") %></li>
+          <li><%- t("app.editor.welcome_play") %></li>
+        </ol>
+        <button type="button" class="tool tool-primary" data-act="welcome"><%= t("app.editor.welcome_close") %></button>
+      </aside>
       <%# What is selected, and what was last said (#419): one bar under the score. %>
       <div class="studio-statusbar">
         <div class="studio-state" aria-live="polite" data-state></div>

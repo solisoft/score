@@ -145,6 +145,7 @@ export function install(ctx) {
       case "tuner": return st.audio.tuner();
       case "practice": return st.audio.practice();
       case "find": return openFind();
+      case "welcome": return ctx.call.showWelcome(root.querySelector("[data-welcome]")?.hidden);
       case "keys": {
         const sheetOfKeys = root.querySelector("[data-keys]");
         if (sheetOfKeys.open) sheetOfKeys.close();

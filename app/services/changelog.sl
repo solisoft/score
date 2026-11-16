@@ -13,6 +13,13 @@ class Changelog
       {"date": "2026-11-16", "entries": [
         {
           "area": "site",
+          "title": "The first gestures, on a first visit to the editor",
+          "text": "The first time the score editor opens in a browser, a card under the score gives the three "
+          + "gestures to start with: click a note to select it, press N and type letters to write, press Space "
+          + "to listen. Once closed it stays closed; View, Getting started, shows it again."
+        },
+        {
+          "area": "site",
           "title": "The note's palette no longer hides the tempo",
           "text": "In the score editor, the small palette that opens over a selected note covered what is written "
           + "above it: a tempo over the first note, a higher note beside it. It now stands just above that, or a "

@@ -682,6 +682,32 @@ describe("The playground, in a browser") do
     assert_no_page_errors()
   end
 
+  test("the first gestures show on a first visit, and not again once closed (#922)") do
+    hidden = "document.querySelector('[data-welcome]').hidden"
+    evaluate("localStorage.removeItem('eui-score-studio-welcomed')")
+    visit("/playground")
+    sleep(0.5)
+    # A first visit: under the score, not over it.
+    assert_eq(evaluate(hidden), false)
+    assert_contains(text_of("[data-welcome]"), "Click a note")
+    under = "document.querySelector('[data-welcome]').getBoundingClientRect().top"
+    + " >= document.querySelector('[data-sheet]').getBoundingClientRect().bottom"
+    assert(evaluate(under), "under the score")
+    # Closed: gone, and that is kept for the next visit.
+    click("[data-welcome] .tool")
+    assert_eq(evaluate(hidden), true)
+    assert_eq(evaluate("localStorage.getItem('eui-score-studio-welcomed')"), "1")
+    visit("/playground")
+    sleep(0.5)
+    assert_eq(evaluate(hidden), true)
+    # View ▸ Getting started brings it back; its × closes it.
+    evaluate("document.querySelector('.studio-dropdown-items [data-act=welcome]').click()")
+    assert_eq(evaluate(hidden), false)
+    evaluate("document.querySelector('.studio-welcome-head [data-act=welcome]').click()")
+    assert_eq(evaluate(hidden), true)
+    assert_no_page_errors()
+  end
+
   test("the bar under the score says what to do with what is selected (#918)") do
     assert_contains(text_of("[data-hint]"), "Space plays")
     evaluate("(() => { const st = document.getElementById('studio').studio; st.sel = { staff: 0, t0: 0, t1: 0 };"

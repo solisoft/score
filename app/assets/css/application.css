@@ -913,6 +913,13 @@
   .tool-primary { background: #2563c9; border-color: #2563c9; color: #fff; }
 
   .studio-canvas { min-width: 0; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  /* The first gestures (#922): a card under the score, not over it. */
+  .studio-welcome { margin-top: 12px; max-width: 640px; border: 1px solid var(--line-strong); background: var(--sheet); border-radius: 12px; padding: 14px 18px 16px; }
+  .studio-welcome-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .studio-welcome h2 { font: 600 18px/1.2 var(--font-serif); margin: 0; }
+  .studio-welcome ol { margin: 10px 0 14px; padding-left: 22px; display: grid; gap: 6px; font-size: 14px; line-height: 1.45; color: var(--ink-soft); }
+  .studio-welcome strong { color: var(--ink); }
+  .studio-welcome .tool { padding: 0 14px; }
   .studio-notice { border: 1px solid #e9d7b5; background: #fdf7ea; color: #5d4a22; border-radius: 10px; padding: 10px 14px; font-size: 14px; }
   .studio-sheet {
     position: relative; flex: 1; background: var(--sheet); color: #111; border: 1px solid var(--line); border-radius: var(--radius);

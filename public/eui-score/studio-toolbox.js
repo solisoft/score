@@ -164,6 +164,24 @@ export function install(ctx) {
     if (!button.hasAttribute("aria-label") && !/\p{L}{2}/u.test(button.textContent)) button.setAttribute("aria-label", button.title.replace(/\s*\(.*\)\s*$/, ""));
   }
 
+  // The first gestures, under the score on a first visit (#922): there until
+  // closed, and that is kept in this browser; View ▸ Getting started shows
+  // them again. Where the browser keeps nothing, they are not shown at each
+  // visit: only when asked for.
+  const WELCOMED = "eui-score-studio-welcomed";
+  const welcome = root.querySelector("[data-welcome]");
+  function showWelcome(show) {
+    if (!welcome) return;
+    welcome.hidden = !show;
+    if (show) return welcome.scrollIntoView({ block: "nearest" });
+    try {
+      localStorage.setItem(WELCOMED, "1");
+    } catch (error) {}
+  }
+  try {
+    if (welcome && !localStorage.getItem(WELCOMED)) welcome.hidden = false;
+  } catch (error) {}
+
   // What to do next, beside what is selected (#918): the keys, as the menus write them.
   const hint = root.querySelector("[data-hint]");
   const keys = (text) => (K.isMac() ? K.keyLabel(text, true) : text);
@@ -552,5 +570,5 @@ export function install(ctx) {
     });
   }
 
-  return { mac, showState, onField, intervalName, instrumentName };
+  return { mac, showState, showWelcome, onField, intervalName, instrumentName };
 }
