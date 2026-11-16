@@ -436,6 +436,60 @@ describe("The playground, in a browser") do
     assert_no_page_errors()
   end
 
+  test("on a phone, the tools closed are a strip to write with, the score in sight (#924)") do
+    strip = "document.getElementById('studio').classList.contains('studio-strip')"
+    shown = "[...document.querySelectorAll('.studio-toolbox button')].filter((it) => it.getClientRects().length)"
+    box = "document.querySelector('.studio-toolbox').getBoundingClientRect()"
+    # A wide screen: no strip, the toolbox beside the score.
+    assert_eq(evaluate(strip), false)
+    viewport(390, 844)
+    sleep(0.5)
+    assert_eq(evaluate(strip), true)
+    # The mode, the six values and the dot, the seven letters and the rest: nothing else.
+    acts = evaluate("[...new Set(" + shown + ".map((it) => it.dataset.act))].sort()")
+    assert_eq(acts, ["dot", "duration", "letter", "mode-input", "mode-select", "rest"])
+    assert_eq(evaluate(shown + ".length"), 17)
+    # Along the bottom, a small part of the screen; the page ends above it.
+    assert_eq(evaluate("Math.round(" + box + ".bottom)"), 844)
+    assert(evaluate(box + ".height") < 180, "a strip, not a sheet")
+    wide = "document.documentElement.scrollWidth <= document.documentElement.clientWidth"
+    assert(evaluate(wide), "nothing wider than the screen")
+    assert(
+      evaluate("document.querySelector('.studio-statusbar').getBoundingClientRect().bottom <= " + box
+      + ".top + 1"),
+      "the bar under the score stops over the strip"
+    )
+    # No keys to press are said to a finger.
+    assert_eq(evaluate("getComputedStyle(document.querySelector('[data-hint]')).display"), "none")
+    # A note written from it: Note input, an eighth, G.
+    type_source("{ \\time 4/4 c'4 d'4 e'4 f'4 | r1 }")
+    caret_on("f'4")
+    before = playground_text()
+    click(".studio-toolbox [data-act=\"mode-input\"]")
+    click(".studio-toolbox [data-act=\"duration\"][data-base=\"8\"]")
+    click(".studio-toolbox [data-act=\"letter\"][data-step=\"4\"]")
+    sleep(0.4)
+    assert_contains(playground_text(), "g'8")
+    assert_not(before.contains("g'8"))
+    # Sections left folded are open in the strip all the same, and folded again in the sheet.
+    evaluate("localStorage.setItem('eui-score-studio-folded', JSON.stringify({ notes: true }))")
+    visit("/playground")
+    sleep(0.6)
+    assert_eq(evaluate(strip), true)
+    assert(section_open?("notes"), "open in the strip")
+    click("[data-act=\"tools\"]")
+    sleep(0.4)
+    # Tools: the whole toolbox over the lower half, as before.
+    assert_eq(evaluate(strip), false)
+    assert_not(section_open?("notes"), "as it was left, in the sheet")
+    assert(evaluate(shown + ".length") > 17, "every open section's tools")
+    click("[data-act=\"tools\"]")
+    sleep(0.4)
+    assert_eq(evaluate(strip), true)
+    evaluate("localStorage.removeItem('eui-score-studio-folded')")
+    assert_no_page_errors()
+  end
+
   test("on a phone, a note's palette stands whole inside the sheet, for a note at the right edge too (#443)") do
     viewport(390, 844)
     sleep(0.5)

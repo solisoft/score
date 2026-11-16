@@ -270,6 +270,29 @@ export function install(ctx) {
     });
   }
   let neededBefore = null;
+  // On a phone, the toolbox closed is a strip along the bottom (#924): the
+  // mode, the values and the letters, to write without the sheet over the
+  // score. Those three are open in it however they were left folded, which
+  // they are again once the sheet is opened; the page's bottom keeps clear of
+  // it by its height (--studio-strip-h).
+  const phone = window.matchMedia("(max-width: 899px)");
+  const STRIP = ["mode", "duration", "notes"];
+  function syncStrip() {
+    const strip = phone.matches && !root.classList.contains("studio-tools-open");
+    if (strip === root.classList.contains("studio-strip")) return;
+    root.classList.toggle("studio-strip", strip);
+    for (const section of sections) {
+      if (STRIP.includes(section.dataset.section)) section.open = strip || sectionOpen(section.dataset.section, folded);
+    }
+  }
+  const stripBox = root.querySelector(".studio-toolbox");
+  const stripSize = new ResizeObserver(() => root.style.setProperty("--studio-strip-h", `${stripBox.offsetHeight}px`));
+  stripSize.observe(stripBox);
+  const stripWatch = new MutationObserver(syncStrip);
+  stripWatch.observe(root, { attributes: true, attributeFilter: ["class"] });
+  phone.addEventListener("change", syncStrip, { signal: ctx.signal });
+  ctx.observers.push(stripSize, stripWatch);
+  syncStrip();
   // What scrolls into the toolbox's view (a button tabbed to, or clicked by
   // a test) stops under the sticky Mode and Duration, not behind them.
   const toolbox = root.querySelector(".studio-toolbox");

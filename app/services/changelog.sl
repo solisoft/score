@@ -13,6 +13,13 @@ class Changelog
       {"date": "2026-11-16", "entries": [
         {
           "area": "site",
+          "title": "On a phone, write without opening the tools",
+          "text": "On a narrow screen, writing a note meant opening the Tools sheet, which covers the lower half "
+          + "of the score. Closed, the tools are now a strip along the bottom: Select and Note input, the note "
+          + "values, the letters and the rest. Tools still opens the whole of them."
+        },
+        {
+          "area": "site",
           "title": "The first gestures, on a first visit to the editor",
           "text": "The first time the score editor opens in a browser, a card under the score gives the three "
           + "gestures to start with: click a note to select it, press N and type letters to write, press Space "

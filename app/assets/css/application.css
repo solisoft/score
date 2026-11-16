@@ -1260,6 +1260,24 @@
     }
     .studio-tools-open .studio-toolbox { transform: none; visibility: visible; transition: transform .2s ease; }
     .studio-tools-open { padding-bottom: 52vh; }
+    /* Closed, it is a strip along the bottom (#924): the mode, the values
+       and the letters in three rows, so that a note is written with the score
+       in sight. Tools opens the whole of it over the lower half, as before. */
+    .studio-strip .studio-toolbox {
+      transform: none; visibility: visible; transition: none; max-height: none; overflow: hidden; border-radius: 0;
+      padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -4px 14px rgb(29 25 20 / .08);
+      display: grid; gap: 5px;
+    }
+    .studio-strip .studio-toolbox > .tool-section:not([data-section="notes"]) { display: none; }
+    .studio-strip .tool-sticky { position: static; margin: 0; padding: 0; border: 0; display: grid; gap: 5px; }
+    .studio-strip .tool-section { padding: 0; border: 0; }
+    .studio-strip .tool-section > summary, .studio-strip .tool-row-rare, .studio-strip .tool-check, .studio-strip .tool-sub { display: none; }
+    .studio-strip .tool-row { margin: 0; }
+    .studio-strip .tool { height: 38px; }
+    .studio-strip { padding-bottom: var(--studio-strip-h, 140px); }
+    .studio-strip .studio-statusbar { bottom: var(--studio-strip-h, 140px); }
+    /* The keys to press say nothing to a finger: what is selected, alone (#924). */
+    .studio-hint { display: none; }
     .studio-tools-toggle { border-color: var(--line-strong); font-weight: 600; }
     /* The magnifying glass alone: the bar is short of room (#919). */
     .studio-find-button span { display: none; }
