@@ -13,6 +13,13 @@ class Changelog
       {"date": "2026-11-16", "entries": [
         {
           "area": "site",
+          "title": "The note's palette no longer hides the tempo",
+          "text": "In the score editor, the small palette that opens over a selected note covered what is written "
+          + "above it: a tempo over the first note, a higher note beside it. It now stands just above that, or a "
+          + "little to the left, as long as it stays over its note."
+        },
+        {
+          "area": "site",
           "title": "The Insert menu names its groups; a Format menu",
           "text": "In the score editor, the Insert menu was one list of 33 lines to scroll. Its commands are now "
           + "in named groups — ties and slurs, words, repeats, staves and voices — in two columns that fit the "

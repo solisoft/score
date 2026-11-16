@@ -402,6 +402,40 @@ describe("The playground, in a browser") do
     assert_no_page_errors()
   end
 
+  test("the note palette stands clear of a tempo written over its note (#921)") do
+    viewport(1280, 800)
+    # What the palette covers of the engraving: the staff's lines, bar lines and stems aside.
+    covered = "(() => { const p = document.querySelector('.studio-palette').getBoundingClientRect();"
+    + " return [...document.querySelectorAll('.studio-svg svg > use, .studio-svg svg > path, .studio-svg svg > rect,"
+    + " .studio-svg svg > g > *')].map((mark) => mark.getBoundingClientRect())"
+    + ".filter((box) => box.width > 0 && box.height > 0 && !(box.height < 3 && box.width > 40)"
+    + " && !(box.width < 3 && box.height > 12))"
+    + ".filter((box) => box.right > p.left && box.left < p.right && box.bottom > p.top && box.top < p.bottom)"
+    + ".length; })()"
+    over_note = "(() => { const st = document.getElementById('studio').studio;"
+    + " const svg = document.querySelector('.studio-svg svg').getBoundingClientRect();"
+    + " const item = st.view.items.find((it) => it.item === 0);"
+    + " const p = document.querySelector('.studio-palette').getBoundingClientRect();"
+    + " const x = svg.left + item.box[0] * svg.width / st.view.width;"
+    + " const y = svg.top + (item.box[1] - (st.view.y0 ?? 0)) * svg.width / st.view.width;"
+    + " return p.left <= x && p.right >= x && p.bottom <= y && y - p.bottom < 60; })()"
+    # Under a title, as scores are: there is room over the tempo.
+    type_source("\\header { title = \"Ode\" subtitle = \"Finale\" }\n"
+    + "{ \\time 4/4 \\tempo \"Allegro assai\" 4 = 116 fis''4 fis''4 g''4 a''4 | a''1 }")
+    caret_on("fis''4")
+    sleep(0.3)
+    assert_eq(palette_side(), "above")
+    assert_eq(evaluate(covered), 0, "the palette covers none of the tempo")
+    assert(evaluate(over_note), "and still stands over its note, near it")
+    # No title, a low note: nowhere clear to go, so it stays over its note, as before.
+    type_source("{ \\time 4/4 c'4 d'4 e'4 f'4 | g'1 }")
+    caret_on("c'4")
+    sleep(0.3)
+    assert_eq(palette_side(), "above")
+    assert(evaluate(over_note), "over its note")
+    assert_no_page_errors()
+  end
+
   test("on a phone, a note's palette stands whole inside the sheet, for a note at the right edge too (#443)") do
     viewport(390, 844)
     sleep(0.5)

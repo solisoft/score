@@ -221,6 +221,46 @@ export function install(ctx) {
     const right = sheet.scrollLeft + sheet.clientWidth - 4 - palette.offsetWidth;
     palette.style.left = `${Math.max(sheet.scrollLeft + 4, Math.min(corner.x - 10, right))}px`;
     palette.style.top = below ? `${corner.y + 10}px` : `${Math.max(4, corner.y - palette.offsetHeight - 8)}px`;
+    if (!below) clearInk(corner.x);
+  }
+
+  // Above the note, the palette goes over what is engraved there that the
+  // view does not report: a tempo, a rehearsal mark, the higher notes beside
+  // it (#921). It is moved to the nearest place that covers none of that ink
+  // — the staff's lines, the bar lines and the stems aside, which run under
+  // everything: lifted by up to LIFT, and slid to the left as far as it
+  // still stands over its note. Where no such place is (a note under the
+  // composer's name, at the end of a line), it stays as it was.
+  const LIFT = 48;
+  function clearInk(noteX) {
+    const marks = svgHost.querySelectorAll("svg > use, svg > path, svg > rect, svg > g > *");
+    if (!marks.length || marks.length > 6000) return; // a very long score: not worth the measuring
+    const start = palette.getBoundingClientRect();
+    const bounds = sheet.getBoundingClientRect();
+    // Slid left, it keeps its note under it: by no more than its width past the note's head.
+    const note = start.left + noteX - palette.offsetLeft;
+    const reach = Math.max(0, Math.min(start.right - note - 32, start.left - bounds.left - 4));
+    const ink = [];
+    for (const mark of marks) {
+      const box = mark.getBoundingClientRect();
+      if (box.right < start.left - reach || box.left > start.right || box.bottom > start.bottom || box.bottom < start.top - LIFT) continue;
+      // Lines: a staff's (long and thin), a bar's or a stem's (thin and tall).
+      if ((box.height < 3 && box.width > 40) || (box.width < 3 && box.height > 12)) continue;
+      if (box.width > 0 && box.height > 0) ink.push(box);
+    }
+    const covers = (dx, dy) => ink.some((box) => box.right > start.left - dx - 4 && box.left < start.right - dx + 4 && box.bottom > start.top - dy - 4 && box.top < start.bottom - dy + 4);
+    if (!covers(0, 0)) return;
+    let best = null;
+    for (let dy = 0; dy <= Math.min(LIFT, palette.offsetTop - 4); dy += 4) {
+      for (let dx = 0; dx <= reach; dx += 8) {
+        const cost = dy + dx / 2;
+        if (best && cost >= best.cost) break;
+        if (!covers(dx, dy)) best = { dx, dy, cost };
+      }
+    }
+    if (!best) return;
+    palette.style.left = `${palette.offsetLeft - best.dx}px`;
+    palette.style.top = `${palette.offsetTop - best.dy}px`;
   }
 
   function placeOverlay() {
