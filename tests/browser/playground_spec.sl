@@ -548,6 +548,58 @@ describe("The playground, in a browser") do
     assert_no_page_errors()
   end
 
+  test("a command is found by its name, and run from the list (#919)") do
+    viewport(1280, 800)
+    names = "[...document.querySelectorAll('[data-find-list] .studio-find-name')].map((el) => el.textContent)"
+    find_open = "document.querySelector('[data-find]').open"
+    ask = "(() => { const box = document.querySelector('[data-find-box]'); box.value = WORDS;"
+    + " box.dispatchEvent(new Event('input', { bubbles: true })); })()"
+    key = "document.querySelector('[data-find-box]')"
+    + ".dispatchEvent(new KeyboardEvent('keydown', { key: KEY, bubbles: true }))"
+    evaluate("(() => { const st = document.getElementById('studio').studio; st.sel = { staff: 0, t0: 0, t1: 0 };"
+    + " document.querySelector('[data-act=\"zoom-in\"]').click(); })()")
+    sleep(0.3)
+    assert_eq(evaluate(find_open), false)
+    click("[data-act=\"find\"]")
+    sleep(0.2)
+    assert_eq(evaluate(find_open), true)
+    assert_eq(evaluate("document.activeElement.matches('[data-find-box]')"), true)
+    # A few letters: the tools' commands, with the section they are in.
+    evaluate(ask.replace("WORDS", "'stacc'"))
+    assert_eq(evaluate(names), ["Staccato", "Staccatissimo"])
+    assert_eq(text_of("[data-find-list] .studio-find-group"), "Articulations")
+    # The menus' too, their key beside them; accents and capitals do not count.
+    evaluate(ask.replace("WORDS", "'UNDO'"))
+    assert_eq(evaluate(names), ["Undo"])
+    assert_eq(text_of("[data-find-list] kbd"), "Ctrl+Z")
+    # A name no command has: said, and Enter does nothing.
+    evaluate(ask.replace("WORDS", "'zzzz'"))
+    assert_eq(evaluate(names), [])
+    assert_eq(evaluate("document.querySelector('[data-find-none]').hidden"), false)
+    before = playground_text()
+    evaluate(key.replace("KEY", "'Enter'"))
+    assert_eq(evaluate(find_open), true)
+    assert_eq(playground_text(), before)
+    # ↓ then Enter runs the second: the note is staccatissimo, the list is closed.
+    evaluate(ask.replace("WORDS", "'stacc'"))
+    evaluate(key.replace("KEY", "'ArrowDown'"))
+    assert_eq(
+      evaluate("document.querySelector('[data-find-list] [aria-selected=true] .studio-find-name').textContent"),
+      "Staccatissimo"
+    )
+    evaluate(key.replace("KEY", "'Enter'"))
+    sleep(0.4)
+    assert_eq(evaluate(find_open), false)
+    assert_contains(playground_text(), "-!")
+    assert_not(before.contains("-!"))
+    # The key / opens it from the score.
+    evaluate("document.querySelector('[data-sheet]')"
+    + ".dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true }))")
+    sleep(0.2)
+    assert_eq(evaluate(find_open), true)
+    assert_no_page_errors()
+  end
+
   test("the bar under the score says what to do with what is selected (#918)") do
     assert_contains(text_of("[data-hint]"), "Space plays")
     evaluate("(() => { const st = document.getElementById('studio').studio; st.sel = { staff: 0, t0: 0, t1: 0 };"

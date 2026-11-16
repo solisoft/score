@@ -13,6 +13,13 @@ class Changelog
       {"date": "2026-11-16", "entries": [
         {
           "area": "site",
+          "title": "Find a command by its name",
+          "text": "In the score editor, Find a command (or the / key) opens a box: type a few letters — slur, "
+          + "transpose, staccato — and the commands of the menus and of the tools by that name are listed, each "
+          + "with its key. Enter, or a click, runs the one chosen."
+        },
+        {
+          "area": "site",
           "title": "The editor's buttons say what they do, at once",
           "text": "In the score editor, a button's name and its key now show as soon as the pointer is over it, "
           + "instead of a second later. The flat, natural and sharp buttons are drawn larger, as are Undo and Redo. "

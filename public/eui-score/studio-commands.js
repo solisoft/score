@@ -144,6 +144,7 @@ export function install(ctx) {
       case "mic-record": return st.audio.record();
       case "tuner": return st.audio.tuner();
       case "practice": return st.audio.practice();
+      case "find": return openFind();
       case "keys": {
         const sheetOfKeys = root.querySelector("[data-keys]");
         if (sheetOfKeys.open) sheetOfKeys.close();
@@ -563,6 +564,116 @@ export function install(ctx) {
   root.querySelector("[data-keys]")?.addEventListener("click", (event) => {
     if (event.target === event.currentTarget) event.currentTarget.close();
   });
+
+  // ---- Find a command (#919) ---------------------------------------------------------
+  // Every command the menus and the tools show, found by a few letters of
+  // its name: the list is read from the page each time it opens, so what is
+  // listed is what is there — and choosing one clicks its button, which does
+  // what a click on it does.
+  const find = root.querySelector("[data-find]");
+  const findBox = find?.querySelector("[data-find-box]");
+  const findList = find?.querySelector("[data-find-list]");
+  let found = [];
+  let findAt = 0;
+  const plain = (text) => text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
+
+  /** The commands there are: `{ el, name, key, group, hay }`, the menus' first, each once. */
+  function commands() {
+    const list = [];
+    const seen = new Set();
+    const add = (el, name, key, group) => {
+      name = name.replace(/\s+/g, " ").replace(/[…:]+$/, "").trim();
+      if (!name || el.disabled || el.closest("[hidden]")) return;
+      const id = el.dataset.act ? JSON.stringify(Object.entries(el.dataset).filter(([k]) => k !== "tip").sort()) : `${group}/${name}`;
+      if (seen.has(id) || seen.has(`${group}/${name}`)) return;
+      seen.add(id).add(`${group}/${name}`);
+      list.push({ el, name, key, group, hay: plain(`${name} ${group}`) });
+    };
+    for (const menu of root.querySelectorAll(".studio-menus .studio-dropdown")) {
+      const group = menu.querySelector("summary").textContent.trim();
+      for (const item of menu.querySelectorAll('button[role="menuitem"], label[role="menuitem"]')) {
+        const key = item.querySelector("kbd")?.textContent.trim() ?? "";
+        const name = [...item.childNodes].filter((node) => node.nodeType === 3 || (node.nodeType === 1 && !node.matches("kbd, input"))).map((node) => node.textContent).join(" ");
+        add(item, name, key, group);
+      }
+    }
+    for (const section of root.querySelectorAll(".studio-toolbox .tool-section")) {
+      const group = section.querySelector("summary").textContent.trim();
+      for (const tool of section.querySelectorAll("button[data-act]")) {
+        const title = tool.title || tool.dataset.tip || "";
+        const [, name, key] = title.match(/^(.*?)(?:\s*\(([^()]{1,24})\))?$/s);
+        add(tool, /\p{L}{2}/u.test(tool.textContent) && tool.textContent.trim().length > name.length ? tool.textContent : name || tool.textContent, key ?? "", group);
+      }
+    }
+    return list;
+  }
+
+  function showFound() {
+    const words = plain(findBox.value).split(" ").filter(Boolean);
+    const all = commands();
+    const first = (c) => (words.length && plain(c.name).startsWith(words[0]) ? 0 : 1);
+    found = all.filter((c) => words.every((word) => c.hay.includes(word))).sort((a, b) => first(a) - first(b)).slice(0, 40);
+    findAt = Math.min(findAt, Math.max(0, found.length - 1));
+    findList.replaceChildren(...found.map((c, i) => {
+      const row = Object.assign(document.createElement("li"), { id: `studio-find-${i}` });
+      row.setAttribute("role", "option");
+      row.setAttribute("aria-selected", String(i === findAt));
+      row.dataset.at = i;
+      row.append(Object.assign(document.createElement("span"), { className: "studio-find-name", textContent: c.name }));
+      row.append(Object.assign(document.createElement("span"), { className: "studio-find-group", textContent: c.group }));
+      if (c.key) row.append(Object.assign(document.createElement("kbd"), { textContent: c.key }));
+      return row;
+    }));
+    find.querySelector("[data-find-none]").hidden = found.length > 0;
+    if (found.length) findBox.setAttribute("aria-activedescendant", `studio-find-${findAt}`);
+    else findBox.removeAttribute("aria-activedescendant");
+    findList.children[findAt]?.scrollIntoView({ block: "nearest" });
+  }
+
+  function openFind() {
+    if (!find) return;
+    if (find.open) return find.close();
+    for (const menu of root.querySelectorAll(".studio-dropdown[open]")) menu.open = false;
+    findBox.value = "";
+    findAt = 0;
+    find.showModal();
+    showFound();
+    findBox.focus();
+  }
+
+  function runFound(at) {
+    const command = found[at];
+    if (!command) return;
+    find.close();
+    sheet.focus({ preventScroll: true });
+    command.el.click();
+  }
+
+  if (find) {
+    findBox.addEventListener("input", () => {
+      findAt = 0;
+      showFound();
+    });
+    findBox.addEventListener("keydown", (event) => {
+      const step = { ArrowDown: 1, ArrowUp: -1 }[event.key];
+      if (step && found.length) {
+        event.preventDefault();
+        findAt = (findAt + step + found.length) % found.length;
+        showFound();
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        runFound(findAt);
+      }
+    });
+    findList.addEventListener("click", (event) => {
+      const row = event.target.closest("li");
+      if (row) runFound(Number(row.dataset.at));
+    });
+    // A click outside it closes it, as Esc does.
+    find.addEventListener("click", (event) => {
+      if (event.target === find) find.close();
+    });
+  }
 
   /** In note input, whether a note (not a rest) starts at the cursor (#702). */
   function noteAtCursor() {

@@ -355,6 +355,7 @@
   "A–G or a click write, 0 or R rest, Esc to stop": "A–G ou un clic écrivent, 0 ou R silence, Échap pour arrêter",
   "Click a note to select it · N to write notes": "Cliquez sur une note pour la sélectionner · N pour écrire des notes",
   "Text only": "Texte seul",
+  "find a command by its name": "chercher une commande par son nom",
   "Space plays · ? shows every key": "Espace joue · ? montre toutes les touches",
   "↑ ↓ move them · Ctrl+C copies them · Delete makes rests · Esc lets go": "↑ ↓ les déplacent · Ctrl+C les copie · Suppr en fait des silences · Échap les lâche",
   "↑ ↓ move it · 2–7 change its length · Delete makes a rest · N writes notes": "↑ ↓ la déplacent · 2–7 changent sa durée · Suppr en fait un silence · N écrit des notes",

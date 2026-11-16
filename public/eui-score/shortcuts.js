@@ -160,6 +160,7 @@ export const SHORTCUTS = [
   },
   { keys: "R", does: tr("record from the MIDI keyboard (out of note input)"), match: (k, ctx) => (!k.mod && !ctx.inputOn && lower(k) === "r" ? ["record"] : null) },
   { keys: "Space", does: tr("play / pause"), match: (k, ctx) => (k.key === " " && !ctx.onButton ? ["play"] : null) },
+  { keys: "/", does: tr("find a command by its name"), match: (k) => (!k.mod && !k.altKey && k.key === "/" ? ["find"] : null) },
   { keys: "?", does: tr("this sheet"), match: (k) => (k.key === "?" ? ["keys"] : null) },
 ];
 

@@ -208,6 +208,8 @@
         <% end %>
       </nav>
       <div class="studio-menu-group">
+        <%# Any command, found by its name (#919): the menus' and the tools'. %>
+        <button type="button" class="studio-menu studio-find-button" data-act="find" title="<%= t("app.editor.find_a_command_slash") %>" aria-label="<%= t("app.editor.find_a_command") %>"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg> <span><%= t("app.editor.find_a_command") %></span></button>
         <button type="button" class="studio-menu" data-act="undo" title="<%= t("app.editor.undo_ctrl_plus_z") %>" aria-label="<%= t("app.editor.undo") %>">↶</button>
         <button type="button" class="studio-menu" data-act="redo" title="<%= t("app.editor.redo_ctrl_plus_y") %>" aria-label="<%= t("app.editor.redo") %>">↷</button>
         <%# The library of sections, a click away (#452): listen, then add. %>
@@ -741,6 +743,15 @@
       <textarea data-source wrap="off" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="<%= t("app.editor.lilypond_source") %>"><%= source %></textarea>
     </div>
   </section>
+
+  <%# Find a command (#919): written by studio-commands.js from the menus'
+      items and the tools' buttons, so a command shown is a command found. %>
+  <dialog class="studio-keys studio-find" data-find aria-label="<%= t("app.editor.find_a_command") %>">
+    <input type="search" class="studio-find-box" data-find-box placeholder="<%= t("app.editor.find_what_do_you_want") %>" aria-label="<%= t("app.editor.find_what_do_you_want") %>"
+      role="combobox" aria-expanded="true" aria-controls="studio-find-list" aria-autocomplete="list" autocomplete="off" spellcheck="false">
+    <ul class="studio-find-list" id="studio-find-list" role="listbox" data-find-list></ul>
+    <p class="studio-find-none" data-find-none hidden><%= t("app.editor.find_nothing") %></p>
+  </dialog>
 
   <dialog class="studio-keys" data-keys aria-labelledby="studio-keys-title">
     <div class="studio-keys-head">
