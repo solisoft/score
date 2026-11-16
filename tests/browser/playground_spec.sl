@@ -600,6 +600,54 @@ describe("The playground, in a browser") do
     assert_no_page_errors()
   end
 
+  test("Insert names its groups and fits the window; stems and beams are under Format (#920)") do
+    viewport(1280, 800)
+    # window.menuNamed("Insert"): the menu of that name; its items' boxes, and its own.
+    evaluate("(() => { window.menuNamed = (name) => [...document.querySelectorAll('.studio-menus > details')]"
+    + ".find((menu) => menu.querySelector('summary').textContent === name);"
+    + " window.menuBoxes = (name) => { const items = menuNamed(name).querySelector('.studio-dropdown-items');"
+    + " return { items, box: items.getBoundingClientRect(),"
+    + " each: [...items.querySelectorAll('[role=menuitem]')].map((item) => item.getBoundingClientRect()) }; }; })()")
+    heads = evaluate("[...menuNamed('Insert').querySelectorAll('.studio-dropdown-head')]"
+    + ".map((head) => head.textContent)")
+    assert_eq(heads, [
+      "Ties, slurs & 8va",
+      "Words",
+      "Repeats & jumps",
+      "Staves, voices"
+    ])
+    # What draws differently, and inserts nothing, left Insert for Format.
+    for act in ["stem", "stem-flip", "beam", "beam-break", "cross"]
+      count = ".querySelectorAll('[data-act=' + JSON.stringify('#{act}') + ']').length"
+      assert_eq(evaluate("menuNamed('Insert')" + count), 0, "#{act} not under Insert")
+      assert(evaluate("menuNamed('Format')" + count) > 0, "#{act} under Format")
+    end
+    # Open, the whole of Insert is in the window: nothing to scroll, nothing cut off.
+    evaluate("menuNamed('Insert').open = true")
+    sleep(0.2)
+    fits = "(() => { const { items, box, each } = menuBoxes('Insert');"
+    + " return items.scrollHeight <= items.clientHeight + 1 && box.bottom <= innerHeight"
+    + " && each.every((item) => item.right <= box.right + 1 && item.bottom <= box.bottom + 1); })()"
+    assert(evaluate(fits), "Insert fits a 1280 × 800 window")
+    # A short window: one list that scrolls, none of it lost off the side.
+    viewport(1280, 560)
+    sleep(0.2)
+    inside = "(() => { const { box, each } = menuBoxes('Insert');"
+    + " return each.every((item) => item.right <= box.right + 1); })()"
+    assert(evaluate(inside), "in a short window, every item is inside the menu's width")
+    # A Format item does what the tool did: the selected note's stem goes down.
+    viewport(1280, 800)
+    evaluate("(() => { menuNamed('Insert').open = false; const st = document.getElementById('studio').studio;"
+    + " st.sel = { staff: 0, t0: 0, t1: 0 }; document.querySelector('[data-act=zoom-in]').click(); })()")
+    sleep(0.3)
+    before = playground_text()
+    evaluate("menuNamed('Format').querySelector('[data-act=stem][data-dir=' + JSON.stringify('-1') + ']').click()")
+    sleep(0.4)
+    assert_contains(playground_text(), "stemDown")
+    assert_not(before.contains("stemDown"))
+    assert_no_page_errors()
+  end
+
   test("the bar under the score says what to do with what is selected (#918)") do
     assert_contains(text_of("[data-hint]"), "Space plays")
     evaluate("(() => { const st = document.getElementById('studio').studio; st.sel = { staff: 0, t0: 0, t1: 0 };"
@@ -663,12 +711,12 @@ describe("The playground, in a browser") do
     click("[data-section=\"pitch\"] [data-act=\"enharmonic\"]")
     sleep(0.4)
     assert_contains(playground_text(), "des'4")
-    # The Edit menu has it by Transpose; Insert is in groups, as the toolbox.
+    # The Edit menu has it by Transpose; Insert is in groups, as the toolbox, each named (#920).
     by_transpose = ".studio-dropdown [data-act=\"transpose\"] ~ [data-act=\"enharmonic\"]"
     assert(evaluate("Boolean(document.querySelector('#{by_transpose}'))"))
     assert_eq(
       evaluate("[...document.querySelectorAll('.studio-dropdown')]"
-      + ".find((it) => it.innerText.startsWith('Insert')).querySelectorAll('hr').length"),
+      + ".find((it) => it.innerText.startsWith('Insert')).querySelectorAll('.studio-dropdown-head').length"),
       4
     )
     assert_no_page_errors()

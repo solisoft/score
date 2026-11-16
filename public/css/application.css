@@ -2521,6 +2521,36 @@
     font: 400 12px/1 var(--font-sans);
     color: var(--muted);
   }
+  .studio-dropdown-head {
+    font: 600 11px/1.2 var(--font-sans);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 10px 10px 4px;
+    break-after: avoid;
+  }
+  @media (min-width: 900px) and (min-height: 720px) {
+    .studio-dropdown-columns {
+      display: block;
+      columns: 2;
+      column-gap: 6px;
+      width: max-content;
+      max-width: min(720px, calc(100vw - 24px));
+      max-height: none;
+      overflow: visible;
+    }
+    .studio-dropdown-columns > button {
+      width: 100%;
+      break-inside: avoid;
+    }
+    .studio-dropdown-columns > .studio-dropdown-head:first-child {
+      padding-top: 4px;
+    }
+    .studio-dropdown-columns > .studio-dropdown-break {
+      break-before: column;
+      padding-top: 4px;
+    }
+  }
   .studio-dropdown-items hr {
     border: 0;
     border-top: 1px solid var(--line);

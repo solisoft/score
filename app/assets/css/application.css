@@ -368,6 +368,17 @@
   .studio-dropdown-items > :is(button, label, a):hover, .studio-dropdown-items > :is(button, label, a):focus-visible { background: var(--paper-deep); outline: none; }
   .studio-dropdown-items > button:disabled { color: var(--muted); cursor: default; background: none; }
   .studio-dropdown-items kbd { font: 400 12px/1 var(--font-sans); color: var(--muted); }
+  /* A long menu in two columns, its groups named (#920): Insert fits the screen without scrolling. */
+  .studio-dropdown-head { font: 600 11px/1.2 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 10px 10px 4px; break-after: avoid; }
+  /* Two columns where the window is tall enough to hold them whole: a
+     column cut by the menu's height would be lost off its side. Shorter, or
+     on a phone, it is one list that scrolls, as the others. */
+  @media (min-width: 900px) and (min-height: 720px) {
+    .studio-dropdown-columns { display: block; columns: 2; column-gap: 6px; width: max-content; max-width: min(720px, calc(100vw - 24px)); max-height: none; overflow: visible; }
+    .studio-dropdown-columns > button { width: 100%; break-inside: avoid; }
+    .studio-dropdown-columns > .studio-dropdown-head:first-child { padding-top: 4px; }
+    .studio-dropdown-columns > .studio-dropdown-break { break-before: column; padding-top: 4px; }
+  }
   .studio-dropdown-items hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
   .studio-dropdown-select { flex-direction: column; align-items: stretch !important; gap: 6px !important; cursor: default !important; }
   .studio-dropdown-select select { font: 400 14px/1.3 var(--font-sans); padding: 6px 8px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--sheet); color: var(--ink); max-width: 320px; }

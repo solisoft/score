@@ -134,7 +134,8 @@
         </details>
         <details class="studio-dropdown">
           <summary class="studio-menu"><%= t("app.editor.insert") %></summary>
-          <div class="studio-dropdown-items" role="menu">
+          <div class="studio-dropdown-items studio-dropdown-columns" role="menu">
+            <div class="studio-dropdown-head" role="presentation"><%= t("app.editor.ties_slurs_8va") %></div>
             <button type="button" role="menuitem" data-act="tie"><%= t("app.editor.tie") %> <kbd>T</kbd></button>
             <button type="button" role="menuitem" data-act="slur"><%= t("app.editor.slur") %> <kbd>S</kbd></button>
             <button type="button" role="menuitem" data-act="slur-up"><%= t("app.editor.slur_above") %></button>
@@ -143,16 +144,7 @@
             <button type="button" role="menuitem" data-act="ottava" data-value="1"><%= t("app.editor.n_8va_above_the_selection") %></button>
             <button type="button" role="menuitem" data-act="ottava" data-value="-1"><%= t("app.editor.n_8vb_below_the_selection") %></button>
             <button type="button" role="menuitem" data-act="ottava-end"><%- t("app.editor.end_the_ottava_line_here") %></button>
-            <hr>
-            <button type="button" role="menuitem" data-act="stem" data-dir="1"><%= t("app.editor.stems_up") %></button>
-            <button type="button" role="menuitem" data-act="stem" data-dir="-1"><%= t("app.editor.stems_down") %></button>
-            <button type="button" role="menuitem" data-act="stem" data-dir="0"><%= t("app.editor.stems_as_the_voice_wants") %></button>
-            <button type="button" role="menuitem" data-act="stem-flip"><%= t("app.editor.flip_the_stems") %> <kbd>X</kbd></button>
-            <button type="button" role="menuitem" data-act="beam"><%= t("app.editor.beam_the_selected_notes") %> <kbd>Alt+B</kbd></button>
-            <button type="button" role="menuitem" data-act="beam-break"><%= t("app.editor.break_the_beam_before_the_note") %> <kbd>Alt+Shift+B</kbd></button>
-            <button type="button" role="menuitem" data-act="cross" data-dir="-1"><%= t("app.editor.notes_on_the_staff_above") %> <kbd>Ctrl+Shift+↑</kbd></button>
-            <button type="button" role="menuitem" data-act="cross" data-dir="1"><%= t("app.editor.notes_on_the_staff_below") %> <kbd>Ctrl+Shift+↓</kbd></button>
-            <hr>
+            <div class="studio-dropdown-head" role="presentation"><%= t("app.editor.words") %></div>
             <button type="button" role="menuitem" data-act="lyrics"><%= t("app.editor.lyrics") %> <kbd>Ctrl+L</kbd></button>
             <button type="button" role="menuitem" data-act="chord"><%= t("app.editor.chord_symbol") %> <kbd>Ctrl+K</kbd></button>
             <button type="button" role="menuitem" data-act="figures"><%= t("app.editor.figures_figured_bass") %></button>
@@ -160,18 +152,35 @@
             <button type="button" role="menuitem" data-act="fret-all"><%= t("app.editor.guitar_diagrams_for_the_chord_symbols") %></button>
             <button type="button" role="menuitem" data-act="text"><%= t("app.editor.staff_text") %></button>
             <button type="button" role="menuitem" data-act="expression">Expression</button>
-            <hr>
+            <div class="studio-dropdown-head studio-dropdown-break" role="presentation"><%= t("app.editor.repeats_jumps") %></div>
             <button type="button" role="menuitem" data-act="mark" data-mark="letter"><%= t("app.editor.rehearsal_letter") %></button>
             <button type="button" role="menuitem" data-act="repeat"><%= t("app.editor.repeat_the_selected_bars") %></button>
             <button type="button" role="menuitem" data-act="ending"><%= t("app.editor.ending_1_2") %></button>
             <button type="button" role="menuitem" data-act="pedal" data-how="on"><%= t("app.editor.sustain_pedal") %></button>
-            <hr>
+            <div class="studio-dropdown-head" role="presentation"><%= t("app.editor.staves_voices") %></div>
             <button type="button" role="menuitem" data-act="add-staff"><%= t("app.editor.a_staff") %></button>
             <button type="button" role="menuitem" data-act="chord-line"><%- t("app.editor.a_line_of_chord_names_over_the_staff") %></button>
             <button type="button" role="menuitem" data-act="figure-line"><%= t("app.editor.a_figured_bass_under_the_staff") %></button>
             <button type="button" role="menuitem" data-act="voice" data-voice="2"><%= t("app.editor.a_second_voice") %> <kbd>Ctrl+Alt+2</kbd></button>
             <button type="button" role="menuitem" data-act="voice" data-voice="3"><%= t("app.editor.a_third_voice") %> <kbd>Ctrl+Alt+3</kbd></button>
             <button type="button" role="menuitem" data-act="voice" data-voice="4"><%= t("app.editor.a_fourth_voice") %> <kbd>Ctrl+Alt+4</kbd></button>
+          </div>
+        </details>
+        <%# Format (#920): how what is written is drawn — stems, beams, the staff
+            a note is drawn on. They were under Insert, and insert nothing. %>
+        <details class="studio-dropdown">
+          <summary class="studio-menu"><%= t("app.editor.format") %></summary>
+          <div class="studio-dropdown-items" role="menu">
+            <button type="button" role="menuitem" data-act="stem" data-dir="1"><%= t("app.editor.stems_up") %></button>
+            <button type="button" role="menuitem" data-act="stem" data-dir="-1"><%= t("app.editor.stems_down") %></button>
+            <button type="button" role="menuitem" data-act="stem" data-dir="0"><%= t("app.editor.stems_as_the_voice_wants") %></button>
+            <button type="button" role="menuitem" data-act="stem-flip"><%= t("app.editor.flip_the_stems") %> <kbd>X</kbd></button>
+            <hr>
+            <button type="button" role="menuitem" data-act="beam"><%= t("app.editor.beam_the_selected_notes") %> <kbd>Alt+B</kbd></button>
+            <button type="button" role="menuitem" data-act="beam-break"><%= t("app.editor.break_the_beam_before_the_note") %> <kbd>Alt+Shift+B</kbd></button>
+            <hr>
+            <button type="button" role="menuitem" data-act="cross" data-dir="-1"><%= t("app.editor.notes_on_the_staff_above") %> <kbd>Ctrl+Shift+↑</kbd></button>
+            <button type="button" role="menuitem" data-act="cross" data-dir="1"><%= t("app.editor.notes_on_the_staff_below") %> <kbd>Ctrl+Shift+↓</kbd></button>
           </div>
         </details>
         <details class="studio-dropdown">

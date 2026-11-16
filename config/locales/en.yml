@@ -967,6 +967,8 @@ en:
       written_pitch: "Written pitch"
       clarinets_horns_saxes: "clarinets, horns, saxes"
       keyboard_shortcuts: "Keyboard shortcuts"
+      format: "Format"
+      staves_voices: "Staves, voices"
       find_a_command: "Find a command"
       find_a_command_slash: "Find a command by its name (/)"
       find_what_do_you_want: "What do you want to do?"

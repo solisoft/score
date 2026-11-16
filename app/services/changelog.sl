@@ -13,6 +13,14 @@ class Changelog
       {"date": "2026-11-16", "entries": [
         {
           "area": "site",
+          "title": "The Insert menu names its groups; a Format menu",
+          "text": "In the score editor, the Insert menu was one list of 33 lines to scroll. Its commands are now "
+          + "in named groups — ties and slurs, words, repeats, staves and voices — in two columns that fit the "
+          + "screen. Stems, beams and notes drawn on the other staff, which insert nothing, are in a new Format "
+          + "menu."
+        },
+        {
+          "area": "site",
           "title": "Find a command by its name",
           "text": "In the score editor, Find a command (or the / key) opens a box: type a few letters — slur, "
           + "transpose, staccato — and the commands of the menus and of the tools by that name are listed, each "
