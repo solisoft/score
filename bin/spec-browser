@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# The browser the browser specs run in (bin/test-browser hands it to Soli as
+# SOLI_CHROME_PATH): the machine's Chromium-family browser, started as CI's
+# is — in English, and with no extension.
+#
+# Both matter on a developer's machine (#923):
+#   - an extension installed for every profile (a password manager, an
+#     assistant) opens its own sign-in tab a moment after the browser starts.
+#     That tab takes the front: the spec's page is "hidden", gets no animation
+#     frame, and everything drawn on one (note input's pen and ghost, the
+#     notes lit while playing, the drum grid's loop) never comes.
+#   - the site has /fr: a browser asking for French is sent to /fr/signup,
+#     and the specs wait for English words.
+#
+# The browser's own binary is preferred to its launcher: Arch's `chromium`
+# adds ~/.config/chromium-flags.conf, which may load more extensions.
+#
+#   SPEC_BROWSER=/path/to/browser bin/test-browser      # another browser
+set -euo pipefail
+
+candidates=(
+  "${SPEC_BROWSER:-}"
+  /usr/lib/chromium/chromium
+  /usr/lib/chromium-browser/chromium-browser
+  "$(command -v google-chrome-stable || true)"
+  "$(command -v google-chrome || true)"
+  "$(command -v chromium || true)"
+  "$(command -v chromium-browser || true)"
+  "$(command -v brave-browser || true)"
+  "$(command -v microsoft-edge || true)"
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  "/Applications/Chromium.app/Contents/MacOS/Chromium"
+  "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"
+)
+for browser in "${candidates[@]}"; do
+  if [ -n "$browser" ] && [ -x "$browser" ]; then
+    exec "$browser" --lang=en-US --accept-lang=en-US --disable-extensions "$@"
+  fi
+done
+echo "bin/spec-browser: no Chromium-family browser found; set SPEC_BROWSER to one" >&2
+exit 1

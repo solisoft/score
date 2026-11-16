@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Runs the browser specs as CI does (.github/workflows/deploy.yml, "The app in
+# a browser"), in a browser started by bin/spec-browser: in English, with no
+# extension. Without it, a developer's own browser setup fails specs that
+# pass in CI — see bin/spec-browser for why.
+#
+#   bin/test-browser                                     # every browser spec
+#   bin/test-browser tests/browser/playground_spec.sl    # one of them
+set -euo pipefail
+cd "$(dirname "$0")/.."
+[ "$#" -gt 0 ] || set -- tests/browser
+SOLI_CHROME_PATH="$PWD/bin/spec-browser" exec soli test "$@" --browser --no-coverage
