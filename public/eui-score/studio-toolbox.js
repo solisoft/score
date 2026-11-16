@@ -12,7 +12,7 @@ const { tr } = await import(`./words.js${V}`);
 const PANEL_WIDTH = 340;
 
 /** The sections open until the person folds or opens them: those written with all the time. */
-export const OPEN_AT_FIRST = new Set(["mode", "duration", "notes", "pitch"]);
+export const OPEN_AT_FIRST = new Set(["mode", "duration", "notes", "common", "pitch"]);
 
 /** Whether the toolbox's section `name` is open: as the person left it (`folded`, name → folded), or as at first. */
 export function sectionOpen(name, folded) {

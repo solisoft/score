@@ -967,6 +967,7 @@ en:
       written_pitch: "Written pitch"
       clarinets_horns_saxes: "clarinets, horns, saxes"
       keyboard_shortcuts: "Keyboard shortcuts"
+      most_used: "Most used"
       welcome_title: "Three gestures to start"
       welcome_select: "<strong>Click a note</strong> to select it. The arrows ↑ ↓ move it; the small palette over it changes it."
       welcome_write: "<strong>Press N</strong>, or Note input, then type the letters A to G: each one writes a note. Esc stops."

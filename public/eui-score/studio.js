@@ -289,6 +289,8 @@ export function startStudio(root, options = {}) {
     return false;
   }
 
+  const SAID_FOR = 8000;
+  let saidTimer = 0;
   function say(message, error = false, link = null) {
     // Said during an edit: it outlives the edit's own clearing.
     status.dataset.fresh = "1";
@@ -297,6 +299,12 @@ export function startStudio(root, options = {}) {
     // `link`: { href, text }, a way on after the message (the Pricing page, #393).
     if (link?.href) status.append(" ", Object.assign(document.createElement("a"), { href: link.href, textContent: link.text }));
     status.classList.toggle("studio-error", error);
+    // What was said steps aside after a while (#925): what is selected and
+    // what to do with it are the line that stays. A refusal, and a message
+    // with a way on, stay until the next thing is said.
+    status.classList.remove("studio-status-old");
+    clearTimeout(saidTimer);
+    if (!error && !link?.href && message) saidTimer = setTimeout(() => status.classList.add("studio-status-old"), SAID_FOR);
     return false;
   }
 

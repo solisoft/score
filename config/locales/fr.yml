@@ -967,6 +967,7 @@ fr:
       written_pitch: "Hauteur écrite"
       clarinets_horns_saxes: "clarinettes, cors, saxophones"
       keyboard_shortcuts: "Raccourcis clavier"
+      most_used: "Courant"
       welcome_title: "Trois gestes pour commencer"
       welcome_select: "<strong>Cliquez sur une note</strong> pour la sélectionner. Les flèches ↑ ↓ la déplacent ; la petite palette au-dessus d'elle la modifie."
       welcome_write: "<strong>Appuyez sur N</strong>, ou sur Saisie, puis tapez les lettres A à G : chacune écrit une note. Échap arrête."

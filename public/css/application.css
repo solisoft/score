@@ -5263,6 +5263,9 @@
   .studio-status.studio-error {
     color: var(--accent-ink);
   }
+  .studio-status-old {
+    display: none;
+  }
   .tool-drums .tool {
     font-size: 12.5px;
     padding: 7px 8px;

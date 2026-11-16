@@ -13,6 +13,14 @@ class Changelog
       {"date": "2026-11-16", "entries": [
         {
           "area": "site",
+          "title": "The signs set most often, in one place",
+          "text": "In the score editor's tools, a Most used section, open under the notes, holds the signs set "
+          + "most often: tie and slur, staccato, accent, triplet, piano, mezzo-forte and forte, lyrics, a chord "
+          + "symbol, a bar more. Each is still in the section of its kind. Under the score, a message steps "
+          + "aside after a few seconds, leaving what is selected and what to do with it."
+        },
+        {
+          "area": "site",
           "title": "On a phone, write without opening the tools",
           "text": "On a narrow screen, writing a note meant opening the Tools sheet, which covers the lower half "
           + "of the score. Closed, the tools are now a strip along the bottom: Select and Note input, the note "

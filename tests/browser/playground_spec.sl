@@ -551,18 +551,19 @@ describe("The playground, in a browser") do
   end
 
   test("the toolbox opens on the tools written with, folds the rest, and keeps a fold by hand (#419)") do
-    ["mode", "duration", "notes", "pitch"].each do |name|
+    ["mode", "duration", "notes", "common", "pitch"].each do |name|
       assert(section_open?(name), "#{name} open")
     end
     ["articulations", "ornaments", "bars-and-staves", "from-bar"].each do |name|
       assert_not(section_open?(name), "#{name} folded")
     end
     # Mode and Duration first, Duration on screen on a laptop without scrolling.
-    order = evaluate("[...document.querySelectorAll('[data-section]')].map((it) => it.dataset.section).slice(0, 4)")
+    order = evaluate("[...document.querySelectorAll('[data-section]')].map((it) => it.dataset.section).slice(0, 5)")
     assert_eq(order, [
       "mode",
       "duration",
       "notes",
+      "common",
       "pitch"
     ])
     viewport(1024, 768)
@@ -621,9 +622,11 @@ describe("The playground, in a browser") do
     assert_eq(text_of(".studio-tip kbd"), "−")
     # The browser's own tip does not follow: the title is off while ours shows.
     assert_eq(evaluate(flat + ".hasAttribute('title')"), false)
-    # Under the button, inside the window.
-    under = tip + ".getBoundingClientRect().top >= " + flat + ".getBoundingClientRect().bottom"
-    assert(evaluate(under), "under its button")
+    # Under the button — over it where the window ends under it — and inside the window.
+    beside = "(() => { const t = " + tip + ".getBoundingClientRect(); const b = " + flat
+    + ".getBoundingClientRect();"
+    + " return (t.top >= b.bottom || t.bottom <= b.top) && t.top >= 0 && t.bottom <= innerHeight; })()"
+    assert(evaluate(beside), "beside its button, not over it")
     # Off the button: gone, and the title is back for a screen reader.
     evaluate("document.querySelector('[data-sheet]').dispatchEvent(" + pointer + ")")
     assert_eq(evaluate(tip + ".hidden"), true)
@@ -759,6 +762,64 @@ describe("The playground, in a browser") do
     assert_eq(evaluate(hidden), false)
     evaluate("document.querySelector('.studio-welcome-head [data-act=welcome]').click()")
     assert_eq(evaluate(hidden), true)
+    assert_no_page_errors()
+  end
+
+  test("the signs set most often are in one open section, each still in the section of its kind (#925)") do
+    viewport(1280, 800)
+    assert(section_open?("common"), "open at first")
+    assert_contains(text_of("[data-section=\"common\"] h3"), "Most used")
+    # The same commands as in the folded sections, which keep theirs.
+    homes = {
+      "tie": "ties-and-lines",
+      "slur": "ties-and-lines",
+      "art": "articulations",
+      "tuplet": "tuplets",
+      "dynamic": "dynamics",
+      "lyrics": "words",
+      "chord": "words",
+      "add-bar": "bars-and-staves"
+    }
+    for act in homes.keys
+      here = "document.querySelectorAll('[data-section=common] [data-act='"
+      + " + JSON.stringify('#{act}') + ']').length"
+      assert(evaluate(here) > 0, "#{act} among the most used")
+      there = "document.querySelectorAll('[data-section=' + JSON.stringify('#{homes[act]}') + '] [data-act='"
+      + " + JSON.stringify('#{act}') + ']').length"
+      assert(evaluate(there) > 0, "#{act} still under #{homes[act]}")
+    end
+    assert_not(section_open?("articulations"), "the sections of their kind stay folded")
+    # They do what the others do: a staccato, then forte, on the selected note.
+    type_source("{ \\time 4/4 c'4 d'4 e'4 f'4 | g'1 }")
+    caret_on("d'4")
+    click("[data-section=\"common\"] [data-act=\"art\"][data-name=\"staccato\"]")
+    sleep(0.3)
+    assert_contains(playground_text(), "d'4-.")
+    click("[data-section=\"common\"] [data-act=\"dynamic\"][data-name=\"f\"]")
+    sleep(0.3)
+    assert_contains(playground_text(), "\\f")
+    assert_no_page_errors()
+  end
+
+  test("what was said steps aside after a while; a refusal stays (#925)") do
+    old = "document.querySelector('[data-status]').classList.contains('studio-status-old')"
+    shown = "getComputedStyle(document.querySelector('[data-status]')).display"
+    type_source("{ \\time 4/4 c'4 d'4 e'4 f'4 | g'1 }")
+    caret_on("d'4")
+    # Copy says what it copied: there, then out of sight, its words kept.
+    evaluate("document.querySelector('.studio-dropdown-items [data-act=copy]').click()")
+    sleep(0.3)
+    said = text_of("[data-status]")
+    assert(said.length > 0, "something is said")
+    assert_eq(evaluate(old), false)
+    sleep(8.5)
+    assert_eq(evaluate(old), true)
+    assert_eq(evaluate(shown), "none")
+    assert_eq(text_of("[data-status]"), said)
+    # Said again: back in sight.
+    evaluate("document.querySelector('.studio-dropdown-items [data-act=copy]').click()")
+    sleep(0.3)
+    assert_eq(evaluate(old), false)
     assert_no_page_errors()
   end
 

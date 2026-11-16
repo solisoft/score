@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { sectionOpen, neededSection, OPEN_AT_FIRST } from "../../public/eui-score/studio-toolbox.js";
 
 test("with nothing kept, Mode, Duration, Notes and Pitch are open, the rest folded", () => {
-  assert.deepEqual([...OPEN_AT_FIRST], ["mode", "duration", "notes", "pitch"]);
+  assert.deepEqual([...OPEN_AT_FIRST], ["mode", "duration", "notes", "common", "pitch"]);
   for (const name of OPEN_AT_FIRST) assert.equal(sectionOpen(name, {}), true, name);
   for (const name of ["articulations", "ornaments", "bars-and-staves", "from-bar"]) assert.equal(sectionOpen(name, {}), false, name);
 });

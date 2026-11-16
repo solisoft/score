@@ -389,6 +389,29 @@
         <label class="tool-check"><input type="checkbox" data-hear checked> <%= t("app.editor.hear_the_notes") %></label>
       </details>
 
+      <%# The signs set most often, from the sections folded below (#925): the
+          same commands, each still in the section of its kind. %>
+      <details class="tool-section" data-section="common" open>
+        <summary><h3><%= t("app.editor.most_used") %></h3></summary>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="tie" title="<%= t("app.editor.tie_to_the_next_note_t") %>"><%= t("app.editor.tie_button") %></button>
+          <button type="button" class="tool tool-wide" data-act="slur" title="<%= t("app.editor.slur_the_selected_notes_s") %>"><%= t("app.editor.slur_button") %></button>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool" data-act="art" data-name="staccato" title="Staccato">·</button>
+          <button type="button" class="tool" data-act="art" data-name="accent" title="Accent">&gt;</button>
+          <button type="button" class="tool" data-act="tuplet" data-n="3" title="<%= t("app.editor.triplet_ctrl_plus_3") %>">3</button>
+          <button type="button" class="tool tool-dyn" data-act="dynamic" data-name="p" title="piano" aria-label="piano">p</button>
+          <button type="button" class="tool tool-dyn" data-act="dynamic" data-name="mf" title="mezzo-forte" aria-label="mezzo-forte">mf</button>
+          <button type="button" class="tool tool-dyn" data-act="dynamic" data-name="f" title="forte" aria-label="forte">f</button>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="lyrics" title="<%= t("app.editor.lyrics_under_the_notes_ctrl_plus_l") %>"><%= t("app.editor.lyrics") %></button>
+          <button type="button" class="tool tool-wide" data-act="chord" title="<%= t("app.editor.a_chord_symbol_above_ctrl_plus_k") %>"><%= t("app.editor.chord_symbol") %></button>
+          <button type="button" class="tool tool-wide" data-act="add-bar" title="<%= t("app.editor.a_bar_at_the_end") %>"><%= t("app.editor.plus_bar") %></button>
+        </div>
+      </details>
+
       <details class="tool-section" data-section="pitch" open>
         <summary><h3><%= t("app.editor.pitch") %></h3></summary>
         <p class="tool-sub"><%= t("app.editor.move") %></p>

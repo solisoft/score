@@ -598,7 +598,8 @@ export function install(ctx) {
         add(item, name, key, group);
       }
     }
-    for (const section of root.querySelectorAll(".studio-toolbox .tool-section")) {
+    // Most used (#925) holds copies of the others' commands: each is listed in the section of its kind.
+    for (const section of root.querySelectorAll('.studio-toolbox .tool-section:not([data-section="common"])')) {
       const group = section.querySelector("summary").textContent.trim();
       for (const tool of section.querySelectorAll("button[data-act]")) {
         const title = tool.title || tool.dataset.tip || "";
