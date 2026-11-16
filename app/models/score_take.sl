@@ -199,13 +199,13 @@ class ScoreTake < Model
   # the score it is of, and the account that score is of — could never be
   # erased (#925). Any other refusal of the store is raised.
   def remove
-    @detach_audio unless @audio_blob_id.nil?
     try
+      @detach_audio unless @audio_blob_id.nil?
       @delete
     catch error
       throw error unless str(error).contains("404")
 
-      # Deleting the take asked the store for that sound again: it has none to take away.
+      # Detaching the sound, or deleting the take, asked the store for it: it has none to take away.
       @audio_blob_id = nil
       @save
       @delete

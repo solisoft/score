@@ -89,6 +89,13 @@ def sign_up_in_browser(email)
   journey_wait_for_mailed_link(email)
   token = User.find_by("email", email).start_email_confirmation
   visit("/confirm_email?token=#{token}")
+  # The sign-up's mail is written by a job, which makes the account a link of
+  # its own: come after this one, it leaves this one refused. Made again then.
+  sleep(0.5)
+  unless page_text().contains("Your email address is confirmed")
+    again = User.find_by("email", email).start_email_confirmation
+    visit("/confirm_email?token=#{again}")
+  end
   wait_for_text("Your email address is confirmed")
   login(email, JOURNEY_PASSWORD)
   visit("/app")
