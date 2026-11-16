@@ -427,7 +427,13 @@ describe("The playground, in a browser") do
     assert_eq(palette_side(), "above")
     assert_eq(evaluate(covered), 0, "the palette covers none of the tempo")
     assert(evaluate(over_note), "and still stands over its note, near it")
-    # No title, a low note: nowhere clear to go, so it stays over its note, as before.
+    # No title: no room over the tempo. Under the note then, the tempo in sight (#926).
+    type_source("{ \\time 4/4 \\tempo \"Allegro assai\" 4 = 116 fis''4 fis''4 g''4 a''4 | a''1 }")
+    caret_on("fis''4")
+    sleep(0.3)
+    assert_eq(palette_side(), "below")
+    assert_eq(evaluate(covered), 0, "under the note, it covers nothing")
+    # No tempo, a low note under higher ones: over its note, as it always stood.
     type_source("{ \\time 4/4 c'4 d'4 e'4 f'4 | g'1 }")
     caret_on("c'4")
     sleep(0.3)
@@ -820,6 +826,107 @@ describe("The playground, in a browser") do
     evaluate("document.querySelector('.studio-dropdown-items [data-act=copy]').click()")
     sleep(0.3)
     assert_eq(evaluate(old), false)
+    assert_no_page_errors()
+  end
+
+  test("the sections with nothing to act on step back, and come forward with a note (#926)") do
+    idle = "[...document.querySelectorAll('.tool-section-idle')].map((it) => it.dataset.section)"
+    type_source("{ \\time 4/4 c'4 r4 e'4 f'4 | g'1 }")
+    # Nothing selected: what acts on a note steps back; what writes, and the staves' own, do not.
+    evaluate("(() => { const st = document.getElementById('studio').studio; st.sel = null;"
+    + " document.querySelector('[data-act=zoom-in]').click(); })()")
+    sleep(0.3)
+    stepped = evaluate(idle)
+    for name in ["common", "pitch", "articulations", "dynamics", "words", "fingering"]
+      assert(stepped.includes?(name), "#{name} steps back with nothing selected")
+    end
+    for name in ["mode", "duration", "notes", "bars-and-staves", "voices", "this-staff"]
+      assert_not(stepped.includes?(name), "#{name} stays forward")
+    end
+    faded = "getComputedStyle(document.querySelector('[data-section=pitch] .tool-row')).opacity"
+    assert_eq(evaluate(faded), "0.45")
+    # A note: every section forward.
+    caret_on("c'4")
+    assert_eq(evaluate(idle), [])
+    assert_eq(evaluate(faded), "1")
+    # A rest: what changes a pitch or a note's drawing steps back; a dynamic, a tuplet, words do not.
+    caret_on("r4")
+    assert_contains(text_of("[data-state]"), "Rest")
+    assert_eq(evaluate(idle), [
+      "pitch",
+      "articulations",
+      "ties-and-lines",
+      "grace-notes",
+      "ornaments",
+      "stems-and-beams",
+      "fingering"
+    ])
+    # Stepped back, a tool still works once it has a note.
+    caret_on("e'4")
+    click("[data-section=\"pitch\"] [data-act=\"alter\"][data-alter=\"1\"]")
+    sleep(0.3)
+    assert_contains(playground_text(), "eis'4")
+    # Note input: nothing steps back.
+    click(".studio-toolbox [data-act=\"mode-input\"]")
+    sleep(0.3)
+    assert_eq(evaluate(idle), [])
+    assert_no_page_errors()
+  end
+
+  test("Edit names its groups, as Insert does, and fits the window (#926)") do
+    viewport(1280, 800)
+    edit = "[...document.querySelectorAll('.studio-menus > details')]"
+    + ".find((menu) => menu.querySelector('summary').textContent === 'Edit')"
+    heads = evaluate("[..." + edit
+    + ".querySelectorAll('.studio-dropdown-head')].map((head) => head.textContent)")
+    assert_eq(heads, [
+      "Undo",
+      "Mode",
+      "Copy and paste",
+      "Bars",
+      "Lines and pages",
+      "Pitch",
+      "Arrange"
+    ])
+    assert_eq(evaluate(edit + ".querySelectorAll('hr').length"), 0)
+    evaluate(edit + ".open = true")
+    sleep(0.2)
+    fits = "(() => { const items = " + edit + ".querySelector('.studio-dropdown-items');"
+    + " const box = items.getBoundingClientRect();"
+    + " return items.scrollHeight <= items.clientHeight + 1 && box.bottom <= innerHeight"
+    + " && [...items.querySelectorAll('[role=menuitem]')].every((item) =>"
+    + " item.getBoundingClientRect().right <= box.right + 1); })()"
+    assert(evaluate(fits), "Edit fits a 1280 × 800 window")
+    assert_no_page_errors()
+  end
+
+  test("on a phone, the bar is two rows and the first gestures are over the score (#926)") do
+    evaluate("localStorage.removeItem('eui-score-studio-welcomed')")
+    viewport(390, 844)
+    visit("/playground")
+    sleep(0.6)
+    # The menus on one row, Undo, Play, the zoom and Rec on the next: none cut off.
+    assert(evaluate("document.querySelector('.studio-menubar').getBoundingClientRect().height") < 100, "two rows")
+    cut = "[...document.querySelectorAll('.studio-menubar > button, .studio-menus > details > summary,"
+    + " .studio-menu-group button')].filter((it) => it.getClientRects().length"
+    + " && it.getBoundingClientRect().right > innerWidth + 1).length"
+    assert_eq(evaluate(cut), 0)
+    for act in ["tools", "find", "undo", "redo", "play", "record", "zoom-in", "zoom-out"]
+      seen = "[...document.querySelectorAll('.studio-menubar [data-act=' + JSON.stringify('#{act}') + ']')]"
+      + ".some((it) => it.getClientRects().length > 0)"
+      assert(evaluate(seen), "#{act} in the bar")
+    end
+    # The library of sections left the bar for the Edit menu, where it already was.
+    assert_eq(evaluate("document.querySelector('[data-sections-button]').getClientRects().length"), 0)
+    assert(evaluate("Boolean(document.querySelector('.studio-dropdown-items [data-act=section-library]'))"))
+    # The first gestures: over the score, in sight without scrolling.
+    over = "(() => { const card = document.querySelector('[data-welcome]').getBoundingClientRect();"
+    + " const sheet = document.querySelector('[data-sheet]').getBoundingClientRect();"
+    + " return card.bottom <= sheet.top && card.top >= 0 && card.top < innerHeight / 2; })()"
+    assert_eq(evaluate("document.querySelector('[data-welcome]').hidden"), false)
+    assert(evaluate(over), "over the score, in sight")
+    click("[data-welcome] .tool")
+    assert_eq(evaluate("document.querySelector('[data-welcome]').hidden"), true)
     assert_no_page_errors()
   end
 

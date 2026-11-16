@@ -4322,6 +4322,9 @@
   .tool-section:last-child {
     border-bottom: 0;
   }
+  .tool-section-idle > summary h3, .tool-section-idle > :not(summary) {
+    opacity: .45;
+  }
   .tool-section h3 {
     font: 600 13px/1.2 var(--font-sans);
     color: var(--ink-soft);
@@ -6351,6 +6354,35 @@
     }
     .studio-hint {
       display: none;
+    }
+    .studio-menubar {
+      gap: 2px 4px;
+    }
+    .studio-menus {
+      gap: 0;
+    }
+    .studio-menus .studio-menu {
+      padding: 7px 6px;
+    }
+    .studio-tools-toggle {
+      padding: 7px 8px;
+    }
+    .studio-menu-group {
+      gap: 2px;
+    }
+    .studio-menu-group [data-sections-button], .studio-menu-group [data-zoom-label] {
+      display: none;
+    }
+    .studio-zoom {
+      margin-left: 0;
+    }
+    .studio-canvas {
+      display: flex;
+      flex-direction: column;
+    }
+    .studio-welcome {
+      order: -1;
+      margin: 0 0 10px;
     }
     .studio-tools-toggle {
       border-color: var(--line-strong);

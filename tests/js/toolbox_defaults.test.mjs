@@ -5,7 +5,7 @@
 //   node --test tests/js/*.test.mjs
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { sectionOpen, neededSection, OPEN_AT_FIRST } from "../../public/eui-score/studio-toolbox.js";
+import { sectionOpen, neededSection, idleSections, OPEN_AT_FIRST } from "../../public/eui-score/studio-toolbox.js";
 
 test("with nothing kept, Mode, Duration, Notes and Pitch are open, the rest folded", () => {
   assert.deepEqual([...OPEN_AT_FIRST], ["mode", "duration", "notes", "common", "pitch"]);
@@ -29,4 +29,14 @@ test("bars selected need Bars & staves; a line of chord names, Words; a note, no
   assert.equal(neededSection(score, { staff: 0, t0: 0, t1: 0 }), null);
   assert.equal(neededSection(score, null), null);
   assert.equal(neededSection(null, { staff: 0 }), null);
+});
+
+test("the sections that step back for what is selected (#926)", () => {
+  const none = idleSections("none");
+  for (const name of ["common", "pitch", "articulations", "dynamics", "words", "repeats"]) assert.ok(none.includes(name), name);
+  for (const name of ["mode", "duration", "notes", "bars-and-staves", "voices", "this-staff", "from-bar"]) assert.ok(!none.includes(name), name);
+  const rest = idleSections("rest");
+  assert.deepEqual(rest, ["pitch", "articulations", "ties-and-lines", "grace-notes", "ornaments", "stems-and-beams", "fingering"]);
+  for (const name of ["dynamics", "tuplets", "words", "common"]) assert.ok(!rest.includes(name), name);
+  assert.deepEqual(idleSections("any"), []);
 });

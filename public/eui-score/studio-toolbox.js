@@ -26,6 +26,21 @@ export function neededSection(score, sel) {
   return sel.bars ? "bars-and-staves" : null;
 }
 
+// The sections whose tools act on a note: with none selected they have
+// nothing to act on; on a rest, those that change a note's pitch or its
+// drawing have none either.
+const NOTE_SECTIONS = ["common", "pitch", "articulations", "dynamics", "ties-and-lines", "words", "tuplets", "grace-notes", "ornaments", "stems-and-beams", "fingering", "repeats"];
+const PITCHED_SECTIONS = ["pitch", "articulations", "ties-and-lines", "grace-notes", "ornaments", "stems-and-beams", "fingering"];
+
+/**
+ * The sections that step back for what is selected (#926): `kind` is
+ * "none" (nothing selected, out of note input), "rest" (one rest), or
+ * anything else — a note, several, bars, note input — for which none does.
+ */
+export function idleSections(kind) {
+  return kind === "none" ? NOTE_SECTIONS : kind === "rest" ? PITCHED_SECTIONS : [];
+}
+
 /** A note value's name, in the page's language: "quarter", "eighth"… */
 function valueWord(base) {
   return { 1: tr("whole"), 2: tr("half"), 4: tr("quarter"), 8: tr("eighth"), 16: tr("16th"), 32: tr("32nd") }[base];
@@ -423,6 +438,12 @@ export function install(ctx) {
     for (const tool of root.querySelectorAll(".studio-toolbox .tool, .studio-toolbox input, .studio-toolbox select")) tool.disabled = !st.score;
     fillFields();
     showHint();
+    // The sections with nothing to act on step back (#926).
+    const picked = !st.score || st.input.on || st.playing ? null : range();
+    const lone = picked && picked.a === picked.b && !st.sel?.bars ? picked.staff.events[picked.a] : null;
+    const kind = !st.score || st.input.on || st.playing ? "any" : !picked ? "none" : lone?.rest ? "rest" : "any";
+    const idle = idleSections(kind);
+    for (const section of sections) section.classList.toggle("tool-section-idle", idle.includes(section.dataset.section));
     // What is selected, in words.
     const value = `${valueWord(st.input.base)}${st.input.dots ? `,${M.dotsWord(st.input.dots)}` : ""}`;
     if (st.playing) showProgress();

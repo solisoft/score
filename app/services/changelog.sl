@@ -13,6 +13,14 @@ class Changelog
       {"date": "2026-11-16", "entries": [
         {
           "area": "site",
+          "title": "The tools that apply come forward; a shorter bar on a phone",
+          "text": "In the score editor, the sections of tools that have nothing to act on — no note selected, or "
+          + "a rest — are paler, and come forward with a note. The Edit menu names its groups, as Insert does. On a "
+          + "phone, the bar over the score is two rows, and the first gestures show over the score. Where there "
+          + "is no room over a tempo, the note's palette opens under the note."
+        },
+        {
+          "area": "site",
           "title": "The signs set most often, in one place",
           "text": "In the score editor's tools, a Most used section, open under the notes, holds the signs set "
           + "most often: tie and slur, staccato, accent, triplet, piano, mezzo-forte and forte, lyrics, a chord "

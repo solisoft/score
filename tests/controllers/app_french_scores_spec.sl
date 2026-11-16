@@ -152,4 +152,71 @@ describe("The library in French") do
       ">Restore this version</button>"
     )
   end
+
+  test("the editor's bar, menus, tools and first gestures are in French with the cookie, in English without (#926)") do
+    owner = french_scores_user()
+    score = Score.start(owner, Score.blank_source("Éditée"))
+    french_scores_sign_in(owner)
+    set_request_cookie("locale", "fr")
+    french = get("/app/scores/#{score._key}")
+    assert_eq(res_status(french), 200)
+    body = res_body(french)
+    # The bar: Find a command (#919), and the Format menu (#920).
+    assert_contains(body, "aria-label=\"Chercher une commande\"")
+    assert_contains(body, "title=\"Chercher une commande par son nom (/)\"")
+    assert_contains(body, "placeholder=\"Que voulez-vous faire ?\"")
+    assert_contains(body, "Rien à ce nom.")
+    assert_contains(body, "<summary class=\"studio-menu\">Format</summary>")
+    # The menus' groups (#920, #926).
+    for head in ["Portées, voix", "Annuler", "Copier et coller", "Lignes et pages", "Arranger", "Mesures"]
+      assert_contains(body, "role=\"presentation\">#{head}</div>")
+    end
+    # The tools: the signs set most often (#925).
+    assert_contains(body, "<summary><h3>Courant</h3></summary>")
+    # The first gestures (#922), and the way back to them.
+    assert_contains(body, "id=\"studio-welcome-title\">Trois gestes pour commencer</h2>")
+    assert_contains(body, "<strong>Cliquez sur une note</strong> pour la sélectionner.")
+    assert_contains(body, "<strong>Appuyez sur N</strong>")
+    assert_contains(body, "<strong>Appuyez sur Espace</strong> pour écouter")
+    assert_contains(body, ">Compris</button>")
+    assert_contains(body, "data-act=\"welcome\">Premiers gestes</button>")
+    # What the editor says itself, from its words (#508): the hints under the score (#918), the / key (#919).
+    words = EditorWords.of("fr")
+    assert_eq(words["Space plays · ? shows every key"], "Espace joue · ? montre toutes les touches")
+    assert_contains(
+      words["↑ ↓ move it · 2–7 change its length · Delete makes a rest · N writes notes"],
+      "↑ ↓ la déplacent"
+    )
+    assert_contains(
+      words["↑ ↓ move them · Ctrl+C copies them · Delete makes rests · Esc lets go"],
+      "↑ ↓ les déplacent"
+    )
+    assert_eq(words["find a command by its name"], "chercher une commande par son nom")
+    assert_contains(body, "Espace joue · ? montre toutes les touches")
+    # No key left untranslated, no English beside the French.
+    for english in [
+      "Find a command",
+      "What do you want to do?",
+      "Three gestures to start",
+      "Got it",
+      "Most used",
+      "Getting started",
+      "Copy and paste",
+      "Lines and pages"
+    ]
+      assert_not(body.contains(english), "no “#{english}” in the French editor")
+    end
+    assert_not(body.contains("app.editor."), "no key shown for want of its words")
+    # Without the cookie, for an account that never chose French: English.
+    clear_cookies()
+    other = french_scores_user()
+    plain = Score.start(other, Score.blank_source("Edited"))
+    french_scores_sign_in(other)
+    english_body = res_body(get("/app/scores/#{plain._key}"))
+    assert_contains(english_body, "aria-label=\"Find a command\"")
+    assert_contains(english_body, "<summary><h3>Most used</h3></summary>")
+    assert_contains(english_body, ">Three gestures to start</h2>")
+    assert_not(english_body.contains("Chercher une commande"))
+    assert_not(english_body.contains("app.editor."))
+  end
 end

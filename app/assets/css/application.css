@@ -783,6 +783,9 @@
   .studio-toolbox { background: var(--sheet); border-bottom: 1px solid var(--line); padding: 10px 12px 18px; overflow-y: auto; }
   .tool-section { padding: 10px 0; border-bottom: 1px solid var(--line); }
   .tool-section:last-child { border-bottom: 0; }
+  /* A section whose tools have nothing to act on — no note selected, or a
+     rest — steps back (#926): still there, still usable once it has. */
+  .tool-section-idle > summary h3, .tool-section-idle > :not(summary) { opacity: .45; }
   .tool-section h3 { font: 600 13px/1.2 var(--font-sans); color: var(--ink-soft); margin: 0; }
   /* Mode and Duration, in sight as the toolbox scrolls. */
   .tool-sticky { position: sticky; top: -10px; z-index: 2; margin-top: -10px; padding-top: 10px; background: var(--sheet); border-bottom: 1px solid var(--line); }
@@ -1280,6 +1283,20 @@
     .studio-strip .studio-statusbar { bottom: var(--studio-strip-h, 140px); }
     /* The keys to press say nothing to a finger: what is selected, alone (#924). */
     .studio-hint { display: none; }
+    /* The bar in two rows, not four (#926): the menus' names closer together,
+       and off the second row what is elsewhere — the library of sections is in
+       Edit, and the zoom's figure is the size one sees. Both rows still wrap
+       where they hold more (the app's MIDI and AI): nothing is cut off. */
+    .studio-menubar { gap: 2px 4px; }
+    .studio-menus { gap: 0; }
+    .studio-menus .studio-menu { padding: 7px 6px; }
+    .studio-tools-toggle { padding: 7px 8px; }
+    .studio-menu-group { gap: 2px; }
+    .studio-menu-group [data-sections-button], .studio-menu-group [data-zoom-label] { display: none; }
+    .studio-zoom { margin-left: 0; }
+    /* The first gestures over the score, where a first visit looks (#926). */
+    .studio-canvas { display: flex; flex-direction: column; }
+    .studio-welcome { order: -1; margin: 0 0 10px; }
     .studio-tools-toggle { border-color: var(--line-strong); font-weight: 600; }
     /* The magnifying glass alone: the bar is short of room (#919). */
     .studio-find-button span { display: none; }

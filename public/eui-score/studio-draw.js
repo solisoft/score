@@ -221,46 +221,77 @@ export function install(ctx) {
     const right = sheet.scrollLeft + sheet.clientWidth - 4 - palette.offsetWidth;
     palette.style.left = `${Math.max(sheet.scrollLeft + 4, Math.min(corner.x - 10, right))}px`;
     palette.style.top = below ? `${corner.y + 10}px` : `${Math.max(4, corner.y - palette.offsetHeight - 8)}px`;
-    if (!below) clearInk(corner.x);
+    if (below || clearInk(corner.x, -1)) return;
+    // No clear place over the note, and a mark under the palette there — a
+    // tempo with no room over it (#926): under the note instead, past its
+    // own words, if that is clear of marks.
+    const kept = [palette.style.left, palette.style.top];
+    const under = g.at(item.box[0], Math.max(item.box[3], ...words.filter((b) => b[1] >= middle).map((b) => b[3])));
+    palette.style.top = `${under.y + 10}px`;
+    if (clearInk(under.x, 1)) palette.dataset.side = "below";
+    else [palette.style.left, palette.style.top] = kept;
   }
 
   // Above the note, the palette goes over what is engraved there that the
   // view does not report: a tempo, a rehearsal mark, the higher notes beside
   // it (#921). It is moved to the nearest place that covers none of that ink
   // — the staff's lines, the bar lines and the stems aside, which run under
-  // everything: lifted by up to LIFT, and slid to the left as far as it
-  // still stands over its note. Where no such place is (a note under the
-  // composer's name, at the end of a line), it stays as it was.
+  // everything: by up to LIFT away from the note (`way`: -1 up, 1 down), and
+  // slid to the left as far as it still stands over its note.
+  //
+  // Answers whether it now stands clear of every mark — a tempo, a word, a
+  // dynamic: ink that is no note of the score. Where no clear place is, it
+  // stays as it was, and over notes alone that is as it always stood.
   const LIFT = 48;
-  function clearInk(noteX) {
+  function clearInk(noteX, way) {
     const marks = svgHost.querySelectorAll("svg > use, svg > path, svg > rect, svg > g > *");
-    if (!marks.length || marks.length > 6000) return; // a very long score: not worth the measuring
+    if (!marks.length || marks.length > 6000) return true; // a very long score: not worth the measuring
     const start = palette.getBoundingClientRect();
     const bounds = sheet.getBoundingClientRect();
     // Slid left, it keeps its note under it: by no more than its width past the note's head.
     const note = start.left + noteX - palette.offsetLeft;
     const reach = Math.max(0, Math.min(start.right - note - 32, start.left - bounds.left - 4));
+    const g = geometry();
+    const notes = (st.view?.items ?? []).map((it) => {
+      const a = g.at(it.box[0], it.box[1]);
+      const b = g.at(it.box[2], it.box[3]);
+      return { left: a.x + start.left - palette.offsetLeft - 14, top: a.y + start.top - palette.offsetTop - 2, right: b.x + start.left - palette.offsetLeft + 2, bottom: b.y + start.top - palette.offsetTop + 2 };
+    });
+    // Each staff of each system, a space past its lines, in the window's pixels.
+    const space = 8 * st.zoom;
+    const tops = [...new Set((st.view?.bars ?? []).flatMap((bar) => bar.staves ?? []))];
+    const staves = tops.map((top) => [g.at(0, top - space).y + start.top - palette.offsetTop, g.at(0, top + 5 * space).y + start.top - palette.offsetTop]);
     const ink = [];
     for (const mark of marks) {
       const box = mark.getBoundingClientRect();
-      if (box.right < start.left - reach || box.left > start.right || box.bottom > start.bottom || box.bottom < start.top - LIFT) continue;
-      // Lines: a staff's (long and thin), a bar's or a stem's (thin and tall).
-      if ((box.height < 3 && box.width > 40) || (box.width < 3 && box.height > 12)) continue;
-      if (box.width > 0 && box.height > 0) ink.push(box);
+      if (box.right < start.left - reach || box.left > start.right) continue;
+      if (way < 0 ? box.bottom > start.bottom || box.bottom < start.top - LIFT : box.top < start.top || box.top > start.bottom + LIFT) continue;
+      // Lines: a staff's and a ledger's (thin), a bar's or a stem's (thin and tall).
+      if (box.height < 3 || (box.width < 3 && box.height > 12)) continue;
+      if (!(box.width > 0 && box.height > 0)) continue;
+      // A mark is ink that is in no note's box, and whose middle is on no
+      // staff: a clef, a time signature and a thick bar line are on one.
+      const inNote = notes.some((n) => box.left >= n.left && box.right <= n.right && box.top >= n.top && box.bottom <= n.bottom);
+      const middleY = (box.top + box.bottom) / 2;
+      const onStaff = staves.some(([top, bottom]) => middleY >= top && middleY <= bottom);
+      ink.push({ box, mark: !inNote && !onStaff });
     }
-    const covers = (dx, dy) => ink.some((box) => box.right > start.left - dx - 4 && box.left < start.right - dx + 4 && box.bottom > start.top - dy - 4 && box.top < start.bottom - dy + 4);
-    if (!covers(0, 0)) return;
+    const hits = (dx, dy, marksOnly) => ink.some(({ box, mark }) => (!marksOnly || mark)
+      && box.right > start.left - dx - 4 && box.left < start.right - dx + 4 && box.bottom > start.top + way * dy - 4 && box.top < start.bottom + way * dy + 4);
+    if (!hits(0, 0, false)) return true;
+    const room = way < 0 ? palette.offsetTop - 4 : sheet.scrollHeight - palette.offsetTop - palette.offsetHeight - 4;
     let best = null;
-    for (let dy = 0; dy <= Math.min(LIFT, palette.offsetTop - 4); dy += 4) {
+    for (let dy = 0; dy <= Math.min(LIFT, room); dy += 4) {
       for (let dx = 0; dx <= reach; dx += 8) {
         const cost = dy + dx / 2;
         if (best && cost >= best.cost) break;
-        if (!covers(dx, dy)) best = { dx, dy, cost };
+        if (!hits(dx, dy, false)) best = { dx, dy, cost };
       }
     }
-    if (!best) return;
+    if (!best) return !hits(0, 0, true);
     palette.style.left = `${palette.offsetLeft - best.dx}px`;
-    palette.style.top = `${palette.offsetTop - best.dy}px`;
+    palette.style.top = `${palette.offsetTop + way * best.dy}px`;
+    return true;
   }
 
   function placeOverlay() {
