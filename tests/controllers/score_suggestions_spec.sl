@@ -115,7 +115,9 @@ describe("AppScoreSuggestionsController") do
     assert_eq(stored.original, "{ a'2 b' }")
     assert_eq(stored.user_id, user._key)
     assert_eq(Score.find(score._key).source, SUGGEST_SOURCE)
-    assert_eq(res_json(get("/app/suggestions/#{stored._key}")), {"state": "working"})
+    asked_after = res_json(get("/app/suggestions/#{stored._key}"))
+    assert_eq(asked_after["state"], "working")
+    assert_eq(asked_after["phase"], "waiting")
     # Without text from the editor, the score as saved.
     saved = ask_assistant(score, {"action": "chords"})
     assert_eq(ScoreSuggestion.find(res_json(saved)["id"]).original, SUGGEST_SOURCE)
@@ -236,6 +238,35 @@ describe("AppScoreSuggestionsController") do
       res_json(get("/app/suggestions/#{failed._key}")),
       {"state": "failed", "error": "Mistral is busy. Try again in a moment."}
     )
+  end
+
+  test("while working, tells the phase, the time and the reasoning, and the score written so far, engraved") do
+    user = suggest_user()
+    working = ScoreSuggestion.create({
+      "user_id": user._key,
+      "score_id": "s",
+      "action": "ask",
+      "state": "working",
+      "created_at": DateTime.utc.to_unix - 75
+    })
+    waiting = res_json(get("/app/suggestions/#{working._key}"))
+    assert_eq(waiting["state"], "working")
+    assert_eq(waiting["phase"], "waiting")
+    assert_eq(waiting["thought"], 0)
+    assert_gt(waiting["seconds"], 74)
+    assert_null(waiting["draft_svg"])
+
+    working.progressed("thinking", "", 4200)
+    thinking = res_json(get("/app/suggestions/#{working._key}"))
+    assert_eq(thinking["phase"], "thinking")
+    assert_eq(thinking["thought"], 4200)
+    assert_null(thinking["draft_svg"], "nothing written yet")
+
+    working.progressed("writing", "A fugue in C.\n\n```lilypond\n\\relative c' { c4 d e f | g a b", 4200)
+    writing = res_json(get("/app/suggestions/#{working._key}"))
+    assert_eq(writing["phase"], "writing")
+    assert_contains(writing["draft_svg"], "<svg")
+    assert_null(writing["source"], "not an answer yet")
   end
 
   test("keeps a score and its suggestions to their owner") do

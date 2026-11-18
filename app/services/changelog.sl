@@ -10,6 +10,16 @@
 class Changelog
   static def days
     [
+      {"date": "2026-11-18", "entries": [{
+        "area": "site",
+        "app": true,
+        "title": "Ask the AI: see how it goes, and the score as it is written",
+        "text": "In the score editor, the AI's dialog stopped waiting after a few seconds whenever it showed the "
+        + "questions left today, so an answer never came. It now waits as long as the AI works, and says how it "
+        + "goes: waiting, thinking (with how far its reasoning has gone), then writing, the bars written so far "
+        + "drawn as they come. A long request, such as a whole fugue, is no longer cut off while the AI still "
+        + "answers."
+      }]},
       {"date": "2026-11-16", "entries": [
         {
           "area": "site",

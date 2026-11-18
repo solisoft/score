@@ -43,13 +43,17 @@ class AppScoreSuggestionsController < AppBaseController
     )
   end
 
-  # GET /app/suggestions/:id — {state}, with `source`, its `svg` and the
-  # `explanation` once done, or `error` once failed
+  # GET /app/suggestions/:id — {state}: while working, its `phase`, `thought`,
+  # `seconds` and the score written so far engraved (`draft_svg`, #973); once
+  # done, `source`, its `svg` and the `explanation`; once failed, `error`
   def show
     suggestion = ScoreSuggestion.find(params["id"])
     halt(404, "No such suggestion") unless suggestion.owned_by?(current_user())
 
-    return render_json({"state": "working"}) if suggestion.state == "working"
+    if suggestion.state == "working"
+      return render_json({"state": "working", "draft_svg": suggestion.draft_svg}.merge(suggestion.news))
+    end
+
     if suggestion.state == "failed"
       return render_json({"state": "failed", "error": suggestion.error})
     end

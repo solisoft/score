@@ -36,7 +36,9 @@
     <p class="muted studio-parts-note" data-ai-about></p>
     <textarea class="studio-ai-request" data-ai-request rows="3" maxlength="<%= ai_request_limit %>"></textarea>
     <p class="muted studio-parts-note" data-ai-with><%= ai_with %><% unless ai_left.nil? %> <span data-ai-left><%= ai_left %></span> <%= t("app.editor.questions_left_today") %><% end %><% if ai_link %> <a href="<%= ai_link["href"] %>"><%= ai_link["text"] %></a><% end %></p>
-    <p class="studio-parts-note" data-ai-status hidden></p>
+    <p class="studio-parts-note" data-ai-status aria-live="polite" hidden></p>
+    <%# The score as the AI writes it, engraved as it comes (#973). %>
+    <div class="studio-parts-preview studio-ai-draft" data-ai-draft hidden></div>
     <p class="form-error" data-ai-error hidden></p>
     <div class="studio-ai-result" data-ai-result hidden>
       <div class="studio-ai-explanation" data-ai-explanation></div>
@@ -749,11 +751,18 @@ ${problem.linkText}?`)) location.href = problem.link;
   };
   let aiAction = "chords";
   let aiAnswer = null;
+  // Each question asked is a run: Ask again, or a new question, leaves the
+  // one before to itself (it stops asking after it, #973).
+  let aiRun = 0;
+  let aiTick = 0;
   // No usable AI key (#396): the dialog says why and links the way to one; nothing is sent.
   const aiRefused = ai.hasAttribute("data-ai-refused");
   const aiReset = () => {
     aiAnswer = null;
-    for (const name of ["status", "error", "result", "apply", "again"]) aiPart(name).hidden = true;
+    aiRun++;
+    clearInterval(aiTick);
+    for (const name of ["status", "draft", "error", "result", "apply", "again"]) aiPart(name).hidden = true;
+    aiPart("draft").innerHTML = "";
     aiPart("send").hidden = false;
     aiPart("send").disabled = aiRefused;
     aiPart("request").disabled = aiRefused;
@@ -771,13 +780,33 @@ ${problem.linkText}?`)) location.href = problem.link;
     if (!aiRefused) aiPart("request").focus();
   }));
   aiPart("close").addEventListener("click", () => ai.close());
+  // How the question goes, as photo readings say it (#435): waiting for the
+  // AI, thinking (with how far its reasoning has gone), writing.
+  const aiSays = (news, seconds) => {
+    const time = took(seconds);
+    const thought = Number(news?.thought) || 0;
+    if (news?.phase === "writing") return say("ai_writing", { time });
+    if (news?.phase === "thinking" && thought > 0) {
+      const chars = thought.toLocaleString(globalThis.EUI_WORDS_LOCALE || "en");
+      return say(thought === 1 ? "ai_thought_one" : "ai_thought_other", { time, chars });
+    }
+    if (news?.phase === "thinking") return say("ai_thinking", { time });
+    return say("ai_waiting", { time });
+  };
+  // How long it has taken, as people read it: "45 s", "3 min 20 s" (score-photo.js's took).
+  const took = (seconds) => {
+    const s = Math.max(0, Math.round(Number(seconds) || 0));
+    return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")} s`;
+  };
   aiPart("again").addEventListener("click", aiReset);
   aiPart("form").addEventListener("submit", async (event) => {
     event.preventDefault();
     if (aiRefused) return;
     // `link`: the page that lifts a refusal (the account, for a key: #396).
     const fail = (message, link, linkText) => {
+      clearInterval(aiTick);
       aiPart("status").hidden = true;
+      aiPart("draft").hidden = true;
       aiPart("error").textContent = message;
       if (link) aiPart("error").append(" ", Object.assign(document.createElement("a"), { href: link, textContent: linkText || say("see_plans") }));
       aiPart("error").hidden = false;
@@ -789,6 +818,9 @@ ${problem.linkText}?`)) location.href = problem.link;
     aiPart("request").disabled = true;
     aiPart("status").textContent = say("ai_working");
     aiPart("status").hidden = false;
+    const run = ++aiRun;
+    // Still this question, on this page, in the open dialog.
+    const current = () => run === aiRun && ai.open && !left;
     try {
       const sent = await fetch(page.suggestions, {
         method: "POST",
@@ -797,14 +829,46 @@ ${problem.linkText}?`)) location.href = problem.link;
       });
       const started = await sent.json();
       if (sent.status !== 202) return fail(started.error, started.link, started.link_text);
-      const left = aiPart("left");
-      if (left) left.textContent = Math.max(0, Number(left.textContent) - 1);
-      // Five minutes, then the page stops waiting.
-      for (let tries = 0; tries < 100; tries++) {
+      // The day's questions left. (Not `left`: that one is whether the page
+      // was left, and shadowing it stopped the waiting after 3 s, #973.)
+      const leftToday = aiPart("left");
+      if (leftToday) leftToday.textContent = Math.max(0, Number(leftToday.textContent) - 1);
+      // The time goes on between two answers from the server.
+      let news = { phase: "waiting" };
+      let seconds = 0;
+      let heardAt = Date.now();
+      const tell = () => {
+        if (!current()) return clearInterval(aiTick);
+        aiPart("status").textContent = aiSays(news, seconds + (Date.now() - heardAt) / 1000);
+      };
+      clearInterval(aiTick);
+      aiTick = setInterval(tell, 1000);
+      tell();
+      // As long as the server says it is working: a question with no news
+      // for ten minutes is failed there (ScoreSuggestion.expire_stuck).
+      for (let tries = 0; tries < 1200; tries++) {
         await new Promise((done) => setTimeout(done, 3000));
-        if (!ai.open || left) return;
-        const answer = await (await fetch(page.suggestion.replace("ID", started.id), { headers: { Accept: "application/json" } })).json();
-        if (answer.state === "working") continue;
+        if (!current()) return;
+        let answer;
+        try {
+          answer = await (await fetch(page.suggestion.replace("ID", started.id), { headers: { Accept: "application/json" } })).json();
+        } catch (problem) {
+          continue;
+        }
+        if (!current()) return;
+        if (answer.state === "working") {
+          news = answer;
+          seconds = Number(answer.seconds) || 0;
+          heardAt = Date.now();
+          tell();
+          if (answer.draft_svg) {
+            aiPart("draft").innerHTML = answer.draft_svg;
+            aiPart("draft").hidden = false;
+          }
+          continue;
+        }
+        clearInterval(aiTick);
+        aiPart("draft").hidden = true;
         if (answer.state === "failed") return fail(answer.error);
         aiAnswer = answer;
         aiPart("status").hidden = true;
@@ -815,9 +879,9 @@ ${problem.linkText}?`)) location.href = problem.link;
         aiPart("apply").hidden = aiPart("again").hidden = false;
         return;
       }
-      fail(say("ai_timeout"));
+      if (current()) fail(say("ai_timeout"));
     } catch (problem) {
-      fail(say("ai_not_sent"));
+      if (run === aiRun) fail(say("ai_not_sent"));
     }
   });
   aiPart("apply").addEventListener("click", async () => {

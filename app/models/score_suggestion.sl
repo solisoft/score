@@ -78,12 +78,14 @@ class ScoreSuggestion < Model
     ).count
   end
 
-  # The suggestions still "working" after SCORE_AI_STUCK_SECONDS: failed,
-  # the score's text and the request sent with them dropped. Answers how many.
+  # The suggestions still "working" with no news for SCORE_AI_STUCK_SECONDS
+  # (their last progress, else their start: one still streaming is not cut
+  # off, #973): failed, the score's text and the request sent with them
+  # dropped. Answers how many.
   static def expire_stuck
     since = DateTime.utc.to_unix - SCORE_AI_STUCK_SECONDS
     stuck = ScoreSuggestion.where(
-      "doc.state == @state AND doc.created_at < @since",
+      "doc.state == @state AND (doc.progressed_at != null ? doc.progressed_at : doc.created_at) < @since",
       {"state": "working", "since": since}
     ).limit(5000).all
     stuck.each do |suggestion|
@@ -91,6 +93,7 @@ class ScoreSuggestion < Model
       suggestion.error = "The request was interrupted. Try again."
       suggestion.original = nil
       suggestion.request = nil
+      suggestion.draft = nil
       suggestion.finished_at = DateTime.utc.to_unix
       suggestion.save
     end
@@ -111,6 +114,7 @@ class ScoreSuggestion < Model
     @source = outcome["source"]
     @explanation = outcome["explanation"]
     @error = outcome["error"]
+    @draft = nil
     @finished_at = DateTime.utc.to_unix
     @save
   end
@@ -122,7 +126,37 @@ class ScoreSuggestion < Model
     settings = AiClient.settings_for(user)
     return {"error": AiClient.refusal_text(AiClient.refusal(user))} if settings.nil?
 
-    ScoreAssistant.suggest(@original.to_s, @action, @request, settings)
+    suggestion = this
+    ScoreAssistant.suggest(@original.to_s, @action, @request, settings, fn(phase, text, thought) {
+      suggestion.progressed(phase, text, thought)
+    })
+  end
+
+  # The suggestion's news as the answer comes (#973), kept for the editor
+  # that asks after it: the phase, the answer so far, the reasoning's length.
+  def progressed(phase, text, thought = 0)
+    @phase = phase
+    @draft = text
+    @thought = thought
+    @progressed_at = DateTime.utc.to_unix
+    @save
+  end
+
+  # What the editor is told of a suggestion still working: its phase, the
+  # reasoning's length so far and the seconds since it was asked.
+  def news
+    {
+      "phase": @phase ?? "waiting",
+      "thought": @thought.to_s.to_i,
+      "seconds": DateTime.utc.to_unix - @created_at.to_s.to_i
+    }
+  end
+
+  # The score written so far, engraved (ScoreReader.draft_svg), or nil.
+  def draft_svg
+    return nil unless @phase == "writing"
+
+    ScoreReader.draft_svg(ScoreAssistant.draft_of(@draft))
   end
 
   def owned_by?(user)

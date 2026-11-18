@@ -45,10 +45,11 @@ class ScoreAssistant
   end
 
   # `action` done to `source` with `settings`: {"source", "explanation"} or
-  # {"error"}.
-  static def suggest(source, action, request, settings)
+  # {"error"}. `progress(phase, text, thought)` is told as the answer comes
+  # (AiClient.ask, #973), the second answer's too when the first is refused.
+  static def suggest(source, action, request, settings, progress = nil)
     turns = ScoreAssistant.turns(source, action, request)
-    first = ScoreAssistant.parsed(AiClient.ask(settings, turns))
+    first = ScoreAssistant.parsed(AiClient.ask(settings, turns, progress))
     return first unless first["error"].nil?
 
     problem = AiClient.problem(first["source"])
@@ -58,7 +59,7 @@ class ScoreAssistant
       {"role": "assistant", "text": first["raw"]},
       {"role": "user", "text": "The engraver refused that score: #{problem}. Answer again, the whole score corrected."}
     ]
-    second = ScoreAssistant.parsed(AiClient.ask(settings, again))
+    second = ScoreAssistant.parsed(AiClient.ask(settings, again, progress))
     return second unless second["error"].nil?
 
     unengraved = {"error": "The AI answered with a score that cannot be drawn. Try again, or ask differently."}
@@ -99,5 +100,23 @@ class ScoreAssistant
       "explanation": pieces[0].trim,
       "raw": text
     }
+  end
+
+  # The score in an answer still being written (#973): what follows its last
+  # ```lilypond line, up to a closing fence if one came; "" before any.
+  static def draft_of(text)
+    lines = text.to_s.split("\n")
+    opened = (0 .. lines.length).filter do |i|
+      line = lines[i].trim
+      line.starts_with?("```lilypond") || line == "```ly"
+    end
+    return "" if opened.length == 0
+
+    body = lines.slice(opened[opened.length - 1] + 1, lines.length)
+    closing = (0 .. body.length).filter do |i|
+      body[i].trim.starts_with?("```")
+    end
+    body = body.slice(0, closing[0]) if closing.length > 0
+    body.join("\n")
   end
 end

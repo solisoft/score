@@ -102,6 +102,22 @@ describe("DataCleanupJob") do
     assert_eq(untouched.request, "Add a coda")
   end
 
+  test("leaves a long suggestion alone while the AI still sends news, and fails it once silent") do
+    user = cleanup_owner()
+    score = Score.start(user, Score.blank_source("Fugue"))
+    streaming = suggestion_started(user, score, SCORE_AI_STUCK_SECONDS * 3)
+    streaming.progressed("thinking", "", 12000)
+    silent = suggestion_started(user, score, SCORE_AI_STUCK_SECONDS * 3)
+    silent.progressed("writing", "```lilypond\n{ c'1", 900)
+    silent.progressed_at = DateTime.utc.to_unix - SCORE_AI_STUCK_SECONDS - 60
+    silent.save
+    DataCleanupJob.perform_now({})
+    assert_eq(ScoreSuggestion.find(streaming._key).state, "working", "news a moment ago")
+    failed = ScoreSuggestion.find(silent._key)
+    assert_eq(failed.state, "failed")
+    assert_null(failed.draft, "its half-written answer let go")
+  end
+
   test("lets the engravings past their days go, and keeps a recent one") do
     old_digest = Crypto.sha256("old-#{uuid_v4}")
     Engraving.upsert(

@@ -52,6 +52,15 @@ describe("ScoreAssistant") do
       assert_eq(ScoreAssistant.parsed({"text": "Done.\n```ly\n{ f'4 }\n```"})["source"], "{ f'4 }")
     end
 
+    test("being written: the score is what follows its last lilypond fence, nothing before one") do
+      assert_eq(ScoreAssistant.draft_of(""), "")
+      assert_eq(ScoreAssistant.draft_of("I will write a fugue in C minor."), "")
+      half = "A fugue.\n\n```lilypond\n\\relative c' {\n  c4 d e f |"
+      assert_eq(ScoreAssistant.draft_of(half), "\\relative c' {\n  c4 d e f |")
+      whole = "Two tries.\n```lilypond\n{ c'1 }\n```\nThen:\n```lilypond\n{ d'1 }\n```\nDone."
+      assert_eq(ScoreAssistant.draft_of(whole), "{ d'1 }")
+    end
+
     test("names an answer without a score, and passes an error on") do
       no_score = "The AI answered without a score. Try again, or ask differently."
       assert_eq(ScoreAssistant.parsed({"text": "Just words."})["error"], no_score)

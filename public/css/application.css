@@ -2635,6 +2635,13 @@
     gap: 10px;
     margin: 6px 0 12px;
   }
+  /* The score as the AI writes it (#973): the last bars kept in view. */
+  .studio-ai-draft {
+    margin: 6px 0 12px;
+    max-height: 40vh;
+    overflow: auto;
+    opacity: 0.85;
+  }
   .studio-ai-explanation {
     white-space: pre-wrap;
     font-size: 14px;
