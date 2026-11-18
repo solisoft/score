@@ -2652,6 +2652,20 @@
     gap: 10px;
     margin: 6px 0 12px;
   }
+  /* The last question asked of the score, and the button that shows its answer (#975). */
+  .studio-ai-last {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+  .studio-ai-last[hidden] {
+    display: none;
+  }
+  .studio-ai-last > span {
+    flex: 1 1 240px;
+    min-width: 0;
+  }
   /* The score as the AI writes it (#973): the last bars kept in view. */
   .studio-ai-draft {
     margin: 6px 0 12px;
