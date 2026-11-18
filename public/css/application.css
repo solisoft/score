@@ -2552,6 +2552,14 @@
       white-space: nowrap;
       text-align: right;
     }
+    /* An icon before the label (Write notes' pen): the label follows it,
+       the shortcut alone goes to the right, not the label to the middle. */
+    .studio-dropdown-columns > button:has(> svg) {
+      justify-content: flex-start;
+    }
+    .studio-dropdown-columns > button:has(> svg) > kbd {
+      margin-left: auto;
+    }
     .studio-dropdown-columns > .studio-dropdown-head:first-child {
       padding-top: 4px;
     }

@@ -35,7 +35,16 @@ const COLUMNS_OUT = """
       return range.getBoundingClientRect().right;
     }));
     const out = Math.round(Math.max(right - box.right, item.scrollWidth - item.clientWidth));
-    return out > 1 ? [item.textContent.trim().replace(/\\s+/g, ' ') + ': by ' + out + ' px'] : [];
+    const name = item.textContent.trim().replace(/\\s+/g, ' ');
+    // The label starts at the left, after its icon if it has one: never
+    // pushed to the middle of the row.
+    const label = [...item.childNodes].find((node) => node.nodeType === 3 && node.textContent.trim());
+    const range = document.createRange();
+    if (label) range.selectNodeContents(label);
+    const icon = item.querySelector(':scope > svg')?.getBoundingClientRect().width ?? 0;
+    const indent = label ? Math.round(range.getBoundingClientRect().left - box.left - icon) : 0;
+    if (indent > 30) return [name + ': its label starts ' + indent + ' px in'];
+    return out > 1 ? [name + ': by ' + out + ' px'] : [];
   });
   details.open = false;
   return found;
