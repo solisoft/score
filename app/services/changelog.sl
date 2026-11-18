@@ -13,6 +13,12 @@ class Changelog
       {"date": "2026-11-18", "entries": [
         {
           "area": "engine",
+          "title": "A dynamic under a whole note's tremolo clears its strokes",
+          "text": "A whole note with a tremolo has its strokes under or over its head. A dynamic written under "
+          + "it, and the hairpin after it, were drawn across the strokes; they now stand under them."
+        },
+        {
+          "area": "engine",
           "title": "Trills, mordents, turns and rolled chords are heard",
           "text": "Ornaments were drawn but not played. A trill now goes between its note and the one above in "
           + "the key, to the note's end; a short trill (prall), a mordent and a turn are played quickly, then "
