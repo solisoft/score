@@ -16,6 +16,10 @@ def columns_open(locale)
   user.save
   score = Score.start(user, "\\header { title = \"Menus\" }\n{ c'4 d' e' f' }\n")
   login(user.email, COLUMNS_PASSWORD)
+  # The app speaks the `locale` cookie's language before the account's
+  # (AppLocale.pick), and the browser keeps cookies from one test to the
+  # next: set it, so the spec does not depend on the test before.
+  set_request_cookie("locale", locale)
   visit("/app/scores/#{score._key}")
   wait_for("[data-act=undo]")
 end
@@ -52,6 +56,12 @@ const COLUMNS_OUT = """
 """
 
 describe("The editor's two-column menus") do
+  # Cookies outlive a test: the French one must not leave the specs after
+  # it in French.
+  after_each() do
+    set_request_cookie("locale", "en")
+  end
+
   test("keep every item to its column, in English") do
     columns_open("en")
     assert_eq(evaluate("document.querySelectorAll('.studio-dropdown-columns').length"), 2)

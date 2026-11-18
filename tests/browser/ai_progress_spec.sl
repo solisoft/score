@@ -42,6 +42,8 @@ def progress_open
   user = User.find_by("email", email)
   user.keep_ai_key("anthropic", "claude-opus-5-5", "sk-ant-1111")
   login(email, PROGRESS_PASSWORD)
+  # In English, whatever language a test before left in the cookie.
+  set_request_cookie("locale", "en")
   score = Score.start(user, PROGRESS_SOURCE)
   visit("/app/scores/#{score._key}")
   wait_for_text("Your changes save themselves")
