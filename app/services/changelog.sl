@@ -12,6 +12,13 @@ class Changelog
     [
       {"date": "2026-11-18", "entries": [
         {
+          "area": "engine",
+          "title": "Two voices on a staff: each voice's accents on its own side",
+          "text": "With two voices on one staff, the accents, staccatos and other marks of both were drawn on the "
+          + "same side, sometimes over the other voice's notes. The first voice's marks now stand above its stems, "
+          + "the second voice's below, in the browser and on the server alike."
+        },
+        {
           "area": "site",
           "app": true,
           "title": "Ask the AI: your last answer, found again",
