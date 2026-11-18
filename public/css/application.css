@@ -2535,13 +2535,22 @@
       columns: 2;
       column-gap: 6px;
       width: max-content;
-      max-width: min(720px, calc(100vw - 24px));
+      max-width: min(860px, calc(100vw - 24px));
       max-height: none;
       overflow: visible;
     }
+    /* A column is half the menu (#974): a label longer than that wraps
+       under itself, its shortcut or hint kept whole on the right, instead
+       of running into the next column. */
     .studio-dropdown-columns > button {
       width: 100%;
       break-inside: avoid;
+      white-space: normal;
+    }
+    .studio-dropdown-columns > button > kbd {
+      flex-shrink: 0;
+      white-space: nowrap;
+      text-align: right;
     }
     .studio-dropdown-columns > .studio-dropdown-head:first-child {
       padding-top: 4px;

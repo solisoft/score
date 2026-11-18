@@ -10,16 +10,26 @@
 class Changelog
   static def days
     [
-      {"date": "2026-11-18", "entries": [{
-        "area": "site",
-        "app": true,
-        "title": "Ask the AI: see how it goes, and the score as it is written",
-        "text": "In the score editor, the AI's dialog stopped waiting after a few seconds whenever it showed the "
-        + "questions left today, so an answer never came. It now waits as long as the AI works, and says how it "
-        + "goes: waiting, thinking (with how far its reasoning has gone), then writing, the bars written so far "
-        + "drawn as they come. A long request, such as a whole fugue, is no longer cut off while the AI still "
-        + "answers."
-      }]},
+      {"date": "2026-11-18", "entries": [
+        {
+          "area": "site",
+          "title": "Menus in two columns: each item keeps to its column",
+          "text": "In the score editor, the Edit and Insert menus are two columns on a wide screen. A long item, "
+          + "its shortcut or its hint ran into the next column (Ctrl+Shift+V over Arpeggiate, and more often in "
+          + "French). The menu is now wider when the screen allows, and a label too long for its column goes on "
+          + "to a second line."
+        },
+        {
+          "area": "site",
+          "app": true,
+          "title": "Ask the AI: see how it goes, and the score as it is written",
+          "text": "In the score editor, the AI's dialog stopped waiting after a few seconds whenever it showed the "
+          + "questions left today, so an answer never came. It now waits as long as the AI works, and says how it "
+          + "goes: waiting, thinking (with how far its reasoning has gone), then writing, the bars written so far "
+          + "drawn as they come. A long request, such as a whole fugue, is no longer cut off while the AI still "
+          + "answers."
+        }
+      ]},
       {"date": "2026-11-16", "entries": [
         {
           "area": "site",
