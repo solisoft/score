@@ -294,6 +294,7 @@ def editor_page_words
     "see_plans",
     "ai_working",
     "ai_waiting",
+    "ai_last",
     "ai_thinking",
     "ai_thought_one",
     "ai_thought_other",

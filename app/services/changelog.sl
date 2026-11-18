@@ -13,6 +13,14 @@ class Changelog
       {"date": "2026-11-18", "entries": [
         {
           "area": "site",
+          "app": true,
+          "title": "Ask the AI: your last answer, found again",
+          "text": "In the score editor, the AI's dialog now offers the last question asked on the score, with its "
+          + "time: Show the answer brings it back, ready to apply, even after the page was closed or reloaded. "
+          + "An answer the dialog had stopped waiting for is no longer lost with the credits it cost."
+        },
+        {
+          "area": "site",
           "title": "Menus in two columns: each item keeps to its column",
           "text": "In the score editor, the Edit and Insert menus are two columns on a wide screen. A long item, "
           + "its shortcut or its hint ran into the next column (Ctrl+Shift+V over Arpeggiate, and more often in "

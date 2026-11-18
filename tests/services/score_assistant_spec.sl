@@ -199,6 +199,56 @@ describe("ScoreSuggestion") do
     assert_eq(stored.error, "Something went wrong while asking the AI. Try again.")
   end
 
+  test("finds the last question asked of a score, that person's only (#975)") do
+    user = assistant_user()
+    other = assistant_user()
+    score = Score.start(user, "{ c'1 }")
+    elsewhere = Score.start(user, "{ d'1 }")
+    assert_null(ScoreSuggestion.last_of(user, score), "none asked yet")
+    assert_null(ScoreSuggestion.last_of(nil, score))
+    now = DateTime.utc.to_unix
+    older = {
+      "user_id": user._key,
+      "score_id": score._key,
+      "action": "chords",
+      "state": "done",
+      "created_at": now - 600
+    }
+    ScoreSuggestion.create(older)
+    newest = ScoreSuggestion.create({
+      "user_id": user._key,
+      "score_id": score._key,
+      "action": "ask",
+      "request": "write a fugue",
+      "state": "done",
+      "created_at": now - 60
+    })
+    ScoreSuggestion.create({
+      "user_id": other._key,
+      "score_id": score._key,
+      "action": "ask",
+      "state": "done",
+      "created_at": now
+    })
+    ScoreSuggestion.create({
+      "user_id": user._key,
+      "score_id": elsewhere._key,
+      "action": "ask",
+      "state": "done",
+      "created_at": now
+    })
+    assert_eq(
+      ScoreSuggestion.last_of(user, score),
+      {
+        "id": newest._key,
+        "action": "ask",
+        "request": "write a fugue",
+        "asked_at": now - 60
+      }
+    )
+    assert_null(ScoreSuggestion.last_of(assistant_user(), score), "someone else asked nothing here")
+  end
+
   test("refuses an action or a state it does not know") do
     assert_null(ScoreSuggestion.create({
       "user_id": "u",

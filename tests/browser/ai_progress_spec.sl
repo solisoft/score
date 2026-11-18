@@ -130,4 +130,44 @@ describe("The AI dialog, while the AI works") do
     assert_eq(evaluate("document.querySelector('[data-ai-status]').hidden"), true)
     assert_eq(evaluate("document.querySelector('[data-ai-send]').disabled"), false)
   end
+
+  test("finds the last question's answer again, after the page was closed (#975)") do
+    opened = progress_open
+    # No question yet on this score: nothing offered.
+    evaluate("document.querySelector('[data-ai-ask=ask]').click()")
+    progress_wait("document.querySelector('[data-ai]').open")
+    assert_eq(evaluate("document.querySelector('[data-ai-last]').hidden"), true)
+    # Asked, then answered while no page followed it.
+    ScoreSuggestion.create({
+      "user_id": opened["user"]._key,
+      "score_id": opened["score"]._key,
+      "action": "ask",
+      "request": "write a complete fugue for organ in the style of Bach",
+      "original": opened["score"].source,
+      "state": "done",
+      "source": "\\new Staff { c'1 | g'1 | c''1 }",
+      "explanation": "The fugue, at last.",
+      "created_at": DateTime.utc.to_unix - 1800
+    })
+    visit("/app/scores/#{opened["score"]._key}")
+    wait_for_text("Your changes save themselves")
+    evaluate("document.querySelector('[data-ai-ask=ask]').click()")
+    progress_wait("!document.querySelector('[data-ai-last]').hidden")
+    assert_contains(evaluate("document.querySelector('[data-ai-last]').textContent"), "Your last question")
+    assert_contains(evaluate("document.querySelector('[data-ai-last]').textContent"), "write a complete fugue")
+    click("[data-ai-last-show]")
+    progress_wait("!document.querySelector('[data-ai-result]').hidden")
+    assert_contains(evaluate("document.querySelector('[data-ai-explanation]').textContent"), "The fugue, at last.")
+    assert_eq(evaluate("document.querySelector('[data-ai-apply]').hidden"), false)
+    assert_eq(evaluate("document.querySelector('[data-ai-last]').hidden"), true)
+    # Applied: the score is the answer.
+    click("[data-ai-apply]")
+    progress_wait("!document.querySelector('[data-ai]').open")
+    tries = 0
+    while tries < 50 && !Score.find(opened["score"]._key).source.contains("c''1")
+      sleep(0.2)
+      tries = tries + 1
+    end
+    assert_contains(Score.find(opened["score"]._key).source, "c''1", "the answer saved as the score")
+  end
 end

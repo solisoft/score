@@ -79,6 +79,7 @@ class AppScoresController < AppBaseController
     @editor_words = EditorWords.of(I18n.locale())
     @editing_score = @score
     @_ai_entry(current_user())
+    @ai_last = ScoreSuggestion.last_of(current_user(), @score)
     @ai_request_limit = SCORE_SUGGESTION_REQUEST_LIMIT
     # A section of the library to add after its bars (#451): its data, which the editor fetches.
     section_key = params["section"].to_s

@@ -69,6 +69,27 @@ class ScoreSuggestion < Model
     [SCORE_SUGGESTIONS_OWN_PER_DAY - ScoreSuggestion.used_today(user), 0].max()
   end
 
+  # The last question `user` asked of `score` (#975), for the editor to
+  # find its answer again: {id, action, request, asked_at}, or nil.
+  static def last_of(user, score)
+    return nil if user.nil? || score.nil?
+
+    found = ScoreSuggestion.where(
+      "doc.user_id == @user AND doc.score_id == @score",
+      {"user": user._key, "score": score._key}
+    ).order("created_at", "desc").limit(1).all
+    return nil if found.length == 0
+
+    last = found[0]
+
+    {
+      "id": last._key,
+      "action": last.action,
+      "request": last.request.to_s,
+      "asked_at": last.created_at.to_s.to_i
+    }
+  end
+
   # The suggestions `user` asked for in the last 24 hours.
   static def used_today(user)
     since = DateTime.utc.to_unix - 86400

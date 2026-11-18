@@ -36,6 +36,8 @@
     <p class="muted studio-parts-note" data-ai-about></p>
     <textarea class="studio-ai-request" data-ai-request rows="3" maxlength="<%= ai_request_limit %>"></textarea>
     <p class="muted studio-parts-note" data-ai-with><%= ai_with %><% unless ai_left.nil? %> <span data-ai-left><%= ai_left %></span> <%= t("app.editor.questions_left_today") %><% end %><% if ai_link %> <a href="<%= ai_link["href"] %>"><%= ai_link["text"] %></a><% end %></p>
+    <%# The last question asked on this score, its answer found again (#975). %>
+    <p class="muted studio-parts-note studio-ai-last" data-ai-last hidden><span data-ai-last-said></span> <button type="button" class="btn btn-ghost" data-ai-last-show><%= t("app.editor.show_the_answer") %></button></p>
     <p class="studio-parts-note" data-ai-status aria-live="polite" hidden></p>
     <%# The score as the AI writes it, engraved as it comes (#973). %>
     <div class="studio-parts-preview studio-ai-draft" data-ai-draft hidden></div>
@@ -116,7 +118,8 @@
   "people": app_score_people_path(score),
   "readings": app_readings_path(),
   "suggestions": app_score_suggestions_path(score),
-  "suggestion": app_suggestion_path("ID")
+  "suggestion": app_suggestion_path("ID"),
+  "last_suggestion": ai_last
 }) %>
 <script type="module">
   const page = JSON.parse(document.getElementById("editor-data").textContent);
@@ -766,6 +769,13 @@ ${problem.linkText}?`)) location.href = problem.link;
     aiPart("send").hidden = false;
     aiPart("send").disabled = aiRefused;
     aiPart("request").disabled = aiRefused;
+    const last = page.last_suggestion;
+    aiPart("last").hidden = aiRefused || !last;
+    if (last) {
+      const at = new Date(last.asked_at * 1000).toLocaleString(globalThis.EUI_WORDS_LOCALE || "en", { dateStyle: "medium", timeStyle: "short" });
+      const asked = (last.request || "").trim();
+      aiPart("last-said").textContent = say("ai_last", { at }) + (asked ? ` “${asked.length > 70 ? asked.slice(0, 70) + "…" : asked}”` : "");
+    }
   };
   document.querySelectorAll("[data-ai-ask]").forEach((button) => button.addEventListener("click", () => {
     button.closest("details")?.removeAttribute("open");
@@ -799,90 +809,114 @@ ${problem.linkText}?`)) location.href = problem.link;
     return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")} s`;
   };
   aiPart("again").addEventListener("click", aiReset);
-  aiPart("form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (aiRefused) return;
-    // `link`: the page that lifts a refusal (the account, for a key: #396).
-    const fail = (message, link, linkText) => {
-      clearInterval(aiTick);
-      aiPart("status").hidden = true;
-      aiPart("draft").hidden = true;
-      aiPart("error").textContent = message;
-      if (link) aiPart("error").append(" ", Object.assign(document.createElement("a"), { href: link, textContent: linkText || say("see_plans") }));
-      aiPart("error").hidden = false;
-      aiPart("send").disabled = false;
-      aiPart("request").disabled = false;
-    };
+  // `link`: the page that lifts a refusal (the account, for a key: #396).
+  const aiFail = (message, link, linkText) => {
+    clearInterval(aiTick);
+    aiPart("status").hidden = true;
+    aiPart("draft").hidden = true;
+    aiPart("error").textContent = message;
+    if (link) aiPart("error").append(" ", Object.assign(document.createElement("a"), { href: link, textContent: linkText || say("see_plans") }));
+    aiPart("error").hidden = false;
+    aiPart("send").disabled = aiRefused;
+    aiPart("request").disabled = aiRefused;
+  };
+  // The dialog busy: nothing more sent while a question is followed.
+  const aiBusy = () => {
     aiPart("error").hidden = true;
+    aiPart("last").hidden = true;
     aiPart("send").disabled = true;
     aiPart("request").disabled = true;
     aiPart("status").textContent = say("ai_working");
     aiPart("status").hidden = false;
-    const run = ++aiRun;
-    // Still this question, on this page, in the open dialog.
+    return ++aiRun;
+  };
+  // Suggestion `id` followed in run `run` until it is done or failed: how it
+  // goes said meanwhile, the bars written so far drawn (#973). A new
+  // question, Ask again, closing the dialog or leaving the page ends it.
+  const aiFollow = async (id, run) => {
     const current = () => run === aiRun && ai.open && !left;
+    // The time goes on between two answers from the server.
+    let news = { phase: "waiting" };
+    let seconds = 0;
+    let heardAt = Date.now();
+    const tell = () => {
+      if (!current()) return clearInterval(aiTick);
+      aiPart("status").textContent = aiSays(news, seconds + (Date.now() - heardAt) / 1000);
+    };
+    clearInterval(aiTick);
+    aiTick = setInterval(tell, 1000);
+    tell();
+    // As long as the server says it is working: a question with no news
+    // for ten minutes is failed there (ScoreSuggestion.expire_stuck).
+    for (let tries = 0; tries < 1200; tries++) {
+      if (tries > 0) await new Promise((done) => setTimeout(done, 3000));
+      if (!current()) return;
+      let answer;
+      try {
+        answer = await (await fetch(page.suggestion.replace("ID", id), { headers: { Accept: "application/json" } })).json();
+      } catch (problem) {
+        continue;
+      }
+      if (!current()) return;
+      if (answer.state === "working") {
+        news = answer;
+        seconds = Number(answer.seconds) || 0;
+        heardAt = Date.now();
+        tell();
+        if (answer.draft_svg) {
+          aiPart("draft").innerHTML = answer.draft_svg;
+          aiPart("draft").hidden = false;
+        }
+        continue;
+      }
+      clearInterval(aiTick);
+      aiPart("draft").hidden = true;
+      if (answer.state === "failed") return aiFail(answer.error);
+      aiAnswer = answer;
+      aiPart("status").hidden = true;
+      aiPart("explanation").textContent = answer.explanation || say("ai_proposes");
+      aiPart("preview").innerHTML = answer.svg;
+      aiPart("result").hidden = false;
+      aiPart("send").hidden = true;
+      aiPart("apply").hidden = aiPart("again").hidden = false;
+      return;
+    }
+    if (current()) aiFail(say("ai_timeout"));
+  };
+  aiPart("form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (aiRefused) return;
+    const run = aiBusy();
+    let started;
     try {
       const sent = await fetch(page.suggestions, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ action: aiAction, request: aiPart("request").value, source: studio.source() }),
       });
-      const started = await sent.json();
-      if (sent.status !== 202) return fail(started.error, started.link, started.link_text);
-      // The day's questions left. (Not `left`: that one is whether the page
-      // was left, and shadowing it stopped the waiting after 3 s, #973.)
-      const leftToday = aiPart("left");
-      if (leftToday) leftToday.textContent = Math.max(0, Number(leftToday.textContent) - 1);
-      // The time goes on between two answers from the server.
-      let news = { phase: "waiting" };
-      let seconds = 0;
-      let heardAt = Date.now();
-      const tell = () => {
-        if (!current()) return clearInterval(aiTick);
-        aiPart("status").textContent = aiSays(news, seconds + (Date.now() - heardAt) / 1000);
-      };
-      clearInterval(aiTick);
-      aiTick = setInterval(tell, 1000);
-      tell();
-      // As long as the server says it is working: a question with no news
-      // for ten minutes is failed there (ScoreSuggestion.expire_stuck).
-      for (let tries = 0; tries < 1200; tries++) {
-        await new Promise((done) => setTimeout(done, 3000));
-        if (!current()) return;
-        let answer;
-        try {
-          answer = await (await fetch(page.suggestion.replace("ID", started.id), { headers: { Accept: "application/json" } })).json();
-        } catch (problem) {
-          continue;
-        }
-        if (!current()) return;
-        if (answer.state === "working") {
-          news = answer;
-          seconds = Number(answer.seconds) || 0;
-          heardAt = Date.now();
-          tell();
-          if (answer.draft_svg) {
-            aiPart("draft").innerHTML = answer.draft_svg;
-            aiPart("draft").hidden = false;
-          }
-          continue;
-        }
-        clearInterval(aiTick);
-        aiPart("draft").hidden = true;
-        if (answer.state === "failed") return fail(answer.error);
-        aiAnswer = answer;
-        aiPart("status").hidden = true;
-        aiPart("explanation").textContent = answer.explanation || say("ai_proposes");
-        aiPart("preview").innerHTML = answer.svg;
-        aiPart("result").hidden = false;
-        aiPart("send").hidden = true;
-        aiPart("apply").hidden = aiPart("again").hidden = false;
-        return;
-      }
-      if (current()) fail(say("ai_timeout"));
+      started = await sent.json();
+      if (sent.status !== 202) return aiFail(started.error, started.link, started.link_text);
     } catch (problem) {
-      if (run === aiRun) fail(say("ai_not_sent"));
+      if (run === aiRun) aiFail(say("ai_not_sent"));
+      return;
     }
+    // The day's questions left. (Not `left`: that one is whether the page
+    // was left, and shadowing it stopped the waiting after 3 s, #973.)
+    const leftToday = aiPart("left");
+    if (leftToday) leftToday.textContent = Math.max(0, Number(leftToday.textContent) - 1);
+    // Asked again later from the dialog (#975), as the last question.
+    page.last_suggestion = { id: started.id, action: aiAction, request: aiPart("request").value, asked_at: Math.floor(Date.now() / 1000) };
+    aiFollow(started.id, run);
+  });
+  // The last question asked on this score (#975): its answer, kept on the
+  // server, found again — after the page was closed or reloaded meanwhile.
+  aiPart("last-show").addEventListener("click", () => {
+    const last = page.last_suggestion;
+    if (!last) return;
+    aiAction = AI_ASKS[last.action] ? last.action : "ask";
+    aiPart("title").textContent = AI_ASKS[aiAction][0];
+    aiPart("request").value = last.request || "";
+    aiFollow(last.id, aiBusy());
   });
   aiPart("apply").addEventListener("click", async () => {
     if (!aiAnswer) return;
