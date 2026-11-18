@@ -386,9 +386,14 @@ describe("AppTakesController") do
       score = room["score"]
       take_sign_in(room["owner"])
       take_upload(score)
-      take = ScoreTake.where({"score_id": score._key}).first
-      ScoreTake.blobs.delete_blob(SCORE_TAKE_BLOBS, take.audio_blob_id)
-      # Its sound is gone from the store: asking for it again is a 404 there.
+      takes = ScoreTake.where({"score_id": score._key}).all
+      assert_eq(takes.length, 1)
+      # Its sound, as the store sees it: one it has never had. (Deleting the
+      # uploaded one from here raced the server's write of it under a busy
+      # suite: the delete found nothing yet, and failed the spec now and then.)
+      take = takes[0]
+      take.audio_blob_id = "gone-#{uuid_v4}"
+      take.save
       assert_raises("404") do
         ScoreTake.blobs.delete_blob(SCORE_TAKE_BLOBS, take.audio_blob_id)
       end
