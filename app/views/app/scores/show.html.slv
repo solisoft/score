@@ -817,6 +817,8 @@ ${problem.linkText}?`)) location.href = problem.link;
     aiPart("error").textContent = message;
     if (link) aiPart("error").append(" ", Object.assign(document.createElement("a"), { href: link, textContent: linkText || say("see_plans") }));
     aiPart("error").hidden = false;
+    // Failed: Ask again comes back, to send it once more (#976).
+    aiPart("send").hidden = false;
     aiPart("send").disabled = aiRefused;
     aiPart("request").disabled = aiRefused;
   };
@@ -824,6 +826,8 @@ ${problem.linkText}?`)) location.href = problem.link;
   const aiBusy = () => {
     aiPart("error").hidden = true;
     aiPart("last").hidden = true;
+    // Asked: no Ask while the AI works on it (#976).
+    aiPart("send").hidden = true;
     aiPart("send").disabled = true;
     aiPart("request").disabled = true;
     aiPart("status").textContent = say("ai_working");

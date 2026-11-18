@@ -91,6 +91,8 @@ describe("The AI dialog, while the AI works") do
       "write a complete fugue for organ in the style of Bach"
     )
     assert(!suggestion.nil?, "a suggestion was started")
+    # Asked: the Ask button goes while the AI works (#976).
+    assert_eq(evaluate("document.querySelector('[data-ai-send]').hidden"), true)
     progress_wait("document.querySelector('[data-ai-status]').textContent.includes('Waiting for the AI')")
 
     # Past the first three seconds, still followed: the time goes on.
@@ -130,6 +132,8 @@ describe("The AI dialog, while the AI works") do
     progress_wait("!document.querySelector('[data-ai-error]').hidden")
     assert_contains(evaluate("document.querySelector('[data-ai-error]').textContent"), "stopped answering")
     assert_eq(evaluate("document.querySelector('[data-ai-status]').hidden"), true)
+    # Failed: Ask comes back, to send it again.
+    assert_eq(evaluate("document.querySelector('[data-ai-send]').hidden"), false)
     assert_eq(evaluate("document.querySelector('[data-ai-send]').disabled"), false)
   end
 
@@ -158,6 +162,7 @@ describe("The AI dialog, while the AI works") do
     assert_contains(evaluate("document.querySelector('[data-ai-last]').textContent"), "Your last question")
     assert_contains(evaluate("document.querySelector('[data-ai-last]').textContent"), "write a complete fugue")
     click("[data-ai-last-show]")
+    assert_eq(evaluate("document.querySelector('[data-ai-send]').hidden"), true, "no Ask while its answer comes")
     progress_wait("!document.querySelector('[data-ai-result]').hidden")
     assert_contains(evaluate("document.querySelector('[data-ai-explanation]').textContent"), "The fugue, at last.")
     assert_eq(evaluate("document.querySelector('[data-ai-apply]').hidden"), false)

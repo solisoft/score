@@ -12,6 +12,13 @@ class Changelog
     [
       {"date": "2026-11-18", "entries": [
         {
+          "area": "site",
+          "app": true,
+          "title": "Ask the AI: no Ask button while the AI works",
+          "text": "In the score editor's AI dialog, the Ask button stayed under the AI's progress, greyed out. It "
+          + "now goes once the question is sent, and comes back if the question fails."
+        },
+        {
           "area": "engine",
           "title": "Two voices on a staff: each voice's accents on its own side",
           "text": "With two voices on one staff, the accents, staccatos and other marks of both were drawn on the "
