@@ -55,17 +55,17 @@ const FEATURES = `\\score { << \\new Staff { \\tempo 4 = 90 \\time 3/4 \\repeat 
 // Taken from the model as it was before #689 (origin/main 7a268fb): the same text, the same answers.
 const GOLDEN = {
   "scores/piano/fur-elise.ly": { from: "f646d4f7d820d237", playback: "072e11313f702cb3", heard: "f0fe54b95606240e", ly: "7028ff2b95a3adb6" },
-  "scores/ensembles/symphony-5.ly": { from: "0788fe2454d2f159", playback: "5bf3e6b61a5e2acb", heard: "4d1c1d7986c48090", ly: "775a4bf2fd733f06" },
+  "scores/ensembles/symphony-5.ly": { from: "0788fe2454d2f159", playback: "deed4f247fb7ab86", heard: "3a850a5bfe455ca1", ly: "775a4bf2fd733f06" },
   "scores/ensembles/string-quartet.ly": { from: "4bc8d5f9fe97cf2b", playback: "6ce5164878ea8622", heard: "5c1d440117319507", ly: "81a59158a6816d62" },
-  "scores/ensembles/jazz-trio.ly": { from: "755aaf1e41224f65", playback: "0dce29b814e19356", heard: "74cc70366cf8bff0", ly: "d91cf3426c0319f2" },
+  "scores/ensembles/jazz-trio.ly": { from: "755aaf1e41224f65", playback: "e848479378955a5c", heard: "74cc70366cf8bff0", ly: "d91cf3426c0319f2" },
   "scores/changelog/endings.ly": { from: "fa8916e8df057b0c", playback: "58acec7cb55e0289", heard: "b59ee02da1f4cb4d", ly: "19c032d3d1da1753" },
   "scores/changelog/pedal-and-jumps.ly": { from: "2fb00a35d9904c5b", playback: "39849b3d2439ca3d", heard: "399c6ecd158cbdb7", ly: "c2e837095c8c8f26" },
   "scores/changelog/part-combine.ly": { from: "a5d697fdea26801e", playback: "6fae1b562de1faa7", heard: "f9add5b22613bc92", ly: "c1687186af2e088c" },
   "scores/changelog/fig-diagrams-graces.ly": { from: "51ccea4c17677d01", playback: "d27d14551a1deea5", heard: "34eb5561200ce87e", ly: "58e8ff86cf182e2a" },
   "scores/changelog/tempo-over-grace.ly": { from: "57e7bd08c3426683", playback: "e32b727db68af34e", heard: "e055c4a6478e8fca", ly: "ef6251038996a367" },
-  "scores/voice/satb-chorale.ly": { from: "b6d171a3cbe98d00", playback: "2dc6eb9d87452864", heard: "071b09bccc196d40", ly: "35b82f00ec60994c" },
+  "scores/voice/satb-chorale.ly": { from: "b6d171a3cbe98d00", playback: "b7446af5ec3e7fee", heard: "071b09bccc196d40", ly: "35b82f00ec60994c" },
   "scores/syntax/repeats.ly": { from: "1cb905ed09cf7e60", playback: "a8939192ae72f6a9", heard: "6625324d33d6a5ad", ly: "1599ef7b818c7e58" },
-  "features": { from: "0d4eaca306ed749f", playback: "f3b8df1bbf6e650c", heard: "f13c2917057a86f8", ly: "cfd03bde7e4530ac" },
+  "features": { from: "0d4eaca306ed749f", playback: "e5f4b2228c696a50", heard: "acdc0bd5b1344345", ly: "cfd03bde7e4530ac" },
 };
 
 test("the model answers what it answered before it was made faster, on real scores (#689)", () => {
@@ -118,9 +118,11 @@ test("a fermata is held on every pass through its bar, and only there (#689)", (
   const score = M.fromParsed(withSpans(long(4)), long(4)).score;
   const passes = M.playback(score);
   const held = passes.filter((p) => p.holds.length);
-  // The repeated bar, played twice; its half note held as long again.
+  // The repeated bar, played twice; its half note held half again, then
+  // two seconds of breath (#977): at 100 a quarter, 3 1/3 quarters.
   assert.deepEqual(held.map((p) => p.bar), [2, 2]);
-  assert.deepEqual(held[0].holds, [{ at: M.notated(2), ticks: M.notated(2) }]);
+  assert.deepEqual(held[0].holds, [{ at: M.notated(2), ticks: M.notated(2) / 2 + M.breathTicks({ bpm: 100, base: 4 }) }]);
+  assert.equal(M.breathTicks({ bpm: 100, base: 4 }), Math.round((M.WHOLE / 4) * (10 / 3)));
   // Each pass its own holds, not one list shared by both.
   assert.notEqual(held[0].holds, held[1].holds);
 });

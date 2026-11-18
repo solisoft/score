@@ -12,6 +12,21 @@ class Changelog
     [
       {"date": "2026-11-18", "entries": [
         {
+          "area": "engine",
+          "title": "Trills, mordents, turns and rolled chords are heard",
+          "text": "Ornaments were drawn but not played. A trill now goes between its note and the one above in "
+          + "the key, to the note's end; a short trill (prall), a mordent and a turn are played quickly, then "
+          + "the note held; a chord marked arpeggio comes in note by note from the lowest. On Play, and in the "
+          + "MIDI files."
+        },
+        {
+          "area": "engine",
+          "title": "A fermata holds, then breathes",
+          "text": "A note under a fermata sounded twice its length and the music went straight on. It now "
+          + "sounds half its value again, then every part waits about two seconds before going on, at the "
+          + "tempo of that moment. On Play, and in the MIDI files."
+        },
+        {
           "area": "site",
           "app": true,
           "title": "Ask the AI: no Ask button while the AI works",

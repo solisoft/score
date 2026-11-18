@@ -5100,13 +5100,17 @@ function speedAt(score, b, marks = tempoMarks(score)) {
   return { bpm, base };
 }
 
+/** How long the music breathes after a fermata, in seconds: eui-score's FERMATA_BREATH_SECONDS (#977). */
+export const FERMATA_BREATH_SECONDS = 2;
+
 /**
- * Where bar `b`'s fermatas hold, as eui-score's MIDI holds them: the music
- * waits, when a note under a fermata ends, as long again as that note —
- * the longest, when several end together. [{ at, ticks }]: `at` ticks into
- * the bar.
+ * Where bar `b`'s fermatas hold, as eui-score's MIDI holds them (#977): when
+ * a note under a fermata ends, it sounds half its value again (the longest,
+ * when several end together), then the music breathes
+ * FERMATA_BREATH_SECONDS at the bar's speed. [{ at, ticks }]: `at` ticks
+ * into the bar, `ticks` the whole wait.
  */
-function holdsIn(score, b, fermatas = fermataNotes(score)) {
+function holdsIn(score, b, fermatas = fermataNotes(score), marks = tempoMarks(score)) {
   const from = barStart(score, b);
   const to = from + barLength(score, b);
   const byEnd = new Map();
@@ -5115,7 +5119,15 @@ function holdsIn(score, b, fermatas = fermataNotes(score)) {
     const end = at + ticks - from;
     byEnd.set(end, Math.max(byEnd.get(end) ?? 0, ticks));
   }
-  return [...byEnd].map(([at, ticks]) => ({ at, ticks })).sort((x, y) => x.at - y.at);
+  if (!byEnd.size) return [];
+  const breath = breathTicks(speedAt(score, b, marks));
+  return [...byEnd].map(([at, ticks]) => ({ at, ticks: Math.floor(ticks / 2) + breath })).sort((x, y) => x.at - y.at);
+}
+
+/** FERMATA_BREATH_SECONDS in ticks at `bpm` beats of `base` (4 a quarter) a minute. */
+export function breathTicks({ bpm, base }) {
+  if (!(bpm > 0) || !(base > 0)) return 0;
+  return Math.round((FERMATA_BREATH_SECONDS * bpm) / 60 * (WHOLE / base));
 }
 
 /**
@@ -5196,7 +5208,7 @@ export function playback(score) {
   return playOrder(score).map((bar) => {
     const { bpm, base } = speedAt(score, bar, marks);
     const start = sec;
-    const pass = { bar, start, end: 0, bpm, base, holds: holdsIn(score, bar, fermatas) };
+    const pass = { bar, start, end: 0, bpm, base, holds: holdsIn(score, bar, fermatas, marks) };
     if (ramps.length) {
       if (!curves.has(bar)) curves.set(bar, curveOf(score, ramps, bar));
       if (curves.get(bar)) pass.curve = curves.get(bar);

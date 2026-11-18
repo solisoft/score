@@ -1070,20 +1070,21 @@ test("playing: the metronome's beats follow the metre, the speed and the repeats
 
 test("playing: a fermata holds the music, and the notes are lit when they sound", () => {
   const s = M.newScore();
-  // Bar 1: C D E(fermata) F — the fermata on the third beat holds it a beat more.
+  // Bar 1: C D E(fermata) F — the fermata on the third beat holds it half
+  // a beat more, then the music breathes two seconds (#977).
   const pitches = [7, 8, 9, 10];
   pitches.forEach((d, k) => M.write(s, 0, k * q, q, { rest: false, pitches: [{ d, alter: 0 }] }));
   M.write(s, 0, 4 * q, q, C4);
   M.toggleArticulation(s, 0, 2, "fermata");
   M.toggleRepeat(s, 0, 0);
   const passes = M.playback(s);
-  // 0.6 s a beat; bar 1 lasts five beats, twice.
-  assert.ok(Math.abs(passes[0].end - 3) < 1e-9 && Math.abs(passes[1].end - 6) < 1e-9);
+  // 0.6 s a beat; bar 1 lasts four beats, 0.3 s held and 2 s of breath: 4.7 s, twice.
+  assert.ok(Math.abs(passes[0].end - 4.7) < 1e-9 && Math.abs(passes[1].end - 9.4) < 1e-9);
   const lit = (t) => M.playedAt(s, passes, t).map((x) => +x.toFixed(6));
-  assert.deepEqual(lit(3 * q), [2.4, 5.4]);
-  assert.deepEqual(lit(4 * q), [6]);
-  // The metronome waits too: its fourth beat comes after the hold.
-  assert.equal(+M.beats(s, passes)[3].sec.toFixed(6), 2.4);
+  assert.deepEqual(lit(3 * q), [4.1, 8.8]);
+  assert.deepEqual(lit(4 * q), [9.4]);
+  // The metronome waits too: its fourth beat comes after the hold and the breath.
+  assert.equal(+M.beats(s, passes)[3].sec.toFixed(6), 4.1);
   // Every note the MIDI file plays is lit at the time it sounds.
   const heard = onsetSeconds(midi(M.toLilyPond(s, { unfold: true }).source, 100, 4, 0));
   const shown = s.staves[0].events.flatMap((ev, k) => (ev.rest ? [] : M.playedAt(s, passes, M.starts(s.staves[0])[k])));

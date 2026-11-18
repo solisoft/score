@@ -32,14 +32,16 @@ crate-type = ["cdylib", "rlib"]
 # _(, and hairpins under a slur drawn below (#467); 2dee226 a PDF set a
 # little smaller, down to 17 pt, when that saves a page (#470); 1250ae9 words
 # and marks over the staff clear accidentals and slurs (#668); 0a305ba two
-# voices' accents, the first's over its stems, the second's under (#828),
-# as Soli 2.36.4 pins it. The browser draws
+# voices' accents, the first's over its stems, the second's under (#828);
+# 8bd3c19 a fermata held half again, then two seconds of breath (#977);
+# 0ed95de trills, mordents, turns and rolled chords played (#978), as
+# Soli 2.36.5 pins it. The browser draws
 # those before the server's Soli does;
 # move this
 # and the server's Soli together otherwise. `build.sh` writes the module
 # into public/eui-score/, and that output is committed: deploying the site
 # needs no Rust.
-eui-score = { git = "https://github.com/solisoft/eui", rev = "0a305ba" }
+eui-score = { git = "https://github.com/solisoft/eui", rev = "0ed95de" }
 wasm-bindgen = "=0.2.126"
 serde_json = "1"
 
