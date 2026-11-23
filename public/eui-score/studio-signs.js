@@ -146,10 +146,12 @@ export function install(ctx) {
    * A press on the score at `p`: on a sign, it is selected and may be
    * dragged — with a mouse or a pen at once, with a finger once it is
    * selected (a finger elsewhere scrolls the score, #454). Answers whether
-   * the press was a sign's; if not, no sign is selected any more.
+   * the press was a sign's; if not, no sign is selected any more. At written
+   * pitch too (#1023): a sign is on the same note there, and its tweak does
+   * not move with the pitch.
    */
   function signPress(event, p) {
-    if (!st.score || st.written || st.playing) {
+    if (!st.score || st.playing) {
       dropSign();
       return false;
     }

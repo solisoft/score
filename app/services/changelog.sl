@@ -49,7 +49,8 @@ class Changelog
           + "written into as its player reads it. A letter typed, the ghost note clicked, a key played on a "
           + "MIDI keyboard and a sharp or a flat are the written notes, in the written key, and the score "
           + "keeps them as they sound — a B♭ clarinet's written D is a C. Paste and the other tools work "
-          + "there too, on the notes as they sound.",
+          + "there too, on the notes as they sound, and a dynamic, words or a slur is dragged where it reads "
+          + "best there as at concert pitch.",
           "link": "playground"
         },
         {

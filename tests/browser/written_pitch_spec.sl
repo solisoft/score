@@ -3,17 +3,22 @@
 # player reads them — the letter D writes the C it sounds, the ghost note
 # shows the written line, a sharp is the written one — and the text keeps
 # them as they sound. Concert pitch again, the same letter writes itself.
+# A sign is dragged there as at concert pitch (#1020): its tweak is written
+# on the note it is on, and the note keeps its sounding pitch.
 
 const WP_SOURCE = "\\header { title = \"Clarinet\" }\n"
 + "\\new Staff \\with { instrumentName = \"Clarinet in B♭\" midiInstrument = \"clarinet\" }"
 + " { \\clef treble \\time 4/4 c''4 r2. | r1 }"
 
-# The playground opened on WP_SOURCE, the score focused.
-def wp_open
+const WP_SIGN_SOURCE = "\\new Staff \\with { instrumentName = \"Clarinet in B♭\" midiInstrument = \"clarinet\" }"
++ " { \\clef treble \\time 4/4 c''4\\mf r2. | r1 }"
+
+# The playground opened on `source` (WP_SOURCE), the score focused.
+def wp_open(source = WP_SOURCE)
   visit("/playground")
   wait_for("[data-source]")
   sleep(1)
-  evaluate("(() => { const box = document.querySelector('[data-source]'); box.value = #{JSON.stringify(WP_SOURCE)};"
+  evaluate("(() => { const box = document.querySelector('[data-source]'); box.value = #{JSON.stringify(source)};"
   + " box.dispatchEvent(new Event('input', { bubbles: true })); })()")
   sleep(0.6)
   evaluate("document.querySelector('[data-source]').dispatchEvent(new Event('change', { bubbles: true }))")
@@ -50,6 +55,30 @@ def wp_pointer(kind, point)
   evaluate("document.querySelector('.studio-sheet').dispatchEvent(new PointerEvent(#{JSON.stringify(kind)},"
   + " { clientX: #{point["x"]}, clientY: #{point["y"]}, pointerId: 1, bubbles: true, button: 0 }))")
   sleep(0.25)
+end
+
+# The dynamic dragged `right` staff spaces to the right with real pointer events, a frame apart.
+def wp_drag_dynamic(right)
+  evaluate("(() => { const st = document.getElementById('studio').studio;"
+  + " const svg = document.querySelector('.studio-svg svg').getBoundingClientRect();"
+  + " const scale = svg.width / st.view.width; const sign = st.view.signs.find((s) => s.on === 'dynamic');"
+  + " const x = svg.left + (sign.box[0] + sign.box[2]) / 2 * scale;"
+  + " const y = svg.top + ((sign.box[1] + sign.box[3]) / 2 - (st.view.y0 ?? 0)) * scale;"
+  + " window.wpDrag = { x, y, dx: #{right} * 8 * st.zoom * scale };"
+  + " const at = { bubbles: true, cancelable: true, pointerId: 1, button: 0, clientX: x, clientY: y };"
+  + " (document.elementFromPoint(x, y) ?? document.querySelector('.studio-sheet'))"
+  + ".dispatchEvent(new PointerEvent('pointerdown', at)); })()")
+  sleep(0.15)
+  for step in [0.25, 0.6, 1]
+    evaluate("(() => { const d = window.wpDrag; document.querySelector('.studio-sheet').dispatchEvent("
+    + "new PointerEvent('pointermove', { bubbles: true, cancelable: true, pointerId: 1, buttons: 1,"
+    + " clientX: d.x + d.dx * #{step}, clientY: d.y })); })()")
+    sleep(0.15)
+  end
+  evaluate("(() => { const d = window.wpDrag; document.querySelector('.studio-sheet').dispatchEvent("
+  + "new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerId: 1,"
+  + " clientX: d.x + d.dx, clientY: d.y })); })()")
+  sleep(0.4)
 end
 
 def wp_ghost
@@ -111,6 +140,21 @@ describe("Writing at written pitch, in a browser") do
     press("d")
     sleep(0.4)
     assert_contains(wp_text(), "| d''4 r2.")
+    assert_no_page_errors()
+  end
+
+  test("a dynamic dragged at written pitch is tweaked on its note, which keeps its sound") do
+    wp_open(WP_SIGN_SOURCE)
+    wp_written()
+    steps_before = evaluate("document.getElementById('studio').studio.past.length")
+    wp_drag_dynamic(1)
+    assert_match(wp_text(), "c''4-\\\\tweak DynamicText\\.extra-offset #'\\(1 \\. 0\\) \\\\mf r2\\.")
+    assert_eq(evaluate("document.getElementById('studio').studio.past.length"), steps_before + 1)
+    # The view stays at written pitch, the text as it sounds.
+    assert(evaluate("document.getElementById('studio').studio.written"))
+    press("Ctrl+z")
+    sleep(0.4)
+    assert_not(wp_text().includes?("extra-offset"), wp_text())
     assert_no_page_errors()
   end
 end
