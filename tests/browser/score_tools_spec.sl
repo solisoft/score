@@ -50,6 +50,17 @@ def tools_press(kind, point, shift)
   sleep(0.2)
 end
 
+# Where the head of lane `lane`'s event `index` is drawn, in the page's pixels.
+def tools_note_point(lane, index)
+  JSON.parse(evaluate("(() => { const st = document.getElementById('studio').studio;"
+  + " const svg = document.querySelector('.studio-svg svg').getBoundingClientRect();"
+  + " const scale = svg.width / st.view.width;"
+  + " const k = st.items.findIndex((it) => it.staff === #{lane} && it.index === #{index});"
+  + " const h = st.view.items.find((it) => it.item === k).heads[0].box;"
+  + " return JSON.stringify({ x: svg.left + (h[0] + h[2]) / 2 * scale,"
+  + " y: svg.top + ((h[1] + h[3]) / 2 - (st.view.y0 ?? 0)) * scale }); })()"))
+end
+
 def tools_click(point, shift)
   tools_press("pointerdown", point, shift)
   tools_press("pointerup", point, shift)
@@ -193,6 +204,26 @@ describe("The tools on many notes at once (#1024)") do
     evaluate("document.querySelectorAll('[data-act=durations]')[0].click()")
     sleep(0.5)
     assert_contains(tools_text(), "c1~ | c1 | e1")
+    assert_no_page_errors()
+  end
+
+  test("Edit ▸ Retrograde turns the clicked notes round; Inversion mirrors them around the first") do
+    tools_open("\\header { title = \"Line\" }\n{ c''4 d''4 e''4 g''4 | c''1 }\n")
+    tools_click(tools_note_point(0, 0), false)
+    tools_click(tools_note_point(0, 3), true)
+    assert(tools_sel()["t1"] > 0, "the four notes selected")
+    steps = tools_steps()
+    evaluate("document.querySelector('[data-act=retrograde]').click()")
+    sleep(0.5)
+    assert_contains(tools_text(), "g''4 e''4 d''4 c''4 | c''1")
+    assert_eq(tools_steps(), steps + 1)
+    evaluate("document.querySelector('[data-act=invert]').click()")
+    sleep(0.5)
+    # Around g'': e'' (down a third) to b'' (up a third), in C major.
+    assert_contains(tools_text(), "g''4 b''4 c'''4 d'''4 | c''1")
+    press("Ctrl+z")
+    sleep(0.5)
+    assert_contains(tools_text(), "g''4 e''4 d''4 c''4")
     assert_no_page_errors()
   end
 end

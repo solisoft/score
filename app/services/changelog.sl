@@ -13,6 +13,16 @@ class Changelog
       {"date": "2026-11-23", "entries": [
         {
           "area": "site",
+          "title": "Retrograde and inversion",
+          "text": "Edit ▸ Retrograde writes the selected notes and rests backwards, each keeping its length "
+          + "and its marks; its ties, slurs and hairpins are turned round with them, and the words sung stay "
+          + "in their order. Edit ▸ Inversion mirrors the selection around its first note, by the key's own "
+          + "letters: up a third becomes down a third, in the key. On one staff or several, each around its "
+          + "own first note; a tuplet, or a note that would go past what can be written, is refused.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
           "title": "Double or halve the durations",
           "text": "Edit ▸ Double the durations and Halve the durations rewrite the selected notes twice as "
           + "long or half as long, on every staff selected, each note keeping its marks. Halved, rests fill "

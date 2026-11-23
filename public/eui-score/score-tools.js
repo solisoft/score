@@ -344,3 +344,129 @@ export function scaleDurations(score, ranges, factor) {
     if (factor < 1) M.write(score, s, t0 + length / 2, length / 2, { rest: true });
   }
 }
+
+// ---- Retrograde and inversion ------------------------------------------------------------
+
+const TUPLET_REFUSED = () => tr("A tuplet is in the selection: leave triplets and the like out of it");
+
+/** The ranges with a tuplet among their events refused. */
+function refuseTuplets(score, ranges) {
+  for (const r of ranges) if (score.staves[r.s].events.slice(r.a, r.b + 1).some((ev) => ev.tuplet)) throw new Error(TUPLET_REFUSED());
+}
+
+/**
+ * A clipboard (M.copy) backwards: each piece with its length and marks; the
+ * ties, slurs, phrasing slurs, beams and hairpins turned round; the
+ * syllables left in their order on the notes.
+ */
+function backwards(clip) {
+  const n = clip.length;
+  const was = clip.map((piece) => piece.content);
+  // Hairpins paired, start to end: the end becomes the start, the other way round.
+  const opens = new Map();
+  const closes = new Map();
+  let open = -1;
+  was.forEach((c, k) => {
+    if (c.hairpinEnd && open >= 0) {
+      opens.set(k, was[open].hairpin === "<" ? ">" : "<");
+      closes.set(open, true);
+      open = -1;
+    }
+    if (c.hairpin) open = k;
+  });
+  const sung = was.filter((c) => !c.rest).map((c) => ({ lyric: c.lyric ?? null, verses: c.verses ?? [] }));
+  const out = [];
+  for (let m = 0; m < n; m++) {
+    const k = n - 1 - m;
+    const c = structuredClone(was[k]);
+    c.tie = !c.rest && m < n - 1 && Boolean(was[k - 1]?.tie) && !was[k - 1].rest;
+    [c.slurStart, c.slurEnd] = [Boolean(was[k].slurEnd), Boolean(was[k].slurStart)];
+    [c.beamStart, c.beamEnd] = [was[k].beamEnd, was[k].beamStart];
+    if (!c.beamStart) delete c.beamStart;
+    if (!c.beamEnd) delete c.beamEnd;
+    const phrase = [was[k].phraseEnd, was[k].phraseStart];
+    delete c.phraseStart;
+    delete c.phraseEnd;
+    if (phrase[0]) c.phraseStart = true;
+    if (phrase[1]) c.phraseEnd = true;
+    // Which way a slur bends is found again, from its new first note.
+    delete c.slurDir;
+    delete c.phraseDir;
+    delete c.hairpinWords;
+    c.hairpin = opens.get(k) ?? null;
+    c.hairpinEnd = closes.has(k);
+    out.push({ content: c, ticks: clip[k].ticks });
+  }
+  let next = 0;
+  for (const piece of out) {
+    if (piece.content.rest) continue;
+    Object.assign(piece.content, sung[next++]);
+  }
+  return out;
+}
+
+/** Each range's notes and rests backwards (see backwards); refused on a tuplet. */
+export function retrograde(score, ranges) {
+  refuseTuplets(score, ranges);
+  for (const r of ranges) {
+    const t0 = M.starts(score.staves[r.s])[r.a];
+    M.paste(score, r.s, t0, backwards(M.copy(score, r.s, r.a, r.b)));
+  }
+}
+
+/** Whether a pitch can be written and played: within the staff's reach and a piano's keys. */
+const playable = (p) => p.d >= -7 && p.d <= 42 && M.midiKey(p.d, p.alter) >= 21 && M.midiKey(p.d, p.alter) <= 108;
+
+/**
+ * Pitch `p` mirrored around `axis` by the key's letters (`fifths`): the
+ * key's notes stay in the key; a note the key does not hold flips its sharp
+ * or flat, unless it has the axis's letter, whose sign it keeps.
+ */
+function mirrored(p, axis, fifths) {
+  const alters = M.keyAlters(fifths);
+  const d = 2 * axis.d - p.d;
+  const own = p.alter - alters[mod7(p.d)];
+  const alter = alters[mod7(d)] + (mod7(p.d) === mod7(axis.d) ? own : -own);
+  return { d, alter: Math.max(-2, Math.min(2, alter)) };
+}
+
+/**
+ * Each range's notes inverted around its first note (the lowest of a
+ * chord), diatonically, in the key each note is in. Refused when there is
+ * no note, or a note would go past what can be written, before anything
+ * changes.
+ */
+export function invert(score, ranges) {
+  const pitched = pitchedRanges(score, ranges);
+  const changes = [];
+  for (const r of pitched) {
+    const staff = score.staves[r.s];
+    const at = M.starts(staff);
+    const first = staff.events.slice(r.a, r.b + 1).find((ev) => !ev.rest);
+    if (!first) continue;
+    const axis = first.pitches[0];
+    for (let i = r.a; i <= r.b; i++) {
+      const ev = staff.events[i];
+      const fifths = M.keyOf(score, r.s, at[i]);
+      const turn = (pitches) => pitches.map((p) => mirrored(p, axis, fifths));
+      const pitches = ev.rest ? null : turn(ev.pitches);
+      const graces = [...ev.graces, ...(ev.afterGraces ?? [])].map((g) => [g, turn(g.pitches)]);
+      if ([pitches ?? [], ...graces.map(([, now]) => now)].flat().some((p) => !playable(p))) {
+        throw new Error(tr("Inverted, a note would go too far from the first to be written: select fewer, or lower ones"));
+      }
+      changes.push({ ev, pitches, graces });
+    }
+  }
+  if (!changes.some((c) => c.pitches)) throw new Error(NO_NOTE());
+  const sorted = (pitches) => [...pitches].sort((x, y) => x.d - y.d || x.alter - y.alter);
+  for (const { ev, pitches, graces } of changes) {
+    if (pitches) {
+      M.followHeads(ev, ev.pitches, pitches);
+      ev.pitches = sorted(pitches);
+    }
+    for (const [g, now] of graces) {
+      M.moveGraceTo(g, now);
+      g.pitches = sorted(g.pitches);
+    }
+  }
+}

@@ -22,5 +22,10 @@
   "Halved, a note would be shorter than a 128th: leave the shortest notes out": "Divisée par deux, une note serait plus courte qu'une quintuple croche : laissez les plus courtes hors de la sélection",
   "Select the notes whose durations to change": "Sélectionnez les notes dont changer les durées",
   "Durations doubled: what followed them is written over.": "Durées doublées : ce qui les suivait est remplacé.",
-  "Durations halved: rests fill the time they left.": "Durées divisées par deux : des silences remplissent le temps libéré."
+  "Durations halved: rests fill the time they left.": "Durées divisées par deux : des silences remplissent le temps libéré.",
+  "A tuplet is in the selection: leave triplets and the like out of it": "Un n-olet est dans la sélection : laissez les triolets et autres n-olets en dehors",
+  "Inverted, a note would go too far from the first to be written: select fewer, or lower ones": "Renversée, une note irait trop loin de la première pour s'écrire : sélectionnez-en moins, ou de plus graves",
+  "Select the notes to rewrite": "Sélectionnez les notes à réécrire",
+  "The selection backwards: its ties, slurs and hairpins turned round, its words in their order.": "La sélection à l'envers : ses liaisons et ses soufflets retournés, ses paroles dans leur ordre.",
+  "The selection mirrored around its first note, in its key.": "La sélection renversée autour de sa première note, dans sa tonalité."
 }

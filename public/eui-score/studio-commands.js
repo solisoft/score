@@ -589,6 +589,14 @@ export function install(ctx) {
         if (done) say(factor > 1 ? tr("Durations doubled: what followed them is written over.") : tr("Durations halved: rests fill the time they left."));
         return;
       }
+      // Edit ▸ Retrograde, Inversion (#1024): the selection backwards, or mirrored around its first note.
+      case "retrograde": case "invert": {
+        const chosen = ranges();
+        if (!chosen.length) return say(tr("Select the notes to rewrite"), true);
+        const done = edit((score) => (name === "retrograde" ? T.retrograde(score, chosen) : T.invert(score, chosen)));
+        if (done) say(name === "retrograde" ? tr("The selection backwards: its ties, slurs and hairpins turned round, its words in their order.") : tr("The selection mirrored around its first note, in its key."));
+        return;
+      }
       case "remove-staff": return edit((score) => {
         M.removeStaff(score, staffOf());
         st.sel = null;

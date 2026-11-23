@@ -109,6 +109,8 @@
             <div class="studio-dropdown-head" role="presentation"><%= t("app.editor.rewrite_the_selection") %></div>
             <button type="button" role="menuitem" data-act="durations" data-factor="2"><%= t("app.editor.double_the_durations") %></button>
             <button type="button" role="menuitem" data-act="durations" data-factor="0.5"><%= t("app.editor.halve_the_durations") %></button>
+            <button type="button" role="menuitem" data-act="retrograde"><%= t("app.editor.retrograde") %> <kbd><%= t("app.editor.backwards") %></kbd></button>
+            <button type="button" role="menuitem" data-act="invert"><%= t("app.editor.inversion") %> <kbd><%= t("app.editor.around_the_first_note") %></kbd></button>
             <div class="studio-dropdown-head" role="presentation"><%= t("app.editor.arrange") %></div>
             <button type="button" role="menuitem" data-act="drum-grid"><%= t("app.editor.drum_grid") %> <kbd><%- t("app.editor.a_drum_staff_s_bar") %></kbd></button>
             <button type="button" role="menuitem" data-act="arpeggiate"><%= t("app.editor.arpeggiate_the_selected_chords") %></button>
