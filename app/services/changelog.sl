@@ -13,6 +13,15 @@ class Changelog
       {"date": "2026-11-23", "entries": [
         {
           "area": "site",
+          "title": "Two desks on one staff: 1., 2. and a2 in the score's language",
+          "text": "Format ▸ Condense with the staff below now writes what the staff prints where one part plays "
+          + "alone and where both play as one — 1., 2. and a2, or « 1. / 2. / à 2 » when the editor is in "
+          + "French — into the staff's settings, part of the score's text. Each desk's part prints none, and "
+          + "Split into two staves takes them away again.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
           "title": "Transpose to a key: the key's name in full",
           "text": "In the tools, Transpose ▸ To a key shows the key it goes to on a line of its own, its two "
           + "names readable (D major / B minor), and up, down or the nearest way under it.",

@@ -5253,7 +5253,8 @@ export function partOf(score, s, desk = 0) {
       delete ev.combineMode;
       delete ev.spacer;
     }
-    part.staves = [{ ...staff, instrument: kept.instruments?.[desk - 1] ?? staff.instrument, events }];
+    part.staves = [{ ...staff, instrument: kept.instruments?.[desk - 1] ?? staff.instrument, withMore: withoutLabels(staff.withMore), events }];
+    if (!part.staves[0].withMore) delete part.staves[0].withMore;
     wholeBarRests(part, 0);
   } else part.staves = lanes.map((lane) => part.staves[lane]);
   // Its settings with it, at its lanes there (#683); the other staves' go.
@@ -6134,8 +6135,13 @@ function staffWiths(source) {
 
 /** What a \\with block says beside the names and sound the model writes: its text, or "". */
 function withMore(body) {
+  return withoutSettings(body, ["instrumentName", "shortInstrumentName", "midiInstrument"]);
+}
+
+/** The text of a \\with block without the settings `names` (`name = value`), its spaces made one. */
+function withoutSettings(body, names) {
   let rest = String(body ?? "");
-  for (const name of ["instrumentName", "shortInstrumentName", "midiInstrument"]) {
+  for (const name of names) {
     for (;;) {
       const m = new RegExp(`(^|\\s)${name}\\s*=`).exec(rest);
       if (!m) break;
@@ -6930,6 +6936,17 @@ function deskNames(score, u) {
   return name ? [`${name} 1`, `${name} 2`] : ["", ""];
 }
 
+// What a staff of two parts prints where part I plays alone, part II alone,
+// and both as one (#1021): LilyPond's soloText, soloIIText and aDueText, in
+// its \with. Condensing writes them in the editor's language ("1.", "2.",
+// "a2"; "à 2" in French); a part alone, or a staff split again, has none.
+const COMBINE_LABELS = ["soloText", "soloIIText", "aDueText"];
+
+/** A staff's \\with text (`withMore`) without the labels of two parts on one staff: undefined when nothing is left. */
+function withoutLabels(more) {
+  return withoutSettings(more, COMBINE_LABELS) || undefined;
+}
+
 /** What a staff says beside its name, its sound and its notes: its clef, key, metre and all that must be alike to share a staff. */
 function staffSettings(staff) {
   const { name, short, instrument, events, voice, combine, ...settings } = staff;
@@ -6940,9 +6957,11 @@ function staffSettings(staff) {
  * The staff of lane `s` and the staff below it condensed on one: the two
  * parts of a \\partCombine, the upper staff part I. Refused, and said, when
  * they cannot share a staff: another clef, key, metre or transposition,
- * bars that differ, words, a second voice. Answers the staff's lane.
+ * bars that differ, words, a second voice. `words`: what the staff prints
+ * over part I alone, part II alone and both as one (`one`, `two`, `both`),
+ * in the page's language: "1.", "2.", "a2" if not said. Answers the staff's lane.
  */
-export function condenseStaves(score, s) {
+export function condenseStaves(score, s, words = {}) {
   const u = upperOf(score, s);
   const staves = staffLanes(score);
   const n = staves.indexOf(u);
@@ -6984,6 +7003,9 @@ export function condenseStaves(score, s) {
   score.meta = { ...(score.meta ?? {}) };
   score.meta.desks = { ...(isPlain(score.meta.desks) ? score.meta.desks : {}), [u]: { names: [one.name || "", two.name || ""], shorts: [one.short || "", two.short || ""], instruments: [one.instrument || "", two.instrument || ""] } };
   one.combine = { names };
+  // What it prints over a part alone and both as one, after what its \\with says already.
+  const labels = [words.one ?? "1.", words.two ?? "2.", words.both ?? "a2"].map((text, k) => `${COMBINE_LABELS[k]} = ${quote(text)}`).join(" ");
+  one.withMore = [withoutLabels(one.withMore), labels].filter(Boolean).join(" ");
   one.name = condensedName(one.name || "", two.name || "");
   one.short = condensedName(one.short || "", two.short || "");
   score.staves[v] = { voice: 2, events: two.events };
@@ -7008,6 +7030,10 @@ export function splitStaves(score, s) {
   const names = deskNames(score, u);
   const shorts = kept.shorts ?? (one.short ? [`${one.short} 1`, `${one.short} 2`] : ["", ""]);
   const instruments = kept.instruments ?? [one.instrument, one.instrument];
+  // A staff of one part prints no "1.", "2." or "a2": its \\with as it was before condensing.
+  const more = withoutLabels(one.withMore);
+  if (more) one.withMore = more;
+  else delete one.withMore;
   const settings = structuredClone(staffSettings(one));
   // How the two were set together is said no more; the rest is each staff's as it was.
   const plain = (events) => events.map((ev) => {

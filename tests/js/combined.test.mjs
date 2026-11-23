@@ -8,7 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import init, { editor_view, score_json, source_spans } from "../../public/eui-score/eui_score_web.js";
+import init, { check, editor_view, score_json, source_spans } from "../../public/eui-score/eui_score_web.js";
 import * as M from "../../public/eui-score/score-model.js";
 
 await init({ module_or_path: readFileSync(new URL("../../public/eui-score/eui_score_web_bg.wasm", import.meta.url)) });
@@ -390,7 +390,8 @@ test("condenseStaves: a staff and the one below it as the two parts of \\partCom
   assert.equal(M.condenseStaves(score, 0), 0);
   const { source } = engrave(score);
   assert.match(source, /^fluteI = \{\n {2}c''4 d''4 e''4 f''4 \| g''1 \| r1\n\}\nfluteII = \{\n {2}c''4 b'4 c''4 d''4 \| r1 \| e''1\n\}\n/);
-  assert.match(source, /\\new Staff \\with \{ instrumentName = "Flute 1\.2" shortInstrumentName = "Fl\. 1\.2" midiInstrument = "flute" \} \{\n {4}\\clef treble \\key g \\major \\time 4\/4\n {4}\\partCombine \\fluteI \\fluteII/);
+  // What it prints over a part alone and both as one (#1021): "1.", "2.", "a2" when no language is said.
+  assert.match(source, /\\new Staff \\with \{ instrumentName = "Flute 1\.2" shortInstrumentName = "Fl\. 1\.2" midiInstrument = "flute" soloText = "1\." soloIIText = "2\." aDueText = "a2" \} \{\n {4}\\clef treble \\key g \\major \\time 4\/4\n {4}\\partCombine \\fluteI \\fluteII/);
   assert.deepEqual(M.staffLanes(score), [0, 2], "two staves now");
   assert.ok(M.isCombined(score, 0) && M.partOfLane(score, 1) === 2);
   // The engraver marks them itself: a2 where they play as one, Solo where one rests.
@@ -401,12 +402,40 @@ test("condenseStaves: a staff and the one below it as the two parts of \\partCom
   assert.deepEqual(score.meta.desks, { 0: { names: ["Flute 1", "Flute 2"], shorts: ["Fl. 1", "Fl. 2"], instruments: ["flute", "piccolo"] } });
   // Split: the text as it was before, to the letter — in memory, and from the saved text read again.
   const saved = reread(score);
+  assert.equal(saved.staves[0].withMore, 'soloText = "1." soloIIText = "2." aDueText = "a2"', "the labels read back");
   assert.deepEqual(M.splitStaves(score, 0), [0, 1]);
   assert.equal(M.toLilyPond(score).source, before);
   assert.ok(M.isCombined(saved, 0), "read back condensed");
   M.splitStaves(saved, 1);
   assert.equal(M.toLilyPond(saved).source, before);
   assert.equal(saved.meta.desks, undefined);
+});
+
+test("condenseStaves: the labels in the editor's language (« 1. / 2. / à 2 »), after what the \\with said; read back with nothing lost; gone on Split and in each desk's part", () => {
+  const src = "<<\n  \\new Staff \\with { instrumentName = \"Cor 1\" \\consists \"Ambitus_engraver\" } { c''4 d'' e'' f'' | g''1 | r1 }\n"
+    + "  \\new Staff \\with { instrumentName = \"Cor 2\" \\consists \"Ambitus_engraver\" } { a'4 b' c'' d'' | r1 | e''1 }\n>>";
+  const score = read(src);
+  const before = M.toLilyPond(score).source;
+  M.condenseStaves(score, 0, { one: "1.", two: "2.", both: "à 2" });
+  const { source } = engrave(score);
+  assert.match(source, /\\with \{ instrumentName = "Cor 1\.2" \\consists "Ambitus_engraver" soloText = "1\." soloIIText = "2\." aDueText = "à 2" \}/);
+  // The engraver pinned today (eui 2bdc942) takes them without a word: it still prints its own a2 and Solo.
+  assert.equal(check(source), "");
+  const parsed = parse(source);
+  assert.deepEqual([parsed.lost, parsed.unsupported], [undefined, undefined], "nothing passed over");
+  // Read back from the saved text: the labels kept with the rest of its \\with.
+  const again = reread(score);
+  assert.equal(again.staves[0].withMore, '\\consists "Ambitus_engraver" soloText = "1." soloIIText = "2." aDueText = "à 2"');
+  // A desk's own part prints no label; Split gives each staff its \\with as it was.
+  assert.doesNotMatch(M.toLilyPond(M.partOf(again, 1, 2), { written: true }).source, /soloText|aDueText/);
+  M.splitStaves(again, 0);
+  assert.equal(M.toLilyPond(again).source, before);
+  // A staff whose \\with had labels of its own: the editor's replace them, and Split takes them away.
+  const labelled = read("<<\n  \\new Staff \\with { aDueText = \"zu 2\" } { c''1 }\n  \\new Staff \\with { aDueText = \"zu 2\" } { a'1 }\n>>");
+  M.condenseStaves(labelled, 0);
+  assert.equal(labelled.staves[0].withMore, 'soloText = "1." soloIIText = "2." aDueText = "a2"');
+  M.splitStaves(labelled, 0);
+  assert.deepEqual([labelled.staves[0].withMore, labelled.staves[1].withMore], [undefined, undefined]);
 });
 
 test("condenseStaves: what cannot share a staff is refused, said, and nothing changes", () => {

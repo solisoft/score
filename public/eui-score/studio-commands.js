@@ -441,8 +441,9 @@ export function install(ctx) {
       // Format ▸ Two desks on one staff (#1021): a staff and the one below it condensed as the two parts
       // of a \\partCombine, split again; how the two are set over the selection; a passage divided.
       case "condense": return edit((score) => {
-        const lane = M.condenseStaves(score, staffOf());
-        say(tr("Two staves on one: {name}. The engraver marks a2 and Solo itself; Format ▸ Split into two staves puts them back.", { name: score.staves[lane].name || tr("Staff {n}", { n: M.staffNumber(score, lane) + 1 }) }));
+        // What the staff prints over a part alone and both as one, in the editor's language: part of the score's text.
+        const lane = M.condenseStaves(score, staffOf(), { one: tr("1."), two: tr("2."), both: tr("a2") });
+        say(tr("Two staves on one: {name}, marked 1. or 2. where a part plays alone and a2 where both play as one; Format ▸ Split into two staves puts them back.", { name: score.staves[lane].name || tr("Staff {n}", { n: M.staffNumber(score, lane) + 1 }) }));
       });
       case "split-staves": return edit((score) => {
         M.splitStaves(score, staffOf());

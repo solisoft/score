@@ -165,6 +165,8 @@ describe("Two desks on one staff, in the browser (#1021)") do
     assert_contains(condensed, "fluteI = {\n  c''4 d''4 e''4 f''4 | g''1 | r1\n}")
     assert_contains(condensed, "fluteII = {\n  c''4 b'4 c''4 d''4 | r1 | e''2 e''2\n}")
     assert_contains(condensed, "instrumentName = \"Flute 1.2\"")
+    # What it prints over a part alone and both as one, in the editor's language (English here).
+    assert_contains(condensed, "soloText = \"1.\" soloIIText = \"2.\" aDueText = \"a2\"")
     assert_contains(condensed, "\\partCombine \\fluteI \\fluteII")
     assert_contains(condensed, "\"desks\":{\"0\":{\"names\":[\"Flute 1\",\"Flute 2\"]")
     assert_contains(cd_status(), "Two staves on one: Flute 1.2")
