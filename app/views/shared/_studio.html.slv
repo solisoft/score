@@ -98,10 +98,12 @@
             <button type="button" role="menuitem" data-act="insert-bar"><%= t("app.editor.insert_a_bar_before_the_selection") %> <kbd>Insert</kbd></button>
             <button type="button" role="menuitem" data-act="add-bar"><%= t("app.editor.add_a_bar_at_the_end") %> <kbd>]</kbd></button>
             <button type="button" role="menuitem" data-act="delete-bars"><%= t("app.editor.delete_the_selected_bars") %> <kbd>Ctrl+Del</kbd></button>
-            <div class="studio-dropdown-head studio-dropdown-break" role="presentation"><%= t("app.editor.lines_and_pages") %></div>
+            <div class="studio-dropdown-head" role="presentation"><%= t("app.editor.lines_and_pages") %></div>
             <button type="button" role="menuitem" data-act="break" data-kind="line"><%= t("app.editor.a_new_line_after_this_bar") %> <kbd><%= t("app.editor.again_to_remove") %></kbd></button>
             <button type="button" role="menuitem" data-act="break" data-kind="page"><%= t("app.editor.a_new_page_after_this_bar") %> <kbd><%= t("app.editor.again_to_remove") %></kbd></button>
-            <div class="studio-dropdown-head" role="presentation"><%= t("app.editor.pitch") %></div>
+            <%# The second column from Pitch on: Rewrite the selection (#1024) made it
+                the taller one, past a 1280 × 800 window. %>
+            <div class="studio-dropdown-head studio-dropdown-break" role="presentation"><%= t("app.editor.pitch") %></div>
             <button type="button" role="menuitem" data-act="transpose" data-scope="selection"><%= t("app.editor.transpose_the_selection") %></button>
             <button type="button" role="menuitem" data-act="transpose" data-scope="score"><%= t("app.editor.transpose_the_score") %></button>
             <button type="button" role="menuitem" data-act="enharmonic"><%= t("app.editor.spell_the_other_way_c_sharp_d_flat") %> <kbd>J</kbd></button>

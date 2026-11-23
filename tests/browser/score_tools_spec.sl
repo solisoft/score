@@ -195,12 +195,27 @@ describe("The tools on many notes at once (#1024)") do
     assert_contains(text, "e'2 r2 | f'1")
     # The bass staff was not selected.
     assert_contains(text, "c1 | d1")
+    # Doubled again, the bar still selected: its note and its rest, the rest
+    # written over the next bar on both staves.
     evaluate("document.querySelectorAll('[data-act=durations]')[0].click()")
     sleep(0.5)
-    assert_contains(tools_text(), "c''1 | d''1")
+    text = tools_text()
+    assert_contains(text, "c''1 | r1 | e''1")
+    assert_contains(text, "e'1 | r1 | g'1")
+    assert_contains(text, "c1 | d1 | e1")
     assert_eq(tools_steps(), steps + 2)
+    # One Undo takes the doubling back.
+    press("Ctrl+z")
+    sleep(0.5)
+    assert_contains(tools_text(), "c''2 r2 | d''1")
+    assert_eq(tools_steps(), steps + 1)
     # A whole note doubled writes over the next bar, tied across the bar line.
+    # (A click on a bar with something selected takes the selection away; the
+    # next one selects the bass staff's first bar.)
     tools_click(tools_bar_point(0, 2), false)
+    assert_null(tools_sel())
+    tools_click(tools_bar_point(0, 2), false)
+    assert_eq(tools_sel()["staff"], 2)
     evaluate("document.querySelectorAll('[data-act=durations]')[0].click()")
     sleep(0.5)
     assert_contains(tools_text(), "c1~ | c1 | e1")

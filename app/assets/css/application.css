@@ -375,7 +375,7 @@
      on a phone, it is one list that scrolls, as the others. */
   @media (min-width: 900px) and (min-height: 720px) {
     .studio-dropdown-columns { display: block; columns: 2; column-gap: 6px; width: max-content; max-width: min(720px, calc(100vw - 24px)); max-height: none; overflow: visible; }
-    .studio-dropdown-columns > button { width: 100%; break-inside: avoid; }
+    .studio-dropdown-columns > button { width: 100%; break-inside: avoid; padding-block: 7px; }
     .studio-dropdown-columns > .studio-dropdown-head:first-child { padding-top: 4px; }
     .studio-dropdown-columns > .studio-dropdown-break { break-before: column; padding-top: 4px; }
   }

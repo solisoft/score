@@ -2546,6 +2546,9 @@
       width: 100%;
       break-inside: avoid;
       white-space: normal;
+      /* A little closer than a one-column menu's items: Edit's two columns
+         (#1024's Rewrite the selection) still fit a 1280 × 800 window. */
+      padding-block: 7px;
     }
     .studio-dropdown-columns > button > kbd {
       flex-shrink: 0;

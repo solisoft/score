@@ -886,6 +886,7 @@ describe("The playground, in a browser") do
       "Bars",
       "Lines and pages",
       "Pitch",
+      "Rewrite the selection",
       "Arrange"
     ])
     assert_eq(evaluate(edit + ".querySelectorAll('hr').length"), 0)
