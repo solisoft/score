@@ -23,7 +23,7 @@ export function install(ctx) {
   let frame = 0;
 
   /** Whether the ghost and the pen are offered now. */
-  const offered = () => Boolean(st.input.on && st.score && st.view && st.mode !== "midi" && !st.written);
+  const offered = () => Boolean(st.input.on && st.score && st.view && st.mode !== "midi");
 
   /** The drawn items by lane and index, for the view drawn now. */
   let drawn = { view: null, at: new Map() };
@@ -86,7 +86,8 @@ export function install(ctx) {
     const b = M.barAt(st.score, t);
     const drums = M.isDrums(st.score, upper);
     const clef = drums ? "percussion" : M.clefAt(st.score, upper, b, t - M.barStart(st.score, b));
-    const pitch = Gh.pitchAt(clef, step, drums ? 0 : M.keyOf(st.score, upper, t));
+    // At written pitch, the line or space is the written note, in the written key (#1023).
+    const pitch = Gh.pitchAt(clef, step, drums ? 0 : M.shownKeyOf(st.score, upper, t, st.written));
     const drum = drums ? Gh.drumAt(pitch.d, M.DRUMS) : null;
     if (drums ? !drum : !Gh.reachable(pitch)) return { over: true, spot: null };
     return { over: true, spot: { lane, t, pitch, drum, step, top, space, x: xOf(lane, bar, t, space), name: drum ?? Gh.nameOf(pitch) } };

@@ -95,7 +95,7 @@ export function install(ctx) {
         st.written = !st.written;
         root.querySelector("[data-written-label]").firstChild.textContent = `${st.written ? tr("Concert pitch") : tr("Written pitch")} `;
         const moved = M.staffLanes(st.score).some((s) => M.transpositionOf(st.score.staves[s]));
-        say(st.written ? (moved ? tr("Written pitch: transposing instruments as their players read them. For reading only.") : tr("Written pitch: no instrument here is written apart from how it sounds.")) : tr("Concert pitch: as it sounds, and as it is written into."));
+        say(st.written ? (moved ? tr("Written pitch: transposing instruments as their players read them, and the notes written in as they read them.") : tr("Written pitch: no instrument here is written apart from how it sounds.")) : tr("Concert pitch: as it sounds, and as it is written into."));
         return draw();
       }
       case "parts": return openParts();
@@ -224,7 +224,7 @@ export function install(ctx) {
         return edit((score) => {
           const t = need();
           M.letter(score, t.s, t.i, Number(data.step), add, t.head);
-        });
+        }, { pitched: true });
       }
       case "drum": {
         const add = data.add || root.querySelector("[data-chord-mode]")?.checked;
@@ -257,7 +257,7 @@ export function install(ctx) {
       case "alter": return edit((score) => {
         const t = need();
         M.setAlter(score, t.s, t.i, Number(data.alter), t.head);
-      });
+      }, { pitched: true });
       case "tuplet":
         if (st.input.on) return inputTuplet(Number(data.n));
         return edit((score) => {

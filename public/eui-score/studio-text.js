@@ -112,17 +112,21 @@ export function install(ctx) {
     applyMix();
   }
 
-  /** Runs `fn` on the model as one undoable edit; a refusal leaves everything as it was. */
-  function edit(fn, { keepFuture = false } = {}) {
+  /**
+   * Runs `fn` on the model as one undoable edit; a refusal leaves everything as it was.
+   * `pitched`: `fn` writes pitches someone typed, clicked or played — with View ▸ Written
+   * pitch on, written ones, stored as they sound (#1023).
+   */
+  function edit(fn, { keepFuture = false, pitched = false } = {}) {
     // An editor swapped out by instant navigation changes nothing (whatever still calls it).
     if (!root.isConnected) return false;
     if (!st.score) return say(tr("The score tools wait: this piece is edited in its text below."), true);
-    if (st.written) return say(tr("Written pitch is for reading: View ▸ Written pitch again to write, at concert pitch."), true);
     const before = snapshot();
     // The step Undo goes back to, made now from what the snapshot holds rather than read back from it (#689).
     const step = { snap: before, text: st.text, after: null, sel: copyOf(st.sel), input: copyOf(st.input) };
     try {
-      fn(st.score);
+      if (pitched && st.written) M.asWritten(st.score, fn);
+      else fn(st.score);
       // A note whose pitch changed in place keeps its velocity; a note gone, its velocity with it.
       if (st.score.meta?.velocity) Vel.reconcile(JSON.parse(before).score, st.score);
     } catch (error) {

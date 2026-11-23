@@ -5330,6 +5330,169 @@ export function transpositionOf(staff) {
   return null;
 }
 
+// ---- Written pitch, edited (#1023) ---------------------------------------------------------
+//
+// With View ▸ Written pitch on, what is typed, clicked or played is what the
+// player reads: the note written as a B♭ clarinet's D is stored as the C it
+// sounds. A tool that reads pitches runs on the score turned to written
+// pitch (asWritten), keys and all, and the score is turned back after it.
+
+/** A LilyPond absolute pitch ("bes,", "c''", "fis") as { d, alter }, or null. */
+function pitchOfName(name) {
+  const m = /^([a-g])((?:is|es|s)*)([',]*)$/.exec(String(name ?? ""));
+  if (!m) return null;
+  const alter = (m[2].match(/is/g) ?? []).length - (m[2].match(/es|(?<![ei])s/g) ?? []).length;
+  const octaves = (m[3].match(/'/g) ?? []).length - (m[3].match(/,/g) ?? []).length;
+  return { d: NAMES.indexOf(m[1]) + 7 * octaves, alter };
+}
+
+/** How far `\\transpose c <to>` moves the notes ("d" a tone up, "a," a minor third down): { steps, semitones }, or null. */
+export function shiftOfTarget(to) {
+  const p = pitchOfName(to);
+  if (!p) return null;
+  const shift = { steps: p.d, semitones: midiKey(p.d, p.alter) - 48 };
+  return shift.steps === 0 && shift.semitones === 0 ? null : shift;
+}
+
+const clampKey = (k) => Math.max(-7, Math.min(7, k));
+const sameShift = (a, b) => (a?.steps ?? 0) === (b?.steps ?? 0) && (a?.semitones ?? 0) === (b?.semitones ?? 0);
+
+/**
+ * How far the staff of lane `u` is written from how it sounds, through
+ * time: `{ at(t), points }` — `at` the shift at time `t` (null: as it
+ * sounds), `points` the times it may change at.
+ */
+function writtenShifts(score, u) {
+  const shift = shiftOfTarget(transpositionOf(score.staves[u]));
+  return { at: () => shift, points: [] };
+}
+
+/** How far lane `s`'s notes are written from how they sound at time `t`: { steps, semitones }, or null. */
+export function writtenShiftAt(score, s, t = 0) {
+  const u = upperOf(score, s);
+  if (!score.staves[u] || isDrums(score, u)) return null;
+  return writtenShifts(score, u).at(t);
+}
+
+/** The key lane `s` is read in at `t`: as it sounds, or — `written` — as its player reads it. */
+export function shownKeyOf(score, s, t = 0, written = false) {
+  const key = keyOf(score, s, t);
+  const shift = written ? writtenShiftAt(score, s, t) : null;
+  return shift ? clampKey(key + fifthsOf(shift.steps, shift.semitones)) : key;
+}
+
+/** Lane `lane`'s notes moved by the shift in force at each one's time, `sign` -1 to move them back. */
+function shiftLane(score, lane, at, sign) {
+  const staff = score.staves[lane];
+  const times = starts(staff);
+  staff.events.forEach((ev, i) => {
+    const shift = at(times[i]);
+    if (!shift) return;
+    const by = (p) => transposePitch(p, sign * shift.steps, sign * shift.semitones);
+    if (!ev.rest && ev.pitches.length) {
+      const moved = ev.pitches.map(by);
+      followHeads(ev, ev.pitches, moved);
+      ev.pitches = moved;
+    }
+    for (const g of [...(ev.graces ?? []), ...(ev.afterGraces ?? [])]) moveGraceTo(g, g.pitches.map(by));
+  });
+}
+
+/** Staff `u`'s keys from its start: [{ bar, pos, key, mode }], the first at 0. */
+function keyList(score, u) {
+  const first = staffKeyAt(score, u, 0, 0);
+  const out = [{ bar: 0, pos: 0, key: first.key, mode: first.mode ?? "major" }];
+  for (const m of keyChanges(score, u)) if (m.bar > 0 || m.pos > 0) out.push({ bar: m.bar, pos: m.pos, key: m.key, mode: m.mode ?? "major" });
+  return out;
+}
+
+/** Staff `u` given the keys `list` (as keyList): the score's own when they are, else a key of its own. */
+function setKeyList(score, u, list) {
+  const staff = score.staves[u];
+  const kept = list.filter((m, k) => k === 0 || m.key !== list[k - 1].key || m.mode !== list[k - 1].mode);
+  const bare = { ...score, staves: score.staves.map((x, k) => (k === u ? { ...x, key: undefined, keys: undefined, mode: undefined } : x)) };
+  const plain = keyList(bare, u);
+  const along = plain.length === kept.length && plain.every((m, k) => m.bar === kept[k].bar && m.pos === kept[k].pos && m.mode === kept[k].mode);
+  const by = kept[0].key - plain[0].key;
+  delete staff.keys;
+  delete staff.mode;
+  delete staff.key;
+  // The score's keys, or the score's moved as far all along (a horn in E♭): no keys of its own.
+  if (along && plain.every((m, k) => kept[k].key === clampKey(m.key + by))) {
+    if (by !== 0) staff.key = kept[0].key;
+    return;
+  }
+  staff.key = kept[0].key;
+  staff.mode = kept[0].mode;
+  staff.keys = kept.slice(1).map((m) => ({ bar: m.bar, pos: m.pos, key: m.key, ...(m.mode !== "major" ? { mode: m.mode } : {}) }));
+}
+
+/** Staff `u`'s keys moved as `shifts` moves its notes (`sign` -1: back), a key written where the shift changes. */
+function shiftKeys(score, u, shifts, sign) {
+  const list = keyList(score, u);
+  const timeOf = (m) => barStart(score, m.bar) + m.pos;
+  for (const t of shifts.points) {
+    if (list.some((m) => Math.abs(timeOf(m) - t) < 1e-6)) continue;
+    const b = barAt(score, t);
+    const now = list.filter((m) => timeOf(m) <= t + 1e-6).pop();
+    list.push({ bar: b, pos: t - barStart(score, b), key: now.key, mode: now.mode });
+  }
+  list.sort((x, y) => timeOf(x) - timeOf(y));
+  const moved = list.map((m) => {
+    const shift = shifts.at(timeOf(m));
+    return shift ? { ...m, key: clampKey(m.key + sign * fifthsOf(shift.steps, shift.semitones)) } : m;
+  });
+  setKeyList(score, u, moved);
+}
+
+/** The staves of `score` written apart from how they sound, by `shiftsOf(u)`: [{ staff, shifts }]. */
+function shiftedStaves(score, shiftsOf) {
+  return staffLanes(score)
+    .filter((u) => !isDrums(score, u) && score.staves[u].raw == null && !isChords(score, u) && !isFigures(score, u))
+    .map((u) => ({ staff: score.staves[u], shifts: shiftsOf(score, u) }))
+    .filter(({ shifts }) => shifts.points.length || shifts.at(0));
+}
+
+/** The staves `moved` (as shiftedStaves) moved, notes and keys: `sign` 1 to written, -1 back. */
+function moveStaves(score, moved, sign) {
+  for (const { staff, shifts } of moved) {
+    const u = score.staves.indexOf(staff);
+    if (u < 0) continue;
+    for (const lane of voiceLanes(score, u)) shiftLane(score, lane, shifts.at, sign);
+    shiftKeys(score, u, shifts, sign);
+  }
+}
+
+const keyFields = (staff) => JSON.stringify([staff.key ?? null, staff.mode ?? null, staff.keys ?? null]);
+
+/**
+ * Runs `fn(score)` on the score turned to written pitch — each transposing
+ * staff's notes and keys as its player reads them — then turns it back to
+ * concert pitch. What `fn` wrote at written pitch is stored as it sounds.
+ * Answers what `fn` answers.
+ */
+export function asWritten(score, fn) {
+  const moved = shiftedStaves(score, writtenShifts);
+  if (!moved.length) return fn(score);
+  const was = moved.map(({ staff }) => ({ key: staff.key, mode: staff.mode, keys: staff.keys }));
+  moveStaves(score, moved, 1);
+  const shown = moved.map(({ staff }) => keyFields(staff));
+  try {
+    return fn(score);
+  } finally {
+    const untouched = moved.map(({ staff }, k) => keyFields(staff) === shown[k]);
+    moveStaves(score, moved, -1);
+    // Keys `fn` left as they were are given back as they were written.
+    moved.forEach(({ staff }, k) => {
+      if (!untouched[k]) return;
+      for (const field of ["key", "mode", "keys"]) {
+        if (was[k][field] === undefined) delete staff[field];
+        else staff[field] = was[k][field];
+      }
+    });
+  }
+}
+
 /**
  * The parts a score is printed in, in order: one for each staff — and, for
  * a staff of two parts (\\partCombine, #1021), one for each desk, its lane

@@ -238,7 +238,7 @@ export function startStudio(root, options = {}) {
     drag: null,
     sign: null, // the sign selected to be moved (#1020): { staff, t, on, piece, kind }
     signDrag: null,
-    written: false, // transposing instruments shown as written, for reading only
+    written: false, // transposing instruments shown, and written into, as their players read them (#1023)
     mode: "score", // or "midi": the MIDI view in place of the engraving
     rollLayout: "tracks", // the MIDI view's: a strip per track, or "keys", one keyboard
     rollOnly: null, // on the keyboard, one lane only (a double click on its track's name)

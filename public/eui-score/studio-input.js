@@ -84,7 +84,7 @@ export function install(ctx) {
       }
       // Always room to write into.
       M.ensureLength(score, st.input.t + 1);
-    });
+    }, { pitched: true });
   }
 
   function inputBack() {

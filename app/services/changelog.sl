@@ -13,6 +13,16 @@ class Changelog
       {"date": "2026-11-23", "entries": [
         {
           "area": "site",
+          "title": "Writing at written pitch",
+          "text": "View ▸ Written pitch is no longer for reading only: a clarinet, a horn or a saxophone is "
+          + "written into as its player reads it. A letter typed, the ghost note clicked, a key played on a "
+          + "MIDI keyboard and a sharp or a flat are the written notes, in the written key, and the score "
+          + "keeps them as they sound — a B♭ clarinet's written D is a C. Paste and the other tools work "
+          + "there too, on the notes as they sound.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
           "title": "Error pages in Score's own hand",
           "text": "An address that leads nowhere now shows a page of the site, in its language, not a line of "
           + "plain text: \"This page is taking a rest\", over a bar engraved by Score that ends in a whole rest "

@@ -31,7 +31,7 @@ export function install(ctx) {
     else edit((score) => {
       const t = need();
       M.setPitch(score, t.s, t.i, M.pitchOfKey(key, M.keyOf(score, t.s, M.starts(score.staves[t.s])[t.i])), false, t.head);
-    });
+    }, { pitched: true });
     hear();
   }
 
