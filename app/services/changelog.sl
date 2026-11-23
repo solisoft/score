@@ -10,6 +10,17 @@
 class Changelog
   static def days
     [
+      {"date": "2026-11-23", "entries": [{
+        "area": "site",
+        "title": "Each part is laid out on its own",
+        "text": "File ▸ Print a part is now File ▸ Parts. Under the instrument, the part has its own layout: a "
+        + "new line or a new page after any bar, its staff size, its systems a page, its lines spread evenly, "
+        + "the space between its systems. It is kept with the score, undone like any edit, and follows its "
+        + "bars and its staff; Reset gives the part back to the score's layout. The score itself is not "
+        + "touched, and its own breaks are no longer put into the parts. The read page's parts are laid out "
+        + "the same.",
+        "link": "playground"
+      }]},
       {"date": "2026-11-18", "entries": [
         {
           "area": "engine",

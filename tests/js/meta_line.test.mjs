@@ -196,6 +196,8 @@ const SAMPLES = {
     at: (lane) => ({ soundfont: { [lane]: { name: "x.sf2", hash: "0123456789abcdef", bank: 0, program: 1, preset: "p" } } }),
     lanes: (meta) => Object.keys(meta?.soundfont ?? {}),
   },
+  // A part's own layout (#1018): no sound, so no channel; laid out by partOf, it is not in the part's settings.
+  parts: { channel: "none", inPart: false, at: (lane) => ({ parts: { [lane]: { breaks: { 0: "line" }, staffSize: 16 } } }), lanes: (meta) => Object.keys(meta?.parts ?? {}) },
 };
 
 /** A key known only to the registry, added for a test: it must work everywhere with nothing else written. */
@@ -249,7 +251,7 @@ test("every key numbered by staff follows its staff: a staff or a voice added be
       M.removeVoice(score, 0, 2);
       assert.deepEqual(where(score), ["1"], `${name}: that voice taken away again`);
       // A part: its staff's settings at its lanes there, the others' gone.
-      assert.deepEqual(sample.lanes(M.partOf(trio(sample), 1).meta), ["0"], `${name}: its own part`);
+      assert.deepEqual(sample.lanes(M.partOf(trio(sample), 1).meta), sample.inPart === false ? [] : ["0"], `${name}: its own part`);
       assert.deepEqual(sample.lanes(M.partOf(trio(sample), 2).meta), [], `${name}: another staff's part`);
     }
   });

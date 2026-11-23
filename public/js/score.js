@@ -219,7 +219,7 @@
             var M = all[1].M;
             var parse = function (text) { return withSpans(all[0].engine, text); };
             var read = M.fromParsed(parse(src), src, { parse: parse });
-            return { E: all[0], M: M, score: read.score || null };
+            return { E: all[0], M: M, score: read.score || null, text: src };
           });
         });
       section.__score.catch(function () { section.__score = null; });
@@ -268,7 +268,11 @@
     readScore(section).then(function (read) {
       var select = section.querySelector("[data-read-part-staff]");
       var name = select.selectedOptions[0] ? select.selectedOptions[0].textContent : word("part");
-      var src = read.M.toLilyPond(read.M.partOf(read.score, Number(select.value)), { written: true }).source;
+      // The part's own layout (#1018) is on the text's settings line: read from it, on a copy,
+      // so the page's own score stays as the page reads it.
+      var layouts = read.M.readMeta(read.text).parts;
+      var own = layouts ? Object.assign({}, read.score, { meta: { parts: layouts } }) : read.score;
+      var src = read.M.toLilyPond(read.M.partOf(own, Number(select.value)), { written: true }).source;
       var file = section.getAttribute("data-file") + " - " + name;
       if (!asPdf) return save(src, file + ".ly", "text/x-lilypond");
       return read.E.toPdf(src, section.getAttribute("data-title") + " — " + name).then(function (pdf) {

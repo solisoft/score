@@ -116,6 +116,39 @@ describe("Sharing") do
       assert_eq(res_status(get("/s/#{score.share_token}/score.pdf")), 200)
     end
 
+    test("a part's own layout (#1018) is saved with the score, and the read page's source carries it") do
+      owner = share_user()
+      score = Score.start(owner, Score.blank_source("Parts apart"))
+      share_sign_in(owner)
+      post("/app/scores/#{score._key}/share", {"visibility": "link"})
+      layout = "%% eui-score {\"parts\":{\"0\":{\"breaks\":{\"1\":\"line\"},\"staffSize\":16}}}"
+      music = "\\header { title = \"Parts apart\" }\n{ c'1 | d'1 | e'1 | f'1 }\n"
+      saved = put(
+        "/app/scores/#{score._key}",
+        {
+          "source": music + layout + "\n",
+          "revision": Score.find(score._key).revision
+        }
+      )
+      assert_eq(res_status(saved), 200)
+      assert_contains(Score.find(score._key).source, layout)
+      clear_cookies()
+      source = get("/s/#{score.share_token}/source.ly")
+      assert_eq(res_status(source), 200)
+      assert_contains(res_body(source), layout)
+      # The score itself is engraved as before: its page still opens, and offers the parts.
+      page = get("/s/#{score.share_token}")
+      assert_eq(res_status(page), 200)
+      assert_contains(res_body(page), "data-read-parts")
+      # A guest saves nothing: the layout stays the owner's.
+      refused = put(
+        "/app/scores/#{score._key}",
+        {"source": music, "revision": Score.find(score._key).revision}
+      )
+      assert_ne(res_status(refused), 200)
+      assert_contains(Score.find(score._key).source, layout)
+    end
+
     test("a guest takes the score away: PDF under its title, MIDI, MusicXML, LilyPond, parts; nothing edits") do
       owner = share_user()
       score = Score.start(owner, Score.blank_source("Für Elise / op. 59"))

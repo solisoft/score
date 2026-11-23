@@ -250,5 +250,8 @@
   "{n} settings lines (%% eui-score) were found: they are merged into one, the later one winning where they differ.": "{n} lignes de réglages (%% eui-score) ont été trouvées : elles sont fusionnées en une seule, la dernière l'emportant là où elles diffèrent.",
   "Hidden settings that do not read are left out: {what}.": "Des réglages cachés illisibles sont écartés : {what}.",
   "Too long to be saved: this score's text has {size} characters, {limit} at most. Its hidden settings (curves, velocities…) take {meta} of them.": "Trop long pour être enregistré : le texte de cette partition compte {size} caractères, {limit} au plus. Ses réglages cachés (courbes, vélocités…) en occupent {meta}.",
-  "Nearly too long to be saved: this score's text has {size} characters, {limit} at most. Its hidden settings (curves, velocities…) take {meta} of them.": "Presque trop long pour être enregistré : le texte de cette partition compte {size} caractères, {limit} au plus. Ses réglages cachés (courbes, vélocités…) en occupent {meta}."
+  "Nearly too long to be saved: this score's text has {size} characters, {limit} at most. Its hidden settings (curves, velocities…) take {meta} of them.": "Presque trop long pour être enregistré : le texte de cette partition compte {size} caractères, {limit} au plus. Ses réglages cachés (courbes, vélocités…) en occupent {meta}.",
+  "Part layouts": "Mises en page des parties séparées",
+  "spreading the lines is on or off": "la répartition des systèmes est activée ou non",
+  "the space between systems is {least} to {most} staff spaces": "l'espace entre les systèmes va de {least} à {most} interlignes"
 }

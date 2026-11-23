@@ -2684,6 +2684,7 @@ export function deleteBars(score, a, b) {
   for (const [holder, name] of barLists(score)) if (holder === score) holder[name] = shift(holder[name]);
   // A break after a bar that goes, goes; those after the bars move back.
   score.breaks = Object.fromEntries(Object.entries(score.breaks ?? {}).filter(([bar]) => Number(bar) < a || Number(bar) > b).map(([bar, kind]) => [Number(bar) > b ? Number(bar) - count : Number(bar), kind]));
+  movePartBreaks(score, (bar) => (bar < a ? bar : bar > b ? bar - count : null));
   score.staves.forEach((staff, s) => {
     for (const name of STAFF_LISTS) if (staff[name]) staff[name] = shift(staff[name]);
     ossiasAfterDelete(staff, a, b, count);
@@ -3101,6 +3102,19 @@ const keptEntries = (value, ok) => (isPlain(value) ? Object.fromEntries(Object.e
 /** `obj` with `fn` applied to each of its values; undefined stays undefined. */
 const mapEntries = (obj, fn) => obj && Object.fromEntries(Object.entries(obj).map(([key, value]) => [key, fn(value)]));
 
+/** A part's own layout (META_KEYS' `parts`) with what does not fit left out; undefined when nothing of it does. */
+function partLayoutKept(layout) {
+  if (!isPlain(layout)) return undefined;
+  const out = {};
+  const breaks = keptEntries(layout.breaks, (kind, bar) => isLane(bar) && (kind === "line" || kind === "page"));
+  if (breaks && Object.keys(breaks).length) out.breaks = breaks;
+  if (isTick(layout.staffSize) && layout.staffSize >= STAFF_SIZES[0] && layout.staffSize <= STAFF_SIZES[1]) out.staffSize = layout.staffSize;
+  if (Number.isInteger(layout.systemsPerPage) && layout.systemsPerPage >= 1 && layout.systemsPerPage <= MAX_SYSTEMS_PER_PAGE) out.systemsPerPage = layout.systemsPerPage;
+  if (typeof layout.evenPages === "boolean") out.evenPages = layout.evenPages;
+  if (isTick(layout.systemSpacing) && layout.systemSpacing >= SYSTEM_SPACINGS[0] && layout.systemSpacing <= SYSTEM_SPACINGS[1]) out.systemSpacing = layout.systemSpacing;
+  return Object.keys(out).length ? out : undefined;
+}
+
 /** Markers `[tick, …]`: the arrays that start with a tick. */
 const markers = (list) => list.filter((marker) => Array.isArray(marker) && isTick(marker[0]));
 
@@ -3108,7 +3122,7 @@ const markers = (list) => list.filter((marker) => Array.isArray(marker) && isTic
  * A meta key numbered by staff, kept under `meta[name]` as `{ lane: value }`:
  * how the lanes are found in it, moved and laid out (see META_KEYS). `lay`
  * answers `[lane, value]` at the merged score's lane (`at.lane`, its ticks by
- * `at.tick`), or nothing, after `drop` was told what found no place.
+ * `at.tick`, its bars by `at.bar`), or nothing, after `drop` was told what found no place.
  */
 export function metaByLane(name, more = {}) {
   return {
@@ -3239,6 +3253,32 @@ export const META_KEYS = {
   // A staff's synthesizer and its own SoundFont's preset (#391); only a staff plays one.
   synth: { label: () => tr("Synthesizer"), clean: (x) => keptEntries(x, isPlain), lanes: metaByLane("synth", { others: "skip" }) },
   soundfont: { label: () => tr("Own SoundFont"), clean: (x) => keptEntries(x, isPlain), lanes: metaByLane("soundfont", { others: "skip" }) },
+  // Each part's own layout (#1018), by its staff's lane: { breaks: { bar: "line" | "page" }, staffSize,
+  // systemsPerPage, evenPages, systemSpacing } — what partOf lays the part out with, the score's left as it is.
+  parts: {
+    label: () => tr("Part layouts"),
+    clean: (parts) => {
+      const kept = mapEntries(keptEntries(parts, (layout, lane) => isLane(lane) && partLayoutKept(layout) !== undefined), partLayoutKept);
+      return kept && Object.keys(kept).length ? kept : undefined;
+    },
+    lanes: metaByLane("parts", {
+      // A break follows its bar (`at.bar`, a merge's); one whose bar is gone goes with it.
+      lay: (lane, layout, at, drop) => {
+        if (at.lane == null) return drop(`parts ${at.where} ${JSON.stringify(layout)}`);
+        const { breaks, ...kept } = isPlain(layout) ? layout : {};
+        const moved = {};
+        for (const [bar, kind] of Object.entries(breaks ?? {})) {
+          const b = at.bar ? at.bar(Number(bar)) : { bar: Number(bar), where: bar };
+          if (b.bar == null) drop(`parts ${at.where} break ${b.where}=${kind}`);
+          else moved[b.bar] = kind;
+        }
+        if (Object.keys(moved).length) kept.breaks = moved;
+        return Object.keys(kept).length ? [at.lane, kept] : undefined;
+      },
+      others: "skip",
+      channel: "none",
+    }),
+  },
 };
 
 /** The meta keys numbered by staff: [[name, lanes]]. */
@@ -3936,6 +3976,7 @@ export function insertBars(score, at, count) {
   }
   // A break stays after its bar: those from bar `at` on move along.
   score.breaks = Object.fromEntries(Object.entries(score.breaks ?? {}).map(([bar, kind]) => [Number(bar) >= at ? Number(bar) + count : Number(bar), kind]));
+  movePartBreaks(score, (bar) => (bar >= at ? bar + count : bar));
 }
 
 // ---- Sharing ----------------------------------------------------------------------------------
@@ -4633,6 +4674,10 @@ export const PAGE_LINES = [["oddHeader", "oddHeaderMarkup"], ["evenHeader", "eve
 /** The fields a header or a footer may name: the header's, and the page's number. */
 export const PAGE_FIELDS = ["title", "subtitle", "composer", "arranger", "poet", "piece", "opus", "instrument", "copyright", "page"];
 const MAX_SYSTEMS_PER_PAGE = 20;
+/** A staff size, in points, from the smallest to the largest. */
+const STAFF_SIZES = [11, 26];
+/** The space from a system to the next (a part's own, #1018), in staff spaces: LilyPond's is 12. */
+export const SYSTEM_SPACINGS = [6, 40];
 
 /** At most `count` systems on a page of the PDF; null, "" or 0 for as many as fit. */
 export function setSystemsPerPage(score, count) {
@@ -4836,7 +4881,7 @@ export function setPaper(score, { size, staffSize }) {
   const name = String(size ?? "a4").toLowerCase();
   if (!PAPER_SIZES.includes(name.replace(/landscape$/, ""))) throw new Error(tr("no such paper: {size}", { size }));
   const pt = staffSize == null || staffSize === "" ? 20 : Number(staffSize);
-  if (!(pt >= 11 && pt <= 26)) throw new Error(tr("a staff size is 11 to 26 points"));
+  if (!(pt >= STAFF_SIZES[0] && pt <= STAFF_SIZES[1])) throw new Error(tr("a staff size is 11 to 26 points"));
   score.paper = { ...(score.paper ?? paperFrom(null)), size: name === "a4" ? null : name, staffSize: pt === 20 ? null : pt };
 }
 
@@ -4893,6 +4938,114 @@ export function setBreak(score, bar, kind) {
   score.breaks = { ...(score.breaks ?? {}) };
   if (kind == null) delete score.breaks[bar];
   else score.breaks[bar] = kind;
+}
+
+// ---- A part's own layout (#1018) ---------------------------------------------------------------
+//
+// A part is laid out apart from the score: its own line and page breaks,
+// staff size, systems a page, spreading and space between systems, kept on
+// the settings line under `parts`, by its staff's lane (META_KEYS), so the
+// score's own layout is not touched. partOf lays the part out with them;
+// what a part does not set is the score's, but for the breaks, which are
+// the part's alone.
+
+/** The lane a part's layout is kept under: its staff's first, which must be one of the score's. */
+function partLayoutLane(score, lane) {
+  const n = Number(lane);
+  if (!Number.isInteger(n) || !staffLanes(score).includes(n)) throw new Error(tr("no such staff"));
+  return String(n);
+}
+
+/** The part of lane `lane`'s own layout put down (`layout`); empty, it goes, and the key with the last one. */
+function putPartLayout(score, lane, layout) {
+  const parts = { ...(isPlain(score.meta?.parts) ? score.meta.parts : {}) };
+  if (Object.keys(layout).length) parts[lane] = layout;
+  else delete parts[lane];
+  score.meta = { ...(score.meta ?? {}) };
+  if (Object.keys(parts).length) score.meta.parts = parts;
+  else delete score.meta.parts;
+}
+
+/** Each part's own breaks moved with the bars: `move(bar)` answers a break's new bar, or null when it goes. */
+function movePartBreaks(score, move) {
+  const parts = score.meta?.parts;
+  if (!isPlain(parts)) return;
+  for (const [lane, layout] of Object.entries(parts)) {
+    if (!isPlain(layout?.breaks)) continue;
+    const breaks = Object.fromEntries(Object.entries(layout.breaks).map(([bar, kind]) => [move(Number(bar)), kind]).filter(([bar]) => bar != null));
+    const { breaks: was, ...rest } = layout;
+    putPartLayout(score, lane, Object.keys(breaks).length ? { ...rest, breaks } : rest);
+  }
+}
+
+/**
+ * The layout of the part of staff `lane`, as its dialog shows it: `breaks`
+ * (bar → "line" or "page"), `staffSize`, `systemsPerPage`, `evenPages`,
+ * `systemSpacing` — each null where the part follows the score.
+ */
+export function partLayout(score, lane) {
+  const own = partLayoutKept(score.meta?.parts?.[String(upperOf(score, lane))]) ?? {};
+  return {
+    breaks: { ...(own.breaks ?? {}) },
+    staffSize: own.staffSize ?? null,
+    systemsPerPage: own.systemsPerPage ?? null,
+    evenPages: own.evenPages ?? null,
+    systemSpacing: own.systemSpacing ?? null,
+  };
+}
+
+/** In the part of staff `lane` alone, the break after bar `bar`: "line", "page", or none (null). */
+export function setPartBreak(score, lane, bar, kind) {
+  const key = partLayoutLane(score, lane);
+  if (!Number.isInteger(bar) || bar < 0 || bar >= barsOf(score) - 1) throw new Error(tr("a break goes after a bar, before the last one ends"));
+  if (kind != null && kind !== "line" && kind !== "page") throw new Error(tr("a break is a line's or a page's"));
+  const { breaks: was, ...rest } = partLayoutKept(score.meta?.parts?.[key]) ?? {};
+  const breaks = { ...(was ?? {}) };
+  if (kind == null) delete breaks[bar];
+  else breaks[bar] = kind;
+  putPartLayout(score, key, Object.keys(breaks).length ? { ...rest, breaks } : rest);
+}
+
+/**
+ * The page of the part of staff `lane` alone — of `staffSize` (points),
+ * `systemsPerPage`, `evenPages` (true or false) and `systemSpacing` (staff
+ * spaces), those named in `set`: null or "" gives one back to the score.
+ */
+export function setPartLayout(score, lane, set) {
+  const key = partLayoutLane(score, lane);
+  const layout = { ...(partLayoutKept(score.meta?.parts?.[key]) ?? {}) };
+  const blank = (value) => value == null || value === "";
+  const put = (name, value) => {
+    if (value == null) delete layout[name];
+    else layout[name] = value;
+  };
+  if ("staffSize" in set) {
+    const pt = blank(set.staffSize) ? null : Number(set.staffSize);
+    if (pt != null && !(pt >= STAFF_SIZES[0] && pt <= STAFF_SIZES[1])) throw new Error(tr("a staff size is 11 to 26 points"));
+    put("staffSize", pt);
+  }
+  if ("systemsPerPage" in set) {
+    const n = blank(set.systemsPerPage) ? 0 : Number(set.systemsPerPage);
+    if (!Number.isInteger(n) || n < 0 || n > MAX_SYSTEMS_PER_PAGE) throw new Error(tr("systems a page: 1 to {most}, or as many as fit", { most: MAX_SYSTEMS_PER_PAGE }));
+    put("systemsPerPage", n || null);
+  }
+  if ("evenPages" in set) {
+    if (set.evenPages != null && typeof set.evenPages !== "boolean") throw new Error(tr("spreading the lines is on or off"));
+    put("evenPages", set.evenPages ?? null);
+  }
+  if ("systemSpacing" in set) {
+    const space = blank(set.systemSpacing) ? null : Number(set.systemSpacing);
+    if (space != null && !(space >= SYSTEM_SPACINGS[0] && space <= SYSTEM_SPACINGS[1])) {
+      throw new Error(tr("the space between systems is {least} to {most} staff spaces", { least: SYSTEM_SPACINGS[0], most: SYSTEM_SPACINGS[1] }));
+    }
+    put("systemSpacing", space);
+  }
+  putPartLayout(score, key, layout);
+}
+
+/** The part of staff `lane` laid out as the score is again: its own breaks and page gone. */
+export function resetPartLayout(score, lane) {
+  putPartLayout(score, partLayoutLane(score, lane), {});
 }
 
 /** What goes before the music: the staff size, then \\paper. */
@@ -4986,6 +5139,18 @@ export function partOf(score, s) {
     dropMetaLanes(part.meta, (lane) => !lanes.includes(lane));
     shiftMetaLanes(part.meta, upper, -upper);
   }
+  // Its own layout (#1018): its breaks alone — the score's are the score's — and, where it sets them, its
+  // staff size, systems a page, spreading and space between systems. The paper, the margins, the headers
+  // and the footers stay the score's. Laid out, the part needs the setting no more: it is not written.
+  const own = partLayoutKept(part.meta?.parts?.["0"]) ?? {};
+  if (part.meta) delete part.meta.parts;
+  part.breaks = own.breaks ?? {};
+  const paper = { ...(part.paper ?? paperFrom(null)) };
+  if (own.staffSize != null) paper.staffSize = own.staffSize === 20 ? null : own.staffSize;
+  if (own.systemsPerPage != null) paper.systemsPerPage = own.systemsPerPage;
+  if (own.evenPages != null) paper.evenPages = own.evenPages ? true : null;
+  if (own.systemSpacing != null) paper.more = [...(paper.more ?? []).filter((said) => !/^system-system-spacing\b/.test(said)), `system-system-spacing.basic-distance = #${own.systemSpacing}`];
+  part.paper = paper;
   part.groups = [];
   part.group = "none";
   part.header = { ...part.header, instrument: staff.name || INSTRUMENTS[instrumentOf(score, upper)]?.name || "" };

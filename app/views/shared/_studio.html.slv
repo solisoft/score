@@ -61,7 +61,7 @@
             <button type="button" role="menuitem" data-act="save-stems"><%= t("app.editor.save_the_stems") %> <kbd><%= t("app.editor.zip_a_wav_a_staff") %></kbd></button>
             <button type="button" role="menuitem" data-act="save-png"><%= t("app.editor.save_a_picture") %> <kbd>.png</kbd></button>
             <button type="button" role="menuitem" data-act="save-svg"><%= t("app.editor.save_a_drawing") %> <kbd>.svg</kbd></button>
-            <button type="button" role="menuitem" data-act="parts"><%= t("app.editor.print_a_part") %> <kbd><%= t("app.editor.one_instrument") %></kbd></button>
+            <button type="button" role="menuitem" data-act="parts"><%= t("app.editor.parts_menu") %> <kbd><%= t("app.editor.one_instrument") %></kbd></button>
             <hr>
             <%# The owner shares from the score's sharing page; someone it is
                 shared with copies its address in the app; the playground
@@ -906,14 +906,58 @@
     <p class="muted midi-learn-note"><%- t("app.editor.clock_note") %></p>
   </dialog>
 
-  <%# File ▸ Print a part…: one instrument of the score, as its player reads it. %>
+  <%# File ▸ Parts…: one instrument of the score, as its player reads it, laid
+      out on its own (#1018) — its breaks, staff size, systems a page and
+      spacing, kept with the score and leaving the score's layout as it is
+      (public/eui-score/studio-files.js). %>
   <dialog class="studio-keys studio-parts" data-parts aria-labelledby="studio-parts-title">
     <div class="studio-keys-head">
-      <h2 id="studio-parts-title"><%= t("app.editor.print_a_part_title") %></h2>
+      <h2 id="studio-parts-title"><%= t("app.editor.parts_title") %></h2>
       <button type="button" class="studio-menu" data-parts-close aria-label="<%= t("app.editor.close") %>">×</button>
     </div>
     <label class="tool-field">Instrument <select data-parts-staff></select></label>
     <p class="muted studio-parts-note"><%= t("app.editor.a_part_is_written_as_its_player_reads_it") %></p>
+    <fieldset class="studio-page-lines studio-parts-layout" data-parts-layout>
+      <legend><%= t("app.editor.parts_layout") %></legend>
+      <div class="studio-parts-fields">
+        <label class="tool-field"><%= t("app.editor.staff_size") %>
+          <select data-parts-field="staffSize">
+            <option value=""><%= t("app.editor.parts_as_the_score") %></option>
+            <% for points in [14, 16, 17, 18, 20, 22, 24, 26] %>
+              <option value="<%= points %>"><%= points %> pt</option>
+            <% end %>
+          </select>
+        </label>
+        <label class="tool-field"><%= t("app.editor.systems_a_page") %>
+          <select data-parts-field="systemsPerPage">
+            <option value=""><%= t("app.editor.parts_as_the_score") %></option>
+            <% for count in range(1, 13) %>
+              <option value="<%= count %>"><%= count %></option>
+            <% end %>
+          </select>
+        </label>
+        <label class="tool-field"><%= t("app.editor.parts_system_spacing") %>
+          <select data-parts-field="systemSpacing">
+            <option value=""><%= t("app.editor.parts_as_the_score") %></option>
+            <% for space in [8, 10, 12, 14, 16, 18, 20, 24, 28, 32] %>
+              <option value="<%= space %>"><%= space %></option>
+            <% end %>
+          </select>
+        </label>
+        <label class="tool-check"><input type="checkbox" data-parts-field="evenPages"> <%= t("app.editor.spread_the_lines_evenly_over_the_pages") %></label>
+      </div>
+      <div class="studio-parts-break">
+        <label class="tool-field"><%= t("app.editor.parts_break_after_bar") %>
+          <input type="number" min="1" step="1" inputmode="numeric" data-parts-bar>
+        </label>
+        <button type="button" class="tool" data-parts-break="line"><%= t("app.editor.parts_new_line") %></button>
+        <button type="button" class="tool" data-parts-break="page"><%= t("app.editor.parts_new_page") %></button>
+      </div>
+      <ul class="studio-parts-breaks" data-parts-breaks aria-label="<%= t("app.editor.parts_breaks") %>"></ul>
+      <p class="studio-parts-status" data-parts-status role="status"></p>
+      <button type="button" class="tool" data-parts-reset><%= t("app.editor.parts_reset") %></button>
+    </fieldset>
+    <p class="muted studio-parts-note"><%= t("app.editor.parts_layout_note") %></p>
     <div class="studio-parts-preview" data-parts-preview></div>
     <div class="tool-row studio-new-actions">
       <button type="button" class="tool tool-wide" data-parts-ly><%= t("app.editor.save_as_ly") %></button>

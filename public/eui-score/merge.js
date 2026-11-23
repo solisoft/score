@@ -457,6 +457,8 @@ function layMeta(score, meta, side, staffMap, barMap, laneAt, out) {
     const k = b >= bars ? barMap.length : barOut.get(b);
     return { tick: k == null ? null : M.barStart(out, k) + offset, where: `${b}+${offset}` };
   };
+  /** `{ bar, where }`: the output bar (or null) of bar `b`, as a part's own break names it (#1018). */
+  const barOf = (b) => ({ bar: barOut.get(b) ?? null, where: `bar ${b}` });
   const laidOut = { ...meta };
   // Every key numbered by staff, as the registry says (score-model.js META_KEYS).
   for (const [, byLane] of M.metaLaneKeys()) {
@@ -470,7 +472,7 @@ function layMeta(score, meta, side, staffMap, barMap, laneAt, out) {
         if (byLane.others === "keep") moved[key] = value;
         continue;
       }
-      const entry = byLane.lay(key, value, { ...laneOf(lane), tick: tickOf }, (what) => {
+      const entry = byLane.lay(key, value, { ...laneOf(lane), tick: tickOf, bar: barOf }, (what) => {
         dropped.push(what);
       });
       if (entry) moved[entry[0]] = entry[1];

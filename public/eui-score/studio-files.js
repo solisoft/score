@@ -33,7 +33,7 @@ function templateWords(template) {
 /** The File menu's dialogs set up; answers what opens, shares and saves files. */
 export function install(ctx) {
   const { root, options, sheet, status, st, quantizeBox, loaded, toPdf, download, engine, M, P, X, musicXml } = ctx;
-  const { open, refuse, say, mixHeard, soundMidi, instrumentName } = ctx.call;
+  const { open, refuse, say, mixHeard, soundMidi, instrumentName, edit, barNo } = ctx.call;
 
   // "New…": a dialog to start from a template, its title, key, metre, tempo and bars set.
   const newDialog = root.querySelector("[data-new]");
@@ -78,10 +78,15 @@ export function install(ctx) {
     }
   });
 
-  // File ▸ Print a part…: one staff, written as its player reads it.
+  // File ▸ Parts…: one staff, written as its player reads it, laid out on its
+  // own (#1018): its breaks, staff size, systems a page, spreading and space
+  // between systems are the part's alone (score-model.js, setPartBreak and
+  // setPartLayout), each an edit of the score: undone, saved and shared with it.
   const partsDialog = root.querySelector("[data-parts]");
   const partsStaff = partsDialog?.querySelector("[data-parts-staff]");
-  const partSource = () => M.toLilyPond(M.partOf(st.score, Number(partsStaff.value)), { written: true }).source;
+  const partsStatus = partsDialog?.querySelector("[data-parts-status]");
+  const partLane = () => Number(partsStaff.value);
+  const partSource = () => M.toLilyPond(M.partOf(st.score, partLane()), { written: true }).source;
   const partName = () => partsStaff.selectedOptions[0]?.textContent ?? "part";
   async function previewPart() {
     await loaded();
@@ -92,6 +97,55 @@ export function install(ctx) {
       box.textContent = error.message ?? String(error);
     }
   }
+  /** The part's own layout shown: its fields, and its breaks, each with a button that takes it away. */
+  function showPartLayout() {
+    const layout = M.partLayout(st.score, partLane());
+    for (const field of partsDialog.querySelectorAll("[data-parts-field]")) {
+      const value = layout[field.dataset.partsField];
+      if (field.type === "checkbox") {
+        // Not set, the part spreads its lines as the score does.
+        field.checked = value ?? Boolean(st.score.paper?.evenPages);
+        continue;
+      }
+      // A value the list does not offer (set in the text) is shown too.
+      for (const option of field.querySelectorAll("[data-parts-own]")) option.remove();
+      if (value != null && ![...field.options].some((option) => option.value === String(value))) {
+        const own = new Option(String(value), String(value));
+        own.dataset.partsOwn = "";
+        field.append(own);
+      }
+      field.value = value == null ? "" : String(value);
+    }
+    const list = partsDialog.querySelector("[data-parts-breaks]");
+    list.replaceChildren(...Object.entries(layout.breaks).sort(([a], [b]) => Number(a) - Number(b)).map(([bar, kind]) => {
+      const n = barNo(Number(bar));
+      const item = document.createElement("li");
+      const said = kind === "page" ? tr("New page after bar {n}", { n }) : tr("New line after bar {n}", { n });
+      const remove = Object.assign(document.createElement("button"), { type: "button", className: "tool", textContent: tr("Remove") });
+      remove.dataset.partsRemove = bar;
+      remove.setAttribute("aria-label", `${tr("Remove")}: ${said}`);
+      item.append(Object.assign(document.createElement("span"), { textContent: said }), remove);
+      return item;
+    }));
+    partsDialog.querySelector("[data-parts-reset]").disabled = !st.score.meta?.parts?.[String(partLane())];
+  }
+  /** One change to the part's layout, as an edit of the score; a refusal is said in the dialog, and nothing changes. */
+  function partEdit(change, said = "") {
+    let refusal = "";
+    const done = edit((score) => {
+      try {
+        change(score);
+      } catch (error) {
+        refusal = error.message ?? String(error);
+        throw error;
+      }
+    });
+    // What the editor itself refuses (a piece edited in its text, written pitch) is on its status line.
+    partsStatus.textContent = done ? said : refusal || status.textContent;
+    partsStatus.classList.toggle("studio-error", !done);
+    showPartLayout();
+    return done ? previewPart() : undefined;
+  }
   function openParts() {
     if (!st.score) return say(tr("A part needs the score tools: this piece is edited in its text."), true);
     partsStaff.replaceChildren(...M.staffLanes(st.score).map((s, n) => {
@@ -99,10 +153,38 @@ export function install(ctx) {
       const name = staff.name || (M.INSTRUMENTS[M.instrumentOf(st.score, s)] ? instrumentName(M.INSTRUMENTS[M.instrumentOf(st.score, s)].name) : null) || tr("Staff {n}", { n: n + 1 });
       return new Option(name, String(s));
     }));
+    partsStatus.textContent = "";
+    showPartLayout();
     partsDialog.showModal();
     return previewPart();
   }
-  partsStaff?.addEventListener("change", previewPart);
+  partsStaff?.addEventListener("change", () => {
+    partsStatus.textContent = "";
+    showPartLayout();
+    return previewPart();
+  });
+  partsDialog?.querySelector("[data-parts-layout]").addEventListener("change", (event) => {
+    const field = event.target.closest("[data-parts-field]");
+    if (!field) return;
+    const value = field.type === "checkbox" ? field.checked : field.value;
+    partEdit((score) => M.setPartLayout(score, partLane(), { [field.dataset.partsField]: value }));
+  });
+  partsDialog?.querySelector("[data-parts-layout]").addEventListener("click", (event) => {
+    const lane = partLane();
+    const remove = event.target.closest("[data-parts-remove]");
+    if (remove) return partEdit((score) => M.setPartBreak(score, lane, Number(remove.dataset.partsRemove), null));
+    if (event.target.closest("[data-parts-reset]")) return partEdit((score) => M.resetPartLayout(score, lane), tr("This part is laid out as the score is."));
+    const kind = event.target.closest("[data-parts-break]")?.dataset.partsBreak;
+    if (!kind) return undefined;
+    const box = partsDialog.querySelector("[data-parts-bar]");
+    const n = Number(box.value);
+    // The number the score shows: after a pickup, the pickup is bar 0.
+    const bar = box.value.trim() === "" || !Number.isInteger(n) ? NaN : n - M.barNumber(st.score, 0);
+    const said = kind === "page" ? tr("A new page after bar {n}, in this part alone.", { n }) : tr("A new line after bar {n}, in this part alone.", { n });
+    return partEdit((score) => M.setPartBreak(score, lane, bar, kind), said)?.then(() => {
+      box.value = "";
+    });
+  });
   partsDialog?.querySelector("[data-parts-close]").addEventListener("click", () => partsDialog.close());
   partsDialog?.querySelector("[data-parts-ly]").addEventListener("click", () => download(partSource(), `${fileName()} - ${partName()}.ly`, "text/x-lilypond"));
   partsDialog?.querySelector("[data-parts-pdf]").addEventListener("click", () => {
