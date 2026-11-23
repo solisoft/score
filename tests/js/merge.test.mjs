@@ -304,3 +304,49 @@ test("an audio track's lane (#390) in the synthesizer or SoundFont keys is no st
   assert.equal(meta.soundfont, undefined);
   assert.deepEqual(meta.mixer, { tracks: { "audio-1": { volume: -9 } } }, "the audio track's own mixer settings kept");
 });
+
+// ---- Signs moved by hand (#1020) ---------------------------------------------------------------
+
+test("signs moved by two people: in different bars both are kept; the same sign is a conflict of its bar, settled either way", async () => {
+  const { source_spans } = await import("../../public/eui-score/eui_score_web.js");
+  // As the editor reads a text (studio.js, parseKept): with where each note is written, so its tweaks read back.
+  const parseKept = (text) => JSON.stringify({ ...JSON.parse(score_json(text)), spans: JSON.parse(source_spans(text)) });
+  const open = (text) => M.fromParsed(JSON.parse(parseKept(text)), text).score;
+  const base = M.toLilyPond(open("{ \\time 4/4 c''4\\mf d''-> e'' f'' | g'4\\p( a') b' c'' | d''1 }")).source;
+  /** `base` with the sign `on` of the note `i` moved by `offset`. */
+  const moved = (i, on, offset, from = base) => {
+    const score = open(from);
+    M.setSignTweak(score, 0, i, on, { offset });
+    return M.toLilyPond(score).source;
+  };
+  const kept = (base0, mine, theirs, prefer = null) => mergeScores(base0, mine, theirs, { parse: parseKept, prefer });
+
+  // One moves the first bar's dynamic, the other reshapes the second bar's slur: both stay.
+  const mine = moved(0, "dynamic", [1, -2]);
+  const theirsScore = open(base);
+  M.setSignTweak(theirsScore, 0, 4, "slur", { shape: [[[0, 0], [0, 1], [0, 1], [0, 0]]] });
+  const theirs = M.toLilyPond(theirsScore).source;
+  const out = kept(base, mine, theirs);
+  assert.deepEqual(out.conflicts, []);
+  assert.ok(out.text.includes("c''4-\\tweak DynamicText.extra-offset #'(1 . -2) \\mf"), out.text);
+  assert.ok(out.text.includes("-\\shape #'((0 . 0) (0 . 1) (0 . 1) (0 . 0)) ("), out.text);
+  // The merged text reads back as the editor wrote it: nothing of either tweak is lost on the way.
+  assert.equal(M.toLilyPond(open(out.text)).source, out.text);
+  // The same move made on both sides is no conflict.
+  assert.equal(kept(base, mine, mine).text, mine);
+
+  // The same dynamic moved two ways: a conflict naming its bar; whichever side is kept, its offset alone is written.
+  const other = moved(0, "dynamic", [-3, 0]);
+  const clash = kept(base, mine, other);
+  assert.equal(clash.text, null);
+  assert.deepEqual(conflictLines(clash.conflicts), ["Bar 1, the staff"]);
+  assert.equal(kept(base, mine, other, "mine").text, mine);
+  assert.equal(kept(base, mine, other, "theirs").text, other);
+  // Two signs of one bar are that bar's too — a bar is merged whole: a conflict, never half of each lost.
+  const accent = moved(1, "art:accent", [0, 1]);
+  assert.equal(kept(base, mine, accent).text, null);
+  assert.equal(kept(base, mine, accent, "theirs").text, accent);
+  // Without the notes' places (the engraver's reading alone) a moved sign cannot be merged: the whole score conflicts, nothing is dropped.
+  const blind = mergeScores(base, mine, theirs, { parse: score_json });
+  assert.deepEqual([blind.text, blind.whole], [null, true]);
+});
