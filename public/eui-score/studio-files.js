@@ -193,6 +193,90 @@ export function install(ctx) {
     toPdf(partSource(), `${title()} — ${partName()}`).then((pdf) => download(pdf, `${fileName()} - ${partName()}.pdf`, "application/pdf")).catch((e) => refuse(e));
   });
 
+  // File ▸ Margins and spacing (#1025): the page's margins, the first
+  // system's indent and three spaces, each empty for the engraver's default
+  // (score-model.js, setPageSpacing). Applied as one edit of the score:
+  // undone, saved and shared with it; a refusal is said in the dialog and
+  // changes nothing. The preview is the first page: the music engraved at
+  // the width the margins leave, placed inside them.
+  const spacingDialog = root.querySelector("[data-page-spacing]");
+  const spacingStatus = spacingDialog?.querySelector("[data-page-spacing-status]");
+  const spacingFields = () => [...(spacingDialog?.querySelectorAll("[data-spacing]") ?? [])];
+  /** The fields filled from the score: its values, empty where the default holds, the default shown then. */
+  function fillSpacing() {
+    const now = M.pageSpacing(st.score);
+    for (const field of spacingFields()) {
+      const spec = M.PAGE_SPACING.find(([name]) => name === field.dataset.spacing);
+      field.value = now[spec[0]] == null ? "" : String(now[spec[0]]);
+      field.placeholder = tr("default: {value}", { value: spec[4] });
+    }
+  }
+  /** The first page, its paper's shape, the music inside its margins. */
+  async function previewSpacing() {
+    await loaded();
+    const box = spacingDialog.querySelector("[data-page-spacing-preview]");
+    const now = M.pageSpacing(st.score);
+    const usual = Object.fromEntries(M.PAGE_SPACING.map((spec) => [spec[0], spec[4]]));
+    const mm = (field) => now[field] ?? usual[field];
+    const name = String(st.score.paper?.size ?? "a4");
+    const sizes = { a4: [210, 297], letter: [215.9, 279.4], a3: [297, 420], a5: [148, 210], legal: [215.9, 355.6], tabloid: [279.4, 431.8] };
+    const [w, h] = sizes[name.replace(/landscape$/, "")] ?? sizes.a4;
+    const [width, height] = name.endsWith("landscape") ? [h, w] : [w, h];
+    // Pixels a millimetre, the page 320 px wide; a staff space is a quarter of the staff size (the staff's height, in points).
+    const k = 320 / width;
+    const space = ((st.score.paper?.staffSize ?? 20) / 4) * 0.3528 * k;
+    const page = document.createElement("div");
+    page.className = "studio-spacing-page";
+    page.style.width = `${Math.round(width * k)}px`;
+    page.style.height = `${Math.round(height * k)}px`;
+    const music = document.createElement("div");
+    music.className = "studio-spacing-music";
+    Object.assign(music.style, { left: `${mm("left") * k}px`, right: `${mm("right") * k}px`, top: `${mm("top") * k}px`, bottom: `${mm("bottom") * k}px` });
+    page.append(music);
+    try {
+      music.innerHTML = engine.svg(M.toLilyPond(st.score).source, Math.max(40, (width - mm("left") - mm("right")) * k), space, "{}");
+    } catch (error) {
+      music.textContent = error.message ?? String(error);
+    }
+    box.replaceChildren(page);
+  }
+  function openSpacing() {
+    if (!st.score) return say(tr("Margins and spacing need the score tools: this piece is edited in its text."), true);
+    spacingStatus.textContent = "";
+    spacingStatus.classList.remove("studio-error");
+    fillSpacing();
+    spacingDialog.showModal();
+    return previewSpacing();
+  }
+  /** What the fields say set on the score, one edit; a refusal said in the dialog, the fields left as typed. */
+  function applySpacing(values) {
+    let refusal = "";
+    const done = edit((score) => {
+      try {
+        M.setPageSpacing(score, values);
+      } catch (error) {
+        refusal = error.message ?? String(error);
+        throw error;
+      }
+    });
+    spacingStatus.textContent = done ? tr("Margins and spacing set.") : refusal || status.textContent;
+    spacingStatus.classList.toggle("studio-error", !done);
+    if (!done) return undefined;
+    fillSpacing();
+    return previewSpacing();
+  }
+  spacingDialog?.querySelector("[data-page-spacing-form]").addEventListener("submit", (event) => {
+    event.preventDefault();
+    applySpacing(Object.fromEntries(spacingFields().map((field) => [field.dataset.spacing, field.value])));
+  });
+  spacingDialog?.querySelector("[data-page-spacing-defaults]").addEventListener("click", () => {
+    applySpacing(Object.fromEntries(spacingFields().map((field) => [field.dataset.spacing, ""])));
+  });
+  spacingDialog?.querySelector("[data-page-spacing-close]").addEventListener("click", () => spacingDialog.close());
+  spacingDialog?.addEventListener("click", (event) => {
+    if (event.target === spacingDialog) spacingDialog.close();
+  });
+
   /** File ▸ Open a file or an example, chosen in `el`: opened, and true; false for any other control. */
   function openChosen(el) {
     if (el.matches('[data-act="example"]') && el.value) {
@@ -341,5 +425,5 @@ export function install(ctx) {
     }
   }
 
-  return { newDialog, openParts, share, title, fileName, openChosen, saveWav, saveSound, saveImage };
+  return { newDialog, openParts, openSpacing, share, title, fileName, openChosen, saveWav, saveSound, saveImage };
 }

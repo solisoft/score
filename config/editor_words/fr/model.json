@@ -277,5 +277,19 @@
   "These bars hold no note to divide": "Ces mesures ne contiennent aucune note à diviser",
   "A second voice plays in these bars already": "Une deuxième voix joue déjà dans ces mesures",
   "Review remarks set aside": "Remarques de relecture mises de côté",
-  "no such remark": "cette remarque n'existe pas"
+  "no such remark": "cette remarque n'existe pas",
+  "The top margin": "La marge du haut",
+  "The bottom margin": "La marge du bas",
+  "The left margin": "La marge de gauche",
+  "The right margin": "La marge de droite",
+  "The first system's indent": "Le retrait du premier système",
+  "The space between systems": "L'espace entre les systèmes",
+  "The space between the staves of a system": "L'espace entre les portées d'un système",
+  "The space between the title and the music": "L'espace entre le titre et la musique",
+  "{what}: a number of millimetres, or empty for the default": "{what} : un nombre de millimètres, ou vide pour la valeur par défaut",
+  "{what}: a number of staff spaces, or empty for the default": "{what} : un nombre d'interlignes, ou vide pour la valeur par défaut",
+  "{what} is {least} to {most} mm": "{what} va de {least} à {most} mm",
+  "{what} is {least} to {most} staff spaces": "{what} va de {least} à {most} interlignes",
+  "The margins and the indent leave the music {width} mm across the page: keep at least {least} mm": "Les marges et le retrait ne laissent que {width} mm de large à la musique : gardez-en au moins {least}",
+  "The top and bottom margins leave the music {height} mm down the page: keep at least {least} mm": "Les marges du haut et du bas ne laissent que {height} mm de haut à la musique : gardez-en au moins {least}"
 }

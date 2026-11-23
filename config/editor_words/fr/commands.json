@@ -564,5 +564,8 @@
   "div.": "div.",
   "unis.": "unis.",
   "Bar {n} divided: the lower notes are voice 2's": "Mesure {n} divisée : les notes graves sont à la voix 2",
-  "Bars {a}–{b} divided: the lower notes are voice 2's": "Mesures {a}–{b} divisées : les notes graves sont à la voix 2"
+  "Bars {a}–{b} divided: the lower notes are voice 2's": "Mesures {a}–{b} divisées : les notes graves sont à la voix 2",
+  "default: {value}": "défaut : {value}",
+  "Margins and spacing set.": "Marges et espacements réglés.",
+  "Margins and spacing need the score tools: this piece is edited in its text.": "Les marges et les espacements demandent les outils de la partition : cette pièce se modifie dans son texte."
 }

@@ -2678,6 +2678,41 @@
   .studio-parts-status.studio-error {
     color: var(--accent-ink);
   }
+  /* Margins and spacing (#1025): a field a line, the first page drawn small, the music inside its margins. */
+  .studio-spacing-open {
+    margin-top: 4px;
+  }
+  .studio-spacing-fields .tool-field {
+    grid-template-columns: minmax(0, 1fr) 112px;
+    margin: 4px 0;
+  }
+  .studio-spacing-preview {
+    display: flex;
+    justify-content: center;
+    padding: 12px;
+    margin-bottom: 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--paper);
+  }
+  .studio-spacing-page {
+    position: relative;
+    flex: none;
+    background: #fff;
+    color: #111;
+    box-shadow: 0 2px 10px rgb(29 25 20 / .18);
+    overflow: hidden;
+  }
+  .studio-spacing-music {
+    position: absolute;
+    overflow: hidden;
+    outline: 1px dashed rgb(29 25 20 / .2);
+  }
+  .studio-spacing-music svg {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
   .studio-ai {
     width: min(820px, calc(100vw - 32px));
   }

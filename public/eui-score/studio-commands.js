@@ -22,7 +22,7 @@ const SIDE_WIDTH = "(min-width: 1200px)";
 export function install(ctx) {
   const { root, options, sheet, st, mac, newDialog, toPdf, download, M, P, K, X, musicXml } = ctx;
   const {
-    openParts, barNo, edit, barsEdit, undo, redo, staffOf, range, hear, target, need, keepOn, inputTicks, setInput,
+    openParts, openSpacing, barNo, edit, barsEdit, undo, redo, staffOf, range, hear, target, need, keepOn, inputTicks, setInput,
     inputWrite, inputBack, inputTuplet, selectedBarsOrNull, selectedBars, duration, toggleDot, step, chordHead, copy,
     insertCopied, paste, openWords, draw, place, toVoice, onField, share, refuse, say, title, fileName, openChosen,
     heardMidi, exportPractice, togglePlay, stopPlay, mixCommit, saveWav, saveSound, saveImage, setLoop, record,
@@ -97,6 +97,7 @@ export function install(ctx) {
         return draw();
       }
       case "parts": return openParts();
+      case "page-spacing": return openSpacing();
       case "review": return ctx.call.toggleReview();
       case "comment": {
         if (!options.onComment) return say(tr("Comments are for scores saved in the app: open this one there to comment."), true);

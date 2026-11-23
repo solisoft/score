@@ -4964,6 +4964,116 @@ export function setPaper(score, { size, staffSize }) {
   score.paper = { ...(score.paper ?? paperFrom(null)), size: name === "a4" ? null : name, staffSize: pt === 20 ? null : pt };
 }
 
+// ---- Margins and spacing (#1025) ------------------------------------------------------------
+//
+// File ▸ Score properties ▸ Margins and spacing: the page's four margins and
+// the first system's indent (millimetres, `score.paper`: written left-margin
+// = 12\mm …), and three spaces, in staff spaces — between systems and from
+// the titles to the music (\paper's system-system-spacing.basic-distance and
+// markup-system-spacing.basic-distance, kept in `score.paper.more`), between
+// the staves of a system (a \layout block of its own in `score.layout`,
+// VerticalAxisGroup.staff-staff-spacing, which a staff group's own spacing
+// gives way to). Each null for the engraver's default.
+
+/** The fields, in the dialog's order: [field, unit, least, most, the engraver's default]. */
+export const PAGE_SPACING = [
+  ["top", "mm", 0, 60, 5],
+  ["bottom", "mm", 0, 60, 12],
+  ["left", "mm", 0, 60, 10],
+  ["right", "mm", 0, 60, 10],
+  ["indent", "mm", 0, 80, 15],
+  ["systems", "space", SYSTEM_SPACINGS[0], SYSTEM_SPACINGS[1], 10],
+  ["staves", "space", 4, 40, 9],
+  ["title", "space", 0, 40, 5],
+];
+/** The paper's width and height, in millimetres, portrait. */
+const PAPER_MM = { a4: [210, 297], letter: [215.9, 279.4], a3: [297, 420], a5: [148, 210], legal: [215.9, 355.6], tabloid: [279.4, 431.8] };
+/** What the margins leave the music at least, across and down the page, in millimetres. */
+const MUSIC_ROOM = [80, 100];
+/** The \\paper settings the spaces between systems and from the titles are, by field. */
+const PAPER_SPACINGS = { systems: "system-system-spacing", title: "markup-system-spacing" };
+/** The \\layout block the space between the staves of a system is written in, and how it reads back. */
+const staffSpacingBlock = (n) => `\\layout { \\context { \\Staff \\override VerticalAxisGroup.staff-staff-spacing = #'((basic-distance . ${n}) (minimum-distance . ${Math.min(n, 8)}) (padding . 1) (stretchability . 5)) } }`;
+const STAFF_SPACING_RE = /^\\layout \{ \\context \{ \\Staff \\override VerticalAxisGroup\.staff-staff-spacing = #'\(\(basic-distance \. (\d+(?:\.\d+)?)\) \(minimum-distance \. \d+(?:\.\d+)?\) \(padding \. 1\) \(stretchability \. 5\)\) \} \}$/;
+
+/** The basic distance \\paper's `name` sets in `more` (its key alone, or its whole alist): the last said, or null. */
+function paperSpacing(more, name) {
+  let found = null;
+  for (const said of more ?? []) {
+    const key = new RegExp(`^${name}\\.basic-distance\\s*=\\s*#?(-?\\d+(?:\\.\\d+)?)$`).exec(said);
+    const alist = new RegExp(`^${name}\\s*=\\s*#'\\(.*\\(basic-distance\\s*\\.\\s*(-?\\d+(?:\\.\\d+)?)\\)`).exec(said);
+    if (key || alist) found = Number((key ?? alist)[1]);
+  }
+  return found;
+}
+
+/** The page's margins and spacing: {top, bottom, left, right, indent (mm), systems, staves, title (staff spaces)}, null where the default holds. */
+export function pageSpacing(score) {
+  const p = score.paper ?? {};
+  const staves = (score.layout ?? []).map((block) => STAFF_SPACING_RE.exec(block)).filter(Boolean).at(-1);
+  return {
+    top: p.top ?? null, bottom: p.bottom ?? null, left: p.left ?? null, right: p.right ?? null, indent: p.indent ?? null,
+    systems: paperSpacing(p.more, PAPER_SPACINGS.systems),
+    staves: staves ? Number(staves[1]) : null,
+    title: paperSpacing(p.more, PAPER_SPACINGS.title),
+  };
+}
+
+/** What a field is called, in a refusal. */
+function spacingName(field) {
+  return {
+    top: tr("The top margin"), bottom: tr("The bottom margin"), left: tr("The left margin"), right: tr("The right margin"),
+    indent: tr("The first system's indent"), systems: tr("The space between systems"),
+    staves: tr("The space between the staves of a system"), title: tr("The space between the title and the music"),
+  }[field];
+}
+
+/** A field's value from what the dialog says: a number in its range (a comma for the decimal point too), or null — empty — for the default. */
+function spacingValue([field, unit, least, most], value) {
+  if (value == null || String(value).trim() === "") return null;
+  const n = Number(String(value).trim().replace(",", "."));
+  const vars = { what: spacingName(field), least, most };
+  if (!Number.isFinite(n)) throw new Error(unit === "mm" ? tr("{what}: a number of millimetres, or empty for the default", vars) : tr("{what}: a number of staff spaces, or empty for the default", vars));
+  if (n < least || n > most) throw new Error(unit === "mm" ? tr("{what} is {least} to {most} mm", vars) : tr("{what} is {least} to {most} staff spaces", vars));
+  return Math.round(n * 10) / 10;
+}
+
+/**
+ * The page's margins and spacing set from `values` (fields of PAGE_SPACING;
+ * each a number, a text the dialog holds, or null or "" for the default); a
+ * field left out stays as it is. All are checked before any is set: a value
+ * out of its range, or margins that leave the music too little of the page,
+ * are refused, and nothing changes.
+ */
+export function setPageSpacing(score, values) {
+  const next = pageSpacing(score);
+  for (const spec of PAGE_SPACING) if (spec[0] in (values ?? {})) next[spec[0]] = spacingValue(spec, values[spec[0]]);
+  const usual = Object.fromEntries(PAGE_SPACING.map((spec) => [spec[0], spec[4]]));
+  const mm = (field) => next[field] ?? usual[field];
+  const name = String(score.paper?.size ?? "a4");
+  const [w, h] = PAPER_MM[name.replace(/landscape$/, "")] ?? PAPER_MM.a4;
+  const [width, height] = name.endsWith("landscape") ? [h, w] : [w, h];
+  const across = Math.round((width - mm("left") - mm("right") - mm("indent")) * 10) / 10;
+  if (across < MUSIC_ROOM[0]) throw new Error(tr("The margins and the indent leave the music {width} mm across the page: keep at least {least} mm", { width: across, least: MUSIC_ROOM[0] }));
+  const down = Math.round((height - mm("top") - mm("bottom")) * 10) / 10;
+  if (down < MUSIC_ROOM[1]) throw new Error(tr("The top and bottom margins leave the music {height} mm down the page: keep at least {least} mm", { height: down, least: MUSIC_ROOM[1] }));
+  const paper = { ...(score.paper ?? paperFrom(null)) };
+  for (const field of ["top", "bottom", "left", "right", "indent"]) paper[field] = next[field];
+  let more = paper.more ?? [];
+  for (const [field, setting] of Object.entries(PAPER_SPACINGS)) {
+    more = more.filter((said) => !new RegExp(`^${setting}\\.basic-distance\\b`).test(said));
+    // A whole alist written in the text keeps its other keys; its distance is the one set after it.
+    if (next[field] != null && paperSpacing(more, setting) !== next[field]) more.push(`${setting}.basic-distance = #${next[field]}`);
+  }
+  if (more.length) paper.more = more;
+  else delete paper.more;
+  score.paper = paper;
+  const layout = (score.layout ?? []).filter((block) => !STAFF_SPACING_RE.test(block));
+  if (next.staves != null) layout.push(staffSpacingBlock(next.staves));
+  if (layout.length) score.layout = layout;
+  else delete score.layout;
+}
+
 const PAPER_NAMES = { a4: "A4", letter: "Letter", a3: "A3", a5: "A5", a6: "A6", b4: "B4", b5: "B5", legal: "Legal", tabloid: "Tabloid", "11x17": "11×17" };
 
 /**
@@ -6199,7 +6309,8 @@ function paperMore(source) {
       const said = text.slice(start, k);
       if (!/^#\(set-paper-size\b/.test(said)) out.push(said.replace(/\s+/g, " "));
     } else {
-      const name = /^[A-Za-z][A-Za-z0-9-]*/.exec(text.slice(k, k + 80))?.[0];
+      // A setting's name, a key of its alist with it: system-system-spacing.basic-distance (#1025).
+      const name = /^[A-Za-z][A-Za-z0-9-]*(?:\.[A-Za-z][A-Za-z0-9-]*)*/.exec(text.slice(k, k + 80))?.[0];
       if (!name) {
         k = text[k] === "\\" ? valueEnd(text, k) : k + 1;
         k = skipBlank(text, k);

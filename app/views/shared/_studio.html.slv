@@ -51,6 +51,7 @@
               </select>
             </label>
             <button type="button" role="menuitem" data-act="properties"><%= t("app.editor.score_properties_menu") %> <kbd><%= t("app.editor.title_tempo_staves") %></kbd></button>
+            <button type="button" role="menuitem" data-act="page-spacing"><%= t("app.editor.page_spacing_menu") %> <kbd><%= t("app.editor.page_spacing_menu_more") %></kbd></button>
             <hr>
             <button type="button" role="menuitem" data-act="save-ly"><%= t("app.editor.save_the_lilypond_source") %> <kbd>.ly</kbd></button>
             <button type="button" role="menuitem" data-act="save-pdf"><%= t("app.editor.print_as_pdf") %> <kbd data-pdf-paper><%= paper_label(source) %></kbd></button>
@@ -956,6 +957,7 @@
             <% end %>
           </select>
         </label>
+        <button type="button" class="tool tool-wide studio-spacing-open" data-act="page-spacing"><%= t("app.editor.page_spacing_menu") %></button>
         <fieldset class="studio-page-lines" data-page-lines>
           <legend><%= t("app.editor.headers_and_footers") %></legend>
           <label class="tool-field"><%= t("app.editor.header") %> <input type="text" data-field="page-oddHeader" placeholder="{title} | | {page}"></label>
@@ -965,6 +967,43 @@
           <p class="muted studio-properties-note"><%= t("app.editor.page_lines_note") %></p>
         </fieldset>
     <p class="muted studio-properties-note"><%- t("app.editor.properties_note") %></p>
+  </dialog>
+
+  <%# File ▸ Margins and spacing (#1025): the page's margins, the first
+      system's indent, the spaces between systems, staves and the title,
+      each empty for the default; filled and applied by studio-files.js. %>
+  <dialog class="studio-keys studio-parts studio-spacing" data-page-spacing aria-labelledby="studio-spacing-title">
+    <div class="studio-keys-head">
+      <h2 id="studio-spacing-title"><%= t("app.editor.page_spacing_title") %></h2>
+      <button type="button" class="studio-menu" data-page-spacing-close aria-label="<%= t("app.editor.close") %>">×</button>
+    </div>
+    <form data-page-spacing-form novalidate>
+      <fieldset class="studio-page-lines">
+        <legend><%= t("app.editor.page_spacing_margins") %></legend>
+        <div class="studio-spacing-fields">
+          <label class="tool-field"><%= t("app.editor.page_spacing_top") %> <input type="text" inputmode="decimal" data-spacing="top"></label>
+          <label class="tool-field"><%= t("app.editor.page_spacing_bottom") %> <input type="text" inputmode="decimal" data-spacing="bottom"></label>
+          <label class="tool-field"><%= t("app.editor.page_spacing_left") %> <input type="text" inputmode="decimal" data-spacing="left"></label>
+          <label class="tool-field"><%= t("app.editor.page_spacing_right") %> <input type="text" inputmode="decimal" data-spacing="right"></label>
+          <label class="tool-field"><%= t("app.editor.page_spacing_indent") %> <input type="text" inputmode="decimal" data-spacing="indent"></label>
+        </div>
+      </fieldset>
+      <fieldset class="studio-page-lines">
+        <legend><%= t("app.editor.page_spacing_spaces") %></legend>
+        <div class="studio-spacing-fields">
+          <label class="tool-field"><%= t("app.editor.page_spacing_systems") %> <input type="text" inputmode="decimal" data-spacing="systems"></label>
+          <label class="tool-field"><%= t("app.editor.page_spacing_staves") %> <input type="text" inputmode="decimal" data-spacing="staves"></label>
+          <label class="tool-field"><%= t("app.editor.page_spacing_title_space") %> <input type="text" inputmode="decimal" data-spacing="title"></label>
+        </div>
+      </fieldset>
+      <p class="studio-parts-status" data-page-spacing-status role="status"></p>
+      <div class="tool-row studio-new-actions">
+        <button type="button" class="tool tool-wide" data-page-spacing-defaults><%= t("app.editor.page_spacing_defaults") %></button>
+        <button type="submit" class="tool tool-wide tool-primary"><%= t("app.editor.page_spacing_apply") %></button>
+      </div>
+    </form>
+    <p class="muted studio-parts-note"><%= t("app.editor.page_spacing_note") %></p>
+    <div class="studio-spacing-preview" data-page-spacing-preview></div>
   </dialog>
 
   <%# Play ▸ MIDI learn and clock…: the controls a MIDI controller is given,

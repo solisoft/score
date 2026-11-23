@@ -13,6 +13,17 @@ class Changelog
       {"date": "2026-11-23", "entries": [
         {
           "area": "site",
+          "title": "Margins and spacing",
+          "text": "File ▸ Margins and spacing, also in Score properties, sets the page's four margins and the "
+          + "first system's indent, in millimetres, and the space between systems, between the staves of a "
+          + "system and between the title and the music, in staff spaces — each left empty for the default, "
+          + "shown in the field. A value out of range, or margins that leave the music too little of the page, "
+          + "is refused with a sentence that says why. Applied, it goes into the score's \\paper and \\layout "
+          + "as one change, undone with Ctrl+Z, and the small page beside it is drawn again.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
           "title": "Two desks on one staff: 1., 2. and a2 in the score's language",
           "text": "Format ▸ Condense with the staff below now writes what the staff prints where one part plays "
           + "alone and where both play as one — 1., 2. and a2, or « 1. / 2. / à 2 » when the editor is in "
