@@ -67,7 +67,9 @@ const SCORE_STUDIO_MODULES = [
   "ghost.js",
   "studio-playback.js",
   "studio-mix.js",
-  "studio-recording.js"
+  "studio-recording.js",
+  "studio-review.js",
+  "review.js"
 ]
 
 class ScoreAssets

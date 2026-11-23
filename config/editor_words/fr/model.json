@@ -275,5 +275,7 @@
   "A divisi is written on a staff of notes": "Un divisi s'écrit sur une portée de notes",
   "A note crosses the selection's first or last bar line: select whole bars": "Une note traverse la première ou la dernière barre de la sélection : sélectionnez des mesures entières",
   "These bars hold no note to divide": "Ces mesures ne contiennent aucune note à diviser",
-  "A second voice plays in these bars already": "Une deuxième voix joue déjà dans ces mesures"
+  "A second voice plays in these bars already": "Une deuxième voix joue déjà dans ces mesures",
+  "Review remarks set aside": "Remarques de relecture mises de côté",
+  "no such remark": "cette remarque n'existe pas"
 }

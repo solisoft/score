@@ -13,6 +13,18 @@ class Changelog
       {"date": "2026-11-23", "entries": [
         {
           "area": "site",
+          "title": "The score read over: View ▸ Review the score",
+          "text": "The editor reads the score over after each change and counts what a player would stop at, "
+          + "on a button under the score: a note out of its instrument's range (a clarinet's or a horn's read "
+          + "as its player reads it) or outside where it is comfortable, a bar the text wrote a beat short or "
+          + "long, a part that starts, or comes back after four bars of rest, with no dynamic. The Review "
+          + "lists them by kind; a click selects the note or the bar. Ignore sets a remark aside: it is kept "
+          + "with the score, so it stays aside after a reload and for whoever the score is shared with, and "
+          + "Show ignored brings it back.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
           "title": "Two desks on one staff: condense, and split again",
           "text": "On a conductor's score, flutes 1 and 2 share a staff. Select a staff and choose Format ▸ "
           + "Condense with the staff below: the two become the two parts of one staff, named after both "

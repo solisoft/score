@@ -129,6 +129,8 @@
             <% end %>
             <%# The source beside the score, on a wide screen (#420); kept in this browser. %>
             <button type="button" role="menuitem" data-act="source-side" data-source-side-label><%= t("app.editor.source_beside_the_score") %> <kbd><%= t("app.editor.wide_screens") %></kbd></button>
+            <%# The score read over (#1022): public/eui-score/studio-review.js. %>
+            <button type="button" role="menuitem" data-act="review"><%= t("app.editor.review_menu") %> <kbd><%= t("app.editor.review_menu_more") %></kbd></button>
             <button type="button" role="menuitem" data-act="written" data-written-label><%= t("app.editor.written_pitch") %> <kbd><%= t("app.editor.clarinets_horns_saxes") %></kbd></button>
             <button type="button" role="menuitem" data-act="keys"><%= t("app.editor.keyboard_shortcuts") %> <kbd>?</kbd></button>
             <button type="button" role="menuitem" data-act="welcome"><%= t("app.editor.getting_started") %></button>
@@ -786,12 +788,26 @@
         </ol>
         <button type="button" class="tool tool-primary" data-act="welcome"><%= t("app.editor.welcome_close") %></button>
       </aside>
+      <%# The Review (#1022): the score read over after each change, its remarks by
+          rule; studio-review.js writes the list. A remark clicked selects its note;
+          one set aside is kept on the score's settings line. %>
+      <aside class="studio-review" data-review hidden aria-labelledby="studio-review-title">
+        <div class="studio-review-head">
+          <h2 id="studio-review-title"><%= t("app.editor.review_title") %></h2>
+          <label class="tool-check"><input type="checkbox" data-review-ignored> <%= t("app.editor.review_show_ignored") %></label>
+          <button type="button" class="studio-menu" data-review-close aria-label="<%= t("app.editor.close") %>">×</button>
+        </div>
+        <p class="muted studio-review-note"><%= t("app.editor.review_note") %></p>
+        <p class="studio-review-none" data-review-none hidden></p>
+        <div class="studio-review-list" data-review-list></div>
+      </aside>
       <%# What is selected, and what was last said (#419): one bar under the score. %>
       <div class="studio-statusbar">
         <div class="studio-state" aria-live="polite" data-state></div>
         <%# What to do next with what is selected (#918): keys, not sentences. %>
         <div class="studio-hint" data-hint></div>
         <div class="studio-status" data-status aria-live="polite"></div>
+        <button type="button" class="studio-review-count" data-act="review" data-review-count aria-expanded="false" hidden><%= t("app.editor.review_title") %> <span data-review-n>0</span></button>
       </div>
     </main>
   </div>

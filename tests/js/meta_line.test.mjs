@@ -200,6 +200,8 @@ const SAMPLES = {
   parts: { channel: "none", inPart: false, at: (lane) => ({ parts: { [lane]: { breaks: { 0: "line" }, staffSize: 16 } } }), lanes: (meta) => Object.keys(meta?.parts ?? {}) },
   // What the desks of a condensed staff were (#1021): no sound; said in each desk's part heading, not in its settings.
   desks: { channel: "none", inPart: false, at: (lane) => ({ desks: { [lane]: { names: ["Flute 1", "Flute 2"], shorts: ["Fl. 1", "Fl. 2"], instruments: ["flute", "flute"] } } }), lanes: (meta) => Object.keys(meta?.desks ?? {}) },
+  // The Review's remarks set aside (#1022): no sound; by their tick, so a merge moves them with it.
+  review: { channel: "none", at: (lane, tick) => ({ review: { [lane]: [`low:${tick}`] } }), lanes: (meta) => Object.keys(meta?.review ?? {}) },
 };
 
 /** A key known only to the registry, added for a test: it must work everywhere with nothing else written. */

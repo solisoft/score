@@ -95,6 +95,7 @@ export function install(ctx) {
         return draw();
       }
       case "parts": return openParts();
+      case "review": return ctx.call.toggleReview();
       case "comment": {
         if (!options.onComment) return say(tr("Comments are for scores saved in the app: open this one there to comment."), true);
         return options.onComment(place());

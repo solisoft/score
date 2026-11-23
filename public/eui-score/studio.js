@@ -74,10 +74,11 @@ const musicXml = () => import(`./musicxml.js${V}`);
 // - studio-ghost.js: note input's pen and ghost note, a click writing there;
 // - studio-playback.js: Play, the metronome, practice, the loop;
 // - studio-mix.js: mute, solo, the mixer, the instruments, the audio tracks;
-// - studio-recording.js: a MIDI keyboard, recording, Sound to.
+// - studio-recording.js: a MIDI keyboard, recording, Sound to;
+// - studio-review.js: the score read over, its remarks listed (#1022).
 const [
   Toolbox, Files, Text, Selection, History, Source, Input, Commands, Clipboard, Words, Draw, Peers, Roll, Velocity,
-  Pointer, Ghost, Playback, Mix, Recording
+  Pointer, Ghost, Playback, Mix, Recording, Review
 ] = await Promise.all([
   import(`./studio-toolbox.js${V}`),
   import(`./studio-files.js${V}`),
@@ -98,6 +99,7 @@ const [
   import(`./studio-playback.js${V}`),
   import(`./studio-mix.js${V}`),
   import(`./studio-recording.js${V}`),
+  import(`./studio-review.js${V}`),
 ]);
 
 const DRAFT = "eui-score-studio-draft";
@@ -218,6 +220,7 @@ export function startStudio(root, options = {}) {
     text: sourceBox.value,
     unsupported: [],
     lost: [], // what the text holds that the model does not keep: the first rewrite drops it
+    uneven: [], // the bars the text read wrote too short or too long (#1022): until the score is edited
     passed: [], // the settings the engraver read and passed over in the text: said when it is opened
     lostNotice: "", // said once it has been dropped
     metaNotice: "", // the settings line that does not read, or lines merged: said when the text is opened (#683)
@@ -329,6 +332,7 @@ export function startStudio(root, options = {}) {
   Object.assign(ctx, Playback.install(ctx));
   Object.assign(ctx, Mix.install(ctx));
   Object.assign(ctx, Recording.install(ctx));
+  Object.assign(ctx, Review.install(ctx));
   // The MIDI clock, sent and followed, and MIDI learn (midi-sync.js).
   ctx.sync = S.attach({ root, st, M, P, act, say });
   ctx.ends.push(() => ctx.sync.stop());

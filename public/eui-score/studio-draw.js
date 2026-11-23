@@ -11,7 +11,7 @@ const COLOURS = { selection: "#b4373a", head: "#e0662a", cursor: "#2563c9", play
 /** Answers the drawing: the score engraved, and what goes over it. */
 export function install(ctx) {
   const { root, options, sheet, svgHost, overlay, palette, playhead, st, loaded, M, editor_view_lit } = ctx;
-  const { range, showInText, placeWords, wordsOpen, tellPlace, placePeers, placeMarkers, placeGhost, drawRoll, showState, refuse } = ctx.call;
+  const { range, showInText, placeWords, wordsOpen, tellPlace, placePeers, placeMarkers, placeGhost, drawRoll, showState, refuse, reviewSoon } = ctx.call;
 
   // ---- Drawing ------------------------------------------------------------------
 
@@ -105,6 +105,8 @@ export function install(ctx) {
     showState();
     if (!st.playing) showInText(false);
     tellPlace();
+    // The score read over again, a moment after the change (#1022).
+    reviewSoon();
   }
 
   // ---- The notes playing --------------------------------------------------------

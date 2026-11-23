@@ -931,6 +931,25 @@
   .studio-welcome ol { margin: 10px 0 14px; padding-left: 22px; display: grid; gap: 6px; font-size: 14px; line-height: 1.45; color: var(--ink-soft); }
   .studio-welcome strong { color: var(--ink); }
   .studio-welcome .tool { padding: 0 14px; }
+  /* The Review (#1022): the score read over, its remarks by rule; a button under the score counts them. */
+  .studio-review { margin-top: 12px; border: 1px solid var(--line-strong); background: var(--sheet); border-radius: 12px; padding: 12px 16px 14px; }
+  .studio-review-head { display: flex; align-items: center; gap: 12px; }
+  .studio-review-head h2 { font: 600 18px/1.2 var(--font-serif); margin: 0; flex: 1 1 auto; }
+  .studio-review-note { font-size: 13px; margin: 6px 0 8px; }
+  .studio-review-none { font-size: 14px; margin: 8px 0 0; color: var(--ink-soft); }
+  .studio-review-rule h3 { font-size: 14px; font-weight: 600; margin: 12px 0 6px; }
+  .studio-review-rule ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+  .studio-review-rule li { display: flex; align-items: center; gap: 8px; border-left: 3px solid var(--line-strong); padding-left: 8px; }
+  .studio-review-rule li.studio-review-error { border-left-color: #b4373a; }
+  .studio-review-rule li.studio-review-warning { border-left-color: #c98a1a; }
+  .studio-review-rule li.studio-review-aside { opacity: 0.6; }
+  .studio-review-go { flex: 1 1 auto; min-width: 0; text-align: left; font: inherit; font-size: 14px; line-height: 1.4; color: var(--ink); background: none; border: 0; padding: 4px 0; cursor: pointer; }
+  .studio-review-go:hover, .studio-review-go:focus-visible { text-decoration: underline; }
+  .studio-review-go strong { font-weight: 600; margin-right: 4px; }
+  .studio-review-ignore { flex: none; padding: 0 10px; }
+  .studio-review-count { font: inherit; font-size: 13px; padding: 2px 10px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--paper); color: var(--ink); cursor: pointer; }
+  .studio-review-count span { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .studio-review-count.studio-review-errors { border-color: #b4373a; color: #b4373a; }
   .studio-notice { border: 1px solid #e9d7b5; background: #fdf7ea; color: #5d4a22; border-radius: 10px; padding: 10px 14px; font-size: 14px; }
   .studio-sheet {
     position: relative; flex: 1; background: var(--sheet); color: #111; border: 1px solid var(--line); border-radius: var(--radius);
@@ -1526,7 +1545,7 @@
     .studio-menubar, .studio-progress, .studio-toolbox, .studio-source, .studio-notice, .studio-statusbar, .studio-panel, .studio-roll,
     .studio-overlay, .studio-ghost, .studio-palette, .studio-playhead, .studio-words, .studio-fret-grid, dialog,
     .score-actions, .score-source, .score-figure figcaption, .read-exports,
-    .studio-comments, .read-comments, .read-takes { display: none !important; }
+    .studio-comments, .studio-review, .read-comments, .read-takes { display: none !important; }
     .wrap, .app-main, .studio, .studio-body, .studio-canvas { display: block; max-width: none; min-height: 0; padding: 0; margin: 0; }
     .score-figure { margin: 0; }
     .studio-sheet, .score-sheet { border: 0; border-radius: 0; box-shadow: none; padding: 0; min-height: 0; overflow: visible; }

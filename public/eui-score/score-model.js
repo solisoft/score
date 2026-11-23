@@ -3305,7 +3305,55 @@ export const META_KEYS = {
     },
     lanes: metaByLane("desks", { others: "skip", channel: "none" }),
   },
+  // The Review's remarks set aside (#1022), by the lane they are about: ["rule:tick", …], each where its
+  // note or bar starts, so a merge moves them with their ticks; one whose place is gone goes with it.
+  review: {
+    label: () => tr("Review remarks set aside"),
+    clean: (review) => {
+      const kept = mapEntries(keptEntries(review, (ids, lane) => isLane(lane) && Array.isArray(ids)), (ids) => ids.filter(isReviewId));
+      const some = kept && Object.fromEntries(Object.entries(kept).filter(([, ids]) => ids.length));
+      return some && Object.keys(some).length ? some : undefined;
+    },
+    lanes: metaByLane("review", {
+      lay: (lane, ids, at, drop) => {
+        const moved = [];
+        for (const id of Array.isArray(ids) ? ids : []) {
+          const [rule, tick] = String(id).split(":");
+          const t = at.tick(Number(tick));
+          if (at.lane == null || t.tick == null) drop(`review ${at.where} ${t.where} ${rule}`);
+          else moved.push(`${rule}:${t.tick}`);
+        }
+        return at.lane != null && moved.length ? [at.lane, moved] : undefined;
+      },
+      others: "skip",
+      channel: "none",
+    }),
+  },
 };
+
+/** A Review remark's id as kept: "rule:tick". */
+const isReviewId = (id) => typeof id === "string" && /^[a-z]+:\d+(\.\d+)?$/.test(id);
+
+/** The Review's remarks set aside (#1022): a Set of "lane/rule:tick". */
+export function reviewIgnored(score) {
+  const kept = META_KEYS.review.clean(score.meta?.review) ?? {};
+  return new Set(Object.entries(kept).flatMap(([lane, ids]) => ids.map((id) => `${lane}/${id}`)));
+}
+
+/** The Review's remark `id` ("rule:tick") on lane `lane` set aside (`on`), or shown again. */
+export function setReviewIgnored(score, lane, id, on) {
+  if (!score.staves[lane]) throw new Error(tr("no such staff"));
+  if (!isReviewId(id)) throw new Error(tr("no such remark"));
+  const review = { ...(META_KEYS.review.clean(score.meta?.review) ?? {}) };
+  const ids = new Set(review[lane] ?? []);
+  if (on) ids.add(id);
+  else ids.delete(id);
+  if (ids.size) review[lane] = [...ids].sort();
+  else delete review[lane];
+  score.meta = { ...(score.meta ?? {}) };
+  if (Object.keys(review).length) score.meta.review = review;
+  else delete score.meta.review;
+}
 
 /** The meta keys numbered by staff: [[name, lanes]]. */
 export const metaLaneKeys = () => Object.entries(META_KEYS).filter(([, key]) => key.lanes).map(([name, key]) => [name, key.lanes]);
@@ -4123,55 +4171,60 @@ function unclosed(text, open, close) {
 // eui-score turns into a program). A null clef keeps the staff's own: a
 // keyboard's two staves are not in the same clef.
 
-const preset = (family, name, short, sound, clef) => ({ family, name, short, sound, clef });
+// An instrument's notes, as MIDI keys at written pitch (a transposing one's as its player reads them, see
+// transpositionOf; a guitar's and a tenor's as their octave clef shows them): `range`, lowest and highest
+// that a professional player gets out of it, and `comfortable`, where it is written for without a second
+// thought — the range itself when none is given. From the usual orchestration tables (Adler, Blatter);
+// the score's Review (#1022) says a note outside them. Strings, Voice and the drum kit have none.
+const preset = (family, name, short, sound, clef, range = null, comfortable = range) => ({ family, name, short, sound, clef, ...(range ? { range, comfortable } : {}) });
 
 export const INSTRUMENTS = [
-  preset("Keyboards", "Piano", "Pno.", "acoustic grand", null),
-  preset("Keyboards", "Electric piano", "E.Pno.", "electric piano 1", null),
-  preset("Keyboards", "Harpsichord", "Hpsd.", "harpsichord", null),
-  preset("Keyboards", "Organ", "Org.", "church organ", null),
-  preset("Keyboards", "Accordion", "Acc.", "accordion", null),
-  preset("Keyboards", "Celesta", "Cel.", "celesta", null),
-  preset("Strings", "Violin", "Vl.", "violin", "treble"),
-  preset("Strings", "Viola", "Va.", "viola", "alto"),
-  preset("Strings", "Cello", "Vc.", "cello", "bass"),
-  preset("Strings", "Double bass", "Cb.", "contrabass", "bass"),
+  preset("Keyboards", "Piano", "Pno.", "acoustic grand", null, [21, 108]),
+  preset("Keyboards", "Electric piano", "E.Pno.", "electric piano 1", null, [28, 100]),
+  preset("Keyboards", "Harpsichord", "Hpsd.", "harpsichord", null, [29, 89]),
+  preset("Keyboards", "Organ", "Org.", "church organ", null, [36, 96]),
+  preset("Keyboards", "Accordion", "Acc.", "accordion", null, [41, 93]),
+  preset("Keyboards", "Celesta", "Cel.", "celesta", null, [60, 108]),
+  preset("Strings", "Violin", "Vl.", "violin", "treble", [55, 100], [55, 88]),
+  preset("Strings", "Viola", "Va.", "viola", "alto", [48, 91], [48, 76]),
+  preset("Strings", "Cello", "Vc.", "cello", "bass", [36, 84], [36, 69]),
+  preset("Strings", "Double bass", "Cb.", "contrabass", "bass", [36, 79], [40, 67]),
   preset("Strings", "Strings", "Str.", "string ensemble 1", null),
-  preset("Strings", "Harp", "Hp.", "orchestral harp", null),
-  preset("Woodwinds", "Piccolo", "Picc.", "piccolo", "treble"),
-  preset("Woodwinds", "Flute", "Fl.", "flute", "treble"),
-  preset("Woodwinds", "Recorder", "Rec.", "recorder", "treble"),
-  preset("Woodwinds", "Oboe", "Ob.", "oboe", "treble"),
-  preset("Woodwinds", "English horn", "E.H.", "english horn", "treble"),
-  preset("Woodwinds", "Clarinet in B♭", "Cl.", "clarinet", "treble"),
-  preset("Woodwinds", "Clarinet in A", "Cl. A", "clarinet", "treble"),
-  preset("Woodwinds", "Bassoon", "Bsn.", "bassoon", "bass"),
-  preset("Woodwinds", "Soprano sax", "S.Sax.", "soprano sax", "treble"),
-  preset("Woodwinds", "Alto sax", "A.Sax.", "alto sax", "treble"),
-  preset("Woodwinds", "Tenor sax", "T.Sax.", "tenor sax", "treble"),
-  preset("Woodwinds", "Baritone sax", "B.Sax.", "baritone sax", "treble"),
-  preset("Brass", "Trumpet in B♭", "Tpt.", "trumpet", "treble"),
-  preset("Brass", "Trumpet in C", "Tpt. C", "trumpet", "treble"),
-  preset("Brass", "Horn in F", "Hn.", "french horn", "treble"),
-  preset("Brass", "Trombone", "Tbn.", "trombone", "bass"),
-  preset("Brass", "Tuba", "Tba.", "tuba", "bass"),
-  preset("Guitars", "Guitar", "Gtr.", "acoustic guitar (nylon)", "treble_8"),
-  preset("Guitars", "Steel-string guitar", "Gtr.", "acoustic guitar (steel)", "treble_8"),
-  preset("Guitars", "Electric guitar", "E.Gtr.", "electric guitar (clean)", "treble_8"),
-  preset("Guitars", "Bass guitar", "B.Gtr.", "electric bass (finger)", "bass_8"),
-  preset("Guitars", "Banjo", "Bjo.", "banjo", "treble_8"),
+  preset("Strings", "Harp", "Hp.", "orchestral harp", null, [24, 103]),
+  preset("Woodwinds", "Piccolo", "Picc.", "piccolo", "treble", [62, 96], [64, 91]),
+  preset("Woodwinds", "Flute", "Fl.", "flute", "treble", [59, 98], [60, 93]),
+  preset("Woodwinds", "Recorder", "Rec.", "recorder", "treble", [60, 86], [60, 84]),
+  preset("Woodwinds", "Oboe", "Ob.", "oboe", "treble", [58, 93], [60, 88]),
+  preset("Woodwinds", "English horn", "E.H.", "english horn", "treble", [59, 91], [60, 84]),
+  preset("Woodwinds", "Clarinet in B♭", "Cl.", "clarinet", "treble", [52, 96], [52, 88]),
+  preset("Woodwinds", "Clarinet in A", "Cl. A", "clarinet", "treble", [52, 96], [52, 88]),
+  preset("Woodwinds", "Bassoon", "Bsn.", "bassoon", "bass", [34, 76], [34, 72]),
+  preset("Woodwinds", "Soprano sax", "S.Sax.", "soprano sax", "treble", [58, 96], [58, 90]),
+  preset("Woodwinds", "Alto sax", "A.Sax.", "alto sax", "treble", [58, 96], [58, 90]),
+  preset("Woodwinds", "Tenor sax", "T.Sax.", "tenor sax", "treble", [58, 96], [58, 90]),
+  preset("Woodwinds", "Baritone sax", "B.Sax.", "baritone sax", "treble", [58, 96], [58, 90]),
+  preset("Brass", "Trumpet in B♭", "Tpt.", "trumpet", "treble", [54, 89], [55, 79]),
+  preset("Brass", "Trumpet in C", "Tpt. C", "trumpet", "treble", [54, 89], [55, 79]),
+  preset("Brass", "Horn in F", "Hn.", "french horn", "treble", [41, 84], [48, 79]),
+  preset("Brass", "Trombone", "Tbn.", "trombone", "bass", [34, 77], [40, 72]),
+  preset("Brass", "Tuba", "Tba.", "tuba", "bass", [26, 65], [31, 58]),
+  preset("Guitars", "Guitar", "Gtr.", "acoustic guitar (nylon)", "treble_8", [40, 83], [40, 76]),
+  preset("Guitars", "Steel-string guitar", "Gtr.", "acoustic guitar (steel)", "treble_8", [40, 83], [40, 76]),
+  preset("Guitars", "Electric guitar", "E.Gtr.", "electric guitar (clean)", "treble_8", [40, 86], [40, 79]),
+  preset("Guitars", "Bass guitar", "B.Gtr.", "electric bass (finger)", "bass_8", [23, 67], [28, 55]),
+  preset("Guitars", "Banjo", "Bjo.", "banjo", "treble_8", [48, 81], [50, 74]),
   preset("Voices", "Voice", "V.", "choir aahs", "treble"),
-  preset("Voices", "Soprano", "S.", "choir aahs", "treble"),
-  preset("Voices", "Alto", "A.", "choir aahs", "treble"),
-  preset("Voices", "Tenor", "T.", "choir aahs", "treble_8"),
-  preset("Voices", "Bass", "B.", "choir aahs", "bass"),
+  preset("Voices", "Soprano", "S.", "choir aahs", "treble", [59, 84], [60, 79]),
+  preset("Voices", "Alto", "A.", "choir aahs", "treble", [53, 77], [55, 72]),
+  preset("Voices", "Tenor", "T.", "choir aahs", "treble_8", [47, 72], [48, 67]),
+  preset("Voices", "Bass", "B.", "choir aahs", "bass", [38, 65], [41, 62]),
   { family: "Percussion", name: "Drum kit", short: "Dr.", sound: "", clef: "percussion", drums: true },
-  preset("Percussion", "Timpani", "Timp.", "timpani", "bass"),
-  preset("Percussion", "Glockenspiel", "Glk.", "glockenspiel", "treble"),
-  preset("Percussion", "Xylophone", "Xyl.", "xylophone", "treble"),
-  preset("Percussion", "Marimba", "Mar.", "marimba", "treble"),
-  preset("Percussion", "Vibraphone", "Vib.", "vibraphone", "treble"),
-  preset("Percussion", "Tubular bells", "T.B.", "tubular bells", "treble"),
+  preset("Percussion", "Timpani", "Timp.", "timpani", "bass", [38, 60], [40, 57]),
+  preset("Percussion", "Glockenspiel", "Glk.", "glockenspiel", "treble", [55, 84]),
+  preset("Percussion", "Xylophone", "Xyl.", "xylophone", "treble", [53, 96], [60, 96]),
+  preset("Percussion", "Marimba", "Mar.", "marimba", "treble", [36, 96], [45, 96]),
+  preset("Percussion", "Vibraphone", "Vib.", "vibraphone", "treble", [53, 89]),
+  preset("Percussion", "Tubular bells", "T.B.", "tubular bells", "treble", [60, 77]),
 ];
 
 // ---- Drums ------------------------------------------------------------------------------------
@@ -6484,6 +6537,105 @@ function keepRaw(score, parsed, placed, source, spans, unsupported) {
   if (used.size) score.defs = [...used].sort((x, y) => defs.get(x).at - defs.get(y).at).map((name) => defs.get(name).text);
 }
 
+// ---- Bars written too short or too long (#1022) ---------------------------------------------------
+//
+// LilyPond checks a bar at each `|` of its text and warns where the music has
+// not reached a bar line; the engraver reads on. The model fills a bar written
+// short with rests and carries the notes after it on, tied across the bar line,
+// so the score is whole and a beat late. What the text wrote is read here.
+
+/** The offsets of the text's bar checks (`|`): none in a comment or a string. */
+function barCheckPlaces(source) {
+  const out = [];
+  let inString = false;
+  for (let i = 0; i < source.length; i++) {
+    const c = source[i];
+    if (inString) {
+      if (c === "\\") i++;
+      else if (c === '"') inString = false;
+    } else if (c === '"') inString = true;
+    else if (c === "%") {
+      if (source[i + 1] === "{") {
+        const end = source.indexOf("%}", i + 2);
+        i = end < 0 ? source.length : end + 1;
+      } else {
+        const end = source.indexOf("\n", i);
+        i = end < 0 ? source.length : end;
+      }
+    } else if (c === "|") out.push(i);
+  }
+  return out;
+}
+
+/** Whether a place of `sorted` lies between `a` and `b` (offsets, both left out). */
+function hasPlaceBetween(sorted, a, b) {
+  let lo = 0;
+  let hi = sorted.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (sorted[mid] <= a) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo < sorted.length && sorted[lo] < b;
+}
+
+/**
+ * The bars a text wrote too short or too long, from what each lane wrote
+ * (`written[lane]`: its bar checks' ticks, and where its music ended):
+ * [{ lane, bar, t, have, want }] — `bar` counted as the text counts its bars,
+ * `t` where that bar's music starts in the score, `have` the ticks it holds,
+ * `want` its metre's. A last bar short by the pickup completes it; a staff
+ * that stops at a bar line, before the others, rests.
+ */
+export function unevenBars(score, written) {
+  const out = [];
+  const eps = 1e-6;
+  const last = barsOf(score);
+  // From `from` (a written bar's start at tick `at`), the bars `have` ticks fill: the bar it ends in, and how.
+  const walk = (from, have) => {
+    let acc = 0;
+    let b = from;
+    while (b < last + 64 && acc + barLength(score, b) <= have + eps) acc += barLength(score, b++);
+    return { b, acc, exact: Math.abs(have - acc) < eps };
+  };
+  written.forEach((w, lane) => {
+    if (!w || score.staves[lane]?.chords || score.staves[lane]?.figures) return;
+    let prev = 0;
+    let bar = 0;
+    const upper = !isLower(score, lane);
+    const marks = [...new Set(w.checks)].sort((x, y) => x - y);
+    if (upper && w.end > (marks[marks.length - 1] ?? 0) + eps) marks.push({ end: w.end });
+    for (const mark of marks) {
+      const atEnd = typeof mark === "object";
+      const c = atEnd ? mark.end : mark;
+      if (c <= prev + eps) continue;
+      const { b, acc, exact } = walk(bar, c - prev);
+      if (exact) {
+        bar = b;
+        prev = c;
+        continue;
+      }
+      const len = barLength(score, b);
+      const short = acc + len - (c - prev);
+      const long = c - prev - acc;
+      // Between two checks a bar and a bit is one bar run on; past that, the nearer reading.
+      if (!atEnd && acc > 0 && (b === bar + 1 || long <= short)) {
+        // The bar before ran on: it holds more than its metre.
+        const before = barLength(score, b - 1);
+        out.push({ lane, bar: b - 1, t: prev + acc - before, have: before + long, want: before });
+        bar = b;
+      } else {
+        // A last bar that is what the pickup leaves of a bar completes it.
+        const completes = atEnd && score.pickup > 0 && b === last - 1 && Math.abs(c - prev - acc + score.pickup - len) < eps;
+        if (!completes) out.push({ lane, bar: b, t: prev + acc, have: len - short, want: len });
+        bar = b + 1;
+      }
+      prev = c;
+    }
+  });
+  return out;
+}
+
 /** Whether lane `s` belongs to a staff kept as written. */
 export function isRaw(score, s) {
   const staff = score.staves[upperOf(score, s)];
@@ -7423,6 +7575,10 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
   // Each lane's length so far, kept as it grows: while the text is read, a lane's events are only ever
   // added to, so its length is counted once, not again from its first note at every note (#689).
   const lengths = new WeakMap();
+  // The text's bar checks (`|`), where each falls in its lane's time, by the lane's events (#1022): the model
+  // fills a bar written short with rests and carries the notes on, so only the text says where a bar ended.
+  const pipes = source != null && Array.isArray(spans) ? barCheckPlaces(source) : [];
+  const checks = new Map();
   const laneLength = (target) => {
     const events = target.events;
     const known = lengths.get(events) ?? { n: 0, sum: 0 };
@@ -7438,6 +7594,8 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
       continue;
     }
     const drums = staff.kind === "Drums";
+    // Where this staff's last note or rest written ends in the text: a bar check after it is the next one's.
+    let textAt = null;
     // A tablature (\\new TabStaff): a staff of notes, drawn as frets on strings.
     const tab = staff.kind === "Tab";
     const ossia = staff.kind === "Ossia";
@@ -7690,6 +7848,15 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
           lane = own;
         }
         if (voices) inBlock.add(lane);
+        const span = spans?.[ev.i];
+        if (pipes.length && span && staff.kind !== "Ossia") {
+          if (textAt != null && hasPlaceBetween(pipes, textAt, span[0])) {
+            const list = checks.get(lane.events) ?? [];
+            list.push(laneLength(lane));
+            checks.set(lane.events, list);
+          }
+          textAt = span[1];
+        }
         const ottava = ottavas.get(lane);
         ottavas.delete(lane);
         if (k === "Rest" && ev.full) {
@@ -7864,6 +8031,8 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
   // A staff kept as written (\\partCombine, \\autoChange): its text, the variables it uses, its notes shown.
   if (source != null && new RegExp(`\\\\(${RAW_COMMANDS.join("|")})\\b`).test(source)) keepRaw(score, parsed, placed, source, spans, unsupported);
   score.staves = placed.flat();
+  // What the text wrote in each lane before its bars were filled: its bar checks, and where its music ends.
+  const written = score.staves.map((lane) => ({ checks: checks.get(lane.events) ?? [], end: lengthOf(lane) }));
   // A staff whose notes go to another one needs a name to come back to.
   for (const u of staffLanes(score)) {
     if (!score.staves[u].id && voiceLanes(score, u).some((lane) => score.staves[lane].events.some((ev) => ev.cross))) staffId(score, u);
@@ -7906,7 +8075,10 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
     const kept = handBeams(score, staff).filter((b) => b === "[").length;
     if (kept < staff.events.filter((ev) => ev.beamStart).length) lost.add("a beam across a bar line, or around a rest or a longer note");
   }
-  return lost.size ? { score, lost: [...lost] } : { score };
+  // Bars the text wrote too short or too long (#1022): the Review says them.
+  const uneven = pipes.length || written.some((w) => !isBarLine(score, w.end)) ? unevenBars(score, written) : [];
+  const read = lost.size ? { score, lost: [...lost] } : { score };
+  return uneven.length ? { ...read, uneven } : read;
 }
 
 // ---- Tempo ramps: rit., rall., accel. played ---------------------------------------------

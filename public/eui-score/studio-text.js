@@ -41,6 +41,8 @@ export function install(ctx) {
       st.metaNotice = st.score ? M.metaNotice(M.attachMeta(st.score, text)) : "";
       st.unsupported = result.unsupported ?? [];
       st.lost = result.lost ?? [];
+      // The bars the text wrote too short or too long (#1022): the Review says them until the score is edited.
+      st.uneven = result.uneven ?? [];
       // What the engraver read and passed over (\\override, \\set …): said when the text is opened.
       st.passed = M.passedOver(parsed?.warnings ?? []);
       // The notes and rests the engraver numbers in this text.
@@ -51,6 +53,7 @@ export function install(ctx) {
       st.lost = [];
       st.passed = [];
       st.metaNotice = "";
+      st.uneven = [];
     }
     st.lostNotice = "";
     mixFromMeta();
@@ -141,6 +144,8 @@ export function install(ctx) {
     }
     st.past.push(step);
     if (!keepFuture) st.future = [];
+    // The text is the model's now, its bars whole: what the text read wrote short or long is no more.
+    st.uneven = [];
     if (status.dataset.fresh !== "1") say("");
     delete status.dataset.fresh;
     saveDraft();
