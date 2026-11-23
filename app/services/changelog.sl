@@ -13,6 +13,17 @@ class Changelog
       {"date": "2026-11-23", "entries": [
         {
           "area": "site",
+          "title": "Transpose to a key, or in the key by degrees",
+          "text": "Transpose now goes by an interval, to a key, or in the key by degrees. To a key, the music "
+          + "moves from the key it is in to the one chosen — the nearest way, up or down, and an octave "
+          + "higher or lower if you like — with its key signatures and chord symbols, as by an interval. In "
+          + "the key, every note moves a second to an octave by the key's own letters, C to D to E in C "
+          + "major, a sharp the key does not hold kept on its note. On the score, or on a selection, over "
+          + "several staves too.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
           "title": "Move a staff up or down",
           "text": "Insert ▸ Move the staff up or down, the Bars & staves tools, or Alt+Shift+↑ ↓ move the "
           + "selected staff over the one above or under the one below. Its voices, its line of chord "

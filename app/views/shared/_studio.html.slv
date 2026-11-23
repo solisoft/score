@@ -454,10 +454,38 @@
           <button type="button" class="tool tool-wide" data-act="reminder" data-kind="cautionary" title="<%= t("app.editor.a_cautionary_accidental_in_parentheses") %>">(♯♭♮)</button>
         </div>
         <p class="tool-sub"><%= t("app.editor.transpose") %></p>
+        <%# By an interval, to a key, or in the key by degrees (#1024): the
+            second menu is the one the first chooses. %>
+        <div class="tool-row tool-transpose">
+          <select class="tool-select" data-transpose-mode aria-label="<%= t("app.editor.how_to_transpose") %>">
+            <option value="interval"><%= t("app.editor.by_an_interval") %></option>
+            <option value="key"><%= t("app.editor.to_a_key") %></option>
+            <option value="degrees"><%= t("app.editor.in_the_key_by_degrees") %></option>
+          </select>
+        </div>
         <div class="tool-row tool-transpose">
           <select class="tool-select" data-transpose-interval aria-label="<%= t("app.editor.interval_to_transpose_by") %>"></select>
+          <select class="tool-select" data-transpose-key aria-label="<%= t("app.editor.key_to_transpose_to") %>" hidden>
+            <% for key_choice in editor_keys() %>
+              <option value="<%= key_choice[0] %>"><%= key_choice[1] %></option>
+            <% end %>
+          </select>
+          <select class="tool-select" data-transpose-degrees aria-label="<%= t("app.editor.degrees_to_move_by") %>" hidden>
+            <option value="1"><%= t("app.editor.a_second") %></option><option value="2"><%= t("app.editor.a_third") %></option>
+            <option value="3"><%= t("app.editor.a_fourth") %></option><option value="4"><%= t("app.editor.a_fifth") %></option>
+            <option value="5"><%= t("app.editor.a_sixth") %></option><option value="6"><%= t("app.editor.a_seventh") %></option>
+            <option value="7"><%= t("app.editor.an_octave") %></option>
+          </select>
           <select class="tool-select" data-transpose-way aria-label="<%= t("app.editor.up_or_down") %>">
+            <option value="0" data-transpose-nearest hidden><%= t("app.editor.the_nearest_way") %></option>
             <option value="1"><%= t("app.editor.up") %></option><option value="-1"><%= t("app.editor.down") %></option>
+          </select>
+        </div>
+        <div class="tool-row tool-transpose" data-transpose-octave-row hidden>
+          <select class="tool-select" data-transpose-octave aria-label="<%= t("app.editor.an_octave_more") %>">
+            <option value="0"><%= t("app.editor.no_octave_more") %></option>
+            <option value="1"><%= t("app.editor.an_octave_higher") %></option>
+            <option value="-1"><%= t("app.editor.an_octave_lower") %></option>
           </select>
         </div>
         <div class="tool-row">

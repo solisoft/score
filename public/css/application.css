@@ -4465,6 +4465,10 @@
     gap: 4px;
     margin-bottom: 4px;
   }
+  /* A row the tools show only when it is needed: Transpose's octave, to a key (#1024). */
+  .tool-row[hidden] {
+    display: none;
+  }
   .tool {
     min-width: 32px;
     height: 32px;

@@ -176,6 +176,9 @@ export function install(ctx) {
       // is shared with; elsewhere, a link that holds the score.
       case "share": return options.shareUrl ? location.assign(options.shareUrl) : share();
       case "transpose": {
+        // To a key, or in the key by degrees (#1024); else by the interval chosen.
+        const mode = root.querySelector("[data-transpose-mode]")?.value ?? "interval";
+        if (mode !== "interval") return transposeTo(mode, data.scope === "score");
         const it = M.INTERVALS[Number(root.querySelector("[data-transpose-interval]").value)];
         const way = Number(root.querySelector("[data-transpose-way]").value);
         const by = { steps: way * it.steps, semitones: way * it.semitones };
@@ -580,6 +583,33 @@ export function install(ctx) {
       case "paste": return paste();
       case "next": case "previous": return step(name === "next" ? 1 : -1, data.extend);
       case "head-up": case "head-down": return chordHead(name === "head-up" ? 1 : -1);
+    }
+  }
+
+  /**
+   * Transpose ▸ To a key, or In the key by degrees (#1024): the score, its
+   * keys and chord symbols with it, or the selection (on every staff it
+   * covers) alone. One edit, said.
+   */
+  function transposeTo(mode, whole) {
+    const value = (selector) => Number(root.querySelector(selector)?.value ?? 0);
+    const way = value("[data-transpose-way]");
+    const chosen = whole ? null : ranges();
+    if (!whole && !chosen.length) return say(tr("Select the notes to transpose, or transpose the score"), true);
+    const what = whole ? tr("The score") : tr("The selection");
+    if (mode === "key") {
+      const to = value("[data-transpose-key]");
+      const keyName = (fifths) => root.querySelector(`[data-transpose-key] option[value="${fifths}"]`)?.textContent.trim() ?? String(fifths);
+      const from = whole ? st.score.key : M.keyOf(st.score, chosen[0].s, M.starts(chosen[0].staff)[chosen[0].a]);
+      if (edit((score) => T.transposeToKey(score, to, { way, octave: value("[data-transpose-octave]"), ranges: chosen }))) {
+        say(tr("{what}, from {from} to {to}.", { what, from: keyName(from), to: keyName(to) }));
+      }
+      return;
+    }
+    const degrees = value("[data-transpose-degrees]") * (way < 0 ? -1 : 1);
+    const degree = root.querySelector("[data-transpose-degrees]")?.selectedOptions[0]?.textContent.trim().toLowerCase() ?? "";
+    if (edit((score) => T.transposeDiatonic(score, degrees, { ranges: chosen }))) {
+      say(degrees > 0 ? tr("{what}, in its key: {degree} up.", { what, degree }) : tr("{what}, in its key: {degree} down.", { what, degree }));
     }
   }
 

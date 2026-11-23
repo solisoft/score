@@ -1451,7 +1451,7 @@ export function removeFingerings(score, s, i) {
 }
 
 /** A chord's fingerings follow its notes, moved from `was` to `now` head by head. */
-function followHeads(ev, was, now) {
+export function followHeads(ev, was, now) {
   // A reminder accidental stays on its note (cis! moved to d is d!).
   for (const field of ["forced", "cautionary", "harmonics"]) {
     if (!ev[field]) continue;
@@ -1597,7 +1597,7 @@ export function moveGrace(score, s, i, how, by) {
 }
 
 /** A grace note given the pitches `now` (head by head): its fingerings follow their notes. */
-function moveGraceTo(g, now) {
+export function moveGraceTo(g, now) {
   if (g.fingers) g.fingers = g.fingers.map((f) => (f.head == null ? f : { ...f, head: now[g.pitches.findIndex((p) => p.d === f.head)]?.d ?? f.head }));
   g.pitches = now;
 }
@@ -4374,7 +4374,7 @@ export function symbolOfChordmode(written) {
 }
 
 /** A \chordmode chord moved by `steps` letters and `semitones`: its root and its bass, the rest as written. */
-function transposeChordmode(written, steps, semitones) {
+export function transposeChordmode(written, steps, semitones) {
   const move = (letter, suffix) => {
     const alter = { is: 1, isis: 2, es: -1, s: -1, eses: -2, ses: -2 }[suffix] ?? 0;
     const p = transposePitch({ d: "cdefgab".indexOf(letter), alter }, steps, semitones);

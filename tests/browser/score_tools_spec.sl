@@ -144,4 +144,30 @@ describe("The tools on many notes at once (#1024)") do
     assert(tools_text().index_of("e'1 | f'1") < tools_text().index_of("c''1 | d''1"))
     assert_no_page_errors()
   end
+
+  test("Transpose to a key: the score to D major, its key signature with it; in the key, a selection a third up") do
+    tools_open(TOOLS_TRIO)
+    evaluate("(() => { const mode = document.querySelector('[data-transpose-mode]'); mode.value = 'key';"
+    + " mode.dispatchEvent(new Event('change', { bubbles: true }));"
+    + " document.querySelector('[data-transpose-key]').value = '2'; })()")
+    assert(evaluate("document.querySelector('[data-transpose-interval]').hidden"), "the interval menu steps aside")
+    assert_eq(evaluate("document.querySelector('[data-transpose-way]').value"), "0")
+    steps = tools_steps()
+    evaluate("document.querySelector('[data-act=transpose][data-scope=score]').click()")
+    sleep(0.5)
+    text = tools_text()
+    assert_eq(tools_steps(), steps + 1)
+    assert_contains(text, "\\key d \\major")
+    assert_contains(text, "d''1 | e''1 | fis''1")
+    # In the key, by degrees: the top staff's first bar, a third up (D major: d'' to fis'').
+    evaluate("(() => { const mode = document.querySelector('[data-transpose-mode]'); mode.value = 'degrees';"
+    + " mode.dispatchEvent(new Event('change', { bubbles: true }));"
+    + " document.querySelector('[data-transpose-degrees]').value = '2';"
+    + " document.querySelector('[data-transpose-way]').value = '1'; })()")
+    tools_click(tools_bar_point(0, 0), false)
+    evaluate("document.querySelector('[data-act=transpose][data-scope=selection]').click()")
+    sleep(0.5)
+    assert_contains(tools_text(), "fis''1 | e''1 | fis''1")
+    assert_no_page_errors()
+  end
 end

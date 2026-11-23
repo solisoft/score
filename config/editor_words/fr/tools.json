@@ -9,5 +9,11 @@
   "This staff is the first already": "Cette portée est déjà la première",
   "This staff is the last already": "Cette portée est déjà la dernière",
   "The staff moved up: Alt+Shift+↑ again moves it higher.": "La portée est montée : Alt+Maj+↑ encore la monte plus haut.",
-  "The staff moved down: Alt+Shift+↓ again moves it lower.": "La portée est descendue : Alt+Maj+↓ encore la descend plus bas."
+  "The staff moved down: Alt+Shift+↓ again moves it lower.": "La portée est descendue : Alt+Maj+↓ encore la descend plus bas.",
+  "The score": "La partition",
+  "The selection": "La sélection",
+  "{what}, from {from} to {to}.": "{what}, de {from} vers {to}.",
+  "{what}, in its key: {degree} up.": "{what}, dans sa tonalité : {degree} plus haut.",
+  "{what}, in its key: {degree} down.": "{what}, dans sa tonalité : {degree} plus bas.",
+  "Choose how many degrees to move the notes by": "Choisissez de combien de degrés déplacer les notes"
 }

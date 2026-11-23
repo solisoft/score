@@ -807,6 +807,8 @@
   .tool-section > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   @media (prefers-reduced-motion: reduce) { .tool-section > summary::before { transition: none; } }
   .tool-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+  /* A row the tools show only when it is needed: Transpose's octave, to a key (#1024). */
+  .tool-row[hidden] { display: none; }
   .tool {
     min-width: 32px; height: 32px; padding: 0 8px; border-radius: 7px; border: 1px solid var(--line-strong);
     background: var(--sheet); color: var(--ink); font: 600 14px/1 var(--font-sans); cursor: pointer;

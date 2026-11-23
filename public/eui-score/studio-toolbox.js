@@ -369,6 +369,24 @@ export function install(ctx) {
     intervalMenu.value = String(M.INTERVALS.findIndex((it) => it.name === "major second"));
   }
 
+  // Transpose by an interval, to a key, or in the key by degrees (#1024): the
+  // menus the way chosen needs; to a key, the nearest way first, from the score's key.
+  const transposeMode = root.querySelector("[data-transpose-mode]");
+  transposeMode?.addEventListener("change", () => {
+    const mode = transposeMode.value;
+    const shown = { "[data-transpose-interval]": "interval", "[data-transpose-key]": "key", "[data-transpose-degrees]": "degrees", "[data-transpose-octave-row]": "key" };
+    for (const [selector, wanted] of Object.entries(shown)) {
+      const el = root.querySelector(selector);
+      if (el) el.hidden = mode !== wanted;
+    }
+    const way = root.querySelector("[data-transpose-way]");
+    const nearest = root.querySelector("[data-transpose-nearest]");
+    if (nearest) nearest.hidden = mode !== "key";
+    if (way) way.value = mode === "key" ? "0" : way.value === "0" ? "1" : way.value;
+    const keyMenu = root.querySelector("[data-transpose-key]");
+    if (mode === "key" && keyMenu && st.score) keyMenu.value = String(st.score.key);
+  });
+
   // The instrument menus, from INSTRUMENTS by family; the new staff's offers
   // the piano's lower staff too, in the bass clef.
   for (const select of root.querySelectorAll("[data-instruments]")) {
