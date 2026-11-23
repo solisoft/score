@@ -19,6 +19,15 @@ def french_scores_sign_in(user)
   )
 end
 
+# Back to English the way a reader goes back: the site's English home sets
+# the `locale` cookie in its answer, which replaces the one the client holds.
+# A second set_request_cookie("locale", "en") would not: it adds a cookie of
+# the same name, and since Soli 2.39.1 the first of two wins (#1033).
+def french_scores_back_to_english
+  home = get("/")
+  assert_eq(res_status(home), 200)
+end
+
 describe("The library in French") do
   before_each() do
     as_guest()
@@ -49,7 +58,7 @@ describe("The library in French") do
     # A search that finds nothing, in French too.
     nothing = res_body(get("/app/scores?q=zzz"))
     assert_contains(nothing, "Aucun titre ni compositeur ne contient « zzz »")
-    set_request_cookie("locale", "en")
+    french_scores_back_to_english()
     english = res_body(get("/app/scores"))
     assert_contains(english, "<h1>Your scores</h1>")
     assert_contains(english, ">Last changed</option>")
@@ -74,7 +83,7 @@ describe("The library in French") do
     assert_contains(trash, "mise à la corbeille ")
     assert_not(trash.contains("Delete for good"))
     # The account kept French; the cookie set to English wins.
-    set_request_cookie("locale", "en")
+    french_scores_back_to_english()
     english = res_body(get("/app/trash"))
     assert_contains(english, "<h1>Trash</h1>")
     assert_contains(english, "Delete for good")
@@ -94,7 +103,7 @@ describe("The library in French") do
     assert_eq(res_status(odd), 422)
     assert_contains(res_body(odd), "Choisissez privée, par lien ou publique.")
     assert_eq(Score.find(score._key).visibility, "private")
-    set_request_cookie("locale", "en")
+    french_scores_back_to_english()
     english = delete("/app/scores/#{score._key}")
     assert_eq(res_status(english), 422)
     assert_contains(res_body(english), "Move the score to the trash first.")
@@ -118,7 +127,7 @@ describe("The library in French") do
     post("/app/scores/#{score._key}/share", {"visibility": "link"})
     shared = res_body(get("/app/scores/#{score._key}/share"))
     assert_contains(shared, "« Partagée » est maintenant ouverte à qui a son lien.")
-    set_request_cookie("locale", "en")
+    french_scores_back_to_english()
     english = res_body(get("/app/scores/#{score._key}/share"))
     assert_contains(english, "<h1>Share “Partagée”</h1>")
     assert_contains(english, "<b>Anyone with the link</b>")
@@ -142,7 +151,7 @@ describe("The library in French") do
     one = res_body(get("/app/scores/#{score._key}/versions/#{version._key}"))
     assert_contains(one, ">Toutes les versions</a>")
     assert_contains(one, ">Restaurer cette version</button>")
-    set_request_cookie("locale", "en")
+    french_scores_back_to_english()
     english = res_body(get("/app/scores/#{score._key}/versions"))
     assert_contains(english, "<h1>History of “Gardée”</h1>")
     assert_contains(english, "kept on request")
