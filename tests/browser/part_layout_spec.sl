@@ -67,8 +67,12 @@ def pl_preview_height
 end
 
 # What the read page saves, caught as its link is clicked: each file's name and text, in window.partFiles.
+# The page scrolls smoothly (application.css); a click scrolls its button into view and reads its place at
+# once, so a button below the fold — the part's, in CI's taller fonts — was clicked where it no longer was,
+# and nothing was saved. Scrolled at once, the click lands on it.
 const PL_SAVES = """
 (() => {
+  document.documentElement.style.scrollBehavior = "auto";
   window.partFiles = [];
   HTMLAnchorElement.prototype.click = function () {
     const file = { name: this.download, text: null };
