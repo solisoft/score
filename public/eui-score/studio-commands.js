@@ -4,6 +4,8 @@
 // Served immutable: this module's version goes to the ones it loads.
 const V = new URL(import.meta.url).search;
 const { tr } = await import(`./words.js${V}`);
+// The tools on many notes at once (#1024): several staves, staves moved, transposing to a key…
+const T = await import(`./score-tools.js${V}`);
 /** The drum grid, the arpeggiator, the chord track and the accompaniment (Edit menu), loaded the first time one is opened. */
 const patternTools = () => import(`./pattern-tools.js${V}`);
 /** Quantize, swing and humanize (Edit and Play menus), loaded the first time one is opened. */
@@ -24,7 +26,7 @@ export function install(ctx) {
     inputWrite, inputBack, inputTuplet, selectedBarsOrNull, selectedBars, duration, toggleDot, step, chordHead, copy,
     insertCopied, paste, openWords, draw, place, toVoice, onField, share, refuse, say, title, fileName, openChosen,
     heardMidi, exportPractice, togglePlay, stopPlay, mixCommit, saveWav, saveSound, saveImage, setLoop, record,
-    intervalName, instrumentName
+    intervalName, instrumentName, ranges, multiLane
   } = ctx.call;
 
   // ---- Actions ------------------------------------------------------------------
@@ -187,6 +189,11 @@ export function install(ctx) {
           if (edit((score) => M.transpose(score, by))) say(tr("The score, {words}.", { words }));
           return;
         }
+        if (multiLane()) {
+          const staves = new Set(ranges().map((each) => M.upperOf(st.score, each.s))).size;
+          if (edit((score) => T.transposeRanges(score, ranges(), by))) say(tr("The selected bars of {n} staves, {words}.", { n: staves, words }));
+          return;
+        }
         const r = range();
         if (!r) return say(tr("Select the notes to transpose, or transpose the score"), true);
         if (edit((score) => M.transpose(score, { ...by, s: r.s, a: r.a, b: r.b }))) say(tr("{n} selected, {words}.", { n: r.b - r.a + 1, words }));
@@ -223,11 +230,13 @@ export function install(ctx) {
       }
       case "rest":
         if (st.input.on) return inputWrite(null);
+        if (multiLane()) return edit((score) => T.clearRanges(score, ranges()));
         return edit((score) => {
           const r = range() ?? (() => { throw new Error(tr("Select a note first")); })();
           for (let i = r.b; i >= r.a; i--) M.remove(score, r.s, i, r.a === r.b ? st.sel.head : -1);
         });
       case "move": return edit((score) => {
+        if (!st.input.on && multiLane()) return T.moveRanges(score, ranges(), data.how, Number(data.by));
         const r = range();
         if (st.input.on || !r || r.a === r.b) {
           const t = need();
@@ -338,6 +347,7 @@ export function install(ctx) {
         M.setHairpin(score, r.s, r.a, r.b, data.kind);
       });
       case "art": return edit((score) => {
+        if (multiLane()) return T.toggleArticulationRanges(score, ranges(), data.name);
         const r = range() ?? (() => { throw new Error(tr("Select a note first")); })();
         for (let i = r.a; i <= r.b; i++) if (!r.staff.events[i].rest || data.name === "fermata") M.toggleArticulation(score, r.s, i, data.name);
       });
@@ -379,6 +389,7 @@ export function install(ctx) {
         M.setTremolo(score, t.s, t.i, Number(data.value));
       });
       case "dynamic": return edit((score) => {
+        if (!st.input.on && multiLane()) return T.dynamicOnRanges(score, ranges(), data.name);
         const t = need();
         M.setDynamic(score, t.s, t.i, data.name);
       });

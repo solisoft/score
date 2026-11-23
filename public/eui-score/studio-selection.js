@@ -4,6 +4,8 @@
 // The editor's words in the page's language (#508).
 const V = new URL(import.meta.url).search;
 const { tr } = await import(`./words.js${V}`);
+// A selection over several staves (#1024).
+const T = await import(`./score-tools.js${V}`);
 
 /** Answers the selection, the note the tools act on, and hearing it. */
 export function install(ctx) {
@@ -45,6 +47,50 @@ export function install(ctx) {
     const a = indexAt(st.sel.t0);
     const b = indexAt(st.sel.t1);
     return a < 0 ? null : { s: st.sel.staff, a: Math.min(a, b), b: Math.max(a, b), staff };
+  }
+
+  /** Whether the selection spans several lanes: bars of several staves (or voices). */
+  function multiLane() {
+    return Boolean(st.sel?.bars && st.sel.lanes?.length > 1);
+  }
+
+  /** The selected events, lane by lane: [{ s, a, b, staff }], one for a selection on one staff; [] for none. */
+  function ranges() {
+    if (!st.sel || !st.score) return [];
+    if (!multiLane()) {
+      const r = range();
+      return r ? [r] : [];
+    }
+    return T.barRanges(st.score, st.sel.lanes, ...st.sel.bars).map((r) => ({ ...r, staff: st.score.staves[r.s] }));
+  }
+
+  /**
+   * Bars `a`…`b` of the staves from lane `l0`'s to lane `l1`'s selected,
+   * every voice of each (#1024): from a Shift+click or a Shift+drag across
+   * staves. On one lane, its bars alone. `l0` and bar `a` stay the anchor a
+   * further Shift+click extends from.
+   */
+  function selectStaves(l0, l1, a, b) {
+    const lanes = l0 === l1 ? [l0] : T.lanesBetween(st.score, l0, l1);
+    const [from, to] = [Math.min(a, b), Math.max(a, b)];
+    const at = M.starts(st.score.staves[lanes[0]]);
+    const last = Math.max(...at.filter((t) => t < M.barStart(st.score, to + 1)));
+    st.sel = { staff: lanes[0], t0: M.barStart(st.score, from), t1: last, head: -1, bars: [from, to], anchor: { lane: l0, bar: a } };
+    if (lanes.length > 1) {
+      st.sel.lanes = lanes;
+      const staves = new Set(lanes.map((s) => M.upperOf(st.score, s))).size;
+      const bars = from === to ? tr("Bar {n}", { n: barNo(from) }) : tr("Bars {a}–{b}", { a: barNo(from), b: barNo(to) });
+      say(staves === 1
+        ? tr("{bars}, every voice: Delete, the arrows, Transpose, articulations, dynamics and Ctrl+C act on them all.", { bars })
+        : tr("{bars} of {n} staves: Delete, the arrows, Transpose, articulations, dynamics and Ctrl+C act on them all.", { bars, n: staves }));
+    } else say("");
+    draw();
+  }
+
+  /** Where a Shift+click across staves extends the selection from: its anchor, or its first lane and bar. */
+  function anchorOf() {
+    if (!st.sel || !st.score) return null;
+    return st.sel.anchor ?? { lane: st.sel.staff, bar: st.sel.bars?.[0] ?? M.barAt(st.score, Math.min(st.sel.t0, st.sel.t1)) };
   }
 
   function select(s, index, head = -1, extend = false) {
@@ -148,5 +194,5 @@ export function install(ctx) {
     st.sel = { staff: s, t0: t, t1: t, head: st.sel?.head ?? -1 };
   }
 
-  return { barNo, changeBar, staffOf, range, select, hear, target, need, keepOn, selectedBarsOrNull, selectedBars };
+  return { barNo, changeBar, staffOf, range, ranges, multiLane, selectStaves, anchorOf, select, hear, target, need, keepOn, selectedBarsOrNull, selectedBars };
 }

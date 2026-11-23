@@ -13,6 +13,16 @@ class Changelog
       {"date": "2026-11-23", "entries": [
         {
           "area": "site",
+          "title": "A selection over several staves",
+          "text": "Shift+click a bar or a note of another staff, or Shift+drag down or up across the staves: the "
+          + "bars of every staff between are selected, every voice of each, and drawn so. Delete, the arrows, "
+          + "Transpose, the articulations, the dynamics, Copy, Cut and Paste then act on all of them, in one "
+          + "step Undo takes back. Drum staves and lines of chord names are left alone where a pitch is "
+          + "changed.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
           "title": "The score read over: View ▸ Review the score",
           "text": "The editor reads the score over after each change and counts what a player would stop at, "
           + "on a button under the score: a note out of its instrument's range (a clarinet's or a horn's read "

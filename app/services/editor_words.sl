@@ -9,7 +9,8 @@ const EDITOR_WORD_GROUPS = [
   "model",
   "patterns",
   "audio",
-  "panels"
+  "panels",
+  "tools"
 ]
 
 class EditorWords

@@ -11,7 +11,7 @@ const COLOURS = { selection: "#b4373a", head: "#e0662a", cursor: "#2563c9", play
 /** Answers the drawing: the score engraved, and what goes over it. */
 export function install(ctx) {
   const { root, options, sheet, svgHost, overlay, palette, playhead, st, loaded, M, editor_view_lit } = ctx;
-  const { range, showInText, placeWords, wordsOpen, tellPlace, placePeers, placeMarkers, placeGhost, drawRoll, showState, refuse, reviewSoon } = ctx.call;
+  const { range, ranges, showInText, placeWords, wordsOpen, tellPlace, placePeers, placeMarkers, placeGhost, drawRoll, showState, refuse, reviewSoon } = ctx.call;
 
   // ---- Drawing ------------------------------------------------------------------
 
@@ -34,7 +34,8 @@ export function install(ctx) {
     };
     const r = range();
     if (r && !st.input.on) {
-      for (let i = r.a; i <= r.b; i++) items[itemOf(r.s, i)] = COLOURS.selection;
+      // Every lane of a selection over several staves (#1024).
+      for (const each of ranges()) for (let i = each.a; i <= each.b; i++) items[itemOf(each.s, i)] = COLOURS.selection;
       if (st.sel.head >= 0 && r.a === r.b) heads.push([itemOf(r.s, r.a), st.sel.head, COLOURS.head]);
     }
     if (st.input.on && st.score) {
@@ -315,9 +316,17 @@ export function install(ctx) {
     placeGhost();
     if (st.input.on) return;
     if (st.sel?.bars) {
+      // Over several staves (#1024): from the first selected staff's top to the last's bottom.
+      const lanes = st.sel.lanes?.length > 1 ? st.sel.lanes : null;
+      const space = 8 * st.zoom;
+      const staves = lanes && [M.staffNumber(st.score, lanes[0]), M.staffNumber(st.score, lanes.at(-1))];
       for (let bar = st.sel.bars[0]; bar <= st.sel.bars[1]; bar++) {
         const box = boxOf(bar);
-        if (box) add("studio-bar-selected", box[0], box[1], box[2] + 3, box[3]);
+        if (!box) continue;
+        const drawn = st.view.bars.find((b) => b.bar === bar);
+        const [top, bottom] = staves ? [drawn.staves?.[staves[0]], drawn.staves?.[staves[1]]] : [];
+        if (top != null && bottom != null) add("studio-bar-selected", box[0], top - space, box[2] + 3, bottom + 5 * space);
+        else add("studio-bar-selected", box[0], box[1], box[2] + 3, box[3]);
       }
       // The selected bars' own way to comment on them (the app's).
       const box = boxOf(st.sel.bars[1]);

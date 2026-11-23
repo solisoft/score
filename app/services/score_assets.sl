@@ -47,6 +47,7 @@ const SCORE_STUDIO_MODULES = [
   "studio-files.js",
   "studio-text.js",
   "studio-selection.js",
+  "score-tools.js",
   "studio-history.js",
   "studio-source.js",
   "studio-input.js",

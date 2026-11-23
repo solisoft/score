@@ -4,7 +4,7 @@
 /** The score's pointer wired: notes and bars selected, notes and repeats dragged. */
 export function install(ctx) {
   const { root, sheet, st, M } = ctx;
-  const { writeText, snapshot, saveDraft, select, geometry, draw, say, ghostAt, writeAtGhost } = ctx.call;
+  const { writeText, snapshot, saveDraft, select, geometry, draw, say, ghostAt, writeAtGhost, selectStaves, anchorOf } = ctx.call;
 
   // ---- Pointer ------------------------------------------------------------------
 
@@ -166,11 +166,20 @@ export function install(ctx) {
       // The empty part of a bar: it is selected, and a drag selects the bars it crosses.
       const on = p && !st.input.on ? barHit(p) : null;
       if (on) {
+        // Shift on another staff than the selection's: the bars of every staff between (#1024).
+        const anchor = event.shiftKey ? anchorOf() : null;
+        if (anchor && (st.sel.lanes || M.upperOf(st.score, anchor.lane) !== on.staff)) {
+          selectStaves(anchor.lane, on.staff, anchor.bar, on.bar);
+          st.barDrag = { s: anchor.lane, a: anchor.bar, at: on.bar, moved: true, deselect: false, across: true };
+          sheet.setPointerCapture(event.pointerId);
+          return;
+        }
         // A drag selects the bars it crosses; a click selects its bar, or —
-        // something selected already — takes the selection away.
+        // something selected already — takes the selection away. With Shift,
+        // the drag goes down or up across the staves too.
         const keep = event.shiftKey && st.sel?.bars && st.sel.staff === on.staff;
         const from = keep ? st.sel.bars[0] : on.bar;
-        st.barDrag = { s: on.staff, a: from, at: on.bar, moved: Boolean(keep), deselect: !keep && Boolean(st.sel) };
+        st.barDrag = { s: on.staff, a: from, at: on.bar, moved: Boolean(keep), deselect: !keep && Boolean(st.sel), across: event.shiftKey };
         if (keep) selectBars(on.staff, from, on.bar);
         sheet.setPointerCapture(event.pointerId);
         return;
@@ -190,6 +199,11 @@ export function install(ctx) {
       st.input.last = null;
       return draw();
     }
+    // Shift+click on a note of another staff (or voice): the bars between, on every staff between (#1024).
+    const anchor = event.shiftKey ? anchorOf() : null;
+    if (anchor && (st.sel.lanes || anchor.lane !== s)) {
+      return selectStaves(anchor.lane, s, anchor.bar, M.barAt(st.score, M.starts(st.score.staves[s])[i]));
+    }
     const chord = ev.pitches.length > 1;
     select(s, i, chord ? found.head : -1, event.shiftKey);
     if (!ev.rest && !event.shiftKey) {
@@ -202,7 +216,20 @@ export function install(ctx) {
   sheet.addEventListener("pointermove", (event) => {
     if (st.barDrag) {
       const on = point(event) && barHit(point(event));
-      if (!on || (!st.barDrag.moved && on.bar === st.barDrag.at)) return;
+      if (!on) return;
+      // Shift held, from the press or now: the staves the pointer crosses as well as the bars (#1024).
+      if (st.barDrag.across || event.shiftKey) {
+        const same = on.bar === st.barDrag.at && M.upperOf(st.score, on.staff) === M.upperOf(st.score, st.barDrag.s);
+        if (!st.barDrag.moved && same) return;
+        const key = `${on.bar}:${on.staff}`;
+        Object.assign(st.barDrag, { across: true, moved: true });
+        if (key !== st.barDrag.last) {
+          st.barDrag.last = key;
+          selectStaves(st.barDrag.s, on.staff, st.barDrag.a, on.bar);
+        }
+        return;
+      }
+      if (!st.barDrag.moved && on.bar === st.barDrag.at) return;
       st.barDrag.moved = true;
       if (on.bar !== st.sel?.bars?.[1] || !st.sel?.bars) selectBars(st.barDrag.s, st.barDrag.a, on.bar);
       return;
