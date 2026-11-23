@@ -88,10 +88,10 @@
     <p>
       Deux portées se condensent en une depuis l'éditeur (Format ▸ Condenser avec la portée du dessous), et se
       séparent de nouveau ; une partie qui dit comment les parties se combinent (<code>\partCombineApart</code>,
-      <code>\partCombineSoloI</code> et consorts) se modifie aussi sur la partition. Les mots que le graveur
-      imprime au-dessus sont les siens, dans toutes les langues : <em>a2</em>, <em>Solo</em> et
-      <em>Solo II</em> — pas encore <em>1.</em>, <em>2.</em> ni <em>à 2</em> — et une portée contient deux
-      parties, pas trois.
+      <code>\partCombineSoloI</code> et consorts) se modifie aussi sur la partition. L'éditeur écrit les mots
+      imprimés au-dessus dans sa langue (<code>soloText</code>, <code>soloIIText</code>, <code>aDueText</code>) :
+      <em>1.</em>, <em>2.</em> et <em>à 2</em> en français, <em>a2</em> en anglais, et le graveur les imprime ;
+      une portée contient deux parties, pas trois.
     </p>
     <p>
       Depuis sa deuxième série de travaux sur LilyPond, le graveur dessine aussi des portées plus petites
@@ -115,16 +115,36 @@
       mesures disent toujours la même chose ; une mesure dont une modification a déplacé le <code>\time</code> ou
       le <code>\partial</code> est écrite comme un <code>\partial</code> de sa longueur.
     </p>
+    <p>
+      Depuis sa troisième série de travaux sur LilyPond — dans l'éditeur et le bac à sable dès maintenant, sur
+      les pages de la bibliothèque et dans les PDF avec la prochaine version de Soli — le graveur dispose les
+      altérations d'un accord en zigzag, ne trace les lignes supplémentaires que sous les têtes qui en ont
+      besoin, fait passer une ligature au-delà de ce qui se trouve dessous, et courbe les liaisons comme
+      LilyPond les évalue. <code>\shape</code> déplace les points de contrôle d'une liaison, d'une liaison de
+      phrasé ou d'une liaison de prolongation ; <code>extra-offset</code>, <code>Hairpin.shorten-pair</code> et
+      <code>Hairpin.height</code> déplacent et redimensionnent soufflets et courbes. Les espacements
+      <code>\paper</code> autour des titres et des textes (<code>top-markup-spacing</code>,
+      <code>score-markup-spacing</code>, <code>markup-markup-spacing</code>) sont appliqués. Un instrument peut
+      changer au milieu d'une portée (<code>instrumentName</code>, <code>midiInstrument</code>),
+      <code>\transposition</code> est jouée — une clarinette en si bémol sonne un ton sous ce qui est écrit — et
+      <code>\midi { \tempo … }</code> fixe la vitesse de lecture. Les portées de longueurs différentes sont
+      dessinées, la plus courte silencieuse jusqu'à la fin ; une tablature a les cordes que nomme son
+      <code>stringTunings</code> (les quatre d'une basse), et <code>\new RhythmicStaff</code> tient sur une
+      ligne. <code>\partCombine</code> imprime les mots que fixe son contexte. De nouveaux signes sont dessinés
+      et joués : les autres ornements (<code>\reverseturn</code>, <code>\prallprall</code>…) et points d'orgue
+      (<code>\shortfermata</code>, <code>\verylongfermata</code>…), les flèches, crochets et parenthèses
+      d'arpège, les trémolos entre deux notes, les pédales sostenuto et una corda, et les élisions des paroles.
+    </p>
     <ul>
       <li><strong>Mesure</strong> : les portées dont les mesures ont des durées différentes (polymétrie à mesures de
         longueurs différentes) sont refusées : alignez-les avec <code>\scaleDurations</code> ou <code>timeSignatureFraction</code>.</li>
-      <li><strong>Mise en page</strong> : une ligature n'est pas écartée des autres objets qu'elle pourrait toucher, et
-        les espacements <code>\paper</code> autour des titres et des textes ne sont pas lus.</li>
       <li><strong>Éditeur</strong> : les notes d'une portée mise à l'échelle par <code>\scaleDurations</code> gardent
         leurs durées sur la partition (leurs hauteurs, marques et silences se modifient ; la saisie de notes, les
         durées, le collage et un nouveau chiffrage y sont refusés et se modifient dans le texte), une mesure
         dessinée qui change après le début d'une portée (<code>timeSignatureFraction</code>) est laissée au texte,
-        et les portées dont les mesures ont des durées différentes restent l'affaire du seul graveur.</li>
+        et les portées dont les mesures ont des durées différentes restent l'affaire du seul graveur, tout comme
+        une tablature d'un autre nombre de cordes que les six d'une guitare et un <code>\new RhythmicStaff</code>
+        (leurs notes se modifient dans le texte).</li>
       <li><strong>Réglages</strong> : un <code>\override</code> absent des listes ci-dessus est toujours ignoré, avec
         un avertissement.</li>
     </ul>

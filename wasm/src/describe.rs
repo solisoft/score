@@ -19,13 +19,15 @@ pub fn description(parsed: &Parsed, bars: usize) -> String {
     for (k, staff) in parsed.staves.iter().enumerate() {
         let name = staff.props.instrument_name.clone().filter(|n| !n.trim().is_empty()).unwrap_or_else(|| format!("Staff {}", k + 1));
         let kind = match staff.kind {
-            StaffKind::Notes => "",
-            StaffKind::ChordNames => " (chord names)",
-            StaffKind::Figures => " (figured bass)",
-            StaffKind::FretBoards => " (guitar chords)",
-            StaffKind::Ossia => " (ossia)",
-            StaffKind::Drums => " (drums)",
-            StaffKind::Tab => " (tablature)",
+            StaffKind::Notes => String::new(),
+            StaffKind::ChordNames => " (chord names)".to_string(),
+            StaffKind::Figures => " (figured bass)".to_string(),
+            StaffKind::FretBoards => " (guitar chords)".to_string(),
+            StaffKind::Ossia => " (ossia)".to_string(),
+            StaffKind::Drums => " (drums)".to_string(),
+            StaffKind::Tab => " (tablature)".to_string(),
+            StaffKind::TabStrings(strings) => format!(" (tablature, {strings} strings)"),
+            StaffKind::Rhythmic => " (rhythm)".to_string(),
         };
         let fifths = staff.events.iter().find(|e| e.k == Kind::Key).map_or(0, |e| e.fifths);
         let time = staff.events.iter().find(|e| e.k == Kind::Time).map(|e| format!(", {}/{}", e.time.0, e.time.1)).unwrap_or_default();
@@ -109,5 +111,14 @@ mod tests {
     fn chord_names_are_chords() {
         let parsed = eui_score::parse::parse("<< \\new ChordNames \\chordmode { c1 g1 } \\new Staff { c'1 | d'1 } >>").unwrap();
         assert!(description(&parsed, 2).contains("Staff 1 (chord names): 2 chords. Staff 2:"), "{}", description(&parsed, 2));
+    }
+
+    #[test]
+    fn a_bass_tablature_and_a_rhythmic_staff_say_what_they_are() {
+        let src = "<< \\new TabStaff \\with { stringTunings = #bass-tuning } { e,4 a, d g } \\new RhythmicStaff { c4 c8 c c2 } >>";
+        let parsed = eui_score::parse::parse(src).unwrap();
+        let said = description(&parsed, 1);
+        assert!(said.contains("Staff 1 (tablature, 4 strings):"), "{said}");
+        assert!(said.contains("Staff 2 (rhythm):"), "{said}");
     }
 }

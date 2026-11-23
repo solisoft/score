@@ -12,6 +12,20 @@ class Changelog
     [
       {"date": "2026-11-23", "entries": [
         {
+          "area": "engine",
+          "title": "A new engraver in the editor: slurs, beams, signs and real files",
+          "text": "The editor and the playground engrave with eui-score's newest round of LilyPond work (#1019, "
+          + "#1020, #1021, #1023, #1025, #1026, #1031, #1032). Accidentals, ledger lines, beams and slurs are "
+          + "set as LilyPond sets them, and \\shape, extra-offset and a hairpin's shorten-pair move curves and "
+          + "hairpins. A condensed staff prints the 1., 2. and a2 (à 2) its settings name. An instrument may "
+          + "change in the middle of a staff, and \\transposition is played. \\paper's spacing around titles "
+          + "and words is followed. The other ornaments and fermatas, arpeggio arrows and brackets, two-note "
+          + "tremolos, the sostenuto and soft pedals, lyric elisions and RhythmicStaff are drawn and played. "
+          + "Staves of different lengths and a bass's four-string tablature open as written. The library's "
+          + "pages and PDFs follow with the next Soli release.",
+          "link": "limits"
+        },
+        {
           "area": "site",
           "title": "Margins and spacing",
           "text": "File ▸ Margins and spacing, also in Score properties, sets the page's four margins and the "

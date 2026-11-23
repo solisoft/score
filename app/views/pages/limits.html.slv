@@ -87,9 +87,9 @@
     <p>
       Two staves are condensed on one from the editor (Format ▸ Condense with the staff below), and split again;
       a part that says how the parts combine (<code>\partCombineApart</code>, <code>\partCombineSoloI</code> and
-      the like) is edited on the score too. The words the engraver prints over them are its own, in every
-      language: <em>a2</em>, <em>Solo</em> and <em>Solo II</em> — not yet <em>1.</em>, <em>2.</em> or
-      <em>à 2</em> — and a staff holds two parts, not three.
+      the like) is edited on the score too. The editor writes the words printed over them in its language
+      (<code>soloText</code>, <code>soloIIText</code>, <code>aDueText</code>): <em>1.</em>, <em>2.</em> and
+      <em>a2</em>, or <em>à 2</em> in French, and the engraver prints them; a staff holds two parts, not three.
     </p>
     <p>
       Since its second round of LilyPond work, the engraver also draws smaller staves
@@ -112,16 +112,33 @@
       <code>\time</code> or <code>\partial</code> an edit has moved is written as a <code>\partial</code> of its
       length.
     </p>
+    <p>
+      Since its third round of LilyPond work — in the editor and the playground now, on the library's pages and
+      in PDFs with the next Soli release — the engraver sets a chord's accidentals in a zig-zag, draws ledger
+      lines only under the heads that need them, takes a beam past what stands under it, and shapes slurs as
+      LilyPond scores them. <code>\shape</code> moves the control points of a slur, a phrasing slur or a tie;
+      <code>extra-offset</code>, <code>Hairpin.shorten-pair</code> and <code>Hairpin.height</code> move and
+      resize hairpins and curves. The <code>\paper</code> spacings around titles and markups
+      (<code>top-markup-spacing</code>, <code>score-markup-spacing</code>, <code>markup-markup-spacing</code>)
+      are laid out. An instrument may change in the middle of a staff (<code>instrumentName</code>,
+      <code>midiInstrument</code>), <code>\transposition</code> is played — a clarinet in B flat sounds a tone
+      under what is written — and <code>\midi { \tempo … }</code> sets the playback speed. Staves of different
+      lengths are drawn, the shorter silent to the end; a tablature has the strings its
+      <code>stringTunings</code> names (a bass's four), and <code>\new RhythmicStaff</code> is one line.
+      <code>\partCombine</code> prints the words its context sets. New signs are drawn and played: the other
+      ornaments (<code>\reverseturn</code>, <code>\prallprall</code>…) and fermatas
+      (<code>\shortfermata</code>, <code>\verylongfermata</code>…), arpeggio arrows, brackets and parentheses,
+      two-note tremolos, the sostenuto and soft pedals, and lyric elisions.
+    </p>
     <ul>
       <li><strong>Metre</strong>: staves whose bars last differently (polymetre with bars of different lengths)
         are refused: line them up with <code>\scaleDurations</code> or <code>timeSignatureFraction</code>.</li>
-      <li><strong>Layout</strong>: a beam is not moved away from other objects it could touch, and the
-        <code>\paper</code> spacings around titles and markups are not read.</li>
       <li><strong>Editor</strong>: the notes of a staff scaled by <code>\scaleDurations</code> keep their
         lengths on the score (their pitches, marks and rests are edited; note input, lengths, pasting and a new
         metre there are refused, edited in the text), a drawn metre that changes after a staff's start
         (<code>timeSignatureFraction</code>) is left to the text, and staves whose bars last differently stay
-        the engraver's alone.</li>
+        the engraver's alone, and so are a tablature of other strings than a guitar's six and a
+        <code>\new RhythmicStaff</code> (their notes edited in the text).</li>
       <li><strong>Settings</strong>: an <code>\override</code> not in the lists above is still passed over
         with a warning.</li>
     </ul>

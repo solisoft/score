@@ -65,7 +65,10 @@ const GOLDEN = {
   "scores/changelog/tempo-over-grace.ly": { from: "57e7bd08c3426683", playback: "e32b727db68af34e", heard: "e055c4a6478e8fca", ly: "ef6251038996a367" },
   "scores/voice/satb-chorale.ly": { from: "b6d171a3cbe98d00", playback: "b7446af5ec3e7fee", heard: "071b09bccc196d40", ly: "35b82f00ec60994c" },
   "scores/syntax/repeats.ly": { from: "1cb905ed09cf7e60", playback: "a8939192ae72f6a9", heard: "6625324d33d6a5ad", ly: "1599ef7b818c7e58" },
-  "features": { from: "0d4eaca306ed749f", playback: "e5f4b2228c696a50", heard: "acdc0bd5b1344345", ly: "cfd03bde7e4530ac" },
+  // The bass staff ends three beats early: the engraver now goes on in silence there, a spacer, as LilyPond
+  // leaves a shorter staff empty (eui 009e6af, #1031) — where the model filled it with a rest. The text it
+  // writes ends "c4 s2." for "c4 r2.", and the rest of the reading is unchanged.
+  "features": { from: "7b0309e8c7e5b042", playback: "e5f4b2228c696a50", heard: "acdc0bd5b1344345", ly: "d98f731bcbcd62bd" },
 };
 
 test("the model answers what it answered before it was made faster, on real scores (#689)", () => {

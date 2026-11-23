@@ -36,13 +36,20 @@ crate-type = ["cdylib", "rlib"]
 # 8bd3c19 a fermata held half again, then two seconds of breath (#977);
 # 0ed95de trills, mordents, turns and rolled chords played (#978);
 # 2bdc942 a dynamic under a whole note's tremolo clears its strokes (#982),
-# as Soli 2.36.5 pins it. The browser draws
+# as Soli 2.36.5 pins it; 009e6af accidentals, beams, ledger lines and
+# slurs set as LilyPond sets them (#1019), \shape, extra-offset and a
+# hairpin's shorten-pair, and where each curve, dynamic and script is
+# (#1020), "1." / "2." / "à 2" as the context sets them (#1021), an
+# instrument changed mid-staff and \transposition played (#1023), \paper's
+# markup spacing (#1025), the other ornaments, fermatas, pedals, tremolos and
+# arpeggios, and RhythmicStaff (#1026), and real files: tab tunings, staves
+# of different lengths (#1031, #1032). The browser draws
 # those before the server's Soli does;
 # move this
 # and the server's Soli together otherwise. `build.sh` writes the module
 # into public/eui-score/, and that output is committed: deploying the site
 # needs no Rust.
-eui-score = { git = "https://github.com/solisoft/eui", rev = "2bdc942" }
+eui-score = { git = "https://github.com/solisoft/eui", rev = "009e6af" }
 wasm-bindgen = "=0.2.126"
 serde_json = "1"
 

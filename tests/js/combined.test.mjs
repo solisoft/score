@@ -394,9 +394,12 @@ test("condenseStaves: a staff and the one below it as the two parts of \\partCom
   assert.match(source, /\\new Staff \\with \{ instrumentName = "Flute 1\.2" shortInstrumentName = "Fl\. 1\.2" midiInstrument = "flute" soloText = "1\." soloIIText = "2\." aDueText = "a2" \} \{\n {4}\\clef treble \\key g \\major \\time 4\/4\n {4}\\partCombine \\fluteI \\fluteII/);
   assert.deepEqual(M.staffLanes(score), [0, 2], "two staves now");
   assert.ok(M.isCombined(score, 0) && M.partOfLane(score, 1) === 2);
-  // The engraver marks them itself: a2 where they play as one, Solo where one rests.
+  // The engraver marks them itself, in the words the \\with sets (#1021): a2 where they play as one,
+  // "1." / "2." where one rests — no longer its own "Solo" / "Solo II".
   assert.match(drawing(source), /"a2"/);
-  assert.match(drawing(source), /"Solo"/);
+  assert.match(drawing(source), /"1\."/);
+  assert.match(drawing(source), /"2\."/);
+  assert.doesNotMatch(drawing(source), /"Solo/);
   // What the settings line keeps by lane stays with its notes; what each desk was is kept for Split.
   assert.deepEqual(score.meta.mixer.tracks, { 0: { volume: 0.5 }, 1: { volume: 0.8 }, 2: { pan: -0.3 } });
   assert.deepEqual(score.meta.desks, { 0: { names: ["Flute 1", "Flute 2"], shorts: ["Fl. 1", "Fl. 2"], instruments: ["flute", "piccolo"] } });
