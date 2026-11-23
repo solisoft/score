@@ -566,8 +566,14 @@ class Score < Model
   # a saxophone, an English horn, as `midiInstrument` names it. The read
   # page offers Written pitch for it. The same list as transpositionOf in
   # public/eui-score/score-model.js, which writes the parts: a change goes
-  # to both.
+  # to both. A staff's own `\transposition` (other than c') says it first
+  # (#1023), whatever its sound.
   static def transposing?(source)
+    owns = Regex.find_all("\\\\transposition\\s+([a-g](?:is|es|s)*[',]*)", source.to_s).any? do |found|
+      Regex.replace("^\\\\transposition\\s+", found["match"], "") != "c'"
+    end
+    return true if owns
+
     Regex.find_all("midiInstrument\\s*=\\s*#?\"([^\"]+)\"", source.to_s).any? do |found|
       SCORE_TRANSPOSING_SOUNDS.includes?(Regex.replace("^.*\"([^\"]+)\"$", found["match"], "$1"))
     end

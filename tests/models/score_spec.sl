@@ -531,4 +531,11 @@ describe("Score.transposing? (#831)") do
     assert_not(Score.transposing?(""))
     assert_not(Score.transposing?(nil))
   end
+
+  test("a staff's own \\transposition says it first, whatever its sound (#1023)") do
+    assert(Score.transposing?("\\new Staff \\with { midiInstrument = \"flute\" } { c'1 \\transposition bes d'1 }"))
+    assert(Score.transposing?("\\new Staff { \\transposition f g'1 }"), "a horn with no sound named")
+    assert(Score.transposing?("{ \\transposition c'' c'''1 }"), "a piccolo, an octave apart")
+    assert_not(Score.transposing?("{ \\transposition c' c'1 }"), "c' is as it sounds")
+  end
 end

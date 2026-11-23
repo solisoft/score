@@ -13,6 +13,16 @@ class Changelog
       {"date": "2026-11-23", "entries": [
         {
           "area": "site",
+          "title": "\\transposition read and kept",
+          "text": "A staff that says its own \\transposition (\\transposition bes for a B♭ clarinet, f for a "
+          + "horn) opens in the editor as it sounds, and its text is written back as it was: the command where "
+          + "it stood, the notes after it as the player reads them. It may change in the middle of a staff. "
+          + "Written pitch, the parts and the Review read the transposition from it before guessing it from "
+          + "the instrument's name, and the read page offers Written pitch for it.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
           "title": "Writing at written pitch",
           "text": "View ▸ Written pitch is no longer for reading only: a clarinet, a horn or a saxophone is "
           + "written into as its player reads it. A letter typed, the ghost note clicked, a key played on a "

@@ -94,7 +94,7 @@ export function install(ctx) {
         if (!st.score) return say(tr("Written pitch needs the score tools: this piece is edited in its text."), true);
         st.written = !st.written;
         root.querySelector("[data-written-label]").firstChild.textContent = `${st.written ? tr("Concert pitch") : tr("Written pitch")} `;
-        const moved = M.staffLanes(st.score).some((s) => M.transpositionOf(st.score.staves[s]));
+        const moved = M.writtenApart(st.score);
         say(st.written ? (moved ? tr("Written pitch: transposing instruments as their players read them, and the notes written in as they read them.") : tr("Written pitch: no instrument here is written apart from how it sounds.")) : tr("Concert pitch: as it sounds, and as it is written into."));
         return draw();
       }

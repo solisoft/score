@@ -87,16 +87,14 @@ function rangeRemarks(score, s, name) {
   const upper = M.upperOf(score, s);
   const instrument = M.INSTRUMENTS[M.instrumentOf(score, upper)];
   if (!instrument?.range) return [];
-  const shift = writtenShift(score.staves[upper]);
-  const written = (p) => (shift ? M.transposePitch(p, shift.steps, shift.semitones) : p);
   const [low, high] = instrument.range;
   const [easyLow, easyHigh] = instrument.comfortable ?? instrument.range;
   // By bar and by what is wrong, the note furthest out: one remark a bar, not one a note.
   const worst = new Map();
-  const keep = (kind, bar, t, p, key, further) => {
+  const keep = (kind, bar, t, p, key, shift, further) => {
     const id = `${kind}:${M.barStart(score, bar)}`;
     const was = worst.get(id);
-    if (!was || further(key, was.key)) worst.set(id, { kind, bar, t, p, key });
+    if (!was || further(key, was.key)) worst.set(id, { kind, bar, t, p, key, shift });
   };
   const events = score.staves[s].events;
   const at = M.starts(score.staves[s]);
@@ -106,13 +104,15 @@ function rangeRemarks(score, s, name) {
     const before = events[i - 1];
     if (before?.tie && !before.rest && before.pitches.length === ev.pitches.length) return;
     const bar = M.barAt(score, at[i]);
+    // Written as the player reads it there: a staff's \\transposition may change on the way (#1023).
+    const shift = M.writtenShiftAt(score, s, at[i]);
     for (const pitch of ev.pitches) {
-      const p = written(pitch);
+      const p = shift ? M.transposePitch(pitch, shift.steps, shift.semitones) : pitch;
       const key = M.midiKey(p.d, p.alter);
-      if (key < low) keep("low", bar, at[i], p, key, (a, b) => a < b);
-      else if (key > high) keep("high", bar, at[i], p, key, (a, b) => a > b);
-      else if (key < easyLow) keep("lowish", bar, at[i], p, key, (a, b) => a < b);
-      else if (key > easyHigh) keep("highish", bar, at[i], p, key, (a, b) => a > b);
+      if (key < low) keep("low", bar, at[i], p, key, shift, (a, b) => a < b);
+      else if (key > high) keep("high", bar, at[i], p, key, shift, (a, b) => a > b);
+      else if (key < easyLow) keep("lowish", bar, at[i], p, key, shift, (a, b) => a < b);
+      else if (key > easyHigh) keep("highish", bar, at[i], p, key, shift, (a, b) => a > b);
     }
   });
   return [...worst.entries()].map(([id, w]) => {
@@ -120,12 +120,12 @@ function rangeRemarks(score, s, name) {
     let text;
     if (w.kind === "low" || w.kind === "high") {
       const limit = keyWord(w.kind === "low" ? low : high);
-      if (shift) text = w.kind === "low" ? tr("{name}: written {note} is out of its range (the lowest written note is {limit})", { ...words, limit }) : tr("{name}: written {note} is out of its range (the highest written note is {limit})", { ...words, limit });
+      if (w.shift) text = w.kind === "low" ? tr("{name}: written {note} is out of its range (the lowest written note is {limit})", { ...words, limit }) : tr("{name}: written {note} is out of its range (the highest written note is {limit})", { ...words, limit });
       else text = w.kind === "low" ? tr("{name}: {note} is out of its range (the lowest note is {limit})", { ...words, limit }) : tr("{name}: {note} is out of its range (the highest note is {limit})", { ...words, limit });
       return { lane: s, bar: w.bar, t: w.t, rule: "range", level: "error", id, text };
     }
     const span = { ...words, low: keyWord(easyLow), high: keyWord(easyHigh) };
-    text = shift ? tr("{name}: written {note} lies outside the comfortable range (written {low} to {high})", span) : tr("{name}: {note} lies outside the comfortable range ({low} to {high})", span);
+    text = w.shift ? tr("{name}: written {note} lies outside the comfortable range (written {low} to {high})", span) : tr("{name}: {note} lies outside the comfortable range ({low} to {high})", span);
     return { lane: s, bar: w.bar, t: w.t, rule: "comfort", level: "hint", id, text };
   });
 }

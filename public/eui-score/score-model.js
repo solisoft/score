@@ -2902,7 +2902,11 @@ function lyricText(staff, verse = 1) {
  * `[{ staff: lane, bar }]`. `unfold` plays every repeat out, for the MIDI:
  * no repeat signs, the bars in the order they sound (see `playOrder`).
  */
-export function toLilyPond(score, { open = [], unfold = false, written = false } = {}) {
+export function toLilyPond(score, { open = [], unfold = false, written = null, shifted = false } = {}) {
+  // A staff's own \\transposition (#1023): its notes written from there on as its player reads them.
+  // `written` false: the score as it sounds, for the concert-pitch view; true: View ▸ Written pitch.
+  const text = !shifted && written !== false ? textScore(score, written === true) : null;
+  if (text) return toLilyPond(text, { open, unfold, written, shifted: true });
   const items = [];
   const header = Object.entries(score.header).filter(([, v]) => v).map(([k, v]) => `${k} = ${quote(v)}`).join(" ");
   const repeats = score.repeats ?? [];
@@ -3024,7 +3028,8 @@ export function toLilyPond(score, { open = [], unfold = false, written = false }
     // A piece that ends on a repeat's end keeps its :|. sign, not a final bar.
     const ending = lastRepeat ? "" : ' \\bar "|."';
     // Written pitch: a transposing instrument's staff, key and all, where it is read.
-    const moved = written ? transpositionOf(staff) : null;
+    // (A staff with a \\transposition of its own is written so already: see textScore.)
+    const moved = written && !transpositionMarks(score, s).length ? transpositionOf(staff) : null;
     const brace = moved ? `\\transpose c ${moved} {` : "{";
     // A drum staff: its strokes in \\drummode, with no clef and no key.
     const auto = staff.autoChange;
@@ -5315,6 +5320,9 @@ export function setMetre(score, text) {
  */
 export function transpositionOf(staff) {
   if (!staff || staff.drums) return null;
+  // Its own \\transposition, written before its first note, says it first (#1023).
+  const own = startTransposition(staff);
+  if (own !== undefined) return own ? targetOf(own) : null;
   const sound = staff.instrument || "";
   const name = staff.name || "";
   const key = /\bin\s+([A-G])\s*(♭|b|-flat)?\b/i.exec(name);
@@ -5354,8 +5362,110 @@ export function shiftOfTarget(to) {
   return shift.steps === 0 && shift.semitones === 0 ? null : shift;
 }
 
+// ---- \transposition, read and written (#1023) ----
+//
+// `\transposition bes` before a note says that from there on the staff's
+// notes are written as a B♭ instrument's player reads them: the engraver
+// plays them a tone lower. The model keeps every note as it sounds, as
+// everywhere else: the text read is brought to concert pitch after each
+// \transposition (fromParsed), and the text written puts the notes back
+// at written pitch there (toLilyPond, textScore). The command is kept on
+// its note (`ev.before`) and moves with it.
+
+const TRANSPOSITION = /^\\transposition ([a-g](?:is|es|s)*[',]*)$/;
+
+/** The pitch a `\\transposition` command (as kept in `ev.before`) names, or null. */
+function transpositionIn(text) {
+  return TRANSPOSITION.exec(text)?.[1] ?? null;
+}
+
+/** How far `\\transposition <to>` writes the notes from how they sound, as `\\transpose c <this>` says it ("bes" → "d"), or null for c'. */
+export function targetOf(to) {
+  const p = pitchOfName(to);
+  if (!p) return null;
+  const written = transposePitch({ d: 0, alter: 0 }, 7 - p.d, 60 - midiKey(p.d, p.alter));
+  return written.d === 0 && written.alter === 0 ? null : lilyName(written);
+}
+
+/** A pitch as transpositionOf names it: E♭ and A♭ as "ees" and "aes". */
+const lilyName = (p) => spellPitch(p.d, p.alter).replace(/^([ea])s/, "$1es");
+
+/** The `\\transposition` that writes notes as `\\transpose c <target>` does ("d" → "bes"): what an instrument change writes. */
+export function transpositionFor(target) {
+  const shift = shiftOfTarget(target);
+  if (!shift) return "c'";
+  return lilyName(transposePitch({ d: 7, alter: 0 }, -shift.steps, -shift.semitones));
+}
+
+/** The \\transposition written before staff `staff`'s first note: its pitch, "" for c' (none), undefined when there is none. */
+function startTransposition(staff) {
+  let found;
+  for (const ev of staff.events ?? []) {
+    for (const text of ev.before ?? []) {
+      const to = transpositionIn(text);
+      if (to) found = to;
+    }
+    if (!ev.rest) break;
+  }
+  return found === undefined ? undefined : targetOf(found) ? found : "";
+}
+
+/** Each \\transposition of the staff of lane `u` (any of its voices), in time: [{ t, to, shift }]. */
+export function transpositionMarks(score, u) {
+  const marks = [];
+  for (const lane of voiceLanes(score, u)) {
+    const staff = score.staves[lane];
+    if (!staff.events.some((ev) => ev.before?.some((text) => transpositionIn(text)))) continue;
+    const times = starts(staff);
+    staff.events.forEach((ev, i) => {
+      for (const text of ev.before ?? []) {
+        const to = transpositionIn(text);
+        if (to) marks.push({ t: times[i], to, shift: shiftOfTarget(targetOf(to)) });
+      }
+    });
+  }
+  return marks.sort((x, y) => x.t - y.t);
+}
+
+/** Whether any staff of `score` says its own \\transposition. */
+function hasTranspositions(score) {
+  return score.staves.some((staff) => staff.events.some((ev) => ev.before?.some((text) => transpositionIn(text))));
+}
+
+/**
+ * The score as its text writes it: after each \\transposition, the notes
+ * and the keys at written pitch — or null when no staff has one. `written`:
+ * as View ▸ Written pitch shows it, the staves before their first
+ * \\transposition at the written pitch their instrument says too.
+ */
+function textScore(score, written) {
+  if (!hasTranspositions(score)) return null;
+  const copy = JSON.parse(JSON.stringify(score));
+  const marked = (s, u) => (transpositionMarks(s, u).length ? (written ? writtenShifts : textShifts)(s, u) : { at: () => null, points: [] });
+  moveStaves(copy, shiftedStaves(copy, marked), 1);
+  return copy;
+}
+
+/** The score read from a text with \\transposition: its notes and keys brought to concert pitch after each. */
+function concertFromText(score) {
+  if (!hasTranspositions(score)) return;
+  moveStaves(score, shiftedStaves(score, textShifts), -1);
+  // The score's key was read from its first staff, a transposing one: every staff now
+  // in the same key of its own (and none changing it) makes that the score's.
+  const lanes = staffLanes(score).filter((u) => !isDrums(score, u) && !isChords(score, u) && !isFigures(score, u));
+  const keys = lanes.map((u) => keyList(score, u));
+  const one = keys.length > 0 && keys.every((list) => list.length === 1 && list[0].key === keys[0][0].key && list[0].mode === keys[0][0].mode);
+  if (!one || lanes.some((u) => score.staves[u].key == null || score.staves[u].keys)) return;
+  score.key = keys[0][0].key;
+  for (const u of lanes) delete score.staves[u].key;
+}
+
+/** Whether a staff of `score` is written apart from how it sounds, anywhere: what View ▸ Written pitch changes. */
+export function writtenApart(score) {
+  return shiftedStaves(score, writtenShifts).length > 0;
+}
+
 const clampKey = (k) => Math.max(-7, Math.min(7, k));
-const sameShift = (a, b) => (a?.steps ?? 0) === (b?.steps ?? 0) && (a?.semitones ?? 0) === (b?.semitones ?? 0);
 
 /**
  * How far the staff of lane `u` is written from how it sounds, through
@@ -5363,8 +5473,19 @@ const sameShift = (a, b) => (a?.steps ?? 0) === (b?.steps ?? 0) && (a?.semitones
  * sounds), `points` the times it may change at.
  */
 function writtenShifts(score, u) {
-  const shift = shiftOfTarget(transpositionOf(score.staves[u]));
-  return { at: () => shift, points: [] };
+  const first = shiftOfTarget(transpositionOf(score.staves[u]));
+  const marks = transpositionMarks(score, u);
+  const at = (t) => {
+    const mark = marks.findLast((m) => m.t <= t + 1e-6);
+    return mark ? mark.shift : first;
+  };
+  return { at, points: marks.map((m) => m.t) };
+}
+
+/** How far the text writes staff `u`'s notes from how they sound: from each \\transposition on (as writtenShifts). */
+function textShifts(score, u) {
+  const marks = transpositionMarks(score, u);
+  return { at: (t) => marks.findLast((m) => m.t <= t + 1e-6)?.shift ?? null, points: marks.map((m) => m.t) };
 }
 
 /** How far lane `s`'s notes are written from how they sound at time `t`: { steps, semitones }, or null. */
@@ -6075,7 +6196,7 @@ function playedOut(score, s, bars) {
 // `source_spans`), so a text the model wrote itself reads back the same.
 
 /** The commands kept before a note: how they start. */
-const KEPT_COMMANDS = ["override", "revert", "set", "unset", "tweak", "hide", "omit"];
+const KEPT_COMMANDS = ["override", "revert", "set", "unset", "tweak", "hide", "omit", "transposition"];
 const KEPT_PREFIXES = ["once", "temporary", "undo", "single"];
 /** The sizes notes are set in, from there on: kept as written too. */
 const KEPT_SIZES = ["teeny", "tiny", "small", "normalsize", "large", "huge"];
@@ -6207,6 +6328,11 @@ function keptCommandAt(src, i) {
   }
   if (KEPT_SIZES.includes(name)) return { end: k, text: `\\${name}`, tweak: false };
   if (!KEPT_COMMANDS.includes(name)) return null;
+  // \\transposition bes: the pitch its written c' sounds (#1023).
+  if (name === "transposition") {
+    const end = pitchEnd(src, k);
+    return end > skipBlank(src, k) ? { end, text: src.slice(i, end).replace(/\s+/g, " ").trim(), tweak: false } : null;
+  }
   k = pathEnd(src, k);
   if (name === "override" || name === "set") {
     const eq = skipBlank(src, k);
@@ -8534,6 +8660,8 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
   }
   // Bars the text wrote too short or too long (#1022): the Review says them.
   const uneven = pipes.length || written.some((w) => !isBarLine(score, w.end)) ? unevenBars(score, written) : [];
+  // After a \\transposition, the text's notes are written ones: kept as they sound (#1023).
+  concertFromText(score);
   const read = lost.size ? { score, lost: [...lost] } : { score };
   return uneven.length ? { ...read, uneven } : read;
 }
