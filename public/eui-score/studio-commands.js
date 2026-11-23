@@ -573,6 +573,22 @@ export function install(ctx) {
         if (done) say(by < 0 ? tr("The staff moved up: Alt+Shift+↑ again moves it higher.") : tr("The staff moved down: Alt+Shift+↓ again moves it lower."));
         return;
       }
+      // Edit ▸ Double / Halve the durations (#1024): the selection, on every staff it covers.
+      case "durations": {
+        const factor = Number(data.factor);
+        const chosen = ranges();
+        if (!chosen.length) return say(tr("Select the notes whose durations to change"), true);
+        const done = edit((score) => {
+          T.scaleDurations(score, chosen, factor);
+          // Selected notes, not bars: the selection still ends on the last of them.
+          if (!st.sel.bars) {
+            const t0 = Math.min(st.sel.t0, st.sel.t1);
+            st.sel = { ...st.sel, t0, t1: t0 + (Math.max(st.sel.t0, st.sel.t1) - t0) * factor };
+          }
+        });
+        if (done) say(factor > 1 ? tr("Durations doubled: what followed them is written over.") : tr("Durations halved: rests fill the time they left."));
+        return;
+      }
       case "remove-staff": return edit((score) => {
         M.removeStaff(score, staffOf());
         st.sel = null;

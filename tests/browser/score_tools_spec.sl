@@ -170,4 +170,29 @@ describe("The tools on many notes at once (#1024)") do
     assert_contains(tools_text(), "fis''1 | e''1 | fis''1")
     assert_no_page_errors()
   end
+
+  test("Edit ▸ Halve the durations, then Double them, over two staves: one Undo each") do
+    tools_open(TOOLS_TRIO)
+    tools_click(tools_bar_point(0, 0), false)
+    tools_click(tools_bar_point(0, 1), true)
+    steps = tools_steps()
+    evaluate("document.querySelectorAll('[data-act=durations]')[1].click()")
+    sleep(0.5)
+    text = tools_text()
+    assert_eq(tools_steps(), steps + 1)
+    assert_contains(text, "c''2 r2 | d''1")
+    assert_contains(text, "e'2 r2 | f'1")
+    # The bass staff was not selected.
+    assert_contains(text, "c1 | d1")
+    evaluate("document.querySelectorAll('[data-act=durations]')[0].click()")
+    sleep(0.5)
+    assert_contains(tools_text(), "c''1 | d''1")
+    assert_eq(tools_steps(), steps + 2)
+    # A whole note doubled writes over the next bar, tied across the bar line.
+    tools_click(tools_bar_point(0, 2), false)
+    evaluate("document.querySelectorAll('[data-act=durations]')[0].click()")
+    sleep(0.5)
+    assert_contains(tools_text(), "c1~ | c1 | e1")
+    assert_no_page_errors()
+  end
 end

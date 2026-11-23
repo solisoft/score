@@ -15,5 +15,12 @@
   "{what}, from {from} to {to}.": "{what}, de {from} vers {to}.",
   "{what}, in its key: {degree} up.": "{what}, dans sa tonalité : {degree} plus haut.",
   "{what}, in its key: {degree} down.": "{what}, dans sa tonalité : {degree} plus bas.",
-  "Choose how many degrees to move the notes by": "Choisissez de combien de degrés déplacer les notes"
+  "Choose how many degrees to move the notes by": "Choisissez de combien de degrés déplacer les notes",
+  "Durations double or halve: nothing else": "Les durées se doublent ou se divisent par deux : rien d'autre",
+  "A tuplet is in the selection: durations are doubled or halved outside triplets and the like": "Un n-olet est dans la sélection : les durées se doublent ou se divisent hors des triolets et autres n-olets",
+  "Doubled, the notes would write over a tuplet: select fewer, or take the tuplet away first": "Doublées, les notes écraseraient un n-olet : sélectionnez-en moins, ou retirez d'abord le n-olet",
+  "Halved, a note would be shorter than a 128th: leave the shortest notes out": "Divisée par deux, une note serait plus courte qu'une quintuple croche : laissez les plus courtes hors de la sélection",
+  "Select the notes whose durations to change": "Sélectionnez les notes dont changer les durées",
+  "Durations doubled: what followed them is written over.": "Durées doublées : ce qui les suivait est remplacé.",
+  "Durations halved: rests fill the time they left.": "Durées divisées par deux : des silences remplissent le temps libéré."
 }

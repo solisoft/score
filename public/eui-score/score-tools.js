@@ -303,3 +303,44 @@ export function transposeDiatonic(score, degrees, { ranges = null } = {}) {
     for (const o of staff.ossias ?? []) for (const ev of o.events) if (!ev.rest) ev.pitches = ev.pitches.map((p) => degreePitch(p, degrees, score.key));
   }
 }
+
+// ---- Durations doubled or halved -----------------------------------------------------
+
+/** The shortest value written: a 128th. */
+const SHORTEST = M.WHOLE / 128;
+
+/** Whether lane `s` holds a tuplet event in ticks [t0, t1). */
+function tupletIn(score, s, t0, t1) {
+  const staff = score.staves[s];
+  const at = M.starts(staff);
+  return staff.events.some((ev, i) => ev.tuplet && at[i] < t1 && at[i] + M.ticksOf(ev) > t0);
+}
+
+/**
+ * Every event of the ranges `factor` (2 or ½) as long, from where the first
+ * starts: halved, rests after them to where they ended; doubled, written
+ * over what follows, tied across bar lines, the score longer if it must
+ * be. Refused, before anything changes, when a note would be shorter than
+ * a 128th or a tuplet is in the selection or in the way.
+ */
+export function scaleDurations(score, ranges, factor) {
+  if (factor !== 2 && factor !== 0.5) throw new Error(tr("Durations double or halve: nothing else"));
+  const plans = ranges.map((r) => {
+    const staff = score.staves[r.s];
+    const at = M.starts(staff);
+    const t0 = at[r.a];
+    const t1 = at[r.b] + M.ticksOf(staff.events[r.b]);
+    const length = t1 - t0;
+    if (tupletIn(score, r.s, t0, t1)) throw new Error(tr("A tuplet is in the selection: durations are doubled or halved outside triplets and the like"));
+    if (factor > 1 && tupletIn(score, r.s, t1, t0 + 2 * length)) throw new Error(tr("Doubled, the notes would write over a tuplet: select fewer, or take the tuplet away first"));
+    const clip = M.copy(score, r.s, r.a, r.b).map((piece) => ({ ...piece, ticks: piece.ticks * factor }));
+    if (clip.some((piece) => !Number.isInteger(piece.ticks) || piece.ticks < SHORTEST || !M.spellDuration(piece.ticks).length)) {
+      throw new Error(tr("Halved, a note would be shorter than a 128th: leave the shortest notes out"));
+    }
+    return { s: r.s, t0, length, clip };
+  });
+  for (const { s, t0, length, clip } of plans) {
+    M.paste(score, s, t0, clip);
+    if (factor < 1) M.write(score, s, t0 + length / 2, length / 2, { rest: true });
+  }
+}

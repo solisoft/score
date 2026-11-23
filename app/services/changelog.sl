@@ -13,6 +13,16 @@ class Changelog
       {"date": "2026-11-23", "entries": [
         {
           "area": "site",
+          "title": "Double or halve the durations",
+          "text": "Edit ▸ Double the durations and Halve the durations rewrite the selected notes twice as "
+          + "long or half as long, on every staff selected, each note keeping its marks. Halved, rests fill "
+          + "the time they leave; doubled, they write over what follows, tied across the bar lines, the "
+          + "score growing if it must. A note that would be shorter than a 128th, or a tuplet in the way, "
+          + "is refused and said.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
           "title": "Transpose to a key, or in the key by degrees",
           "text": "Transpose now goes by an interval, to a key, or in the key by degrees. To a key, the music "
           + "moves from the key it is in to the one chosen — the nearest way, up or down, and an octave "

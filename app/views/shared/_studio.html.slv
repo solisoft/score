@@ -105,6 +105,10 @@
             <button type="button" role="menuitem" data-act="transpose" data-scope="score"><%= t("app.editor.transpose_the_score") %></button>
             <button type="button" role="menuitem" data-act="enharmonic"><%= t("app.editor.spell_the_other_way_c_sharp_d_flat") %> <kbd>J</kbd></button>
             <button type="button" role="menuitem" data-act="swap-voices"><%= t("app.editor.swap_voices_1_and_2") %> <kbd><%= t("app.editor.the_selected_bars") %></kbd></button>
+            <%# Rewriting the selection (#1024): one Undo each. %>
+            <div class="studio-dropdown-head" role="presentation"><%= t("app.editor.rewrite_the_selection") %></div>
+            <button type="button" role="menuitem" data-act="durations" data-factor="2"><%= t("app.editor.double_the_durations") %></button>
+            <button type="button" role="menuitem" data-act="durations" data-factor="0.5"><%= t("app.editor.halve_the_durations") %></button>
             <div class="studio-dropdown-head" role="presentation"><%= t("app.editor.arrange") %></div>
             <button type="button" role="menuitem" data-act="drum-grid"><%= t("app.editor.drum_grid") %> <kbd><%- t("app.editor.a_drum_staff_s_bar") %></kbd></button>
             <button type="button" role="menuitem" data-act="arpeggiate"><%= t("app.editor.arpeggiate_the_selected_chords") %></button>
