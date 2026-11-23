@@ -140,8 +140,8 @@ export function editor_view_lit(src, width, staff_space, lit) {
 /**
  * The source as a Standard MIDI File. `bpm` and `beat` give a tempo to a
  * source with none (0 for none), `program` a General MIDI instrument to a
- * staff that names none. Arpeggios, glissandi and ornaments are played
- * out (see `perform`).
+ * staff that names none. Glissandi are slid (see `perform`); the engine
+ * plays arpeggios, ornaments and fermatas itself.
  * @param {string} src
  * @param {number} bpm
  * @param {number} beat

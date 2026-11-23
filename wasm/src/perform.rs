@@ -1,37 +1,53 @@
-//! What eui-score writes on the page and leaves out of its MIDI file, played:
-//! an arpeggio rolled from the lowest note up, a glissando slid to the next
-//! note, and the ornaments — trill, short trill, mordent, turn — played out.
+//! What eui-score writes on the page and still leaves out of its MIDI file,
+//! played: a glissando, slid through every key to the next note; and the
+//! trill, mordent, turn or rolled chord of a note with `\afterGrace` notes.
+//!
+//! The engine plays the rest itself: arpeggios rolled, trills, mordents and
+//! turns written out (score #978), fermatas held then breathed (score #977).
+//! This module once played those too, and with the engine doing it they
+//! were heard twice: it now adds only what the engine leaves out, played
+//! the way the engine plays its own.
 //!
 //! The engraver's MIDI stays as it is; this reads the source again, finds
-//! when each of those notes sounds the way `eui_score::midi` times them
-//! (bars, grace notes taking their time from the note, fermatas holding),
-//! and rewrites the notes concerned in the file's tracks.
+//! when each of those notes sounds the way `eui_score::midi` times it (bars,
+//! grace notes taking their time from the note, fermatas holding and
+//! breathing), and rewrites the notes concerned in the file's tracks.
 
 use eui_score::measure::{measures, Bar};
+use eui_score::midi::FERMATA_BREATH_SECONDS;
 use eui_score::parse::{parse, Kind, StaffKind};
-use eui_score::WHOLE;
+use eui_score::{MidiOptions, WHOLE};
 
-/// A sixty-fourth of a whole: how far apart an arpeggio's notes start.
-const ROLL: i64 = WHOLE / 48;
+/// The ornaments the engine plays, as LilyPond's articulate.ly plays them.
+const ORNAMENTS: [&str; 4] = ["trill", "prall", "mordent", "turn"];
+/// A sixty-fourth of a whole: how far apart a rolled chord's notes start.
+const ROLL: i64 = WHOLE / 64;
 /// A thirty-second: one note of a trill or a mordent.
 const SHAKE: i64 = WHOLE / 32;
 
 /// A change to one staff's track.
 #[derive(Debug, PartialEq)]
 enum Play {
-    /// The chord's keys at `t` started one after the other, lowest first.
-    Roll { t: i64, keys: Vec<i64>, span: i64 },
     /// From key `from` at `t`, held half of `span`, then every key on the way to `to`.
     Slide { t: i64, span: i64, from: i64, to: i64 },
-    /// The note `key` at `t` decorated with its neighbours, over `span`.
-    Ornament { t: i64, span: i64, key: i64, upper: i64, lower: i64, name: &'static str },
+    /// The chord `keys` (low to high) at `t`, rolled when `rolled`, its top
+    /// note decorated by `ornament` with its neighbours in the key.
+    Ornament { t: i64, keys: Vec<i64>, above: i64, below: i64, ornament: Option<&'static str>, rolled: bool },
 }
 
-/// The file `bytes`, written by `eui_score::midi` for `src`, with what it
-/// leaves out played. Answers the bytes unchanged when there is nothing to
-/// add, or when the source or the file cannot be read.
-pub fn perform(src: &str, bytes: Vec<u8>) -> Vec<u8> {
-    let Some(plays) = plays(src) else { return bytes };
+/// A fermata's hold, as `eui_score::midi` times it: where the held note
+/// ends, how much longer it sounds, the silence after.
+struct Hold {
+    ends: i64,
+    sustain: i64,
+    breath: i64,
+}
+
+/// The file `bytes`, written by `eui_score::midi` for `src` with `opts`,
+/// with what it leaves out played. Answers the bytes unchanged when there is
+/// nothing to add, or when the source or the file cannot be read.
+pub fn perform(src: &str, bytes: Vec<u8>, opts: &MidiOptions) -> Vec<u8> {
+    let Some(plays) = plays(src, opts) else { return bytes };
     if plays.iter().all(Vec::is_empty) {
         return bytes;
     }
@@ -39,8 +55,7 @@ pub fn perform(src: &str, bytes: Vec<u8>) -> Vec<u8> {
     // The engraver's ticks to the file's: its header says how many a quarter.
     let division = i64::from(u16::from_be_bytes([head[12], head[13]])).max(1);
     let per = (WHOLE / 4 / division).max(1);
-    // The tempo track, when the file has one, is the first; the engraver
-    // writes one track per staff, so the staves are its tracks in order.
+    // The engraver writes one track per staff it plays, in order.
     for (k, track) in tracks.iter_mut().enumerate() {
         if let Some(changes) = plays.get(k) {
             for change in changes {
@@ -52,16 +67,19 @@ pub fn perform(src: &str, bytes: Vec<u8>) -> Vec<u8> {
 }
 
 /// For each track of the file, what to play in it.
-fn plays(src: &str) -> Option<Vec<Vec<Play>>> {
+fn plays(src: &str, opts: &MidiOptions) -> Option<Vec<Vec<Play>>> {
     let parsed = parse(src).ok()?;
     let mut measured = Vec::new();
     for stf in &parsed.staves {
         measured.push(measures(&stf.events).ok()?);
     }
-    let holds = holds(&measured);
+    let holds = holds(&measured, opts);
     let mut out = Vec::new();
     for (si, stf) in parsed.staves.iter().enumerate() {
-        if stf.kind == StaffKind::ChordNames && parsed.staves.len() > 1 {
+        // The staves the engine does not play have no track.
+        if (stf.kind == StaffKind::ChordNames && parsed.staves.len() > 1)
+            || matches!(stf.kind, StaffKind::Figures | StaffKind::FretBoards | StaffKind::Ossia)
+        {
             continue;
         }
         if stf.kind == StaffKind::Drums {
@@ -73,12 +91,13 @@ fn plays(src: &str) -> Option<Vec<Vec<Play>>> {
     Some(out)
 }
 
-fn staff_plays(bars: &[Bar], holds: &[(i64, i64)]) -> Vec<Play> {
+fn staff_plays(bars: &[Bar], holds: &[Hold]) -> Vec<Play> {
     // Every note, in order: its start, its length, its keys low to high, what it carries.
     struct Note<'a> {
         t: i64,
         span: i64,
         keys: Vec<i64>,
+        top: i64,
         fifths: i64,
         top_d: i64,
         ev: &'a eui_score::parse::Ev,
@@ -95,43 +114,39 @@ fn staff_plays(bars: &[Bar], holds: &[(i64, i64)]) -> Vec<Play> {
                 let stolen = if written > 0 { written.min(span / 2).max(1) } else { 0 };
                 let mut keys: Vec<i64> = ev.heads.iter().map(|h| key_of(h.d, h.alter)).collect();
                 keys.sort_unstable();
+                keys.dedup();
+                let top = *keys.last().unwrap_or(&60);
                 let top_d = ev.heads.iter().map(|h| h.d).max().unwrap_or(0);
-                notes.push(Note { t: t0 + stolen, span: span - stolen, keys, fifths: bar.fifths, top_d, ev });
+                notes.push(Note { t: t0 + stolen, span: span - stolen, keys, top, fifths: bar.fifths, top_d, ev });
             }
         }
         at += bar.length * bar.span.unwrap_or(1);
     }
     let mut out = Vec::new();
     for (k, n) in notes.iter().enumerate() {
-        let start = held(holds, n.t);
-        let span = held(holds, n.t + n.span) - start;
-        let top = *n.keys.last().unwrap_or(&60);
-        if n.ev.arpeggio && n.keys.len() > 1 && n.ev.tremolo == 0 {
-            out.push(Play::Roll { t: start, keys: n.keys.clone(), span });
+        // A tremolo is the engine's to play, and so is an ornament or a
+        // rolled chord, unless `\afterGrace` notes follow it.
+        if n.ev.tremolo > 0 {
+            continue;
         }
-        if n.ev.gliss && n.ev.tremolo == 0 {
-            if let Some(next) = notes.get(k + 1) {
-                let to = *next.keys.last().unwrap_or(&top);
-                if (to - top).abs() > 1 {
-                    out.push(Play::Slide { t: start, span, from: top, to });
-                }
+        let ornament = ORNAMENTS.into_iter().find(|name| n.ev.scripts.iter().any(|sc| sc.name == *name));
+        if ornament.is_some() || n.ev.arpeggio {
+            if !n.ev.after_graces.is_empty() {
+                let above = key_of(n.top_d + 1, in_key(n.top_d + 1, n.fifths));
+                let below = key_of(n.top_d - 1, in_key(n.top_d - 1, n.fifths));
+                let t = held(holds, n.t, false);
+                out.push(Play::Ornament { t, keys: n.keys.clone(), above, below, ornament, rolled: n.ev.arpeggio });
             }
+            continue;
         }
-        for sc in &n.ev.scripts {
-            let name = match sc.name.as_str() {
-                "trill" => "trill",
-                "prall" => "prall",
-                "mordent" => "mordent",
-                "turn" => "turn",
-                _ => continue,
-            };
-            if n.ev.tremolo > 0 {
-                continue;
-            }
-            let upper = key_of(n.top_d + 1, alter_in(n.fifths, n.top_d + 1));
-            let lower = key_of(n.top_d - 1, alter_in(n.fifths, n.top_d - 1));
-            out.push(Play::Ornament { t: start, span, key: top, upper, lower, name });
-            break;
+        if !n.ev.gliss {
+            continue;
+        }
+        let Some(next) = notes.get(k + 1) else { continue };
+        if (next.top - n.top).abs() > 1 {
+            let start = held(holds, n.t, false);
+            let span = held(holds, n.t + n.span, true) - start;
+            out.push(Play::Slide { t: start, span, from: n.top, to: next.top });
         }
     }
     out
@@ -143,28 +158,38 @@ fn key_of(d: i64, alter: i64) -> i64 {
     12 * ((d - step) / 7 + 4) + [0, 2, 4, 5, 7, 9, 11][step as usize] + alter
 }
 
-/// What key `fifths` does to the step of `d`: 1 a sharp, -1 a flat.
-fn alter_in(fifths: i64, d: i64) -> i64 {
+/// The alteration the key of `fifths` gives the step of `d`: a sharp for the
+/// first `fifths` of F C G D A E B, a flat for the first of B E A D G C F.
+fn in_key(d: i64, fifths: i64) -> i64 {
+    const SHARPS: [i64; 7] = [3, 0, 4, 1, 5, 2, 6];
+    const FLATS: [i64; 7] = [6, 2, 5, 1, 4, 0, 3];
     let step = d.rem_euclid(7);
-    // F C G D A E B take sharps in that order, the flats go the other way.
-    let sharps = [3, 0, 4, 1, 5, 2, 6];
-    if fifths > 0 && sharps[..fifths.min(7) as usize].contains(&step) {
+    let count = fifths.unsigned_abs().min(7) as usize;
+    if fifths > 0 && SHARPS[..count].contains(&step) {
         1
-    } else if fifths < 0 && sharps[7 - (-fifths).min(7) as usize..].contains(&step) {
+    } else if fifths < 0 && FLATS[..count].contains(&step) {
         -1
     } else {
         0
     }
 }
 
-/// Where fermatas hold, as `eui_score::midi` times them: (tick the held
-/// note ends, ticks it is held for), in time order.
-fn holds(measured: &[Vec<Bar>]) -> Vec<(i64, i64)> {
+/// Where fermatas hold, as `eui_score::midi` times them, in time order: of
+/// several notes under a fermata that end together, the longest is held,
+/// half its value again, then the music breathes FERMATA_BREATH_SECONDS at
+/// the tempo of that moment.
+fn holds(measured: &[Vec<Bar>], opts: &MidiOptions) -> Vec<Hold> {
     let mut by_end: Vec<(i64, i64)> = Vec::new();
+    let mut tempi: Vec<(i64, f64)> = Vec::new();
     for bars in measured {
         let mut at = 0;
         for bar in bars {
             for ev in &bar.items {
+                if let Some(mark) = &ev.tempo {
+                    if mark.bpm > 0 {
+                        tempi.push((at + ev.start, quarter_seconds(mark.bpm as f64, mark.base)));
+                    }
+                }
                 if ev.k == Kind::Note && ev.scripts.iter().any(|sc| sc.name == "fermata") {
                     let span = ev.ticks * ev.mm.unwrap_or(1);
                     let ends = at + ev.start + span;
@@ -178,11 +203,28 @@ fn holds(measured: &[Vec<Bar>]) -> Vec<(i64, i64)> {
         }
     }
     by_end.sort_by_key(|h| h.0);
+    tempi.sort_by_key(|t| t.0);
+    // With no `\tempo`, the options' tempo, or MIDI's own 120 a minute.
+    let first = if opts.bpm > 0.0 { quarter_seconds(opts.bpm, opts.beat) } else { 0.5 };
     by_end
+        .into_iter()
+        .map(|(ends, span)| {
+            let quarter = tempi.iter().take_while(|t| t.0 < ends).last().map_or(first, |t| t.1);
+            let breath = if quarter > 0.0 { (FERMATA_BREATH_SECONDS / quarter * (WHOLE / 4) as f64).round() as i64 } else { 0 };
+            Hold { ends, sustain: span / 2, breath }
+        })
+        .collect()
 }
 
-fn held(holds: &[(i64, i64)], t: i64) -> i64 {
-    t + holds.iter().filter(|h| h.0 <= t).map(|h| h.1).sum::<i64>()
+/// A quarter's length in seconds at `bpm` beats of `beat` (4 a quarter) a minute.
+fn quarter_seconds(bpm: f64, beat: i64) -> f64 {
+    60.0 / bpm * beat as f64 / 4.0
+}
+
+/// A time moved past every hold before it. At a hold's own end, a note let
+/// go (`off`) moves by the extra length only; a note starting, after the breath.
+fn held(holds: &[Hold], t: i64, off: bool) -> i64 {
+    t + holds.iter().filter(|h| h.ends <= t).map(|h| if h.ends == t && off { h.sustain } else { h.sustain + h.breath }).sum::<i64>()
 }
 
 // ---- The file ------------------------------------------------------------------
@@ -299,81 +341,22 @@ fn note(track: &[Event], t: i64, key: i64) -> Option<(usize, usize)> {
     Some((on, off))
 }
 
-/// A change timed in the engraver's ticks, timed in the file's (`per` of
-/// them each).
+/// A change timed in the engraver's ticks, timed in the file's (`per` of them each).
 fn in_file(change: &Play, per: i64) -> Play {
     let at = |t: i64| (t + per / 2) / per;
     match change {
-        Play::Roll { t, keys, span } => Play::Roll { t: at(*t), keys: keys.clone(), span: at(t + span) - at(*t) },
         Play::Slide { t, span, from, to } => Play::Slide { t: at(*t), span: at(t + span) - at(*t), from: *from, to: *to },
-        Play::Ornament { t, span, key, upper, lower, name } => Play::Ornament { t: at(*t), span: at(t + span) - at(*t), key: *key, upper: *upper, lower: *lower, name },
+        Play::Ornament { t, keys, above, below, ornament, rolled } => {
+            Play::Ornament { t: at(*t), keys: keys.clone(), above: *above, below: *below, ornament: *ornament, rolled: *rolled }
+        }
     }
 }
 
 fn apply(track: &mut Vec<Event>, change: &Play, per: i64) {
-    let mut added: Vec<Event> = Vec::new();
     match change {
-        Play::Roll { t, keys, span } => {
-            let gap = (ROLL / per).min(span / (2 * keys.len() as i64)).max(1);
-            for (k, key) in keys.iter().enumerate() {
-                if let Some((on, _)) = note(track, *t, *key) {
-                    track[on].0 = t + gap * k as i64;
-                }
-            }
-        }
-        Play::Slide { t, span, from, to } => {
-            let Some((on, off)) = note(track, *t, *from) else { return };
-            let (channel, velocity) = (track[on].1[0] & 0x0f, track[on].1[2]);
-            let half = span / 2;
-            let off_at = track[off].0.min(t + half);
-            track[off].0 = off_at;
-            let way: Vec<i64> = if to > from { (from + 1..*to).collect() } else { (to + 1..*from).rev().collect() };
-            let each = ((span - half) / way.len() as i64).max(1);
-            for (k, key) in way.iter().enumerate() {
-                let at = t + half + each * k as i64;
-                added.push((at, vec![0x90 | channel, *key as u8, velocity]));
-                added.push((at + each, vec![0x80 | channel, *key as u8, 64]));
-            }
-        }
-        Play::Ornament { t, span, key, upper, lower, name } => {
-            let Some((on, off)) = note(track, *t, *key) else { return };
-            let (channel, velocity) = (track[on].1[0] & 0x0f, track[on].1[2]);
-            let n = (SHAKE / per).min(span / 4).max(1);
-            // The notes played before the note goes on as written.
-            let figure: Vec<i64> = match *name {
-                "trill" => (0..(span / n - 1).max(1)).map(|k| if k % 2 == 0 { *key } else { *upper }).collect(),
-                "prall" => vec![*key, *upper],
-                "mordent" => vec![*key, *lower],
-                _ => vec![*upper, *key, *lower],
-            };
-            let ends = track[off].0;
-            // The written note sounds first only when the figure starts with it.
-            let mut at = *t;
-            let mut keys = figure.into_iter();
-            if *name != "turn" {
-                keys.next();
-                track[off].0 = (t + n).min(ends);
-                at += n;
-            } else {
-                // The turn starts above: the written note's own sounding moves past it.
-                track[on].1[1] = *upper as u8;
-                track[off].1[1] = *upper as u8;
-                track[off].0 = (t + n).min(ends);
-                keys.next();
-                at += n;
-            }
-            for k in keys {
-                added.push((at, vec![0x90 | channel, k as u8, velocity]));
-                added.push((at + n, vec![0x80 | channel, k as u8, 64]));
-                at += n;
-            }
-            if at < ends {
-                added.push((at, vec![0x90 | channel, *key as u8, velocity]));
-                added.push((ends, vec![0x80 | channel, *key as u8, 64]));
-            }
-        }
+        Play::Slide { t, span, from, to } => slide(track, *t, *span, *from, *to),
+        Play::Ornament { t, keys, above, below, ornament, rolled } => ornamented(track, *t, keys, *above, *below, *ornament, *rolled, per),
     }
-    track.extend(added);
     // Offs before ons at one time, the end of the track last.
     let end = track.iter().position(|e| e.1 == [0xff, 0x2f, 0x00]).map(|k| track.remove(k));
     track.sort_by_key(|e| (e.0, i64::from(e.1[0] & 0xf0 == 0x90 && e.1.get(2).is_some_and(|v| *v > 0))));
@@ -383,12 +366,83 @@ fn apply(track: &mut Vec<Event>, change: &Play, per: i64) {
     }
 }
 
+/// The note `from` at `t` held half of `span`, then every key on the way to `to`.
+fn slide(track: &mut Vec<Event>, t: i64, span: i64, from: i64, to: i64) {
+    let Some((on, off)) = note(track, t, from) else { return };
+    let (channel, velocity) = (track[on].1[0] & 0x0f, track[on].1[2]);
+    let half = span / 2;
+    track[off].0 = track[off].0.min(t + half);
+    let way: Vec<i64> = if to > from { (from + 1..to).collect() } else { (to + 1..from).rev().collect() };
+    let each = ((span - half) / way.len() as i64).max(1);
+    for (k, key) in way.iter().enumerate() {
+        let at = t + half + each * k as i64;
+        track.push((at, vec![0x90 | channel, *key as u8, velocity]));
+        track.push((at + each, vec![0x80 | channel, *key as u8, 64]));
+    }
+}
+
+/// The chord `keys` at `t`, as the engine plays an ornamented note, in the
+/// time the file already gives it (an `\afterGrace` note ends where its
+/// grace notes start): the keys rolled in from the lowest a sixty-fourth
+/// apart when `rolled` (half the note at most from the first to the last);
+/// the top one decorated in thirty-seconds (a quarter of what is left at
+/// most each) — a trill to the end, a prall above, a mordent below, a turn
+/// round it — then held.
+#[allow(clippy::too_many_arguments)]
+fn ornamented(track: &mut Vec<Event>, t: i64, keys: &[i64], above: i64, below: i64, ornament: Option<&str>, rolled: bool, per: i64) {
+    let Some(&top) = keys.last() else { return };
+    let Some((top_on, top_off)) = note(track, t, top) else { return };
+    let (channel, velocity) = (track[top_on].1[0] & 0x0f, track[top_on].1[2]);
+    let end = track[top_off].0;
+    let n = keys.len() as i64;
+    let roll = if rolled && n > 1 { (ROLL / per).min((end - t) / 2 / (n - 1)).max(0) } else { 0 };
+    for (i, key) in keys.iter().enumerate().take(keys.len() - 1) {
+        if let Some((on, _)) = note(track, t, *key) {
+            track[on].0 = t + i as i64 * roll;
+        }
+    }
+    // The top note, written out again from where it comes in.
+    track.remove(top_off.max(top_on));
+    track.remove(top_off.min(top_on));
+    let mut sound = |key: i64, from: i64, to: i64| {
+        if to > from {
+            track.push((from, vec![0x90 | channel, key as u8, velocity]));
+            track.push((to, vec![0x80 | channel, key as u8, 64]));
+        }
+    };
+    let mut at = t + (n - 1) * roll;
+    let unit = (SHAKE / per).min((end - at) / 4).max(1);
+    if ornament == Some("trill") {
+        let mut upper = false;
+        while at < end {
+            let next = (at + unit).min(end);
+            sound(if upper { above } else { top }, at, next);
+            upper = !upper;
+            at = next;
+        }
+        return;
+    }
+    let figure: &[i64] = match ornament {
+        Some("prall") => &[top, above],
+        Some("mordent") => &[top, below],
+        Some("turn") => &[above, top, below],
+        _ => &[],
+    };
+    for &key in figure {
+        let next = (at + unit).min(end);
+        sound(key, at, next);
+        at = next;
+    }
+    sound(top, at, end);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn notes(src: &str) -> Vec<Vec<(i64, i64, bool)>> {
-        let bytes = perform(src, eui_score::midi(src, &eui_score::MidiOptions::default()).unwrap());
+        let opts = MidiOptions::default();
+        let bytes = perform(src, eui_score::midi(src, &opts).unwrap(), &opts);
         let (_, tracks) = read(&bytes).unwrap();
         tracks
             .iter()
@@ -404,30 +458,39 @@ mod tests {
 
     /// The file's ticks a whole: a quarter of 6720.
     const FILE_WHOLE: i64 = 4 * 6720;
-    /// An arpeggio's step, in the file's ticks.
-    const FILE_ROLL: i64 = ROLL * FILE_WHOLE / WHOLE;
+    /// An arpeggio's step, as the engine rolls it: a sixty-fourth.
+    const FILE_ROLL: i64 = FILE_WHOLE / 64;
+    /// A trill's or a mordent's note, as the engine plays it: a thirty-second.
+    const FILE_SHAKE: i64 = FILE_WHOLE / 32;
 
     fn ons(src: &str) -> Vec<(i64, i64)> {
         notes(src).concat().into_iter().filter(|n| n.2).map(|n| (n.0, n.1)).collect()
     }
 
+    fn keys(src: &str) -> Vec<i64> {
+        ons(src).into_iter().map(|n| n.1).collect()
+    }
+
     #[test]
     fn plain_music_is_left_as_it_is() {
-        let src = "{ c'4 d' <e' g'>2 }";
-        let bytes = eui_score::midi(src, &eui_score::MidiOptions::default()).unwrap();
-        assert_eq!(perform(src, bytes.clone()), bytes);
+        // Ornaments, rolls and fermatas are the engine's: nothing added to them.
+        for src in ["{ c'4 d' <e' g'>2 }", "{ c''4\\trill <c' e' g'>2\\arpeggio d'4\\fermata }"] {
+            let opts = MidiOptions::default();
+            let bytes = eui_score::midi(src, &opts).unwrap();
+            assert_eq!(perform(src, bytes.clone(), &opts), bytes, "{src}");
+        }
     }
 
     #[test]
     fn a_file_read_and_written_again_is_the_same() {
         let src = "{ c'4 d' <e' g'>2 }";
-        let bytes = eui_score::midi(src, &eui_score::MidiOptions::default()).unwrap();
+        let bytes = eui_score::midi(src, &MidiOptions::default()).unwrap();
         let (head, tracks) = read(&bytes).unwrap();
         assert_eq!(write(&head, &tracks), bytes);
     }
 
     #[test]
-    fn an_arpeggio_rolls_the_chord_from_the_bottom() {
+    fn an_arpeggio_rolls_the_chord_from_the_bottom_once() {
         let on = ons("{ <c' e' g'>2\\arpeggio r2 }");
         assert_eq!(on, vec![(0, 60), (FILE_ROLL, 64), (2 * FILE_ROLL, 67)]);
     }
@@ -444,17 +507,27 @@ mod tests {
     }
 
     #[test]
-    fn a_trill_alternates_with_the_note_above_in_the_key() {
-        let on = ons("{ \\key g \\major e''4\\trill r2. }");
+    fn a_glissando_after_a_fermata_slides_where_the_engine_plays_it() {
+        // The fermata's quarter held to a dotted quarter, then two seconds
+        // (four quarters at 120) of breath: the glissando starts after both.
+        let on = ons("{ c'4\\fermata d'2\\glissando g'4 }");
         let keys: Vec<i64> = on.iter().map(|n| n.1).collect();
-        // E and F sharp, G major's.
-        assert_eq!(&keys[..4], &[76, 78, 76, 78]);
-        assert!(on.iter().all(|n| n.0 < FILE_WHOLE / 4));
+        assert_eq!(keys, vec![60, 62, 63, 64, 65, 66, 67]);
+        let start = FILE_WHOLE / 4 + FILE_WHOLE / 8 + FILE_WHOLE;
+        assert_eq!(on[1].0, start);
+        assert_eq!(on[2].0, start + FILE_WHOLE / 4);
     }
 
     #[test]
-    fn a_mordent_and_a_turn_go_round_the_note() {
-        let keys = |src| ons(src).into_iter().map(|n| n.1).collect::<Vec<_>>();
+    fn a_trill_alternates_with_the_note_above_in_the_key_once() {
+        let on = ons("{ \\key g \\major e''4\\trill r2. }");
+        // E and F sharp, G major's, a thirty-second each through the quarter.
+        let expected: Vec<(i64, i64)> = (0..8).map(|k| (k * FILE_SHAKE, if k % 2 == 0 { 76 } else { 78 })).collect();
+        assert_eq!(on, expected);
+    }
+
+    #[test]
+    fn a_mordent_and_a_turn_go_round_the_note_once() {
         assert_eq!(keys("{ c''4\\mordent r2. }"), vec![72, 71, 72]);
         assert_eq!(keys("{ c''4\\prall r2. }"), vec![72, 74, 72]);
         assert_eq!(keys("{ c''4\\turn r2. }"), vec![74, 72, 71, 72]);
@@ -463,14 +536,42 @@ mod tests {
     #[test]
     fn grace_notes_keep_their_time_before_a_rolled_chord() {
         let on = ons("{ \\grace d'8 <c' e'>2\\arpeggio r2 }");
-        assert_eq!(on[0].1, 62);
+        assert_eq!(on.len(), 3);
+        assert_eq!(on[0], (0, 62));
         assert!(on[1].0 > 0 && on[1].1 == 60);
         assert_eq!(on[2], (on[1].0 + FILE_ROLL, 64));
     }
 
     #[test]
+    fn a_trill_before_after_grace_notes_is_played_until_they_come() {
+        // The engine leaves this one out: the whole note, its last quarter
+        // given to the grace notes, trilled through its first three.
+        let on = ons("{ \\key g \\major \\afterGrace e''1\\trill { d''16 e'' } r1 }");
+        let trill: Vec<(i64, i64)> = on.iter().copied().filter(|n| n.0 < 3 * FILE_WHOLE / 4).collect();
+        let expected: Vec<(i64, i64)> = (0..24).map(|k| (k * FILE_SHAKE, if k % 2 == 0 { 76 } else { 78 })).collect();
+        assert_eq!(trill, expected);
+        // Then the grace notes, as the engine plays them.
+        let after: Vec<i64> = on.iter().filter(|n| n.0 >= 3 * FILE_WHOLE / 4).map(|n| n.1).collect();
+        assert_eq!(after, vec![74, 76]);
+    }
+
+    #[test]
+    fn a_mordent_or_a_rolled_chord_before_after_grace_notes_is_played_once() {
+        assert_eq!(keys("{ \\afterGrace c''2\\mordent { b'16 } r2 }"), vec![72, 71, 72, 71]);
+        let on = ons("{ \\afterGrace <c' e' g'>2\\arpeggio { a'16 } r2 }");
+        assert_eq!(on, vec![(0, 60), (FILE_ROLL, 64), (2 * FILE_ROLL, 67), (3 * FILE_WHOLE / 8, 69)]);
+    }
+
+    #[test]
     fn every_note_on_is_ended() {
-        for src in ["{ c'2\\glissando c''2 }", "{ c''1\\trill }", "{ c''4\\turn d'' e'' f'' }", "{ <c' e' g' c''>1\\arpeggio }"] {
+        for src in [
+            "{ c'2\\glissando c''2 }",
+            "{ c''1\\trill }",
+            "{ c''4\\turn d'' e'' f'' }",
+            "{ <c' e' g' c''>1\\arpeggio }",
+            "{ \\afterGrace <c'' e''>1\\turn\\arpeggio { d''16 } }",
+            "{ \\afterGrace c''1\\trill { b'16 c'' } }",
+        ] {
             for track in notes(src) {
                 let on = track.iter().filter(|n| n.2).count();
                 let off = track.iter().filter(|n| !n.2).count();
