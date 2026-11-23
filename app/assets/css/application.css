@@ -974,6 +974,7 @@
   .studio-review-go:hover, .studio-review-go:focus-visible { text-decoration: underline; }
   .studio-review-go strong { font-weight: 600; margin-right: 4px; }
   .studio-review-ignore { flex: none; padding: 0 10px; }
+  .studio-review-cue { flex: none; padding: 0 10px; }
   .studio-review-count { font: inherit; font-size: 13px; padding: 2px 10px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--paper); color: var(--ink); cursor: pointer; }
   .studio-review-count span { font-weight: 600; font-variant-numeric: tabular-nums; }
   .studio-review-count.studio-review-errors { border-color: #b4373a; color: #b4373a; }

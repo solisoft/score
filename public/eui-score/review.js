@@ -14,9 +14,10 @@
 const V = new URL(import.meta.url).search;
 const { tr, language } = await import(`./words.js${V}`);
 const M = await import(`./score-model.js${V}`);
+const C = await import(`./cues.js${V}`);
 
 /** The rules, in the order the panel lists them: what is wrong first, what is only worth a look last. */
-export const RULES = ["range", "bars", "dynamic", "comfort"];
+export const RULES = ["range", "bars", "dynamic", "comfort", "cue"];
 
 /** Bars of rest after which a part that comes back is given its dynamic again. */
 export const REST_BARS = 4;
@@ -216,6 +217,21 @@ function dynamicRemarks(score, staves, nameOf) {
   return out;
 }
 
+// ---- Cues (#1023) ----------------------------------------------------------------------------
+
+/**
+ * A cue proposed where a part comes back after CUE_REST_BARS bars of rest or
+ * more, from the part heard most just before (cues.js); one already there,
+ * to take away. The remark's `cue` is the proposal, for the panel's button.
+ */
+function cueRemarks(score, nameOf) {
+  return C.cueProposals(score).map((cue) => {
+    const words = { name: nameOf(cue.lane), n: cue.rested, source: cue.source == null ? "" : nameOf(cue.source) };
+    const text = cue.cued ? tr("{name}: a cue over the rests before it comes back", words) : tr("{name} comes back after {n} bars of rest: a cue from {source} over the bars before", words);
+    return { lane: cue.lane, bar: cue.bar, t: cue.t, rule: "cue", level: "hint", id: `cue:${cue.t}`, text, cue };
+  });
+}
+
 // ---- All of it --------------------------------------------------------------------------------
 
 /**
@@ -241,6 +257,7 @@ export function review(score, opts = {}) {
   });
   remarks.push(...barRemarks(score, opts.uneven, nameOf));
   for (const staves of dynamicGroups(score)) remarks.push(...dynamicRemarks(score, staves, nameOf));
+  remarks.push(...cueRemarks(score, nameOf));
   for (const remark of remarks) remark.ignored = ignored.has(`${remark.lane}/${remark.id}`);
   return remarks.sort((a, b) => a.bar - b.bar || a.lane - b.lane || RULES.indexOf(a.rule) - RULES.indexOf(b.rule) || a.t - b.t);
 }
@@ -252,5 +269,6 @@ export function ruleTitle(rule) {
     bars: tr("Bars that do not add up"),
     dynamic: tr("No dynamic to start with"),
     comfort: tr("Outside the comfortable range"),
+    cue: tr("Cues"),
   }[rule] ?? rule;
 }

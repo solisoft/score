@@ -5147,6 +5147,10 @@
     flex: none;
     padding: 0 10px;
   }
+  .studio-review-cue {
+    flex: none;
+    padding: 0 10px;
+  }
   .studio-review-count {
     font: inherit;
     font-size: 13px;

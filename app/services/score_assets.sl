@@ -72,6 +72,7 @@ const SCORE_STUDIO_MODULES = [
   "studio-review.js",
   "studio-signs.js",
   "review.js",
+  "cues.js",
   "studio-instrument-change.js"
 ]
 

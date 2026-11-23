@@ -9,6 +9,7 @@
 const V = new URL(import.meta.url).search;
 const { tr } = await import(`./words.js${V}`);
 const R = await import(`./review.js${V}`);
+const C = await import(`./cues.js${V}`);
 
 /** How long after a change the score is read over: typing goes on undisturbed. */
 const AFTER = 400;
@@ -80,7 +81,14 @@ export function install(ctx) {
         go.append(Object.assign(document.createElement("strong"), { textContent: tr("Bar {n}", { n: barNo(remark.bar) }) }), " ", remark.text);
         const aside = Object.assign(document.createElement("button"), { type: "button", className: "tool studio-review-ignore", textContent: remark.ignored ? tr("Show again") : tr("Ignore") });
         aside.dataset.reviewIgnore = String(remarks.indexOf(remark));
-        item.append(go, aside);
+        item.append(go);
+        // A cue proposed (#1023): Add writes it; one there: Remove cue.
+        if (remark.cue && !remark.ignored) {
+          const cue = Object.assign(document.createElement("button"), { type: "button", className: "tool studio-review-cue", textContent: remark.cue.cued ? tr("Remove cue") : tr("Add") });
+          cue.dataset.reviewCue = String(remarks.indexOf(remark));
+          item.append(cue);
+        }
+        item.append(aside);
         return item;
       }));
       section.append(heading, items);
@@ -129,9 +137,21 @@ export function install(ctx) {
     }
   }
 
+  /** A cue proposed written, or one there taken away: one edit, one Undo (#1023). */
+  function cueEdit(remark) {
+    const { cue } = remark;
+    const done = edit((score) => (cue.cued ? C.removeCue(score, cue.lane, cue.from, cue.to) : C.addCue(score, cue)));
+    if (done === true) {
+      say(cue.cued ? tr("The cue is taken away: one Undo brings it back.") : tr("The cue is written over the rests: one Undo takes it away."));
+      reread();
+    }
+  }
+
   list?.addEventListener("click", (event) => {
     const go = event.target.closest("[data-review-go]");
     if (go) return goTo(remarks[Number(go.dataset.reviewGo)]);
+    const cue = event.target.closest("[data-review-cue]");
+    if (cue) return cueEdit(remarks[Number(cue.dataset.reviewCue)]);
     const aside = event.target.closest("[data-review-ignore]");
     if (aside) setAside(remarks[Number(aside.dataset.reviewIgnore)]);
   });

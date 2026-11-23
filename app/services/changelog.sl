@@ -13,6 +13,16 @@ class Changelog
       {"date": "2026-11-23", "entries": [
         {
           "area": "site",
+          "title": "Cues proposed by the Review",
+          "text": "Where a part comes back after four bars of rest or more, the Review proposes a cue: what the "
+          + "part heard most plays in the bar or two before — the loudest, then the busiest. Add writes it over "
+          + "the rests, small and not played, an octave up or down when that keeps it on the staff, and at "
+          + "written pitch on a clarinet's staff; Remove cue takes it away. Each is one change, undone with "
+          + "Ctrl+Z.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
           "title": "Change instrument in the middle of a staff",
           "text": "Insert ▸ Change instrument…, at the selected note or bar, has the staff's player take up "
           + "another instrument: the flute for the piccolo, for the clarinet. From there the staff is named for "

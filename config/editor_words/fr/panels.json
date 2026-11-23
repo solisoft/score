@@ -25,5 +25,15 @@
   "Show again": "Ne plus ignorer",
   "Ignore": "Ignorer",
   "The remark is shown again.": "La remarque est de nouveau affichée.",
-  "The remark is set aside: Show ignored lists it.": "La remarque est mise de côté : « Voir les remarques ignorées » la montre."
+  "The remark is set aside: Show ignored lists it.": "La remarque est mise de côté : « Voir les remarques ignorées » la montre.",
+  "Cues": "Répliques",
+  "{name}: a cue over the rests before it comes back": "{name} : une réplique sur les silences avant sa rentrée",
+  "{name} comes back after {n} bars of rest: a cue from {source} over the bars before": "{name} revient après {n} mesures de silence : une réplique de {source} sur les mesures d'avant",
+  "Remove cue": "Retirer la réplique",
+  "The cue is taken away: one Undo brings it back.": "La réplique est retirée : une annulation la remet.",
+  "The cue is written over the rests: one Undo takes it away.": "La réplique est écrite sur les silences : une annulation la retire.",
+  "A cue goes on a staff of one part, of notes": "Une réplique va sur une portée d'une seule partie, de notes",
+  "No other part plays there to cue": "Aucune autre partie ne joue là pour une réplique",
+  "A cue goes over rests: bar {bar} is not all rests": "Une réplique va sur des silences : la mesure {bar} n'est pas que silences",
+  "There is no cue there": "Il n'y a pas de réplique ici"
 }
