@@ -81,20 +81,21 @@ const sounds = (ev) => !ev.rest && ev.pitches.length > 0 && !ev.cue;
 
 // ---- Range ------------------------------------------------------------------------------------
 
-/** Each bar's notes out of the range, and out of where it is comfortable, of lane `s`'s instrument. */
+/**
+ * Each bar's notes out of the range, and out of where it is comfortable, of
+ * lane `s`'s instrument — the one played at each note, when the staff
+ * changes instrument on the way (#1023), named then.
+ */
 function rangeRemarks(score, s, name) {
   if (M.isDrums(score, s)) return [];
   const upper = M.upperOf(score, s);
-  const instrument = M.INSTRUMENTS[M.instrumentOf(score, upper)];
-  if (!instrument?.range) return [];
-  const [low, high] = instrument.range;
-  const [easyLow, easyHigh] = instrument.comfortable ?? instrument.range;
+  const own = M.instrumentOf(score, upper);
   // By bar and by what is wrong, the note furthest out: one remark a bar, not one a note.
   const worst = new Map();
-  const keep = (kind, bar, t, p, key, shift, further) => {
+  const keep = (kind, bar, t, p, key, shift, k, further) => {
     const id = `${kind}:${M.barStart(score, bar)}`;
     const was = worst.get(id);
-    if (!was || further(key, was.key)) worst.set(id, { kind, bar, t, p, key, shift });
+    if (!was || further(key, was.key)) worst.set(id, { kind, bar, t, p, key, shift, k });
   };
   const events = score.staves[s].events;
   const at = M.starts(score.staves[s]);
@@ -103,20 +104,28 @@ function rangeRemarks(score, s, name) {
     // A note tied on from the one before is that note: said once.
     const before = events[i - 1];
     if (before?.tie && !before.rest && before.pitches.length === ev.pitches.length) return;
+    const k = M.instrumentAt(score, s, at[i]);
+    const instrument = M.INSTRUMENTS[k];
+    if (!instrument?.range) return;
+    const [low, high] = instrument.range;
+    const [easyLow, easyHigh] = instrument.comfortable ?? instrument.range;
     const bar = M.barAt(score, at[i]);
-    // Written as the player reads it there: a staff's \\transposition may change on the way (#1023).
+    // Written as the player reads it there: a staff's \\transposition may change on the way.
     const shift = M.writtenShiftAt(score, s, at[i]);
     for (const pitch of ev.pitches) {
       const p = shift ? M.transposePitch(pitch, shift.steps, shift.semitones) : pitch;
       const key = M.midiKey(p.d, p.alter);
-      if (key < low) keep("low", bar, at[i], p, key, shift, (a, b) => a < b);
-      else if (key > high) keep("high", bar, at[i], p, key, shift, (a, b) => a > b);
-      else if (key < easyLow) keep("lowish", bar, at[i], p, key, shift, (a, b) => a < b);
-      else if (key > easyHigh) keep("highish", bar, at[i], p, key, shift, (a, b) => a > b);
+      if (key < low) keep("low", bar, at[i], p, key, shift, k, (a, b) => a < b);
+      else if (key > high) keep("high", bar, at[i], p, key, shift, k, (a, b) => a > b);
+      else if (key < easyLow) keep("lowish", bar, at[i], p, key, shift, k, (a, b) => a < b);
+      else if (key > easyHigh) keep("highish", bar, at[i], p, key, shift, k, (a, b) => a > b);
     }
   });
   return [...worst.entries()].map(([id, w]) => {
-    const words = { name, note: pitchWord(w.p) };
+    const instrument = M.INSTRUMENTS[w.k];
+    const [low, high] = instrument.range;
+    const [easyLow, easyHigh] = instrument.comfortable ?? instrument.range;
+    const words = { name: w.k === own ? name : tr(instrument.name), note: pitchWord(w.p) };
     let text;
     if (w.kind === "low" || w.kind === "high") {
       const limit = keyWord(w.kind === "low" ? low : high);

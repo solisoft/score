@@ -69,7 +69,7 @@ describe("Writing at written pitch, in a browser") do
     press("n")
     sleep(0.3)
     # The cursor on the second bar: written D sounds C.
-    evaluate("(() => { const st = document.getElementById('studio').studio; st.input.t = 161280; })()")
+    evaluate("(() => { const st = document.getElementById('studio').studio; st.input.t = 80640; })()")
     press("d")
     sleep(0.4)
     assert_contains(wp_text(), "| c''4 r2.")
@@ -107,7 +107,7 @@ describe("Writing at written pitch, in a browser") do
     wp_written()
     press("n")
     sleep(0.3)
-    evaluate("(() => { const st = document.getElementById('studio').studio; st.input.t = 161280; })()")
+    evaluate("(() => { const st = document.getElementById('studio').studio; st.input.t = 80640; })()")
     press("d")
     sleep(0.4)
     assert_contains(wp_text(), "| d''4 r2.")

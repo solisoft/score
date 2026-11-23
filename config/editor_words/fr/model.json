@@ -294,5 +294,9 @@
   "The top and bottom margins leave the music {height} mm down the page: keep at least {least} mm": "Les marges du haut et du bas ne laissent que {height} mm de haut à la musique : gardez-en au moins {least}",
   "That sign is no longer on its note.": "Ce signe n'est plus sur sa note.",
   "Only a slur, a phrasing slur or a tie is reshaped.": "Seules une liaison, une liaison de phrasé ou une liaison de prolongation se remodèlent.",
-  "Only a hairpin's ends are moved.": "Seules les extrémités d'un soufflet se déplacent."
+  "Only a hairpin's ends are moved.": "Seules les extrémités d'un soufflet se déplacent.",
+  "no such instrument": "instrument inconnu",
+  "A drum kit is a staff of its own: add one with Insert ▸ A staff": "Une batterie a sa propre portée : ajoutez-en une avec Insertion ▸ Une portée",
+  "The staff's first instrument is its own: change it in the staff's properties": "Le premier instrument d'une portée est le sien : changez-le dans les propriétés de la portée",
+  "An instrument changes where a note or a rest of the staff starts": "Un instrument change là où commence une note ou un silence de la portée"
 }

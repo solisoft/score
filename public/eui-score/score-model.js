@@ -5614,6 +5614,94 @@ export function asWritten(score, fn) {
   }
 }
 
+// ---- An instrument changed in the middle of a staff (#1023) ---------------------------------
+//
+// The player puts the flute down for the piccolo: from a note on, the staff
+// is named for the piccolo on the systems after it, plays its sound and, for
+// a transposing instrument, is written as it reads (\transposition). The
+// commands are kept on that note (`ev.before`) as the text writes them;
+// LilyPond's custom writes "To Picc." in the rests before and "Piccolo"
+// over the first note after.
+
+/** The commands an instrument change writes before its note. */
+const CHANGE_COMMANDS = /^\\set (?:Staff\.)?(instrumentName|shortInstrumentName|midiInstrument) = "((?:\\.|[^"\\])*)"$|^\\transposition /;
+
+/** What a `\\set Staff.x = "…"` kept before a note says: { name, value }, or null. */
+function changeSetting(text) {
+  const m = CHANGE_COMMANDS.exec(text);
+  return m?.[1] ? { name: m[1], value: m[2].replace(/\\(.)/g, "$1") } : null;
+}
+
+/**
+ * The instrument lane `s`'s staff is played on at time `t`: an index of
+ * INSTRUMENTS — the last change made before it (its name, else its
+ * sound), else the staff's own.
+ */
+export function instrumentAt(score, s, t = 0) {
+  const u = upperOf(score, s);
+  const staff = score.staves[u];
+  const times = starts(staff);
+  let name = null;
+  let sound = null;
+  staff.events.forEach((ev, i) => {
+    if (times[i] > t + 1e-6) return;
+    for (const text of ev.before ?? []) {
+      const set = changeSetting(text);
+      if (set?.name === "instrumentName") [name, sound] = [set.value, null];
+      if (set?.name === "midiInstrument") sound = set.value;
+    }
+  });
+  const byName = name == null ? -1 : INSTRUMENTS.findIndex((it) => it.name === name);
+  if (byName >= 0) return byName;
+  const bySound = sound == null ? -1 : INSTRUMENTS.findIndex((it) => it.sound === sound);
+  return bySound >= 0 ? bySound : instrumentOf(score, u);
+}
+
+/**
+ * The staff of lane `s` changes to INSTRUMENTS[k] at time `t` (where a note
+ * or a rest of its first voice starts): its names and its sound from there,
+ * its \\transposition when it is written apart from how it sounds (or when
+ * the instrument before was), `words.name` over the first note from there
+ * and `words.to` ("To Picc.") on the first of the rests before that note.
+ * Chosen again at the same place, the change before is replaced — its
+ * words too, among `words.known` (all an instrument change may write).
+ * Answers { index, was }: the note or rest the change is written on, and
+ * the name of the instrument played before.
+ */
+export function changeInstrument(score, s, t, k, words = {}) {
+  refuseRaw(score, s);
+  refuseDrums(score, s);
+  const u = upperOf(score, s);
+  const it = INSTRUMENTS[k];
+  if (!it) throw new Error(tr("no such instrument"));
+  if (it.drums) throw new Error(tr("A drum kit is a staff of its own: add one with Insert ▸ A staff"));
+  if (t <= 0) throw new Error(tr("The staff's first instrument is its own: change it in the staff's properties"));
+  const staff = score.staves[u];
+  const i = starts(staff).findIndex((at) => Math.abs(at - t) < 1e-6);
+  if (i < 0) throw new Error(tr("An instrument changes where a note or a rest of the staff starts"));
+  const ev = staff.events[i];
+  const was = INSTRUMENTS[instrumentAt(score, u, t - 1)];
+  const shiftBefore = writtenShiftAt(score, u, t - 1);
+  // A change made at this place before: replaced, and its words with it.
+  const again = (ev.before ?? []).some((text) => CHANGE_COMMANDS.test(text));
+  ev.before = (ev.before ?? []).filter((text) => !CHANGE_COMMANDS.test(text));
+  const target = transpositionOf({ instrument: it.sound, name: it.name });
+  const commands = [`\\set Staff.instrumentName = ${quote(it.name)}`, `\\set Staff.shortInstrumentName = ${quote(it.short)}`, `\\set Staff.midiInstrument = ${quote(it.sound)}`];
+  if (target || shiftBefore) commands.push(`\\transposition ${transpositionFor(target)}`);
+  ev.before = [...commands, ...ev.before];
+  // The name over the first note from here; "To …" on the first of the rests before it.
+  const entry = staff.events.findIndex((x, j) => j >= i && !x.rest);
+  const named = entry >= 0 ? entry : i;
+  let first = named;
+  while (first > 0 && staff.events[first - 1].rest) first--;
+  const known = new Set(again ? words.known ?? [] : []);
+  const unsaid = (x) => !(known.has(x.text) && !x.italic && !x.bold);
+  for (const j of new Set([first, named])) staff.events[j].texts = staff.events[j].texts.filter(unsaid);
+  if (words.name) staff.events[named].texts.push({ text: words.name, dir: -1, italic: false });
+  if (words.to && first < named) staff.events[first].texts.push({ text: words.to, dir: -1, italic: false });
+  return { index: i, was: was?.name ?? null };
+}
+
 /**
  * The parts a score is printed in, in order: one for each staff — and, for
  * a staff of two parts (\\partCombine, #1021), one for each desk, its lane
@@ -5655,6 +5743,11 @@ export function partOf(score, s, desk = 0) {
     if (!part.staves[0].withMore) delete part.staves[0].withMore;
     wholeBarRests(part, 0);
   } else part.staves = lanes.map((lane) => part.staves[lane]);
+  // An instrument changed on the way (#1023): played and written so, its words said over the
+  // notes; the part names no staff, after the change no more than before.
+  for (const lane of part.staves) {
+    for (const ev of lane.events) if (ev.before) ev.before = ev.before.filter((text) => !/^\\set (?:Staff\.)?(?:instrumentName|shortInstrumentName) =/.test(text));
+  }
   // Its settings with it, at its lanes there (#683); the other staves' go.
   if (part.meta) {
     dropMetaLanes(part.meta, (lane) => !lanes.includes(lane));

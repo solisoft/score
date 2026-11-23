@@ -101,6 +101,8 @@ export function install(ctx) {
       case "parts": return openParts();
       case "page-spacing": return openSpacing();
       case "review": return ctx.call.toggleReview();
+      case "instrument-change": return ctx.call.openInstrumentChange();
+      case "instrument-change-apply": return ctx.call.applyInstrumentChange();
       case "comment": {
         if (!options.onComment) return say(tr("Comments are for scores saved in the app: open this one there to comment."), true);
         return options.onComment(place());

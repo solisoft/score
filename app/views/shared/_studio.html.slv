@@ -175,6 +175,7 @@
             <button type="button" role="menuitem" data-act="pedal" data-how="on"><%= t("app.editor.sustain_pedal") %></button>
             <div class="studio-dropdown-head" role="presentation"><%= t("app.editor.staves_voices") %></div>
             <button type="button" role="menuitem" data-act="add-staff"><%= t("app.editor.a_staff") %></button>
+            <button type="button" role="menuitem" data-act="instrument-change"><%= t("app.editor.change_instrument") %></button>
             <button type="button" role="menuitem" data-act="chord-line"><%- t("app.editor.a_line_of_chord_names_over_the_staff") %></button>
             <button type="button" role="menuitem" data-act="figure-line"><%= t("app.editor.a_figured_bass_under_the_staff") %></button>
             <button type="button" role="menuitem" data-act="move-staff" data-by="-1"><%= t("app.editor.move_the_staff_up") %> <kbd>Alt+Shift+↑</kbd></button>
@@ -1095,6 +1096,25 @@
       <button type="button" class="tool tool-wide" data-act="paste-special" data-filter="marks"><%= t("app.editor.paste_the_marks_only") %></button>
     </div>
     <p class="tool-hint"><%= t("app.editor.paste_special_hint") %></p>
+    <form method="dialog" class="tool-row">
+      <button type="submit" class="tool tool-wide"><%= t("app.editor.cancel") %></button>
+    </form>
+  </dialog>
+
+  <%# Insert ▸ Change instrument… (#1023): the staff's player takes up another
+      instrument from the selected note or bar on (studio-instrument-change.js). %>
+  <dialog class="studio-keys" data-instrument-change aria-labelledby="studio-instrument-change-title">
+    <div class="studio-keys-head">
+      <h2 id="studio-instrument-change-title"><%= t("app.editor.change_instrument_title") %></h2>
+    </div>
+    <p class="tool-hint" data-instrument-change-where></p>
+    <div class="tool-row">
+      <select class="tool-select" data-instruments="change" data-instrument-change-choice aria-label="<%= t("app.editor.the_instrument_taken_up") %>"></select>
+    </div>
+    <p class="tool-hint"><%= t("app.editor.change_instrument_hint") %></p>
+    <div class="tool-row">
+      <button type="button" class="tool tool-wide" data-act="instrument-change-apply"><%= t("app.editor.change_instrument_apply") %></button>
+    </div>
     <form method="dialog" class="tool-row">
       <button type="submit" class="tool tool-wide"><%= t("app.editor.cancel") %></button>
     </form>

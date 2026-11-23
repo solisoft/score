@@ -71,7 +71,8 @@ const SCORE_STUDIO_MODULES = [
   "studio-recording.js",
   "studio-review.js",
   "studio-signs.js",
-  "review.js"
+  "review.js",
+  "studio-instrument-change.js"
 ]
 
 class ScoreAssets

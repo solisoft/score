@@ -76,10 +76,11 @@ const musicXml = () => import(`./musicxml.js${V}`);
 // - studio-mix.js: mute, solo, the mixer, the instruments, the audio tracks;
 // - studio-recording.js: a MIDI keyboard, recording, Sound to;
 // - studio-review.js: the score read over, its remarks listed (#1022);
-// - studio-signs.js: a sign selected, dragged, nudged, reshaped by its handles (#1020).
+// - studio-signs.js: a sign selected, dragged, nudged, reshaped by its handles (#1020);
+// - studio-instrument-change.js: Insert ▸ Change instrument… (#1023).
 const [
   Toolbox, Files, Text, Selection, History, Source, Input, Commands, Clipboard, Words, Draw, Peers, Roll, Velocity,
-  Pointer, Ghost, Playback, Mix, Recording, Review, Signs
+  Pointer, Ghost, Playback, Mix, Recording, Review, Signs, InstrumentChange
 ] = await Promise.all([
   import(`./studio-toolbox.js${V}`),
   import(`./studio-files.js${V}`),
@@ -102,6 +103,7 @@ const [
   import(`./studio-recording.js${V}`),
   import(`./studio-review.js${V}`),
   import(`./studio-signs.js${V}`),
+  import(`./studio-instrument-change.js${V}`),
 ]);
 
 const DRAFT = "eui-score-studio-draft";
@@ -338,6 +340,7 @@ export function startStudio(root, options = {}) {
   Object.assign(ctx, Recording.install(ctx));
   Object.assign(ctx, Review.install(ctx));
   Object.assign(ctx, Signs.install(ctx));
+  Object.assign(ctx, InstrumentChange.install(ctx));
   // The MIDI clock, sent and followed, and MIDI learn (midi-sync.js).
   ctx.sync = S.attach({ root, st, M, P, act, say });
   ctx.ends.push(() => ctx.sync.stop());

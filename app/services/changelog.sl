@@ -13,6 +13,17 @@ class Changelog
       {"date": "2026-11-23", "entries": [
         {
           "area": "site",
+          "title": "Change instrument in the middle of a staff",
+          "text": "Insert ▸ Change instrument…, at the selected note or bar, has the staff's player take up "
+          + "another instrument: the flute for the piccolo, for the clarinet. From there the staff is named for "
+          + "it on the systems after, plays its sound and, for a clarinet, a horn or a saxophone, is written as "
+          + "its player reads it (\\transposition). \"To Picc.\" goes in the rests before and the instrument's "
+          + "name over its first note. Chosen again at the same place, the change is replaced; one Undo takes "
+          + "it back. The part carries it, and the Review reads each note against the instrument playing it.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
           "title": "\\transposition read and kept",
           "text": "A staff that says its own \\transposition (\\transposition bes for a B♭ clarinet, f for a "
           + "horn) opens in the editor as it sounds, and its text is written back as it was: the command where "

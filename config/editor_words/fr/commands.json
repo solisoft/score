@@ -587,5 +587,9 @@
   "Drag: this end of the hairpin": "Faire glisser : cette extrémité du soufflet",
   "Drag: this point of the curve": "Faire glisser : ce point de la courbe",
   "Back where the engraver puts it (Backspace)": "Remettre à la place que donne le graveur (Retour arrière)",
-  "Automatic position": "Position automatique"
+  "Automatic position": "Position automatique",
+  "To {short}": "Prendre {short}",
+  "Select the note or the bar the new instrument starts on": "Sélectionnez la note ou la mesure où commence le nouvel instrument",
+  "From bar {bar}": "À partir de la mesure {bar}",
+  "From bar {bar}: {name}. One Undo takes it back.": "À partir de la mesure {bar} : {name}. Une annulation le retire."
 }

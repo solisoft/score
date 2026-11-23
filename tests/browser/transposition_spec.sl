@@ -37,7 +37,7 @@ describe("A staff's own \\transposition, in a browser") do
     assert_eq(first, 7)
     press("n")
     sleep(0.3)
-    evaluate("document.getElementById('studio').studio.input.t = 161280")
+    evaluate("document.getElementById('studio').studio.input.t = 80640")
     # Concert A4: written B4.
     press("a")
     sleep(0.4)
