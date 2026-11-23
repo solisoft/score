@@ -13,6 +13,16 @@ class Changelog
       {"date": "2026-11-23", "entries": [
         {
           "area": "site",
+          "title": "Explode chords over staves, implode staves into chords",
+          "text": "Edit ▸ Explode the chords spreads the chords of the first staff selected over the staves "
+          + "selected under it: the top note on the top staff, the next on the next, a chord of fewer notes "
+          + "giving its lowest to the staves left. With one staff selected, it takes as many staves under it "
+          + "as its largest chord needs. Edit ▸ Implode into chords does the reverse: the notes of the staves "
+          + "selected, or of a staff's voices, merged as chords into the first where their rhythm is the same.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
           "title": "Paste special: the notes, the rhythm or the marks only",
           "text": "Edit ▸ Paste special (Ctrl+Alt+Shift+V) pastes what was copied in part, where Paste would "
           + "put it: the notes only, without their dynamics, articulations, slurs or words; the rhythm only, "

@@ -587,3 +587,120 @@ export function pasteSpecial(score, s, t, clip, filter) {
   if (!took) throw new Error(filter === "marks" ? NO_MARKS() : tr("There is no staff there to paste on"));
   return skipped;
 }
+
+// ---- Explode and implode ---------------------------------------------------------------------
+
+const NOT_PITCHED = () => tr("Drums and chord names are not exploded or imploded: select staves of notes");
+const pitchedLane = (score, s) => !M.isDrums(score, s) && !M.isChords(score, s) && !M.isFigures(score, s);
+const samePitch = (x, y) => x.d === y.d && x.alter === y.alter;
+
+/** The staves the ranges cover, by their first lanes, top to bottom. */
+const stavesOf = (score, ranges) => [...new Set(ranges.map((r) => M.upperOf(score, r.s)))];
+
+/** Copied event `content` keeping one note of its chord, `p`: its reminders and fingering on that note only. */
+function onePitch(content, p) {
+  const c = { ...content, pitches: [{ ...p }], arpeggio: false };
+  for (const field of ["forced", "cautionary", "harmonics"]) {
+    if (!c[field]) continue;
+    c[field] = c[field].filter((d) => d === p.d);
+    if (!c[field].length) delete c[field];
+  }
+  if (c.fingers) {
+    c.fingers = c.fingers.filter((f) => f.head == null || f.head === p.d);
+    if (!c.fingers.length) delete c.fingers;
+  }
+  return c;
+}
+
+/**
+ * The chords of the first staff the ranges cover spread over the staves
+ * under it they cover: the top note on the first, the next on the next — a
+ * chord of fewer notes giving its lowest to the staves left, a single note
+ * going to all. One staff alone: onto as many staves under it as its largest
+ * chord needs. The words, chord symbols and texts stay on the first staff;
+ * a tie holds where a staff keeps its pitch.
+ */
+export function explode(score, ranges) {
+  const staves = stavesOf(score, ranges);
+  const source = ranges.find((r) => r.s === staves[0]) ?? ranges[0];
+  if (!pitchedLane(score, source.s)) throw new Error(NOT_PITCHED());
+  refuseTuplets(score, [source]);
+  const clip = M.copy(score, source.s, source.a, source.b);
+  const widest = Math.max(0, ...clip.map((piece) => (piece.content.rest ? 0 : piece.content.pitches.length)));
+  let targets = staves.slice(1);
+  if (staves.length < 2) {
+    if (widest < 2) throw new Error(tr("There is no chord in the selection to explode"));
+    const top = M.upperOf(score, source.s);
+    targets = M.staffLanes(score).filter((u) => u > top && pitchedLane(score, u)).slice(0, widest - 1);
+    if (targets.length < widest - 1) throw new Error(tr("The largest chord has {n} notes: it needs {m} staves under its own", { n: widest, m: widest - 1 }));
+  }
+  if (targets.some((u) => !pitchedLane(score, u))) throw new Error(NOT_PITCHED());
+  const t0 = M.starts(score.staves[source.s])[source.a];
+  [source.s, ...targets].forEach((lane, k) => {
+    const pieces = clip.map((piece) => {
+      let c = structuredClone(piece.content);
+      if (!c.rest) {
+        const high = [...c.pitches].sort((x, y) => y.d - x.d || y.alter - x.alter);
+        c = onePitch(c, high[Math.min(k, high.length - 1)]);
+      }
+      if (k > 0) {
+        Object.assign(c, { lyric: null, verses: [], chord: "", texts: [] });
+        delete c.fret;
+        delete c.fretBelow;
+      }
+      return { ...piece, content: c };
+    });
+    // A tie holds to the same pitch only; out of the selection, on the first staff alone.
+    pieces.forEach((piece, j) => {
+      const next = pieces[j + 1]?.content;
+      if (piece.content.tie && (next ? next.rest || !samePitch(next.pitches[0], piece.content.pitches[0]) : k > 0)) piece.content.tie = false;
+    });
+    M.paste(score, lane, t0, pieces);
+  });
+}
+
+/**
+ * The notes of the other ranges merged as chords into the first's, where
+ * one starts with a note of the first (or a rest) and lasts as long. The
+ * first range is the first staff (or voice 1); a voice of its own staff
+ * merged leaves rests where its notes were, another staff is left as it
+ * is. Refused when nothing matches.
+ */
+export function implode(score, ranges) {
+  if (ranges.length < 2) throw new Error(tr("Select several staves (Shift+click), or every voice of a staff, to merge them into chords"));
+  const [into, ...others] = ranges;
+  if (!pitchedLane(score, into.s)) throw new Error(NOT_PITCHED());
+  const sources = others.filter((r) => pitchedLane(score, r.s));
+  const staff = score.staves[into.s];
+  const at = M.starts(staff);
+  const emptied = [];
+  let merged = 0;
+  for (let i = into.a; i <= into.b; i++) {
+    const ev = staff.events[i];
+    if (ev.tuplet) continue;
+    const length = M.ticksOf(ev);
+    const found = [];
+    for (const r of sources) {
+      const lane = score.staves[r.s];
+      const j = M.eventAt(lane, at[i]);
+      if (j < r.a || j > r.b || lane.events[j].rest || lane.events[j].tuplet || M.ticksOf(lane.events[j]) !== length) continue;
+      found.push(...lane.events[j].pitches);
+      if (M.upperOf(score, r.s) === M.upperOf(score, into.s)) emptied.push([r.s, at[i]]);
+    }
+    if (!found.length) continue;
+    const union = [];
+    for (const p of [...(ev.rest ? [] : ev.pitches), ...found]) if (!union.some((q) => samePitch(p, q))) union.push({ d: p.d, alter: p.alter });
+    ev.pitches = union.sort((x, y) => x.d - y.d || x.alter - y.alter);
+    if (ev.rest) {
+      ev.rest = false;
+      delete ev.spacer;
+    }
+    merged++;
+  }
+  if (!merged) throw new Error(tr("The rhythms do not match anywhere: there is nothing to merge"));
+  // The voices merged: their notes are the chords' now.
+  for (const [lane, t] of emptied.sort((x, y) => y[1] - x[1])) {
+    const i = M.eventAt(score.staves[lane], t);
+    if (i >= 0) M.remove(score, lane, i);
+  }
+}

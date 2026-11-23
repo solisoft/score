@@ -597,6 +597,24 @@ export function install(ctx) {
         if (done) say(name === "retrograde" ? tr("The selection backwards: its ties, slurs and hairpins turned round, its words in their order.") : tr("The selection mirrored around its first note, in its key."));
         return;
       }
+      // Edit ▸ Explode, Implode (#1024): chords spread over the staves under them, or staves (voices) merged into chords.
+      case "explode": {
+        const chosen = ranges();
+        if (!chosen.length) return say(tr("Select the chords to explode: on their staff, and the staves under it with Shift+click"), true);
+        if (edit((score) => T.explode(score, chosen))) {
+          say(multiLane() ? tr("The chords spread over the staves selected, the top note on the top staff.") : tr("The chords spread over the staves under them, the top note on its own staff."));
+        }
+        return;
+      }
+      case "implode": {
+        let chosen = ranges();
+        if (!chosen.length) return say(tr("Select the staves to merge: Shift+click across them, or select bars of a staff with several voices"), true);
+        // One staff: its voices, over the selected bars.
+        const voices = !multiLane() && M.voiceLanes(st.score, chosen[0].s).length > 1;
+        if (voices) chosen = T.barRanges(st.score, M.voiceLanes(st.score, chosen[0].s), ...selectedBars());
+        if (edit((score) => T.implode(score, chosen))) say(voices ? tr("The voices merged as chords into voice 1, where their rhythm is the same.") : tr("The staves merged as chords into the first, where their rhythm is the same; the others are left as they were."));
+        return;
+      }
       case "remove-staff": return edit((score) => {
         M.removeStaff(score, staffOf());
         st.sel = null;

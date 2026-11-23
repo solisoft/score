@@ -35,5 +35,16 @@
   "There is no staff there to paste on": "Il n'y a pas de portée là où coller",
   "The notes pasted, without their marks.": "Les notes collées, sans leurs signes.",
   "The rhythm pasted, on the pitches that were there.": "Le rythme collé, sur les hauteurs qui étaient là.",
-  "The marks pasted, on the notes there.": "Les signes collés, sur les notes en place."
+  "The marks pasted, on the notes there.": "Les signes collés, sur les notes en place.",
+  "Drums and chord names are not exploded or imploded: select staves of notes": "Les batteries et les noms d'accords ne s'éclatent ni ne se réunissent : sélectionnez des portées de notes",
+  "There is no chord in the selection to explode": "La sélection ne contient aucun accord à éclater",
+  "The largest chord has {n} notes: it needs {m} staves under its own": "Le plus grand accord a {n} notes : il lui faut {m} portées sous la sienne",
+  "Select several staves (Shift+click), or every voice of a staff, to merge them into chords": "Sélectionnez plusieurs portées (Maj+clic), ou toutes les voix d'une portée, pour les réunir en accords",
+  "The rhythms do not match anywhere: there is nothing to merge": "Les rythmes ne coïncident nulle part : il n'y a rien à réunir",
+  "Select the chords to explode: on their staff, and the staves under it with Shift+click": "Sélectionnez les accords à éclater : sur leur portée, et les portées dessous avec Maj+clic",
+  "The chords spread over the staves selected, the top note on the top staff.": "Les accords répartis sur les portées sélectionnées, la note du haut sur la portée du haut.",
+  "The chords spread over the staves under them, the top note on its own staff.": "Les accords répartis sur les portées dessous, la note du haut sur sa propre portée.",
+  "Select the staves to merge: Shift+click across them, or select bars of a staff with several voices": "Sélectionnez les portées à réunir : Maj+clic de l'une à l'autre, ou des mesures d'une portée à plusieurs voix",
+  "The voices merged as chords into voice 1, where their rhythm is the same.": "Les voix réunies en accords dans la voix 1, là où leur rythme est le même.",
+  "The staves merged as chords into the first, where their rhythm is the same; the others are left as they were.": "Les portées réunies en accords dans la première, là où leur rythme est le même ; les autres restent telles quelles."
 }

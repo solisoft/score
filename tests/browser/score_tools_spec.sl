@@ -254,4 +254,29 @@ describe("The tools on many notes at once (#1024)") do
     assert_contains(tools_text(), "f''4 | c''4 d''4 e''4 f''4")
     assert_no_page_errors()
   end
+
+  test("Explode spreads a chord over the staves Shift+clicked under it; Implode merges them back") do
+    tools_open("\\header { title = \"Chords\" }\n<<\n  \\new Staff { <c'' e'' g''>1 | c''1 }\n"
+    + "  \\new Staff { r1 | r1 }\n  \\new Staff { r1 | r1 }\n>>\n")
+    tools_click(tools_bar_point(0, 0), false)
+    tools_click(tools_bar_point(0, 2), true)
+    assert_eq(tools_sel()["lanes"], [
+      0,
+      1,
+      2
+    ])
+    steps = tools_steps()
+    evaluate("document.querySelector('[data-act=explode]').click()")
+    sleep(0.5)
+    text = tools_text()
+    assert_eq(tools_steps(), steps + 1)
+    assert_contains(text, "g''1 | c''1")
+    assert_contains(text, "e''1 | r1")
+    assert_contains(text, "c''1 | r1")
+    evaluate("document.querySelector('[data-act=implode]').click()")
+    sleep(0.5)
+    assert_contains(tools_text(), "<c'' e'' g''>1 | c''1")
+    assert_eq(tools_steps(), steps + 2)
+    assert_no_page_errors()
+  end
 end
