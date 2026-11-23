@@ -144,6 +144,11 @@ export const SHORTCUTS = [
       return { c: ["copy"], x: ["cut"] }[lower(k)] ?? null;
     },
   },
+  {
+    keys: "Ctrl+Alt+Shift+V",
+    does: tr("paste special: the notes, the rhythm or the marks only"),
+    match: (k) => (k.mod && k.altKey && k.shiftKey && (k.code === "KeyV" || lower(k) === "v") ? ["paste-special"] : null),
+  },
   { keys: "Ctrl+Shift+V", does: tr("insert the copied bars before the selection"), match: (k) => (k.mod && k.shiftKey && !k.altKey && lower(k) === "v" ? ["insert-copied"] : null) },
   {
     keys: "Ctrl+Z / Y",

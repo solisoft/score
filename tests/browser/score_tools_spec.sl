@@ -226,4 +226,32 @@ describe("The tools on many notes at once (#1024)") do
     assert_contains(tools_text(), "g''4 e''4 d''4 c''4")
     assert_no_page_errors()
   end
+
+  test("Ctrl+Alt+Shift+V opens Paste special; the marks only go onto the notes there") do
+    tools_open("\\header { title = \"Marks\" }\n{ c''4\\f-> d''4( e''4) f''4 | g''4 a''4 b''4 c'''4 }\n")
+    tools_click(tools_note_point(0, 0), false)
+    tools_click(tools_note_point(0, 3), true)
+    press("Ctrl+c")
+    sleep(0.3)
+    tools_click(tools_note_point(0, 4), false)
+    press("Ctrl+Alt+Shift+V")
+    sleep(0.3)
+    assert(evaluate("document.querySelector('[data-paste-special]').open"), "the dialog is open")
+    steps = tools_steps()
+    click("[data-paste-special] [data-filter=marks]")
+    sleep(0.6)
+    assert_not(evaluate("document.querySelector('[data-paste-special]').open"))
+    assert_eq(tools_steps(), steps + 1)
+    assert_contains(tools_text(), "g''4\\f-> a''4( b''4) c'''4")
+    # The notes only, over the same bar: the marks of the paste are not there.
+    press("Ctrl+z")
+    sleep(0.5)
+    tools_click(tools_note_point(0, 4), false)
+    evaluate("document.querySelector('[data-act=paste-special]').click()")
+    sleep(0.3)
+    click("[data-paste-special] [data-filter=notes]")
+    sleep(0.6)
+    assert_contains(tools_text(), "f''4 | c''4 d''4 e''4 f''4")
+    assert_no_page_errors()
+  end
 end

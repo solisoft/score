@@ -88,6 +88,7 @@
             <button type="button" role="menuitem" data-act="copy"><%= t("app.editor.copy") %> <kbd>Ctrl+C</kbd></button>
             <button type="button" role="menuitem" data-act="cut"><%= t("app.editor.cut") %> <kbd>Ctrl+X</kbd></button>
             <button type="button" role="menuitem" data-act="paste"><%= t("app.editor.paste_over_the_selection") %> <kbd>Ctrl+V</kbd></button>
+            <button type="button" role="menuitem" data-act="paste-special"><%= t("app.editor.paste_special") %> <kbd>Ctrl+Alt+Shift+V</kbd></button>
             <button type="button" role="menuitem" data-act="insert-copied"><%= t("app.editor.insert_the_copied_bars_before_the") %> <kbd>Ctrl+Shift+V</kbd></button>
             <button type="button" role="menuitem" data-act="section-library"><%= t("app.editor.library_of_sections") %> <kbd><%- t("app.editor.bars_others_shared") %></kbd></button>
             <% if locals["app"] %>
@@ -1034,6 +1035,26 @@
       <button type="button" class="tool tool-wide" data-parts-ly><%= t("app.editor.save_as_ly") %></button>
       <button type="button" class="tool tool-wide tool-primary" data-parts-pdf><%= t("app.editor.print_as_pdf") %></button>
     </div>
+  </dialog>
+
+  <%# Edit ▸ Paste special (#1024): what was copied, pasted in part. %>
+  <dialog class="studio-keys" data-paste-special aria-labelledby="studio-paste-special-title">
+    <div class="studio-keys-head">
+      <h2 id="studio-paste-special-title"><%= t("app.editor.paste_special_title") %></h2>
+    </div>
+    <div class="tool-row">
+      <button type="button" class="tool tool-wide" data-act="paste-special" data-filter="notes"><%= t("app.editor.paste_the_notes_only") %></button>
+    </div>
+    <div class="tool-row">
+      <button type="button" class="tool tool-wide" data-act="paste-special" data-filter="rhythm"><%= t("app.editor.paste_the_rhythm_only") %></button>
+    </div>
+    <div class="tool-row">
+      <button type="button" class="tool tool-wide" data-act="paste-special" data-filter="marks"><%= t("app.editor.paste_the_marks_only") %></button>
+    </div>
+    <p class="tool-hint"><%= t("app.editor.paste_special_hint") %></p>
+    <form method="dialog" class="tool-row">
+      <button type="submit" class="tool tool-wide"><%= t("app.editor.cancel") %></button>
+    </form>
   </dialog>
 
   <%# A shared link (#s=) opened over a draft of another score (#688): the

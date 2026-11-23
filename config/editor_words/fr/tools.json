@@ -27,5 +27,13 @@
   "Inverted, a note would go too far from the first to be written: select fewer, or lower ones": "Renversée, une note irait trop loin de la première pour s'écrire : sélectionnez-en moins, ou de plus graves",
   "Select the notes to rewrite": "Sélectionnez les notes à réécrire",
   "The selection backwards: its ties, slurs and hairpins turned round, its words in their order.": "La sélection à l'envers : ses liaisons et ses soufflets retournés, ses paroles dans leur ordre.",
-  "The selection mirrored around its first note, in its key.": "La sélection renversée autour de sa première note, dans sa tonalité."
+  "The selection mirrored around its first note, in its key.": "La sélection renversée autour de sa première note, dans sa tonalité.",
+  "paste special: the notes, the rhythm or the marks only": "collage spécial : les notes, le rythme ou les signes seuls",
+  "Paste the notes, the rhythm or the marks": "Collez les notes, le rythme ou les signes",
+  "There is no note there to keep the pitches of: paste the rhythm over notes": "Il n'y a pas de note là dont garder les hauteurs : collez le rythme sur des notes",
+  "There is no note there starting where the copied marks do": "Aucune note ne commence là où commencent les signes copiés",
+  "There is no staff there to paste on": "Il n'y a pas de portée là où coller",
+  "The notes pasted, without their marks.": "Les notes collées, sans leurs signes.",
+  "The rhythm pasted, on the pitches that were there.": "Le rythme collé, sur les hauteurs qui étaient là.",
+  "The marks pasted, on the notes there.": "Les signes collés, sur les notes en place."
 }

@@ -470,3 +470,120 @@ export function invert(score, ranges) {
     }
   }
 }
+
+// ---- Paste special -------------------------------------------------------------------------
+
+/** The kinds of paste special: the notes without their marks, the rhythm on the pitches there, the marks alone. */
+export const PASTE_FILTERS = ["notes", "rhythm", "marks"];
+
+/** A copied event's content with its marks taken off: what "the notes only" pastes. */
+function unmarked(content) {
+  const out = { ...structuredClone(content), dynamic: null, hairpin: null, hairpinEnd: false, arts: [], lyric: null, verses: [], texts: [], chord: "", slurStart: false, slurEnd: false, pedalOn: false, pedalOff: false };
+  for (const field of ["hairpinWords", "artDirs", "slurDir", "phraseStart", "phraseEnd", "phraseDir", "fingers", "breath", "spanStart", "spanEnd", "tweaks", "fret", "fretBelow"]) delete out[field];
+  return out;
+}
+
+/** The pitches of lane `s`'s notes from `t` on, a tied note once: [[pitch]]. */
+function pitchesFrom(score, s, t) {
+  const staff = score.staves[s];
+  const at = M.starts(staff);
+  const out = [];
+  staff.events.forEach((ev, i) => {
+    const tiedFrom = i > 0 && staff.events[i - 1].tie && !staff.events[i - 1].rest;
+    if (at[i] >= t && !ev.rest && !tiedFrom) out.push(ev.pitches);
+  });
+  return out;
+}
+
+const NO_PITCHES = () => tr("There is no note there to keep the pitches of: paste the rhythm over notes");
+const NO_MARKS = () => tr("There is no note there starting where the copied marks do");
+
+/** The copied rhythm with lane `s`'s pitches from `t` on, a tied note one pitch, the last kept when they run out. */
+function onPitches(score, s, t, clip) {
+  const pitches = pitchesFrom(score, s, t);
+  if (!pitches.length && clip.some((piece) => !piece.content.rest)) throw new Error(NO_PITCHES());
+  let next = -1;
+  let tied = false;
+  return clip.map((piece) => {
+    const content = { ...unmarked(piece.content), graces: [], grace: null, arpeggio: false, gliss: false };
+    delete content.afterGraces;
+    delete content.afterAt;
+    delete content.forced;
+    delete content.cautionary;
+    delete content.harmonics;
+    if (!content.rest) {
+      if (!tied) next = Math.min(next + 1, pitches.length - 1);
+      content.pitches = pitches[next].map((p) => ({ ...p }));
+    }
+    tied = !content.rest && Boolean(content.tie);
+    return { ...piece, content };
+  });
+}
+
+/** The copied marks put on lane `s`'s events that start where the copied ones did, from `t`: how many took one. */
+function putMarks(score, s, t, clip) {
+  const staff = score.staves[s];
+  let put = 0;
+  let at = t;
+  for (const piece of clip) {
+    const c = piece.content;
+    const i = M.eventAt(staff, at);
+    at += piece.ticks;
+    const ev = staff.events[i];
+    if (!ev) continue;
+    let took = false;
+    const take = (fields) => {
+      Object.assign(ev, fields);
+      took = true;
+    };
+    if (c.dynamic) take({ dynamic: c.dynamic });
+    if (c.hairpin || c.hairpinEnd) take({ hairpin: c.hairpin ?? ev.hairpin, hairpinEnd: Boolean(c.hairpinEnd || ev.hairpinEnd) });
+    const arts = (c.arts ?? []).filter((name) => !ev.rest || name === "fermata");
+    if (arts.length) take({ arts: [...new Set([...ev.arts, ...arts])] });
+    if (!ev.rest) {
+      if (c.slurStart) take({ slurStart: true });
+      if (c.slurEnd) take({ slurEnd: true });
+      if (c.lyric) take({ lyric: structuredClone(c.lyric) });
+      if (c.verses?.length) take({ verses: structuredClone(c.verses) });
+    }
+    if (took) put++;
+  }
+  return put;
+}
+
+/** One lane's clipboard pasted as `filter` says, from `t`; answers how many events took marks (for "marks"). */
+function pasteLane(score, s, t, clip, filter) {
+  if (filter === "marks") return putMarks(score, s, t, clip);
+  M.paste(score, s, t, filter === "rhythm" ? onPitches(score, s, t, clip) : clip.map((piece) => ({ ...piece, content: unmarked(piece.content) })));
+  return 1;
+}
+
+/**
+ * What was copied (`clip`: M.copy's, or `{ section }` from M.copySection)
+ * pasted at lane `s`, time `t`, in part (`filter`, see PASTE_FILTERS). A
+ * section goes from the bar `t` is in, each part on its staff and voice as
+ * a plain paste puts it; a part with no staff or voice there is left out.
+ * Refused when the rhythm finds no pitch, or the marks no note.
+ */
+export function pasteSpecial(score, s, t, clip, filter) {
+  if (!PASTE_FILTERS.includes(filter)) throw new Error(tr("Paste the notes, the rhythm or the marks"));
+  if (!clip.section) {
+    if (!pasteLane(score, s, t, clip, filter)) throw new Error(NO_MARKS());
+    return 0;
+  }
+  const { section } = clip;
+  const from = M.barStart(score, M.barAt(score, t));
+  let skipped = 0;
+  let took = 0;
+  for (const part of section.parts) {
+    const staff = section.parts.length === 1 ? M.upperOf(score, s) : M.staffLanes(score)[M.staffNumber(score, s) + part.offset];
+    const lane = section.parts.length === 1 ? s : staff == null ? -1 : M.laneOfVoice(score, staff, part.voice ?? 1);
+    if (lane < 0) {
+      skipped++;
+      continue;
+    }
+    took += pasteLane(score, lane, from, part.pieces, filter);
+  }
+  if (!took) throw new Error(filter === "marks" ? NO_MARKS() : tr("There is no staff there to paste on"));
+  return skipped;
+}

@@ -4,6 +4,8 @@
 // The editor's words in the page's language (#508).
 const V = new URL(import.meta.url).search;
 const { tr } = await import(`./words.js${V}`);
+// Paste special (#1024).
+const T = await import(`./score-tools.js${V}`);
 
 /** "1 bar" or "3 bars". */
 const barsCount = (n) => (n === 1 ? tr("1 bar") : tr("{n} bars", { n }));
@@ -141,6 +143,33 @@ export function install(ctx) {
   }
 
   /**
+   * Edit ▸ Paste special (#1024): what was copied pasted in part — `filter`
+   * "notes" (without their marks), "rhythm" (on the pitches there) or
+   * "marks" (on the notes there) — where Paste would put it. One edit.
+   */
+  async function pasteSpecial(filter) {
+    const s = st.input.on ? st.input.staff : st.sel?.staff;
+    const t = st.input.on ? st.input.t : st.sel?.t0;
+    if (s == null || t == null) return say(tr("Select where to paste"), true);
+    if (!st.score) return say(tr("Pasting bars needs the score tools"), true);
+    let clip;
+    try {
+      clip = await clipboard();
+    } catch (error) {
+      return say(tr("The clipboard's text is not music this reads: {error}", { error: error.message ?? error }), true);
+    }
+    if (!clip) return say(tr("Nothing copied yet"), true);
+    // Bars go where Paste puts them: the selected bar of the selected track.
+    const place = clip.section ? sectionPlace() : null;
+    const lane = place ? place.lane : s;
+    const at = place ? M.barStart(st.score, place.bar) : t;
+    let skipped = 0;
+    if (!edit((score) => (skipped = T.pasteSpecial(score, lane, at, clip, filter)))) return;
+    const said = { notes: tr("The notes pasted, without their marks."), rhythm: tr("The rhythm pasted, on the pitches that were there."), marks: tr("The marks pasted, on the notes there.") }[filter];
+    say(`${said}${sectionSaid(skipped)}`);
+  }
+
+  /**
    * `section` (a copySection, from the shared library, #444) put in the
    * score at the selection: before the selected bar as new bars, or with
    * `over`, over the bars from there. One undoable edit; false when there is
@@ -168,5 +197,5 @@ export function install(ctx) {
     return true;
   }
 
-  return { copy, insertCopied, paste, putSection };
+  return { copy, insertCopied, paste, pasteSpecial, putSection };
 }

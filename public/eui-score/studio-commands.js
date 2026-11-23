@@ -26,7 +26,7 @@ export function install(ctx) {
     inputWrite, inputBack, inputTuplet, selectedBarsOrNull, selectedBars, duration, toggleDot, step, chordHead, copy,
     insertCopied, paste, openWords, draw, place, toVoice, onField, share, refuse, say, title, fileName, openChosen,
     heardMidi, exportPractice, togglePlay, stopPlay, mixCommit, saveWav, saveSound, saveImage, setLoop, record,
-    intervalName, instrumentName, ranges, multiLane
+    intervalName, instrumentName, ranges, multiLane, pasteSpecial
   } = ctx.call;
 
   // ---- Actions ------------------------------------------------------------------
@@ -605,6 +605,13 @@ export function install(ctx) {
       case "copy": return copy(false);
       case "cut": return copy(true);
       case "paste": return paste();
+      // Edit ▸ Paste special… (#1024): its dialog, then the kind chosen in it.
+      case "paste-special": {
+        const dialog = root.querySelector("[data-paste-special]");
+        if (!data.filter) return dialog?.showModal();
+        dialog?.close();
+        return pasteSpecial(data.filter);
+      }
       case "next": case "previous": return step(name === "next" ? 1 : -1, data.extend);
       case "head-up": case "head-down": return chordHead(name === "head-up" ? 1 : -1);
     }

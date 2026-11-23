@@ -13,6 +13,16 @@ class Changelog
       {"date": "2026-11-23", "entries": [
         {
           "area": "site",
+          "title": "Paste special: the notes, the rhythm or the marks only",
+          "text": "Edit ▸ Paste special (Ctrl+Alt+Shift+V) pastes what was copied in part, where Paste would "
+          + "put it: the notes only, without their dynamics, articulations, slurs or words; the rhythm only, "
+          + "on the pitches already there, a tied note keeping one pitch; or the marks only — dynamics, "
+          + "hairpins, articulations, slurs and words sung — on the notes already there that start where the "
+          + "copied ones did. Bars copied over several staves paste so on each.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
           "title": "Retrograde and inversion",
           "text": "Edit ▸ Retrograde writes the selected notes and rests backwards, each keeping its length "
           + "and its marks; its ties, slurs and hairpins are turned round with them, and the words sung stay "
