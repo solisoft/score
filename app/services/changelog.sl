@@ -90,8 +90,12 @@ class Changelog
           + "change in the middle of a staff, and \\transposition is played. \\paper's spacing around titles "
           + "and words is followed. The other ornaments and fermatas, arpeggio arrows and brackets, two-note "
           + "tremolos, the sostenuto and soft pedals, lyric elisions and RhythmicStaff are drawn and played. "
-          + "Staves of different lengths and a bass's four-string tablature open as written. The library's "
-          + "pages and PDFs follow with the next Soli release.",
+          + "Staves of different lengths and a bass's four-string tablature open as written. A tablature's "
+          + "grace notes, dead notes, ties and harmonics are drawn, on as many strings as it has; shape notes "
+          + "(Aiken, Sacred Harp, Southern Harmony, funk, Walker) and Roman numeral analysis under the bass "
+          + "are engraved. Words between the scores of a \\book and title pages are set as blocks of the page, "
+          + "and each \\bookpart has its own \\paper and page numbers. The library's pages, the shared pages "
+          + "and the PDFs engrave with the same engraver, from Soli 2.40.2.",
           "link": "limits"
         },
         {

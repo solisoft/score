@@ -113,8 +113,8 @@
       length.
     </p>
     <p>
-      Since its third round of LilyPond work — in the editor and the playground now, on the library's pages and
-      in PDFs with the next Soli release — the engraver sets a chord's accidentals in a zig-zag, draws ledger
+      Since its third round of LilyPond work — in the editor and the playground, and since Soli 2.40.2 on the
+      library's pages, the shared pages and in PDFs — the engraver sets a chord's accidentals in a zig-zag, draws ledger
       lines only under the heads that need them, takes a beam past what stands under it, and shapes slurs as
       LilyPond scores them. <code>\shape</code> moves the control points of a slur, a phrasing slur or a tie;
       <code>extra-offset</code>, <code>Hairpin.shorten-pair</code> and <code>Hairpin.height</code> move and
@@ -129,6 +129,20 @@
       ornaments (<code>\reverseturn</code>, <code>\prallprall</code>…) and fermatas
       (<code>\shortfermata</code>, <code>\verylongfermata</code>…), arpeggio arrows, brackets and parentheses,
       two-note tremolos, the sostenuto and soft pedals, and lyric elisions.
+    </p>
+    <p>
+      Since Soli 2.40.2, a tablature draws the details LilyPond draws: grace notes' frets, dead notes
+      (<code>\deadNote</code>, <code>\xNote</code>) as crosses, a harmonic's fret between angle brackets and a
+      tied note's fret in parentheses where a line starts with it, on up to eight strings; fret boards and
+      diagrams of a ukulele's four strings. Shape notes are engraved (<code>\aikenHeads</code>,
+      <code>\sacredHarpHeads</code>, <code>\southernHarmonyHeads</code>, <code>\funkHeads</code>,
+      <code>\walkerHeads</code>, <code>shapeNoteStyles</code>), and so is Roman numeral analysis under the bass
+      (<code>\markup \rN { V 6 5 }</code> in a <code>Lyrics</code> context). Words outside the scores — a
+      <code>\markup</code> before, between or after them — are set as blocks of the page, laid out with
+      <code>\column</code>, <code>\fill-line</code>, <code>\wordwrap</code> and the other markup commands; a page
+      of words before a <code>\pageBreak</code>, or in a <code>\bookpart</code> of its own, is a title page. Each
+      <code>\bookpart</code>'s own <code>\paper</code> sets its margins, headers, footers and page numbers, and
+      page headers read LilyPond 2.24's <code>\if</code> and <code>\unless</code>.
     </p>
     <ul>
       <li><strong>Metre</strong>: staves whose bars last differently (polymetre with bars of different lengths)

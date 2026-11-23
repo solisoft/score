@@ -116,8 +116,8 @@
       le <code>\partial</code> est écrite comme un <code>\partial</code> de sa longueur.
     </p>
     <p>
-      Depuis sa troisième série de travaux sur LilyPond — dans l'éditeur et le bac à sable dès maintenant, sur
-      les pages de la bibliothèque et dans les PDF avec la prochaine version de Soli — le graveur dispose les
+      Depuis sa troisième série de travaux sur LilyPond — dans l'éditeur et le bac à sable, et depuis Soli 2.40.2
+      sur les pages de la bibliothèque, les pages partagées et dans les PDF — le graveur dispose les
       altérations d'un accord en zigzag, ne trace les lignes supplémentaires que sous les têtes qui en ont
       besoin, fait passer une ligature au-delà de ce qui se trouve dessous, et courbe les liaisons comme
       LilyPond les évalue. <code>\shape</code> déplace les points de contrôle d'une liaison, d'une liaison de
@@ -134,6 +134,21 @@
       et joués : les autres ornements (<code>\reverseturn</code>, <code>\prallprall</code>…) et points d'orgue
       (<code>\shortfermata</code>, <code>\verylongfermata</code>…), les flèches, crochets et parenthèses
       d'arpège, les trémolos entre deux notes, les pédales sostenuto et una corda, et les élisions des paroles.
+    </p>
+    <p>
+      Depuis Soli 2.40.2, une tablature dessine les détails que dessine LilyPond : les frettes des notes
+      d'ornement, les notes étouffées (<code>\deadNote</code>, <code>\xNote</code>) en croix, la frette d'une
+      harmonique entre chevrons et celle d'une note liée entre parenthèses en début de ligne, sur huit cordes au
+      plus ; grilles et diagrammes des quatre cordes d'un ukulélé. Les notes à formes sont gravées
+      (<code>\aikenHeads</code>, <code>\sacredHarpHeads</code>, <code>\southernHarmonyHeads</code>,
+      <code>\funkHeads</code>, <code>\walkerHeads</code>, <code>shapeNoteStyles</code>), tout comme l'analyse en
+      chiffres romains sous la basse (<code>\markup \rN { V 6 5 }</code> dans un contexte <code>Lyrics</code>).
+      Les textes hors des partitions — un <code>\markup</code> avant, entre ou après elles — sont des blocs de la
+      page, composés avec <code>\column</code>, <code>\fill-line</code>, <code>\wordwrap</code> et les autres
+      commandes de texte ; une page de texte avant un <code>\pageBreak</code>, ou dans un <code>\bookpart</code>
+      à elle, est une page de titre. Le <code>\paper</code> propre à chaque <code>\bookpart</code> fixe ses
+      marges, en-têtes, pieds de page et numéros de page, et les en-têtes lisent <code>\if</code> et
+      <code>\unless</code> de LilyPond 2.24.
     </p>
     <ul>
       <li><strong>Mesure</strong> : les portées dont les mesures ont des durées différentes (polymétrie à mesures de

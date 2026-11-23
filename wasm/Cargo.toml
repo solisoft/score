@@ -43,13 +43,14 @@ crate-type = ["cdylib", "rlib"]
 # instrument changed mid-staff and \transposition played (#1023), \paper's
 # markup spacing (#1025), the other ornaments, fermatas, pedals, tremolos and
 # arpeggios, and RhythmicStaff (#1026), and real files: tab tunings, staves
-# of different lengths (#1031, #1032). The browser draws
-# those before the server's Soli does;
-# move this
-# and the server's Soli together otherwise. `build.sh` writes the module
+# of different lengths (#1031, #1032); 88db77e a tablature's grace notes,
+# dead notes, ties and harmonics, shape notes, Roman numerals (#1026), page
+# headers that know a book part's pages, \if, and words between scores and
+# title pages as blocks of the page (#1025), as Soli 2.40.2 pins it. Move
+# this and the server's Soli together. `build.sh` writes the module
 # into public/eui-score/, and that output is committed: deploying the site
 # needs no Rust.
-eui-score = { git = "https://github.com/solisoft/eui", rev = "009e6af" }
+eui-score = { git = "https://github.com/solisoft/eui", rev = "88db77e" }
 wasm-bindgen = "=0.2.126"
 serde_json = "1"
 
