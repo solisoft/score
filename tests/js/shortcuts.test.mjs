@@ -181,3 +181,21 @@ test("shortcuts: Ctrl and Alt read ⌘ and ⌥ on a Mac, and stay as they are el
   // Every entry of the sheet reads without a Ctrl or an Alt on a Mac.
   for (const { keys, does } of SHORTCUTS) assert.doesNotMatch(keyLabel(`${keys} ${does}`, true), /\b(Ctrl|Alt)\b/);
 });
+
+test("shortcuts: with a sign selected, Alt+arrows nudge it and Backspace puts it back; without one they are the notes' (#1020)", () => {
+  const sign = { sign: true };
+  assert.deepEqual(resolveKey(press("ArrowRight", { alt: true }), sign), ["sign-nudge", { dx: 1, dy: 0 }]);
+  assert.deepEqual(resolveKey(press("ArrowLeft", { alt: true }), sign), ["sign-nudge", { dx: -1, dy: 0 }]);
+  // Up is up: y counts up in the text.
+  assert.deepEqual(resolveKey(press("ArrowUp", { alt: true }), sign), ["sign-nudge", { dx: 0, dy: 1 }]);
+  assert.deepEqual(resolveKey(press("ArrowDown", { alt: true }), sign), ["sign-nudge", { dx: 0, dy: -1 }]);
+  assert.deepEqual(resolveKey(press("Backspace"), sign), ["sign-reset", {}]);
+  assert.deepEqual(resolveKey(press("Delete"), sign), ["sign-reset", {}]);
+  // The other keys are what they were: the staff moved, the bars taken away.
+  assert.equal(resolveKey(press("ArrowUp", { alt: true, shift: true }), sign)[0], "move-staff");
+  assert.equal(resolveKey(press("Delete", { ctrl: true }), sign)[0], "delete-bars");
+  // No sign selected: a note of the chord, a rest, and Alt+← → are nobody's.
+  assert.equal(resolveKey(press("ArrowUp", { alt: true }))[0], "head-up");
+  assert.equal(resolveKey(press("Backspace"))[0], "rest");
+  assert.notEqual(resolveKey(press("ArrowRight", { alt: true }))?.[0], "sign-nudge");
+});

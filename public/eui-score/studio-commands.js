@@ -75,6 +75,8 @@ export function install(ctx) {
         if (st.rollLayout === "keys" && st.sel?.lanes) st.sel = null;
         return draw();
       case "insert-copied": return insertCopied();
+      case "sign-nudge": return ctx.call.signNudge(Number(data.dx) || 0, Number(data.dy) || 0);
+      case "sign-reset": return ctx.call.signReset();
       case "record": return record();
       case "midi-learn": return ctx.sync.open();
       case "set-loop": return setLoop(selectedBarsOrNull());
@@ -671,7 +673,7 @@ export function install(ctx) {
     const field = event.target.closest("input, textarea, select, dialog");
     if (field) return;
     // What the key does, from the one table the sheet is written from (shortcuts.js).
-    const found = K.resolveKey(event, { inputOn: st.input.on, alter: currentAlter(), onButton: !!event.target.closest("button, summary") });
+    const found = K.resolveKey(event, { inputOn: st.input.on, alter: currentAlter(), onButton: !!event.target.closest("button, summary"), sign: ctx.call.signSelected() });
     if (!found) return;
     // Ctrl/⌘ + and − zoom the score, not the page; Ctrl+↑ is the browser's otherwise.
     event.preventDefault();
@@ -679,6 +681,7 @@ export function install(ctx) {
     if (name === "escape") {
       if (st.input.on) return setInput(false);
       st.sel = null;
+      ctx.call.dropSign();
       return draw();
     }
     if (name === "input-back") return inputBack();

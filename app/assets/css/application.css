@@ -1046,6 +1046,20 @@
   .studio-peer { position: absolute; border: 2px dashed var(--peer); border-radius: 5px; }
   .studio-peer::after { content: ""; position: absolute; inset: 0; background: var(--peer); opacity: .1; border-radius: 3px; }
   .studio-peer-name { position: absolute; left: -2px; bottom: 100%; margin-bottom: 1px; font: 600 11px/1.5 var(--font-sans); color: #fff; background: var(--peer); border-radius: 4px; padding: 0 6px; white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+  /* A sign selected to be moved (#1020): its dashed box, a curve's four points
+     and a hairpin's two ends to drag, and the way back under it. */
+  .studio-sign-box { position: absolute; border: 1.5px dashed #2563c9; border-radius: 4px; background: rgba(37, 99, 201, .07); box-sizing: border-box; }
+  .studio-sign-box.studio-sign-held { border-color: var(--muted); background: none; }
+  .studio-sign-handle { position: absolute; pointer-events: auto; touch-action: none; box-sizing: border-box; min-width: 10px; min-height: 10px; border: 2px solid #2563c9; border-radius: 50%; background: #fff; cursor: grab; box-shadow: 0 1px 4px rgb(29 25 20 / .25); }
+  .studio-sign-handle.studio-sign-end { border-radius: 3px; cursor: ew-resize; }
+  .studio-sign-back { position: absolute; pointer-events: none; }
+  .studio-sign-back button { pointer-events: auto; position: absolute; left: 0; top: 6px; font: 600 12px/1 var(--font-sans); color: #fff; background: #2563c9; border: 0; border-radius: 999px; padding: 5px 9px; white-space: nowrap; cursor: pointer; box-shadow: 0 3px 10px rgb(29 25 20 / .2); }
+  .studio-sign-back-above button { top: auto; bottom: 6px; }
+  .studio-sheet.studio-sign-dragging { cursor: grabbing; }
+  /* A finger scrolls the score (#454) — but on the selected sign it drags it. */
+  @media (pointer: coarse) {
+    .studio-sign-box { pointer-events: auto; touch-action: none; }
+  }
   .studio-grip {
     position: absolute; pointer-events: auto; cursor: ew-resize; border-radius: 6px;
     background: linear-gradient(to right, transparent 40%, rgba(37, 99, 201, .55) 40%, rgba(37, 99, 201, .55) 60%, transparent 60%);

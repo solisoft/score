@@ -6,8 +6,8 @@
 // Ctrl on Windows and Linux, ⌘ on a Mac: see `keyLabel`), and `match(key,
 // ctx)`, which answers [action, data] for a key it takes, or null. `key` is
 // a keydown's { key, code, mod (Ctrl or ⌘), shiftKey, altKey }; `ctx` is
-// { inputOn, alter, onButton } — note input on, the selected note's
-// alteration, a button focused. Two actions are the handler's own:
+// { inputOn, alter, onButton, sign } — note input on, the selected note's
+// alteration, a button focused, a sign selected to be moved (#1020). Two actions are the handler's own:
 // "escape" (note input off, or the selection dropped) and "input-back".
 
 // What each entry does, in the page's language (#508): the keys stay as they are matched.
@@ -46,6 +46,16 @@ export const SHORTCUTS = [
       if (k.mod) return null;
       if (KEY_DURATIONS[k.key]) return ["duration", { base: KEY_DURATIONS[k.key] }];
       return k.key === "." ? ["dot"] : null;
+    },
+  },
+  {
+    keys: "Alt+← → ↑ ↓",
+    does: tr("nudge the selected sign — a dynamic, a slur, words — by a tenth of a space; Backspace puts it back"),
+    match: (k, ctx) => {
+      if (!ctx.sign || k.mod) return null;
+      if (!k.altKey && !k.shiftKey && (k.key === "Backspace" || k.key === "Delete")) return ["sign-reset"];
+      const by = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] }[k.key];
+      return by && k.altKey && !k.shiftKey ? ["sign-nudge", { dx: by[0], dy: by[1] }] : null;
     },
   },
   {
@@ -191,7 +201,7 @@ export function keysShown(keys) {
 /** What a keydown does: [action, data], or null for a key the editor leaves alone. */
 export function resolveKey(event, ctx = {}) {
   const k = { key: event.key ?? "", code: event.code ?? "", mod: !!(event.ctrlKey || event.metaKey), shiftKey: !!event.shiftKey, altKey: !!event.altKey };
-  const context = { inputOn: !!ctx.inputOn, alter: ctx.alter ?? 0, onButton: !!ctx.onButton };
+  const context = { inputOn: !!ctx.inputOn, alter: ctx.alter ?? 0, onButton: !!ctx.onButton, sign: !!ctx.sign };
   for (const entry of SHORTCUTS) {
     const found = entry.match(k, context);
     if (found) return [found[0], found[1] ?? {}];

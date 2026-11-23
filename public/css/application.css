@@ -5435,6 +5435,66 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .studio-sign-box {
+    position: absolute;
+    border: 1.5px dashed #2563c9;
+    border-radius: 4px;
+    background: rgba(37, 99, 201, .07);
+    box-sizing: border-box;
+  }
+  .studio-sign-box.studio-sign-held {
+    border-color: var(--muted);
+    background: none;
+  }
+  .studio-sign-handle {
+    position: absolute;
+    pointer-events: auto;
+    touch-action: none;
+    box-sizing: border-box;
+    min-width: 10px;
+    min-height: 10px;
+    border: 2px solid #2563c9;
+    border-radius: 50%;
+    background: #fff;
+    cursor: grab;
+    box-shadow: 0 1px 4px rgb(29 25 20 / .25);
+  }
+  .studio-sign-handle.studio-sign-end {
+    border-radius: 3px;
+    cursor: ew-resize;
+  }
+  .studio-sign-back {
+    position: absolute;
+    pointer-events: none;
+  }
+  .studio-sign-back button {
+    pointer-events: auto;
+    position: absolute;
+    left: 0;
+    top: 6px;
+    font: 600 12px/1 var(--font-sans);
+    color: #fff;
+    background: #2563c9;
+    border: 0;
+    border-radius: 999px;
+    padding: 5px 9px;
+    white-space: nowrap;
+    cursor: pointer;
+    box-shadow: 0 3px 10px rgb(29 25 20 / .2);
+  }
+  .studio-sign-back-above button {
+    top: auto;
+    bottom: 6px;
+  }
+  .studio-sheet.studio-sign-dragging {
+    cursor: grabbing;
+  }
+  @media (pointer: coarse) {
+    .studio-sign-box {
+      pointer-events: auto;
+      touch-action: none;
+    }
+  }
   .studio-grip {
     position: absolute;
     pointer-events: auto;

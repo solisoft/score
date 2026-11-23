@@ -12,6 +12,21 @@ class Changelog
     [
       {"date": "2026-11-23", "entries": [
         {
+          "area": "site",
+          "title": "Move and reshape signs with the mouse",
+          "text": "A dynamic, a hairpin, an articulation, a fingering, words, a slur, a phrasing slur or a tie "
+          + "is selected by a click on it — a dashed box shows which — and dragged to where it reads best, to "
+          + "a tenth of a staff space; Shift keeps the drag to one axis, and Alt with the arrows nudges it. A "
+          + "selected slur or tie shows its four control points, each dragged on its own, and a hairpin its "
+          + "two ends, which draw it shorter or longer without changing how long it sounds. Backspace, or "
+          + "Automatic position under the sign, puts it back where the engraver sets it; every move is one "
+          + "Undo. On a touch screen a tap selects the sign and the next drag moves it, a finger elsewhere "
+          + "still scrolling the score. What is moved is written in the score's text as LilyPond writes it: "
+          + "\\tweak extra-offset, \\shape and a hairpin's shorten-pair. Two signs of one kind on a note "
+          + "move together.",
+          "link": "playground"
+        },
+        {
           "area": "engine",
           "title": "A new engraver in the editor: slurs, beams, signs and real files",
           "text": "The editor and the playground engrave with eui-score's newest round of LilyPond work (#1019, "

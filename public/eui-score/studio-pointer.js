@@ -110,7 +110,7 @@ export function install(ctx) {
   let swallowClick = false;
   const DOUBLE_PRESS_MS = 500;
   sheet.addEventListener("pointerdown", (event) => {
-    if (event.target.closest(".studio-words, .studio-fret-grid, .studio-note-marker, .studio-comment-here")) return;
+    if (event.target.closest(".studio-words, .studio-fret-grid, .studio-note-marker, .studio-comment-here, .studio-sign-back")) return;
     swallowClick = false;
     const press = { x: event.clientX, y: event.clientY, at: event.timeStamp };
     const again = lastPress && press.at - lastPress.at < DOUBLE_PRESS_MS && Math.hypot(press.x - lastPress.x, press.y - lastPress.y) < 6;
@@ -133,7 +133,7 @@ export function install(ctx) {
   sheet.addEventListener("pointerdown", (event) => {
     if (event.target.closest(".studio-words, .studio-fret-grid")) return;
     // A comment's bubble, or the selection's 💬: a click of their own, not a press on the score.
-    if (event.target.closest(".studio-note-marker, .studio-comment-here")) return;
+    if (event.target.closest(".studio-note-marker, .studio-comment-here, .studio-sign-back")) return;
     sheet.focus({ preventScroll: true });
     if (!st.score || !st.view) return;
     const p = point(event);
@@ -153,6 +153,8 @@ export function install(ctx) {
       event.preventDefault();
       return writeAtGhost(spot, !event.altKey);
     }
+    // A sign — a dynamic, a slur, words — taken to be moved, or a handle of the one selected (#1020).
+    if (p && !st.input.on && ctx.call.signPress(event, p)) return;
     // A chord diagram drawn on the score: a click opens it large, its grid to click on (#436).
     const diagram = p && !st.input.on ? wordHit(p) : null;
     const on = diagram && st.items[diagram.item];
@@ -214,6 +216,7 @@ export function install(ctx) {
   });
 
   sheet.addEventListener("pointermove", (event) => {
+    if (st.signDrag) return ctx.call.signMove(event);
     if (st.barDrag) {
       const on = point(event) && barHit(point(event));
       if (!on) return;
@@ -295,6 +298,7 @@ export function install(ctx) {
   }
 
   const endDrag = () => {
+    if (st.signDrag) return ctx.call.signEnd();
     if (st.barDrag) {
       const drag = st.barDrag;
       st.barDrag = null;
@@ -329,6 +333,7 @@ export function install(ctx) {
   // The browser took the gesture over (a finger scrolling the score, #454): what
   // was begun is left, never ended as a click would be — no bar selected by a scroll.
   sheet.addEventListener("pointercancel", () => {
+    if (st.signDrag) return ctx.call.signEnd({ cancelled: true });
     if (st.barDrag && !st.barDrag.moved) st.barDrag = null;
     endDrag();
   });

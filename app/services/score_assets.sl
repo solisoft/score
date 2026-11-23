@@ -70,6 +70,7 @@ const SCORE_STUDIO_MODULES = [
   "studio-mix.js",
   "studio-recording.js",
   "studio-review.js",
+  "studio-signs.js",
   "review.js"
 ]
 

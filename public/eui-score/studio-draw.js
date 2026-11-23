@@ -11,7 +11,7 @@ const COLOURS = { selection: "#b4373a", head: "#e0662a", cursor: "#2563c9", play
 /** Answers the drawing: the score engraved, and what goes over it. */
 export function install(ctx) {
   const { root, options, sheet, svgHost, overlay, palette, playhead, st, loaded, M, editor_view_lit } = ctx;
-  const { range, ranges, showInText, placeWords, wordsOpen, tellPlace, placePeers, placeMarkers, placeGhost, drawRoll, showState, refuse, reviewSoon } = ctx.call;
+  const { range, ranges, showInText, placeWords, wordsOpen, tellPlace, placePeers, placeMarkers, placeGhost, drawRoll, showState, refuse, reviewSoon, placeSign } = ctx.call;
 
   // ---- Drawing ------------------------------------------------------------------
 
@@ -314,6 +314,8 @@ export function install(ctx) {
     placePeers(g, add);
     placeMarkers(g, add);
     placeGhost();
+    // The sign selected to be moved: its box, its handles (#1020).
+    placeSign(g, add);
     if (st.input.on) return;
     if (st.sel?.bars) {
       // Over several staves (#1024): from the first selected staff's top to the last's bottom.

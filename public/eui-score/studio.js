@@ -75,10 +75,11 @@ const musicXml = () => import(`./musicxml.js${V}`);
 // - studio-playback.js: Play, the metronome, practice, the loop;
 // - studio-mix.js: mute, solo, the mixer, the instruments, the audio tracks;
 // - studio-recording.js: a MIDI keyboard, recording, Sound to;
-// - studio-review.js: the score read over, its remarks listed (#1022).
+// - studio-review.js: the score read over, its remarks listed (#1022);
+// - studio-signs.js: a sign selected, dragged, nudged, reshaped by its handles (#1020).
 const [
   Toolbox, Files, Text, Selection, History, Source, Input, Commands, Clipboard, Words, Draw, Peers, Roll, Velocity,
-  Pointer, Ghost, Playback, Mix, Recording, Review
+  Pointer, Ghost, Playback, Mix, Recording, Review, Signs
 ] = await Promise.all([
   import(`./studio-toolbox.js${V}`),
   import(`./studio-files.js${V}`),
@@ -100,6 +101,7 @@ const [
   import(`./studio-mix.js${V}`),
   import(`./studio-recording.js${V}`),
   import(`./studio-review.js${V}`),
+  import(`./studio-signs.js${V}`),
 ]);
 
 const DRAFT = "eui-score-studio-draft";
@@ -234,6 +236,8 @@ export function startStudio(root, options = {}) {
     zoom: 1,
     playing: null,
     drag: null,
+    sign: null, // the sign selected to be moved (#1020): { staff, t, on, piece, kind }
+    signDrag: null,
     written: false, // transposing instruments shown as written, for reading only
     mode: "score", // or "midi": the MIDI view in place of the engraving
     rollLayout: "tracks", // the MIDI view's: a strip per track, or "keys", one keyboard
@@ -333,6 +337,7 @@ export function startStudio(root, options = {}) {
   Object.assign(ctx, Mix.install(ctx));
   Object.assign(ctx, Recording.install(ctx));
   Object.assign(ctx, Review.install(ctx));
+  Object.assign(ctx, Signs.install(ctx));
   // The MIDI clock, sent and followed, and MIDI learn (midi-sync.js).
   ctx.sync = S.attach({ root, st, M, P, act, say });
   ctx.ends.push(() => ctx.sync.stop());
