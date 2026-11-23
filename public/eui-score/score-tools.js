@@ -105,3 +105,79 @@ export function dynamicOnRanges(score, ranges, name) {
   }
   if (!put) throw new Error(NO_NOTE());
 }
+
+// ---- Staves moved ------------------------------------------------------------------
+//
+// A staff moves with what belongs to it: its voices (the lanes after it), the
+// line of chord names over it, the figured bass under it; a piano's braced
+// staves move as one. Those are the "units" the staves move by.
+
+/** The staves as they move: [[staff numbers]], top to bottom. */
+export function staffUnits(score) {
+  const tops = M.staffLanes(score);
+  const units = [];
+  tops.forEach((u, n) => {
+    const overChords = n > 0 && score.staves[tops[n - 1]].chords;
+    const braced = (score.groups ?? []).some((g) => g.kind === "brace" && n > g.first && n <= g.last);
+    if (units.length && (overChords || score.staves[u].figures || braced)) units.at(-1).push(n);
+    else units.push([n]);
+  });
+  return units;
+}
+
+/** The unit lane `s` is in: its index in staffUnits. */
+export function unitOf(score, s) {
+  const n = M.staffNumber(score, s);
+  return staffUnits(score).findIndex((unit) => unit.includes(n));
+}
+
+/** What the settings line keeps by lane (META_KEYS' `lanes`) moved by `moved`, each old lane's new one. */
+function permuteMetaLanes(meta, moved) {
+  if (!meta) return;
+  for (const [, lanes] of M.metaLaneKeys()) {
+    const map = lanes.of(meta);
+    if (!map || typeof map !== "object" || Array.isArray(map)) continue;
+    // An audio track's ("audio-1") is no staff's lane: it stays as it is.
+    const key = (k) => {
+      const lane = String(lanes.lane(k));
+      return /^\d+$/.test(lane) && moved[Number(lane)] != null ? lanes.rekey(k, moved[Number(lane)]) : k;
+    };
+    lanes.put(meta, Object.fromEntries(Object.entries(map).map(([k, value]) => [key(k), value])));
+  }
+}
+
+const contiguous = (list) => list.length > 0 && Math.max(...list) - Math.min(...list) + 1 === list.length;
+
+/**
+ * Unit `from` (see staffUnits) moved to unit place `to`, the others closing
+ * up: its lanes, what the settings line keeps by them, and the groups — a
+ * group keeps its staves; a staff moved out across its edge leaves it, one
+ * moved into its middle joins it. Answers each old lane's new lane.
+ */
+export function moveStaff(score, from, to) {
+  const units = staffUnits(score);
+  if (units.length < 2) throw new Error(tr("This score has one staff: there is nowhere to move it"));
+  if (!units[from]) throw new Error(tr("no such staff"));
+  if (to < 0) throw new Error(tr("This staff is the first already"));
+  if (to >= units.length) throw new Error(tr("This staff is the last already"));
+  const order = units.map((_, k) => k);
+  order.splice(to, 0, ...order.splice(from, 1));
+  const tops = M.staffLanes(score);
+  const staffOrder = order.flatMap((k) => units[k]);
+  const laneOrder = staffOrder.flatMap((n) => M.voiceLanes(score, tops[n]));
+  const moved = [];
+  laneOrder.forEach((old, lane) => (moved[old] = lane));
+  const staffMoved = [];
+  staffOrder.forEach((old, n) => (staffMoved[old] = n));
+  score.staves = laneOrder.map((old) => score.staves[old]);
+  permuteMetaLanes(score.meta, moved);
+  const mover = new Set(units[from].map((n) => staffMoved[n]));
+  score.groups = (score.groups ?? []).map((g) => {
+    const members = [];
+    for (let n = g.first; n <= g.last; n++) members.push(staffMoved[n]);
+    const without = members.filter((n) => !mover.has(n));
+    const kept = contiguous(members) ? members : contiguous(without) ? without : members;
+    return { ...g, first: Math.min(...kept), last: Math.max(...kept) };
+  });
+  return moved;
+}

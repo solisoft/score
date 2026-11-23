@@ -13,6 +13,16 @@ class Changelog
       {"date": "2026-11-23", "entries": [
         {
           "area": "site",
+          "title": "Move a staff up or down",
+          "text": "Insert ▸ Move the staff up or down, the Bars & staves tools, or Alt+Shift+↑ ↓ move the "
+          + "selected staff over the one above or under the one below. Its voices, its line of chord "
+          + "names, its figured bass, its mixer settings, its velocities and its part's layout go with "
+          + "it; a piano's two staves move as one. A bracket keeps its staves: a staff moved out across "
+          + "its edge leaves it, one moved into its middle joins it.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
           "title": "A selection over several staves",
           "text": "Shift+click a bar or a note of another staff, or Shift+drag down or up across the staves: the "
           + "bars of every staff between are selected, every voice of each, and drawn so. Delete, the arrows, "

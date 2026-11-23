@@ -3,5 +3,11 @@
   "Drums and chord names are not transposed: select notes of another staff": "Les batteries et les noms d'accords ne se transposent pas : sélectionnez les notes d'une autre portée",
   "{bars}, every voice: Delete, the arrows, Transpose, articulations, dynamics and Ctrl+C act on them all.": "{bars}, toutes les voix : Suppr, les flèches, Transposer, les articulations, les nuances et Ctrl+C agissent sur toutes.",
   "{bars} of {n} staves: Delete, the arrows, Transpose, articulations, dynamics and Ctrl+C act on them all.": "{bars} de {n} portées : Suppr, les flèches, Transposer, les articulations, les nuances et Ctrl+C agissent sur toutes.",
-  "The selected bars of {n} staves, {words}.": "Les mesures sélectionnées de {n} portées, {words}."
+  "The selected bars of {n} staves, {words}.": "Les mesures sélectionnées de {n} portées, {words}.",
+  "move the staff up / down, with its voices": "monter / descendre la portée, avec ses voix",
+  "This score has one staff: there is nowhere to move it": "Cette partition n'a qu'une portée : elle ne peut aller nulle part",
+  "This staff is the first already": "Cette portée est déjà la première",
+  "This staff is the last already": "Cette portée est déjà la dernière",
+  "The staff moved up: Alt+Shift+↑ again moves it higher.": "La portée est montée : Alt+Maj+↑ encore la monte plus haut.",
+  "The staff moved down: Alt+Shift+↓ again moves it lower.": "La portée est descendue : Alt+Maj+↓ encore la descend plus bas."
 }

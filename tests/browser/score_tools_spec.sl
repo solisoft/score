@@ -121,4 +121,27 @@ describe("The tools on many notes at once (#1024)") do
     assert(sel["lanes"].nil?, "one staff")
     assert_no_page_errors()
   end
+
+  test("Alt+Shift+↓ moves the selected staff under the next one, the selection with it; one Undo puts it back") do
+    tools_open(TOOLS_TRIO)
+    tools_click(tools_bar_point(0, 0), false)
+    steps = tools_steps()
+    press("Alt+Shift+ArrowDown")
+    sleep(0.5)
+    text = tools_text()
+    assert_eq(tools_steps(), steps + 1)
+    assert(text.index_of("e'1 | f'1") < text.index_of("c''1 | d''1"), text)
+    assert_eq(tools_sel()["staff"], 1)
+    # The menu's item does the same, back up.
+    evaluate("document.querySelector('[data-act=\"move-staff\"][data-by=\"-1\"]').click()")
+    sleep(0.5)
+    assert(tools_text().index_of("c''1 | d''1") < tools_text().index_of("e'1 | f'1"))
+    press("Alt+Shift+ArrowUp")
+    sleep(0.3)
+    assert_contains(evaluate("document.querySelector('[data-status]').textContent"), "first already")
+    press("Ctrl+z")
+    sleep(0.5)
+    assert(tools_text().index_of("e'1 | f'1") < tools_text().index_of("c''1 | d''1"))
+    assert_no_page_errors()
+  end
 end

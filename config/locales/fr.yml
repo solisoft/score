@@ -1182,6 +1182,13 @@ fr:
       delete_bars: "Supprimer les mesures"
       plus_staff: "+ Portée"
       minus_this_staff: "− Cette portée"
+      # Tools on many notes at once (#1024).
+      move_the_staff_up: "Monter la portée"
+      move_the_staff_down: "Descendre la portée"
+      move_the_staff_up_alt_shift: "La portée sélectionnée au-dessus de la précédente, avec ses voix (Alt+Maj+↑)"
+      move_the_staff_down_alt_shift: "La portée sélectionnée sous la suivante, avec ses voix (Alt+Maj+↓)"
+      staff_up: "↑ Monter la portée"
+      staff_down: "↓ Descendre la portée"
       voices: "Voix"
       voice_1: "Voix 1"
       voice_2: "Voix 2"

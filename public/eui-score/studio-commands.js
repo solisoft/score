@@ -556,6 +556,20 @@ export function install(ctx) {
         st.input.staff = moved(st.input.staff);
         say(tr("Voice {n} taken away", { n: voice }));
       });
+      // The selected staff (with its voices, its chord names, a piano's other staff) moved up or down one (#1024).
+      case "move-staff": {
+        const by = Number(data.by);
+        const done = edit((score) => {
+          const unit = T.unitOf(score, staffOf());
+          const moved = T.moveStaff(score, unit, unit + by);
+          // The selection and the cursor stay on what they were on.
+          if (st.sel) st.sel = { staff: moved[st.sel.staff], t0: st.sel.t0, t1: st.sel.t1, head: st.sel.head, ...(st.sel.bars ? { bars: st.sel.bars } : {}) };
+          st.input.staff = moved[st.input.staff] ?? st.input.staff;
+          if (st.input.last) st.input.last = { ...st.input.last, staff: moved[st.input.last.staff] ?? st.input.last.staff };
+        });
+        if (done) say(by < 0 ? tr("The staff moved up: Alt+Shift+↑ again moves it higher.") : tr("The staff moved down: Alt+Shift+↓ again moves it lower."));
+        return;
+      }
       case "remove-staff": return edit((score) => {
         M.removeStaff(score, staffOf());
         st.sel = null;

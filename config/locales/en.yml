@@ -1182,6 +1182,13 @@ en:
       delete_bars: "Delete bars"
       plus_staff: "+ Staff"
       minus_this_staff: "− This staff"
+      # Tools on many notes at once (#1024).
+      move_the_staff_up: "Move the staff up"
+      move_the_staff_down: "Move the staff down"
+      move_the_staff_up_alt_shift: "The selected staff over the one above it, with its voices (Alt+Shift+↑)"
+      move_the_staff_down_alt_shift: "The selected staff under the one below it, with its voices (Alt+Shift+↓)"
+      staff_up: "↑ Staff up"
+      staff_down: "↓ Staff down"
       voices: "Voices"
       voice_1: "Voice 1"
       voice_2: "Voice 2"

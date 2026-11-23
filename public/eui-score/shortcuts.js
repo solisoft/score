@@ -64,6 +64,11 @@ export const SHORTCUTS = [
     },
   },
   {
+    keys: "Alt+Shift+↑ ↓",
+    does: tr("move the staff up / down, with its voices"),
+    match: (k) => (!k.mod && k.altKey && k.shiftKey && (k.key === "ArrowUp" || k.key === "ArrowDown") ? ["move-staff", { by: k.key === "ArrowUp" ? "-1" : "1" }] : null),
+  },
+  {
     keys: "Alt+↑ ↓",
     does: tr("a note of the chord"),
     match: (k) => (!k.mod && k.altKey && (k.key === "ArrowUp" || k.key === "ArrowDown") ? [k.key === "ArrowUp" ? "head-up" : "head-down"] : null),

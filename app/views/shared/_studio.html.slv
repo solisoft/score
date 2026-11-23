@@ -165,6 +165,8 @@
             <button type="button" role="menuitem" data-act="add-staff"><%= t("app.editor.a_staff") %></button>
             <button type="button" role="menuitem" data-act="chord-line"><%- t("app.editor.a_line_of_chord_names_over_the_staff") %></button>
             <button type="button" role="menuitem" data-act="figure-line"><%= t("app.editor.a_figured_bass_under_the_staff") %></button>
+            <button type="button" role="menuitem" data-act="move-staff" data-by="-1"><%= t("app.editor.move_the_staff_up") %> <kbd>Alt+Shift+↑</kbd></button>
+            <button type="button" role="menuitem" data-act="move-staff" data-by="1"><%= t("app.editor.move_the_staff_down") %> <kbd>Alt+Shift+↓</kbd></button>
             <button type="button" role="menuitem" data-act="voice" data-voice="2"><%= t("app.editor.a_second_voice") %> <kbd>Ctrl+Alt+2</kbd></button>
             <button type="button" role="menuitem" data-act="voice" data-voice="3"><%= t("app.editor.a_third_voice") %> <kbd>Ctrl+Alt+3</kbd></button>
             <button type="button" role="menuitem" data-act="voice" data-voice="4"><%= t("app.editor.a_fourth_voice") %> <kbd>Ctrl+Alt+4</kbd></button>
@@ -685,6 +687,10 @@
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="condense" title="<%= t("app.editor.condense_title") %>"><%= t("app.editor.condense_staves") %></button>
           <button type="button" class="tool tool-wide" data-act="split-staves" title="<%= t("app.editor.split_title") %>"><%= t("app.editor.split_staves") %></button>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="move-staff" data-by="-1" title="<%= t("app.editor.move_the_staff_up_alt_shift") %>"><%= t("app.editor.staff_up") %></button>
+          <button type="button" class="tool tool-wide" data-act="move-staff" data-by="1" title="<%= t("app.editor.move_the_staff_down_alt_shift") %>"><%= t("app.editor.staff_down") %></button>
         </div>
       </details>
 
