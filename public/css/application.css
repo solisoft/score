@@ -2539,15 +2539,10 @@
       max-height: none;
       overflow: visible;
     }
-    /* A column is half the menu (#974): a label longer than that wraps
-       under itself, its shortcut or hint kept whole on the right, instead
-       of running into the next column. */
     .studio-dropdown-columns > button {
       width: 100%;
       break-inside: avoid;
       white-space: normal;
-      /* A little closer than a one-column menu's items: Edit's two columns
-         (#1024's Rewrite the selection) still fit a 1280 × 800 window. */
       padding-block: 7px;
     }
     .studio-dropdown-columns > button > kbd {
@@ -2555,8 +2550,6 @@
       white-space: nowrap;
       text-align: right;
     }
-    /* An icon before the label (Write notes' pen): the label follows it,
-       the shortcut alone goes to the right, not the label to the middle. */
     .studio-dropdown-columns > button:has(> svg) {
       justify-content: flex-start;
     }
@@ -2678,7 +2671,6 @@
   .studio-parts-status.studio-error {
     color: var(--accent-ink);
   }
-  /* Margins and spacing (#1025): a field a line, the first page drawn small, the music inside its margins. */
   .studio-spacing-open {
     margin-top: 4px;
   }
@@ -2733,7 +2725,6 @@
     gap: 10px;
     margin: 6px 0 12px;
   }
-  /* The last question asked of the score, and the button that shows its answer (#975). */
   .studio-ai-last {
     display: flex;
     align-items: center;
@@ -2747,7 +2738,6 @@
     flex: 1 1 240px;
     min-width: 0;
   }
-  /* The score as the AI writes it (#973): the last bars kept in view. */
   .studio-ai-draft {
     margin: 6px 0 12px;
     max-height: 40vh;
@@ -4503,7 +4493,6 @@
     gap: 4px;
     margin-bottom: 4px;
   }
-  /* A row the tools show only when it is needed: Transpose's octave, to a key (#1024). */
   .tool-row[hidden] {
     display: none;
   }
@@ -4617,7 +4606,6 @@
   .tool-select {
     flex: 1;
   }
-  /* Transpose to a key: the key's two names on a line of their own, the way below (#1024). */
   .tool-transpose .tool-select[data-transpose-key] {
     flex-basis: 100%;
   }

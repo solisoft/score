@@ -374,8 +374,18 @@
      column cut by the menu's height would be lost off its side. Shorter, or
      on a phone, it is one list that scrolls, as the others. */
   @media (min-width: 900px) and (min-height: 720px) {
-    .studio-dropdown-columns { display: block; columns: 2; column-gap: 6px; width: max-content; max-width: min(720px, calc(100vw - 24px)); max-height: none; overflow: visible; }
-    .studio-dropdown-columns > button { width: 100%; break-inside: avoid; padding-block: 7px; }
+    .studio-dropdown-columns { display: block; columns: 2; column-gap: 6px; width: max-content; max-width: min(860px, calc(100vw - 24px)); max-height: none; overflow: visible; }
+    /* A column is half the menu (#974): a label longer than that wraps
+       under itself, its shortcut or hint kept whole on the right, instead
+       of running into the next column. A little closer than a one-column
+       menu's items: Edit's two columns (#1024's Rewrite the selection) still
+       fit a 1280 × 800 window. */
+    .studio-dropdown-columns > button { width: 100%; break-inside: avoid; white-space: normal; padding-block: 7px; }
+    .studio-dropdown-columns > button > kbd { flex-shrink: 0; white-space: nowrap; text-align: right; }
+    /* An icon before the label (Write notes' pen): the label follows it,
+       the shortcut alone goes to the right, not the label to the middle. */
+    .studio-dropdown-columns > button:has(> svg) { justify-content: flex-start; }
+    .studio-dropdown-columns > button:has(> svg) > kbd { margin-left: auto; }
     .studio-dropdown-columns > .studio-dropdown-head:first-child { padding-top: 4px; }
     .studio-dropdown-columns > .studio-dropdown-break { break-before: column; padding-top: 4px; }
   }
@@ -409,6 +419,12 @@
   .studio-ai { width: min(820px, calc(100vw - 32px)); }
   .studio-ai-request { width: 100%; box-sizing: border-box; font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--paper); color: var(--ink); resize: vertical; }
   .studio-ai-result { display: grid; gap: 10px; margin: 6px 0 12px; }
+  /* The last question asked of the score, and the button that shows its answer (#975). */
+  .studio-ai-last { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+  .studio-ai-last[hidden] { display: none; }
+  .studio-ai-last > span { flex: 1 1 240px; min-width: 0; }
+  /* The score as the AI writes it (#973): the last bars kept in view. */
+  .studio-ai-draft { margin: 6px 0 12px; max-height: 40vh; overflow: auto; opacity: 0.85; }
   .studio-ai-explanation { white-space: pre-wrap; font-size: 14px; line-height: 1.55; max-height: 30vh; overflow: auto; }
   .studio-ai-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
