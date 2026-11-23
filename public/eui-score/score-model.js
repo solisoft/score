@@ -796,6 +796,7 @@ function pieces(score, ev, at, ticks, role) {
       delete p.phraseDir;
       delete p.stemDir;
       delete p.noAutoBeam;
+      delete p.combineMode;
       delete p.spanStart;
       delete p.forced;
       delete p.cautionary;
@@ -894,7 +895,7 @@ const sameNote = (a, b) => Boolean(a && b && !a.rest && !b.rest && a.pitches.len
 
 /** A rest with nothing on it (a spacer may be one): what tidy merges, and a bar of rest gathers. */
 export function isBareRest(ev) {
-  const marked = ev.before?.length || ev.cue || ev.ottava != null || ev.stemDir != null || ev.noAutoBeam != null || ev.breath || ev.spanStart != null || ev.spanEnd || ev.cross != null || ev.figure || ev.figureRaw || ev.fret;
+  const marked = ev.before?.length || ev.cue || ev.ottava != null || ev.stemDir != null || ev.noAutoBeam != null || ev.combineMode != null || ev.breath || ev.spanStart != null || ev.spanEnd || ev.cross != null || ev.figure || ev.figureRaw || ev.fret;
   return ev.rest && !ev.tuplet && !ev.scale && !ev.dynamic && !ev.hairpin && !ev.hairpinEnd && !ev.texts.length && !ev.chord && !ev.arts.length && !ev.pedalOn && !ev.pedalOff && !ev.beamStart && !ev.beamEnd && !marked;
 }
 
@@ -1156,8 +1157,10 @@ export const OTTAVAS = [-2, -1, 0, 1, 2];
 // What holds from the event it is written on until it changes, and its value
 // before any: an ottava (`ev.ottava`), the stems (`ev.stemDir`: 1 \\stemUp,
 // -1 \\stemDown, 0 \\stemNeutral), the beaming (`ev.noAutoBeam`: true
-// \\autoBeamOff, false \\autoBeamOn). An event without one carries no field.
-const MARKERS = { ottava: 0, stemDir: 0, noAutoBeam: false };
+// \\autoBeamOff, false \\autoBeamOn), how two parts on one staff are set
+// (`ev.combineMode`, see COMBINE_MODES: \\partCombineApart and its kin, on a
+// \\partCombine staff's part I). An event without one carries no field.
+const MARKERS = { ottava: 0, stemDir: 0, noAutoBeam: false, combineMode: "automatic" };
 
 /** Marker `field` in force at event `i` of a lane. */
 function markerAt(staff, i, field) {
@@ -2804,6 +2807,8 @@ function eventText(ev, beam = "") {
     const graces = ev.graces.map(graceText);
     out += `\\${ev.grace ?? "grace"} ${graces.length === 1 && !ev.graces[0].fingers?.length ? graces[0] : `{ ${graces.join(" ")} }`} `;
   }
+  // How the two parts of a \\partCombine are set from this note on: right before it, after its grace notes.
+  if (COMBINE_MODES[ev.combineMode]) out += `\\partCombine${COMBINE_MODES[ev.combineMode]} `;
   const after = !ev.rest && ev.afterGraces?.length ? ev.afterGraces.map(graceText) : null;
   if (after) out += `\\afterGrace ${ev.afterAt != null && ev.afterAt !== AFTER_GRACE_AT ? `${afterFraction(ev.afterAt)} ` : ""}`;
   out += ev.rest ? (ev.spacer ? "s" : "r") : ev.pitches.length > 1 ? `<${ev.pitches.map((p) => head(p) + headMarks(p)).join(" ")}>` : notes(ev.pitches);
@@ -3115,6 +3120,17 @@ function partLayoutKept(layout) {
   return Object.keys(out).length ? out : undefined;
 }
 
+/** What a condensed staff's desks were (META_KEYS' `desks`): pairs of words; undefined when nothing of it reads. */
+function desksKept(desk) {
+  if (!isPlain(desk)) return undefined;
+  const out = {};
+  for (const field of ["names", "shorts", "instruments"]) {
+    const pair = desk[field];
+    if (Array.isArray(pair) && pair.length === 2 && pair.every((word) => typeof word === "string")) out[field] = [...pair];
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 /** Markers `[tick, …]`: the arrays that start with a tick. */
 const markers = (list) => list.filter((marker) => Array.isArray(marker) && isTick(marker[0]));
 
@@ -3278,6 +3294,16 @@ export const META_KEYS = {
       others: "skip",
       channel: "none",
     }),
+  },
+  // Two staves condensed on one (#1021), by the staff's lane: what each desk's staff was called and sounded
+  // like — { names: [a, b], shorts: [a, b], instruments: [a, b] } — for its part's heading, and for Split.
+  desks: {
+    label: () => tr("Desks of a condensed staff"),
+    clean: (desks) => {
+      const kept = mapEntries(keptEntries(desks, (desk, lane) => isLane(lane) && desksKept(desk) !== undefined), desksKept);
+      return kept && Object.keys(kept).length ? kept : undefined;
+    },
+    lanes: metaByLane("desks", { others: "skip", channel: "none" }),
   },
 };
 
@@ -4949,11 +4975,21 @@ export function setBreak(score, bar, kind) {
 // what a part does not set is the score's, but for the breaks, which are
 // the part's alone.
 
-/** The lane a part's layout is kept under: its staff's first, which must be one of the score's. */
+/**
+ * The lane a part's layout is kept under: its staff's first, which must be
+ * one of the score's — or, for the second desk of a staff of two parts
+ * (\\partCombine, #1021), that part's own lane: each desk is laid out apart,
+ * and keeps its layout when the staff is split in two.
+ */
 function partLayoutLane(score, lane) {
   const n = Number(lane);
-  if (!Number.isInteger(n) || !staffLanes(score).includes(n)) throw new Error(tr("no such staff"));
+  if (!Number.isInteger(n) || !score.staves[n] || partKeyLane(score, n) !== n) throw new Error(tr("no such staff"));
   return String(n);
+}
+
+/** The lane the part of lane `lane` is kept under: part II's own on a staff of two parts, else its staff's first. */
+function partKeyLane(score, lane) {
+  return partOfLane(score, lane) === 2 ? lane : upperOf(score, lane);
 }
 
 /** The part of lane `lane`'s own layout put down (`layout`); empty, it goes, and the key with the last one. */
@@ -4984,7 +5020,7 @@ function movePartBreaks(score, move) {
  * `systemSpacing` — each null where the part follows the score.
  */
 export function partLayout(score, lane) {
-  const own = partLayoutKept(score.meta?.parts?.[String(upperOf(score, lane))]) ?? {};
+  const own = partLayoutKept(score.meta?.parts?.[String(partKeyLane(score, lane))]) ?? {};
   return {
     breaks: { ...(own.breaks ?? {}) },
     staffSize: own.staffSize ?? null,
@@ -5127,17 +5163,52 @@ export function transpositionOf(staff) {
   return null;
 }
 
-/** The part of the staff on lane `s`: that staff (and its other voices) alone, its name on top. */
-export function partOf(score, s) {
+/**
+ * The parts a score is printed in, in order: one for each staff — and, for
+ * a staff of two parts (\\partCombine, #1021), one for each desk, its lane
+ * the part's own. [{ lane, desk, staff, name }]: `desk` 1 or 2 (0 for a
+ * staff of one part), `staff` the staff's number, `name` what the part is
+ * called ("" when its staff has no name: the page names it then).
+ */
+export function partList(score) {
+  return staffLanes(score).flatMap((u, n) => {
+    const staff = score.staves[u];
+    if (!staff.combine) return [{ lane: u, desk: 0, staff: n, name: staff.name || "" }];
+    const names = deskNames(score, u);
+    return [1, 2].map((desk) => ({ lane: laneOfVoice(score, u, desk), desk, staff: n, name: names[desk - 1] }));
+  });
+}
+
+/**
+ * The part of the staff on lane `s`: that staff (and its other voices)
+ * alone, its name on top. `desk` 1 or 2 on a staff of two parts
+ * (\\partCombine): that desk's part alone, a plain staff of one voice —
+ * what the other plays left out, its own rests drawn and gathered.
+ */
+export function partOf(score, s, desk = 0) {
   const upper = upperOf(score, s);
-  const lanes = voiceLanes(score, upper);
+  const alone = desk === 1 || desk === 2;
+  if (desk !== 0 && !(alone && score.staves[upper]?.combine)) throw new Error(tr("no such part"));
+  const lanes = alone ? [laneOfVoice(score, upper, desk)] : voiceLanes(score, upper);
   const part = JSON.parse(JSON.stringify(score));
-  const staff = part.staves[upper];
-  part.staves = lanes.map((lane) => part.staves[lane]);
+  const { combine, ...staff } = part.staves[upper];
+  if (alone) {
+    // One desk: its notes on its staff's lines, nothing of how the two were set together.
+    const kept = desksKept(score.meta?.desks?.[String(upper)]) ?? {};
+    const events = part.staves[lanes[0]].events;
+    for (const ev of events) {
+      delete ev.combineMode;
+      delete ev.spacer;
+    }
+    part.staves = [{ ...staff, instrument: kept.instruments?.[desk - 1] ?? staff.instrument, events }];
+    wholeBarRests(part, 0);
+  } else part.staves = lanes.map((lane) => part.staves[lane]);
   // Its settings with it, at its lanes there (#683); the other staves' go.
   if (part.meta) {
     dropMetaLanes(part.meta, (lane) => !lanes.includes(lane));
-    shiftMetaLanes(part.meta, upper, -upper);
+    shiftMetaLanes(part.meta, lanes[0], -lanes[0]);
+    // What its desks were called is said in its heading.
+    delete part.meta.desks;
   }
   // Its own layout (#1018): its breaks alone — the score's are the score's — and, where it sets them, its
   // staff size, systems a page, spreading and space between systems. The paper, the margins, the headers
@@ -5153,12 +5224,28 @@ export function partOf(score, s) {
   part.paper = paper;
   part.groups = [];
   part.group = "none";
-  part.header = { ...part.header, instrument: staff.name || INSTRUMENTS[instrumentOf(score, upper)]?.name || "" };
+  const known = INSTRUMENTS[instrumentOf(score, upper)]?.name || "";
+  part.header = { ...part.header, instrument: alone ? deskNames(score, upper)[desk - 1] || (known ? `${known} ${desk}` : "") : staff.name || known };
   // The staff's name is the part's heading: not repeated before each line.
   part.staves[0] = { ...part.staves[0], name: "", short: "" };
   // A player counts the bars it rests: they are gathered, R1*12 as one bar.
   part.compress = true;
   return part;
+}
+
+/** Each bar of lane `s` that holds nothing but bare rests, as one rest of the bar's length: what a part gathers. */
+function wholeBarRests(score, s) {
+  const staff = score.staves[s];
+  const at = starts(staff);
+  const out = [];
+  for (let b = 0, k = 0; k < staff.events.length; b++) {
+    const end = barStart(score, b + 1);
+    const bar = [];
+    while (k < staff.events.length && at[k] < end - 1e-6) bar.push(staff.events[k++]);
+    const whole = bar.length > 1 && bar.every(isBareRest) && Math.abs(at[k - 1] + ticksOf(bar[bar.length - 1]) - end) < 1e-6 && Math.abs(at[k - bar.length] - barStart(score, b)) < 1e-6;
+    out.push(...(whole ? rests(score, barStart(score, b), barLength(score, b)) : bar));
+  }
+  staff.events = out;
 }
 
 // ---- Playing ----------------------------------------------------------------------------------
@@ -6163,8 +6250,8 @@ function ossiasAfterDelete(staff, a, b, count) {
 // Two parts set on one staff (`\partCombine \a \b`) or one part spread over
 // a piano's two staves (`\new PianoStaff \autoChange { … }`) are edited on
 // the score (see "Two parts on one staff" below). What that cannot take
-// apart — `\partCombineUp`, a part saying how the parts are combined, music
-// beside the command on its staff — or a reading without the engraver at
+// apart — `\partCombineUp`, voices inside a part, music beside the command
+// on its staff — or a reading without the engraver at
 // hand: the engraver decides where each note goes, so the model keeps the
 // staff's text as written — `staff.raw` on its first staff, `rawPart` on the others it makes
 // — with the variables it names (`score.defs`). Its notes are read, shown
@@ -6413,8 +6500,8 @@ function refuseRawBars(score) {
   if (score.staves.some((staff) => staff.raw != null || staff.rawPart)) throw new Error(RAW_BARS_REFUSAL());
 }
 
-const RAW_REFUSAL = () => tr("This staff is kept as LilyPond wrote it (a \\partCombine or \\autoChange the score editor cannot take apart: \\partCombineUp, \\partCombineApart and the like, music beside it on its staff): edit its notes in the text below");
-const RAW_BARS_REFUSAL = () => tr("A staff is kept as LilyPond wrote it (a \\partCombine or \\autoChange the score editor cannot take apart: \\partCombineUp, \\partCombineApart and the like, music beside it on its staff): put bars in or take them away in the text below");
+const RAW_REFUSAL = () => tr("This staff is kept as LilyPond wrote it (a \\partCombine or \\autoChange the score editor cannot take apart: \\partCombineUp, voices inside a part, music beside it on its staff): edit its notes in the text below");
+const RAW_BARS_REFUSAL = () => tr("A staff is kept as LilyPond wrote it (a \\partCombine or \\autoChange the score editor cannot take apart: \\partCombineUp, voices inside a part, music beside it on its staff): put bars in or take them away in the text below");
 
 // ---- Two parts on one staff (\partCombine), one voice over two (\autoChange) ----------------
 //
@@ -6438,15 +6525,52 @@ const RAW_BARS_REFUSAL = () => tr("A staff is kept as LilyPond wrote it (a \\par
 //
 // To read them the model asks the engraver for a text that says the same in
 // the model's terms (`splitCombined`: `<< A \\ B >>`, `\new Staff M`).
-// What still cannot be held — a `\partCombineUp`, a part that changes how
-// the parts are combined, music beside the command on its staff — stays kept
-// as written (see above).
+// A part saying how the two are set (`\partCombineApart` and its kin) is
+// held on its notes (`ev.combineMode`, see COMBINE_MODES). What still cannot
+// be held — a `\partCombineUp`, voices inside a part, music beside the
+// command on its staff — stays kept as written (see above).
 
 /** The commands read this way: every one, and whether a text holds one. */
 const COMBINE_RE = /\\(partCombine|partcombine|autoChange|autochange)(?![A-Za-z])/g;
 const COMBINE_ONE = new RegExp(COMBINE_RE.source);
-/** What the parts may say that the model cannot hold: how they are combined, two voices in one. */
-const COMBINE_MODES = /\\(partCombine[A-Z][A-Za-z]*|partcombine[A-Z][A-Za-z]*|voiceOne|voiceTwo|change)\b|\\\\/;
+/** What the parts may say that the model cannot hold: a \\partCombine… it does not know, two voices in one. */
+const COMBINE_UNHELD = /\\(part[Cc]ombine(?!(?:Automatic|Apart|Chords|Unisono|SoloI|SoloII)(?![A-Za-z]))[A-Z][A-Za-z]*|voiceOne|voiceTwo|change)\b|\\\\/;
+
+/**
+ * How a stretch of two parts on one staff is set, as a part says it from a
+ * note on (`ev.combineMode`, a marker — see MARKERS): as the notes ask
+ * (`automatic`), two voices (`apart`), one chord (`chords`), one note for
+ * both, "a2" (`unisono`), part I or part II alone, "Solo" (`soloI`,
+ * `soloII`). Each with the end of its \\partCombine… command.
+ */
+export const COMBINE_MODES = { automatic: "Automatic", apart: "Apart", chords: "Chords", unisono: "Unisono", soloI: "SoloI", soloII: "SoloII" };
+const COMBINE_MODE_RE = /\\part[Cc]ombine(Automatic|Apart|Chords|Unisono|SoloII|SoloI)(?![A-Za-z])/g;
+
+/**
+ * The \\partCombine… commands written in the parts `found` names (see
+ * splitCombined), by the engraver's number of the note or rest each stands
+ * before: Map i → mode. One written elsewhere says nothing, as for the
+ * engraver; null when one in a part has no note of its part after it, or a
+ * note read twice — the staff is then kept as written.
+ */
+function writtenModes(source, spans, found) {
+  const out = new Map();
+  const places = found.filter((f) => f.kind === "combine").flatMap((f) => f.places);
+  if (!places.length || !Array.isArray(spans)) return out;
+  const text = String(source ?? "");
+  const mask = codeMask(text);
+  const order = spans.map((sp, i) => (sp ? i : -1)).filter((i) => i >= 0).sort((x, y) => spans[x][0] - spans[y][0] || x - y);
+  for (const m of text.matchAll(COMBINE_MODE_RE)) {
+    if (!mask[m.index]) continue;
+    // The innermost stretch it is written in: a part, or a variable a part names.
+    const place = places.filter(([x, y]) => m.index >= x && m.index < y).sort((p, q) => p[1] - p[0] - (q[1] - q[0]))[0];
+    if (!place) continue;
+    const next = order.filter((i) => spans[i][0] >= m.index + m[0].length && spans[i][0] < place[1]);
+    if (!next.length || (next.length > 1 && spans[next[1]][0] === spans[next[0]][0])) return null;
+    out.set(next[0], Object.keys(COMBINE_MODES).find((mode) => COMBINE_MODES[mode] === m[1]));
+  }
+  return out;
+}
 
 /** Where `text` is music, not a string or a comment: a flag per place. */
 function codeMask(text) {
@@ -6519,7 +6643,7 @@ function splitCombined(source) {
       // The music of each part, its variables' too: nothing in it the model cannot hold.
       const parts = [a, b].map(([x, y]) => text.slice(x, y));
       const used = usedDefinitions(parts.join(" "), defs);
-      if ([...parts, ...used.map((name) => defs.get(name).text)].some((t) => COMBINE_MODES.test(t) || COMBINE_ONE.test(t))) continue;
+      if ([...parts, ...used.map((name) => defs.get(name).text)].some((t) => COMBINE_UNHELD.test(t) || COMBINE_ONE.test(t))) continue;
       const nameOf = ([x, y]) => {
         const name = commandAt(text, x);
         return name && defs.has(name) && y === x + 1 + name.length ? name : null;
@@ -6542,7 +6666,7 @@ function splitCombined(source) {
       const music = [k, musicEnd(text, k)];
       if (music[1] <= music[0]) continue;
       const used = usedDefinitions(text.slice(...music), defs);
-      if ([text.slice(...music), ...used.map((name) => defs.get(name).text)].some((t) => COMBINE_MODES.test(t) || COMBINE_ONE.test(t))) continue;
+      if ([text.slice(...music), ...used.map((name) => defs.get(name).text)].some((t) => COMBINE_UNHELD.test(t) || COMBINE_ONE.test(t))) continue;
       const piano = pianoAround(text, site);
       if (!piano && !amongStaves(text, mask, site)) continue;
       edits.push({ from: p, to: k, insert: "" });
@@ -6586,6 +6710,7 @@ function markCombined(score, parsed, placed, spans, found) {
       if (lanes.length > 2) return false;
       if (lanes.length === 1) lanes.push({ voice: 2, events: rests(score, 0, lengthOf(head)) });
       head.combine = f.names ? { names: f.names } : {};
+      gatherModes(head, lanes[1]);
     } else {
       if (lanes.length > 1 || head.events.some((ev) => ev.cross)) return false;
       head.autoChange = { ...(f.split ? { split: f.split } : {}), ...(f.piano ? { piano: true } : {}) };
@@ -6610,6 +6735,218 @@ export function partOfLane(score, s) {
   return isCombined(score, s) ? voiceOf(score, s) : 0;
 }
 
+// ---- Two staves condensed on one, and split again; divisi (#1021) ---------------------------
+//
+// On a conductor's score two desks of an instrument share a staff:
+// `condenseStaves` sets a staff and the one below it as the two parts of a
+// \partCombine — their music in two variables named after them, `\partCombine
+// \fluteI \fluteII` — and `splitStaves` gives each its staff back. The
+// lanes stay where they are (the lower staff's lane is part II's), so what
+// the settings line keeps by lane — the mixer, each part's own layout —
+// stays with its notes, and comes back with the staff. What the lower staff
+// was called and sounded like is kept under `desks` (META_KEYS): the
+// condensed staff sounds as its first desk does. The engraver prints "a2",
+// "Solo" and "Solo II" itself; `setCombineMode` says, over a passage, how
+// the two are set. `divisi` splits a passage of a plain staff in two voices,
+// "div." over its first note and "unis." after it.
+
+/** A name as a LilyPond variable: its letters, its numbers in Roman numerals ("Flute 1" → fluteI). */
+function variableName(name, desk) {
+  const roman = (n) => ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"][n] ?? "X";
+  const words = String(name ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\d+/g, (n) => ` ${roman(Number(n))} `).split(/[^A-Za-z]+/).filter(Boolean);
+  const numbered = /^[IVX]+$/.test(words.at(-1) ?? "") && words.length > 1;
+  const base = words.slice(0, numbered ? -1 : undefined).map((word, k) => (k ? word[0].toUpperCase() : word[0].toLowerCase()) + word.slice(1)).join("") || "part";
+  return base + (numbered ? words.at(-1) : roman(desk));
+}
+
+/** What two staves are called together: "Flute 1" and "Flute 2" → "Flute 1.2"; else both names. */
+function condensedName(a, b) {
+  const numbered = (name) => /^(.*\S)\s+(\d+|[IVX]+)$/.exec(name);
+  const [x, y] = [numbered(a), numbered(b)];
+  if (x && y && x[1] === y[1]) return `${x[1]} ${x[2]}.${y[2]}`;
+  if (a === b) return a ? `${a} 1.2` : "";
+  return a && b ? `${a} / ${b}` : a || b;
+}
+
+/** What the two desks of lane `u`'s staff of two parts are called: as their staves were, or after the staff's name. */
+function deskNames(score, u) {
+  const kept = desksKept(score.meta?.desks?.[String(u)])?.names;
+  if (kept) return kept;
+  const name = score.staves[u]?.name || "";
+  const both = /^(.*\S)\s+(\d+|[IVX]+)\s*[.,&+/–-]\s*(\d+|[IVX]+)$/.exec(name);
+  if (both) return [`${both[1]} ${both[2]}`, `${both[1]} ${both[3]}`];
+  return name ? [`${name} 1`, `${name} 2`] : ["", ""];
+}
+
+/** What a staff says beside its name, its sound and its notes: its clef, key, metre and all that must be alike to share a staff. */
+function staffSettings(staff) {
+  const { name, short, instrument, events, voice, combine, ...settings } = staff;
+  return settings;
+}
+
+/**
+ * The staff of lane `s` and the staff below it condensed on one: the two
+ * parts of a \\partCombine, the upper staff part I. Refused, and said, when
+ * they cannot share a staff: another clef, key, metre or transposition,
+ * bars that differ, words, a second voice. Answers the staff's lane.
+ */
+export function condenseStaves(score, s) {
+  const u = upperOf(score, s);
+  const staves = staffLanes(score);
+  const n = staves.indexOf(u);
+  const v = staves[n + 1];
+  if (!score.staves[u] || n < 0) throw new Error(tr("no such staff"));
+  if (v == null) throw new Error(tr("No staff below this one to condense it with"));
+  const [one, two] = [score.staves[u], score.staves[v]];
+  if (isCombined(score, u) || isCombined(score, v)) throw new Error(tr("A staff holds two parts at most: one of these holds two already"));
+  for (const lane of [u, v]) {
+    refuseRaw(score, lane);
+    const staff = score.staves[lane];
+    if (staff.autoChange || staff.drums || staff.tab || staff.chords || staff.figures || staff.ossias?.length) throw new Error(tr("Only two staves of notes condense on one: not a drum staff, a tablature, a line of chords or figures, a piano's two staves, a staff under an ossia"));
+    if (voiceLanes(score, lane).length > 1) throw new Error(tr("A staff with a second voice cannot be condensed: each staff must hold one voice"));
+    if (versesOf(staff) > 0) throw new Error(COMBINE_WORDS());
+    if (staff.id || staff.events.some((ev) => ev.cross)) throw new Error(COMBINE_CROSS());
+    if (staff.events.some((ev) => ev.cue)) throw new Error(tr("A staff with cue notes cannot be condensed"));
+  }
+  const clefs = (staff) => JSON.stringify([staff.clef, staff.clefs ?? []]);
+  if (clefs(one) !== clefs(two)) throw new Error(tr("These staves are in different clefs: two parts on one staff read the same clef"));
+  const keys = (staff) => JSON.stringify([staff.key ?? null, staff.mode ?? null, staff.keys ?? null]);
+  if (keys(one) !== keys(two)) throw new Error(tr("These staves are in different keys: two parts on one staff read the same key"));
+  if (transpositionOf(one) !== transpositionOf(two)) throw new Error(tr("These instruments are not written in the same transposition: they cannot share a staff"));
+  const metres = (staff) => JSON.stringify([staff.time ?? null, staff.times ?? null, staff.shownTime ?? null]);
+  if (metres(one) !== metres(two) || Math.abs(lengthOf(one) - lengthOf(two)) > 1e-6) throw new Error(tr("These staves do not have the same bars: two parts on one staff keep the same metre and the same length"));
+  if (JSON.stringify(staffSettings(one)) !== JSON.stringify(staffSettings(two))) throw new Error(tr("These staves are not set alike (their size, their lines, what their \\with says): make them alike before condensing them"));
+  // A group must hold both or neither: the staff they share is in one place.
+  const inside = (g, k) => k >= g.first && k <= g.last;
+  if ((score.groups ?? []).some((g) => inside(g, n) !== inside(g, n + 1))) throw new Error(tr("These staves are in different groups: put them in the same group before condensing them"));
+  // The variables their music is written in, named after them, and no other's name.
+  const taken = new Set(score.staves.flatMap((staff) => staff.combine?.names ?? []).filter(Boolean));
+  for (const text of score.defs ?? []) taken.add(/^([A-Za-z_]+)/.exec(text)?.[1]);
+  const names = [variableName(one.name, 1), variableName(two.name, 2)];
+  if (names[0] === names[1]) names[1] = variableName("", 2);
+  names.forEach((name, k) => {
+    while (taken.has(names[k]) || names.indexOf(names[k]) !== k) names[k] += "x";
+    taken.add(names[k]);
+  });
+  // What each desk was, for its part and for Split.
+  score.meta = { ...(score.meta ?? {}) };
+  score.meta.desks = { ...(isPlain(score.meta.desks) ? score.meta.desks : {}), [u]: { names: [one.name || "", two.name || ""], shorts: [one.short || "", two.short || ""], instruments: [one.instrument || "", two.instrument || ""] } };
+  one.combine = { names };
+  one.name = condensedName(one.name || "", two.name || "");
+  one.short = condensedName(one.short || "", two.short || "");
+  score.staves[v] = { voice: 2, events: two.events };
+  score.groups = (score.groups ?? []).map((g) => ({ ...g, first: g.first > n ? g.first - 1 : g.first, last: g.last > n ? g.last - 1 : g.last }));
+  return u;
+}
+
+/**
+ * The staff of two parts of lane `s` (\\partCombine) split in two staves,
+ * part I above part II, each with every note and rest of its part: what
+ * `condenseStaves` did undone — their names and sounds as they were — or,
+ * for a staff written so, each named after it. Answers the two lanes.
+ */
+export function splitStaves(score, s) {
+  refuseRaw(score, s);
+  const u = upperOf(score, s);
+  if (!isCombined(score, u)) throw new Error(tr("This staff holds one part: only a staff of two parts splits into two staves"));
+  const v = laneOfVoice(score, u, 2);
+  const one = score.staves[u];
+  const n = staffNumber(score, u);
+  const kept = desksKept(score.meta?.desks?.[String(u)]) ?? {};
+  const names = deskNames(score, u);
+  const shorts = kept.shorts ?? (one.short ? [`${one.short} 1`, `${one.short} 2`] : ["", ""]);
+  const instruments = kept.instruments ?? [one.instrument, one.instrument];
+  const settings = structuredClone(staffSettings(one));
+  // How the two were set together is said no more; the rest is each staff's as it was.
+  const plain = (events) => events.map((ev) => {
+    const { combineMode, ...rest } = ev;
+    return rest;
+  });
+  score.staves[v] = { name: names[1], short: shorts[1], instrument: instruments[1] || one.instrument, ...settings, events: plain(score.staves[v].events) };
+  delete one.combine;
+  Object.assign(one, { name: names[0], short: shorts[0], instrument: instruments[0] || one.instrument, events: plain(one.events) });
+  if (isPlain(score.meta?.desks)) {
+    const { [String(u)]: gone, ...others } = score.meta.desks;
+    score.meta = { ...score.meta, desks: others };
+    if (!Object.keys(others).length) delete score.meta.desks;
+  }
+  score.groups = (score.groups ?? []).map((g) => ({ ...g, first: g.first > n ? g.first + 1 : g.first, last: g.last >= n ? g.last + 1 : g.last }));
+  return [u, v];
+}
+
+/**
+ * Bars `a`…`b` of lane `s`'s staff divided in two (divisi): its first
+ * voice keeps the upper notes of each chord and a second voice takes the
+ * lower ones — a note alone is played by both — "div." over the first note
+ * and "unis." over the first one after the bars. `words`: those two, as the
+ * page's language writes them. Refused where a second voice plays already.
+ */
+export function divisi(score, s, a, b, words = {}) {
+  const u = upperOf(score, s);
+  const staff = score.staves[u];
+  if (!staff) throw new Error(tr("no such staff"));
+  refuseRaw(score, u);
+  if (isCombined(score, u)) throw new Error(tr("This staff holds two parts already: set them apart over the selection instead (Format ▸ Two parts: apart)"));
+  if (staff.autoChange || staff.drums || staff.tab || staff.chords || staff.figures) throw new Error(tr("A divisi is written on a staff of notes"));
+  const [from, to] = [Math.min(a, b), Math.max(a, b)];
+  if (from < 0 || to >= barsOf(score)) throw new Error(tr("no such bar"));
+  const t0 = barStart(score, from);
+  const t1 = barStart(score, to + 1);
+  const span = (lane) => {
+    const at = starts(score.staves[lane]);
+    const i = at.findIndex((t) => Math.abs(t - t0) < 1e-6);
+    let j = at.findIndex((t) => t >= t1 - 1e-6);
+    if (j < 0) j = at.length;
+    const whole = i >= 0 && j > i && Math.abs((at[j] ?? lengthOf(score.staves[lane])) - t1) < 1e-6;
+    if (!whole) throw new Error(tr("A note crosses the selection's first or last bar line: select whole bars"));
+    return [i, j];
+  };
+  const [i, j] = span(u);
+  const played = staff.events.slice(i, j);
+  if (!played.some((ev) => !ev.rest)) throw new Error(tr("These bars hold no note to divide"));
+  const had = voiceLanes(score, u).length;
+  if (had > 1) {
+    const [i2, j2] = span(u + 1);
+    if (sounding(score.staves[u + 1].events.slice(i2, j2))) throw new Error(tr("A second voice plays in these bars already"));
+  } else addVoice(score, u, 2);
+  const lower = score.staves[u + 1];
+  const [i2, j2] = span(u + 1);
+  // The second voice: the bars' rhythm, the lower notes; what is said once for the staff stays with the first.
+  const tuplets = new Map();
+  const second = played.map((ev) => {
+    const low = ev.pitches.length > 1 ? sortPitches(ev.pitches).slice(0, Math.floor(ev.pitches.length / 2)) : ev.pitches;
+    const copy = makeEvent({ rest: ev.rest, pitches: structuredClone(low), base: ev.base, dots: ev.dots, tie: ev.tie, slurStart: ev.slurStart, slurEnd: ev.slurEnd, arts: [...ev.arts], ...(ev.scale ? { scale: [...ev.scale] } : {}) });
+    if (ev.tuplet) {
+      if (!tuplets.has(ev.tuplet.id)) tuplets.set(ev.tuplet.id, newId());
+      copy.tuplet = { ...structuredClone(ev.tuplet), id: tuplets.get(ev.tuplet.id) };
+    }
+    return copy;
+  });
+  lower.events.splice(i2, j2 - i2, ...second);
+  for (const ev of played) {
+    if (ev.pitches.length < 2) continue;
+    const gone = sortPitches(ev.pitches).slice(0, Math.floor(ev.pitches.length / 2)).map((p) => p.d);
+    ev.pitches = sortPitches(ev.pitches).slice(Math.floor(ev.pitches.length / 2));
+    for (const field of ["fingers", "forced", "cautionary", "harmonics"]) {
+      if (ev[field]) ev[field] = ev[field].filter((x) => !gone.includes(typeof x === "object" ? x.head : x));
+    }
+  }
+  const say = (ev, text) => {
+    if (ev && !ev.texts.some((t) => t.text === text)) ev.texts = [...ev.texts, { text, dir: -1 }];
+  };
+  const [div, unis] = [words.div ?? "div.", words.unis ?? "unis."];
+  // After bars divided already, the division goes on: their "unis." goes, and no second "div." is said.
+  const first = played.find((ev) => !ev.rest);
+  if (first.texts.some((t) => t.text === unis)) first.texts = first.texts.filter((t) => t.text !== unis);
+  else say(first, div);
+  // Before bars divided already, the same: they have their "div.", which goes.
+  const next = staff.events.slice(j).find((ev) => !ev.rest);
+  const after = lower.events[i2 + second.length];
+  if (after && !after.rest && next?.texts.some((t) => t.text === div)) next.texts = next.texts.filter((t) => t.text !== div);
+  else say(next, unis);
+  return u + 1;
+}
+
 const COMBINE_VOICES = () => tr("A \\partCombine staff holds its two parts, part I and part II: no other voice");
 const AUTO_VOICES = () => tr("\\autoChange spreads one voice over the piano's two staves: it holds no other voice");
 const AUTO_CLEFS = () => tr("\\autoChange keeps its staves' clefs, treble over bass");
@@ -6628,18 +6965,80 @@ function eventTimes(events) {
   return { at, end: t };
 }
 
+/** The \\partCombine… commands of two parts as the engraver hears them: [[tick, mode]] by time, part I's first. */
+function combineModes(partI, partII) {
+  const said = (events) => {
+    const { at } = eventTimes(events);
+    return events.map((ev, i) => [at[i], ev.combineMode]).filter(([, mode]) => COMBINE_MODES[mode]);
+  };
+  return [...said(partI), ...said(partII)].sort((x, y) => x[0] - y[0]);
+}
+
+/** The mode in force at `t` among `modes` (combineModes): the last said by then. */
+const combineModeIn = (modes, t) => modes.findLast(([at]) => at <= t + 1e-6)?.[1] ?? "automatic";
+
+/**
+ * Part II's \\partCombine… commands said by part I instead, each on its
+ * first note at or after it — where the engraver first heeds it, the parts
+ * being cut where both start something — so that each part's own notes keep
+ * what holds for them through an edit.
+ */
+function gatherModes(partI, partII) {
+  if (!partII.events.some((ev) => ev.combineMode != null)) return;
+  const modes = combineModes(partI.events, partII.events);
+  const { at } = eventTimes(partI.events);
+  partI.events.forEach((ev, i) => (ev.combineMode = combineModeIn(modes, at[i])));
+  for (const ev of partII.events) delete ev.combineMode;
+  tidyMarkers(partI, "combineMode");
+}
+
+/** How the two parts are set at event `i` of lane `s`, a \\partCombine staff's: a COMBINE_MODES name. */
+export function combineModeAt(score, s, i) {
+  if (!isCombined(score, s)) return "automatic";
+  const [one, two] = [1, 2].map((voice) => score.staves[laneOfVoice(score, s, voice)]);
+  return combineModeIn(combineModes(one.events, two.events), starts(score.staves[s])[i] ?? 0);
+}
+
+/**
+ * The two parts of lane `s`'s staff set as `mode` says (COMBINE_MODES) over
+ * events `a`…`b` of that lane — two voices, one note marked "a2", one part
+ * alone marked "Solo", or as the notes ask — and as they were after them.
+ * Part I says it, from its first note in the selection.
+ */
+export function setCombineMode(score, s, a, b, mode) {
+  if (!COMBINE_MODES[mode]) throw new Error(tr("two parts on a staff are set as the notes ask, apart, as a chord, a2, or one of them solo"));
+  if (!isCombined(score, s)) throw new Error(tr("This staff holds one part: condense it with the staff below first (Format ▸ Condense with the staff below)"));
+  const [lane, from, to] = laneRange(score, s, a, b);
+  const [one, two] = [1, 2].map((voice) => score.staves[laneOfVoice(score, s, voice)]);
+  gatherModes(one, two);
+  const t0 = starts(lane)[from];
+  const t1 = starts(lane)[to] + ticksOf(lane.events[to]);
+  const at = starts(one);
+  const first = at.findIndex((t) => t >= t0 - 1e-6);
+  if (first < 0 || at[first] >= t1 - 1e-6) throw new Error(tr("Part I starts no note in the selection: select from a note of part I on"));
+  let next = at.findIndex((t) => t >= t1 - 1e-6);
+  if (next < 0) next = one.events.length;
+  const after = markerAt(one, next, "combineMode");
+  for (let k = first; k < next; k++) delete one.events[k].combineMode;
+  one.events[first].combineMode = mode;
+  if (one.events[next] && one.events[next].combineMode == null) one.events[next].combineMode = after;
+  tidyMarkers(one, "combineMode");
+}
+
 /**
  * Which notes and rests of two parts the engraver draws when it combines
  * them, as its part combiner does (eui-score's combine.rs): [shownI, shownII],
  * a flag per event. The parts are cut where both start something; a stretch
  * is set apart (both drawn), as one note or one chord (part I's drawn), as
  * a solo (the part playing drawn), or as rests (part I's, or part II's where
- * part I's are spacers and its own are not).
+ * part I's are spacers and its own are not) — as its notes ask, or as the
+ * part's \\partCombine… command in force says (`ev.combineMode`).
  */
 export function combinedShown(partI, partII) {
   const a = eventTimes(partI);
   const b = eventTimes(partII);
   const cuts = [...new Set([0, Math.max(a.end, b.end), ...[...a.at, a.end].filter((t) => b.at.includes(t) || t >= b.end), ...[...b.at, b.end].filter((t) => t >= a.end)])].sort((x, y) => x - y);
+  const modes = combineModes(partI, partII);
   const shownI = partI.map(() => false);
   const shownII = partII.map(() => false);
   const allRests = (list, events) => list.every((i) => events[i].rest);
@@ -6649,20 +7048,34 @@ export function combinedShown(partI, partII) {
     const ia = a.at.map((t, i) => i).filter((i) => a.at[i] >= t0 && a.at[i] < t1);
     const ib = b.at.map((t, i) => i).filter((i) => b.at[i] >= t0 && b.at[i] < t1);
     const show = (list, flags) => list.forEach((i) => (flags[i] = true));
-    let state;
-    if (!ib.length && !allRests(ia, partI)) state = "soloI";
-    else if (!ia.length && !allRests(ib, partII)) state = "soloII";
-    else if (!ia.length || !ib.length) state = "rests";
-    else if (allRests(ia, partI) && allRests(ib, partII)) state = "rests";
-    else if (allRests(ib, partII)) state = "soloI";
-    else if (allRests(ia, partI)) state = "soloII";
-    else if (ia.length !== 1 || ib.length !== 1 || ticksOf(partI[ia[0]]) !== ticksOf(partII[ib[0]]) || partI[ia[0]].rest || partII[ib[0]].rest) state = "apart";
-    else {
+    // One note of each part, as long as the other's.
+    const pair = ia.length === 1 && ib.length === 1 && ticksOf(partI[ia[0]]) === ticksOf(partII[ib[0]]) && !partI[ia[0]].rest && !partII[ib[0]].rest;
+    // As the notes ask.
+    const byNotes = () => {
+      if (allRests(ia, partI) && allRests(ib, partII)) return "rests";
+      if (allRests(ib, partII)) return "soloI";
+      if (allRests(ia, partI)) return "soloII";
+      if (!pair) return "apart";
       const [x, y] = [partI[ia[0]], partII[ib[0]]];
       const ds = (ev) => ev.pitches.map((p) => p.d);
       const chords = Math.min(...ds(x)) >= Math.max(...ds(y)) && Math.max(...ds(x)) - Math.min(...ds(y)) <= 8 && Boolean(x.tie) === Boolean(y.tie) && Boolean(x.tuplet) === Boolean(y.tuplet);
-      state = sorted(x) === sorted(y) ? "one" : chords ? "one" : "apart";
-    }
+      return sorted(x) === sorted(y) || chords ? "one" : "apart";
+    };
+    // As a command says: the engraver's `forced`.
+    const forced = (mode) => {
+      const auto = byNotes();
+      if (mode === "apart") return auto === "rests" ? "rests" : "apart";
+      if (mode === "chords") return pair ? "one" : auto;
+      if (mode === "unisono") return allRests(ia, partI) && !allRests(ib, partII) ? "soloII" : "one";
+      if (mode === "soloI" || mode === "soloII") return mode;
+      return auto;
+    };
+    let state;
+    // Past the end of a part, the other is alone.
+    if (!ib.length && !allRests(ia, partI)) state = "soloI";
+    else if (!ia.length && !allRests(ib, partII)) state = "soloII";
+    else if (!ia.length || !ib.length) state = "rests";
+    else state = forced(combineModeIn(modes, t0));
     if (state === "apart") {
       show(ia, shownI);
       show(ib, shownII);
@@ -6958,6 +7371,10 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
   }
   // A text the engraver could not read (`name = \\partCombine …`, which only the model's reading gets through).
   if (!parsed) return { unsupported: ["a text the engraver cannot read"] };
+  // How the parts of each \\partCombine are set (\\partCombineApart …), by the note it is written before.
+  const modes = combined ? writtenModes(source, spans, combined) : new Map();
+  if (!modes) return { missed: true };
+  let modesRead = 0;
   const unsupported = new Set();
   // What the model reads and does not keep: the first edit writes the text without it.
   const lost = new Set();
@@ -7370,7 +7787,10 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
           ...(tweaked.get(ev.i)?.length ? { tweaks: tweaked.get(ev.i).map((x) => ({ ...x })) } : {}),
           // \\scaleDurations n/d: the written value, lasting n/d of itself.
           ...(Array.isArray(ev.scale) && ev.scale[0] > 0 && ev.scale[1] > 0 ? { scale: [ev.scale[0], ev.scale[1]] } : {}),
+          // \\partCombineApart and its kin, written before it in a part of a \\partCombine.
+          ...(modes.has(ev.i) ? { combineMode: modes.get(ev.i) } : {}),
         });
+        if (modes.has(ev.i)) modesRead++;
         // \\stemUp and \\autoBeamOff hold until changed: written where the lane's notes change them.
         if (k === "Note") {
           const was = switches.get(lane) ?? { stem: 0, beam: false };
@@ -7440,7 +7860,7 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
     score.groups = score.groups.map((g) => ({ ...g, first: shift(g.first), last: shift(g.last) })).filter((g) => g.last >= g.first);
   }
   // Two parts on one staff, one voice over two: their staves marked, or the text read otherwise.
-  if (combined && !markCombined(score, parsed, placed, spans, combined)) return { missed: true };
+  if (combined && (modesRead !== modes.size || !markCombined(score, parsed, placed, spans, combined))) return { missed: true };
   // A staff kept as written (\\partCombine, \\autoChange): its text, the variables it uses, its notes shown.
   if (source != null && new RegExp(`\\\\(${RAW_COMMANDS.join("|")})\\b`).test(source)) keepRaw(score, parsed, placed, source, spans, unsupported);
   score.staves = placed.flat();

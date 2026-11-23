@@ -183,6 +183,17 @@
             <hr>
             <button type="button" role="menuitem" data-act="cross" data-dir="-1"><%= t("app.editor.notes_on_the_staff_above") %> <kbd>Ctrl+Shift+↑</kbd></button>
             <button type="button" role="menuitem" data-act="cross" data-dir="1"><%= t("app.editor.notes_on_the_staff_below") %> <kbd>Ctrl+Shift+↓</kbd></button>
+            <%# Two desks on one staff (#1021): a staff and the one below it condensed as the two
+                parts of a partCombine, split again, how they are set over a passage, a divisi. %>
+            <div class="studio-dropdown-head" role="presentation"><%= t("app.editor.two_desks_on_one_staff") %></div>
+            <button type="button" role="menuitem" data-act="condense" title="<%= t("app.editor.condense_title") %>"><%= t("app.editor.condense_with_the_staff_below") %></button>
+            <button type="button" role="menuitem" data-act="split-staves" title="<%= t("app.editor.split_title") %>"><%= t("app.editor.split_into_two_staves") %></button>
+            <button type="button" role="menuitem" data-act="combine-mode" data-mode="automatic"><%= t("app.editor.two_parts_as_the_notes_ask") %></button>
+            <button type="button" role="menuitem" data-act="combine-mode" data-mode="apart"><%= t("app.editor.two_parts_apart") %></button>
+            <button type="button" role="menuitem" data-act="combine-mode" data-mode="unisono"><%= t("app.editor.two_parts_a2") %></button>
+            <button type="button" role="menuitem" data-act="combine-mode" data-mode="soloI"><%= t("app.editor.two_parts_solo_i") %></button>
+            <button type="button" role="menuitem" data-act="combine-mode" data-mode="soloII"><%= t("app.editor.two_parts_solo_ii") %></button>
+            <button type="button" role="menuitem" data-act="divisi" title="<%= t("app.editor.divisi_title") %>"><%= t("app.editor.divisi_over_the_selected_bars") %> <kbd><%= t("app.editor.the_selected_bars") %></kbd></button>
           </div>
         </details>
         <details class="studio-dropdown">
@@ -668,6 +679,10 @@
         </div>
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="remove-staff" title="<%= t("app.editor.take_the_selected_staff_away") %>"><%= t("app.editor.minus_this_staff") %></button>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="condense" title="<%= t("app.editor.condense_title") %>"><%= t("app.editor.condense_staves") %></button>
+          <button type="button" class="tool tool-wide" data-act="split-staves" title="<%= t("app.editor.split_title") %>"><%= t("app.editor.split_staves") %></button>
         </div>
       </details>
 

@@ -219,7 +219,9 @@ test("\\partCombine: what the score cannot do there is refused, said, and change
   // What the model cannot take apart stays kept as written, its notes edited in the text — with the reason.
   for (const src of [
     "\\new Staff \\partCombineUp { c''4 d'' e'' f'' } { a'4 b' c''2 }",
-    "\\new Staff \\partCombine { \\partCombineApart c''4 d'' e'' f'' } { a'4 b' c''2 }",
+    // A command with no note of its part after it: where it holds cannot be said.
+    "\\new Staff \\partCombine { c''4 d'' e'' f'' \\partCombineApart } { a'4 b' c''2 }",
+    "\\new Staff \\partCombine { \\voiceOne c''4 d'' e'' f'' } { a'4 b' c''2 }",
     "\\new Staff { c''4 d'' e'' f'' | \\partCombine { c''4 d'' e'' f'' } { a'4 b' c''2 } }",
   ]) {
     const result = parse(src);
@@ -244,6 +246,303 @@ test("combinedShown: unison, chords, solos, rests and parts apart, as the engrav
   // Too far apart for one chord: two voices.
   const [i3, ii3] = M.combinedShown([ev(21)], [ev(7)]);
   assert.deepEqual([i3, ii3], [[true], [true]]);
+});
+
+// ---- How the two parts are set: \partCombineApart and its kin (#1021) ----------------------
+
+/** What the engraver draws of a text: each note and rest, its length, its voice, the words over it. */
+const drawing = (text) => JSON.stringify(JSON.parse(score_json(text)).staves.map((st) => st.events.filter((ev) => ev.k === "Note" || ev.k === "Rest").map((ev) => [ev.k, ev.pitches, ev.ticks, ev.texts.map((t) => t[0]), ev.voice ?? 0])));
+
+function engraves(source) {
+  assert.doesNotThrow(() => editor_view(source, 900, 7, -1, -1), source);
+}
+
+const MODES = `hornI = \\relative c'' { c4 d \\partCombineApart e f | \\partCombineAutomatic g1 | c,4 \\partCombineUnisono d e f }
+hornII = \\relative c'' { \\partCombineSoloI a4 b c2 | g1 | \\partCombineSoloII c4 d e \\partCombineChords d }
+\\new Staff \\with { instrumentName = "Horns" } { \\partCombine \\hornI \\hornII }`;
+
+test("\\partCombineApart, SoloI, SoloII, Unisono, Chords, Automatic: held by the model, part I saying them, and drawn as the text was", () => {
+  const { score, source } = roundTrip(MODES);
+  assert.ok(M.isCombined(score, 0), "edited on the score, not kept as written");
+  assert.equal(M.isRaw(score, 0), false);
+  // Part II's commands are said by part I, on its first note at or after each: the engraver heeds them there.
+  assert.deepEqual(score.staves[0].events.map((ev) => ev.combineMode ?? "-"), ["soloI", "-", "apart", "-", "automatic", "soloII", "unisono", "-", "chords"]);
+  assert.ok(score.staves[1].events.every((ev) => ev.combineMode == null));
+  assert.match(source, /hornI = \{\n {2}\\partCombineSoloI c''4 d''4 \\partCombineApart e''4 f''4 \| \\partCombineAutomatic g''1 \| \\partCombineSoloII c''4 \\partCombineUnisono d''4 e''4 \\partCombineChords f''4\n\}/);
+  assert.doesNotMatch(source.split("hornII = ")[1], /partCombine[A-Z]/, "part II says none");
+  // The engraver draws the model's text as it drew the one read: the same notes, voices, Solo and a2.
+  assert.equal(drawing(source), drawing(MODES));
+  assert.match(drawing(source), /"Solo"/);
+  assert.match(drawing(source), /"Solo II"/);
+  assert.match(drawing(source), /"a2"/);
+  for (const [i, mode] of [[0, "soloI"], [1, "soloI"], [2, "apart"], [4, "automatic"], [5, "soloII"], [8, "chords"]]) assert.equal(M.combineModeAt(score, 0, i), mode, `at ${i}`);
+});
+
+test("\\partCombine… commands: in braces, before a rest or a grace note, spelled \\partcombine — the same drawing; one in a string or a comment is not one", () => {
+  for (const src of [
+    "\\new Staff \\partCombine { c''4 \\partCombineApart d'' e'' f'' | g''1 } { c''4 d'' e'' f'' | \\partCombineAutomatic g''1 }",
+    "\\new Staff \\partCombine { \\partCombineSoloII c''2 r | \\partCombineAutomatic \\grace b'8 c''1 } { a'2 a' | c''1 }",
+    "\\new Staff \\partcombine { \\partcombineApart c''4 d'' e'' f'' } { a'4 b' c''2 }",
+  ]) {
+    const { score, source } = roundTrip(src);
+    assert.ok(M.isCombined(score, 0), src);
+    assert.ok(score.staves[0].events.some((ev) => ev.combineMode), src);
+    assert.equal(drawing(source), drawing(src), src);
+  }
+  // In a string or a comment: read as none.
+  const quoted = read("\\new Staff \\partCombine { c''4^\"partCombineApart\" d'' e'' f'' } { c''4 d'' % \\partCombineSoloI\n e'' f'' }");
+  assert.ok(M.isCombined(quoted, 0));
+  assert.ok(quoted.staves.every((st) => st.events.every((ev) => ev.combineMode == null)));
+});
+
+test("combinedShown: a command in force sets the stretch — apart, a2, a solo, a chord — as the engraver's `forced` does", () => {
+  const ev = (d, base = 4, fields = {}) => M.makeEvent({ rest: d == null, pitches: d == null ? [] : [{ d, alter: 0 }], base, ...fields });
+  const shown = (one, two) => M.combinedShown(one, two).map((flags) => flags.map(Number).join(""));
+  // The same note in both: one drawn — two when apart.
+  assert.deepEqual(shown([ev(14), ev(14)], [ev(14), ev(14)]), ["11", "00"]);
+  assert.deepEqual(shown([ev(14, 4, { combineMode: "apart" }), ev(14)], [ev(14), ev(14)]), ["11", "11"]);
+  // Apart holds until another says otherwise; both resting, part I's rest still.
+  assert.deepEqual(shown([ev(14, 4, { combineMode: "apart" }), ev(null), ev(14, 4, { combineMode: "automatic" })], [ev(14), ev(null), ev(14)]), ["111", "100"]);
+  // Different notes forced as one (a2): part I's drawn; a solo of part II: part II's, whatever part I plays.
+  assert.deepEqual(shown([ev(16, 4, { combineMode: "unisono" }), ev(16, 4, { combineMode: "soloII" })], [ev(9), ev(9)]), ["10", "01"]);
+  // a2 where part I rests and part II plays: part II's.
+  assert.deepEqual(shown([ev(null, 4, { combineMode: "unisono" })], [ev(9)]), ["0", "1"]);
+  // A chord forced where the parts are too far apart for one; not where their rhythms differ.
+  assert.deepEqual(shown([ev(21, 4, { combineMode: "chords" }), ev(21, 8), ev(21, 8)], [ev(7), ev(7)]), ["111", "01"]);
+  // Part II's command counts too, the later one winning at the same moment.
+  assert.deepEqual(shown([ev(14, 4, { combineMode: "apart" })], [ev(14, 4, { combineMode: "soloI" })]), ["1", "0"]);
+});
+
+test("setCombineMode: a passage set apart, a2 or solo — what follows as it was — on either part's selection; refusals change nothing", () => {
+  const score = read(HORNS);
+  const plainText = engrave(score).source;
+  // Bar 1 (c'' d'' e''8 f''8 over a' d'' c''): apart, then as the notes ask from bar 2 on.
+  M.setCombineMode(score, 0, 0, 3, "apart");
+  assert.deepEqual(score.staves[0].events.map((ev) => ev.combineMode ?? "-"), ["apart", "-", "-", "-", "automatic", "-", "-"]);
+  const { source, items } = engrave(score);
+  assert.match(source, /\\partCombine \{ \\partCombineApart c''4 d''4 e''8 f''8 \| \\partCombineAutomatic f''2\. \|/);
+  // The d'' both play, drawn once before, is now drawn for each part.
+  assert.ok(!items.find((it) => it.staff === 1 && it.index === 1).hidden);
+  // Read back: the same.
+  assert.deepEqual(read(source).staves[0].events.map((ev) => ev.combineMode ?? "-"), ["apart", "-", "-", "-", "automatic", "-", "-"]);
+  // A selection in part II (its second and third notes) sets the passage from part I's note there.
+  M.setCombineMode(score, 1, 1, 2, "soloI");
+  assert.deepEqual(score.staves[0].events.map((ev) => ev.combineMode ?? "-"), ["apart", "soloI", "-", "-", "automatic", "-", "-"]);
+  assert.match(drawing(engrave(score).source), /"Solo"/);
+  // As the notes ask everywhere: the commands are gone, the text as it was.
+  M.setCombineMode(score, 0, 0, 6, "automatic");
+  assert.equal(engrave(score).source, plainText);
+  // Refusals, each said, nothing changed.
+  assert.throws(() => M.setCombineMode(score, 0, 0, 1, "together"), /as the notes ask, apart, as a chord, a2/);
+  assert.throws(() => M.setCombineMode(score, 0, 0, 99, "apart"), /no such note/);
+  assert.equal(M.toLilyPond(score).source, plainText);
+  // A selection in which part I starts nothing: its whole note under part II's second half.
+  const long = read("\\new Staff \\partCombine { c''1 } { a'2 b'2 }");
+  const was = M.toLilyPond(long).source;
+  assert.throws(() => M.setCombineMode(long, 1, 1, 1, "apart"), /Part I starts no note in the selection/);
+  assert.equal(M.toLilyPond(long).source, was);
+  const one = read("\\new Staff { c''4 d'' e'' f'' }");
+  assert.throws(() => M.setCombineMode(one, 0, 0, 1, "apart"), /holds one part: condense it/);
+});
+
+test("a \\partCombine… command goes with its notes: the note under it rewritten, its bar deleted", () => {
+  const score = read(HORNS);
+  M.setCombineMode(score, 0, 4, 4, "apart");
+  assert.deepEqual(score.staves[0].events.map((ev) => ev.combineMode ?? "-"), ["-", "-", "-", "-", "apart", "automatic", "-"]);
+  // The note under the command rewritten: the command holds there still.
+  M.write(score, 0, M.starts(score.staves[0])[4], M.notated(2, 1), pitch(20));
+  assert.equal(M.combineModeAt(score, 0, 4), "apart");
+  assert.equal(M.combineModeAt(score, 0, 5), "automatic");
+  engrave(score);
+  // Its bar deleted: nothing of it left, what held after it holds there still.
+  M.deleteBars(score, 1, 1);
+  assert.ok(score.staves[0].events.every((ev) => (ev.combineMode ?? "automatic") === "automatic"), JSON.stringify(score.staves[0].events.map((ev) => ev.combineMode)));
+  engrave(score);
+});
+
+// ---- Two staves condensed on one, and split again (#1021) --------------------------------
+
+const FLUTES = `<<
+  \\new Staff \\with { instrumentName = "Flute 1" shortInstrumentName = "Fl. 1" midiInstrument = "flute" } { \\key g \\major c''4 d'' e'' f'' | g''1 | r1 }
+  \\new Staff \\with { instrumentName = "Flute 2" shortInstrumentName = "Fl. 2" midiInstrument = "piccolo" } { \\key g \\major c''4 b' c'' d'' | r1 | e''1 }
+  \\new Staff \\with { instrumentName = "Bassoon" midiInstrument = "bassoon" } { \\clef bass \\key g \\major c1 | d | e }
+>>`;
+
+/** FLUTES read, with a mixer setting on each lane and a break of its own in the second flute's part. */
+function flutes() {
+  const score = read(FLUTES);
+  score.meta = { mixer: { tracks: { 0: { volume: 0.5 }, 1: { volume: 0.8 }, 2: { pan: -0.3 } } } };
+  M.setPartBreak(score, 1, 0, "line");
+  return score;
+}
+
+/** The model's text read again as the page reads it, its settings line with it. */
+function reread(score) {
+  const { source } = M.toLilyPond(score);
+  const again = read(source);
+  M.attachMeta(again, source);
+  return again;
+}
+
+test("condenseStaves: a staff and the one below it as the two parts of \\partCombine, variables named after them; splitStaves undoes it, to the letter", () => {
+  const score = flutes();
+  const before = M.toLilyPond(score).source;
+  assert.equal(M.condenseStaves(score, 0), 0);
+  const { source } = engrave(score);
+  assert.match(source, /^fluteI = \{\n {2}c''4 d''4 e''4 f''4 \| g''1 \| r1\n\}\nfluteII = \{\n {2}c''4 b'4 c''4 d''4 \| r1 \| e''1\n\}\n/);
+  assert.match(source, /\\new Staff \\with \{ instrumentName = "Flute 1\.2" shortInstrumentName = "Fl\. 1\.2" midiInstrument = "flute" \} \{\n {4}\\clef treble \\key g \\major \\time 4\/4\n {4}\\partCombine \\fluteI \\fluteII/);
+  assert.deepEqual(M.staffLanes(score), [0, 2], "two staves now");
+  assert.ok(M.isCombined(score, 0) && M.partOfLane(score, 1) === 2);
+  // The engraver marks them itself: a2 where they play as one, Solo where one rests.
+  assert.match(drawing(source), /"a2"/);
+  assert.match(drawing(source), /"Solo"/);
+  // What the settings line keeps by lane stays with its notes; what each desk was is kept for Split.
+  assert.deepEqual(score.meta.mixer.tracks, { 0: { volume: 0.5 }, 1: { volume: 0.8 }, 2: { pan: -0.3 } });
+  assert.deepEqual(score.meta.desks, { 0: { names: ["Flute 1", "Flute 2"], shorts: ["Fl. 1", "Fl. 2"], instruments: ["flute", "piccolo"] } });
+  // Split: the text as it was before, to the letter — in memory, and from the saved text read again.
+  const saved = reread(score);
+  assert.deepEqual(M.splitStaves(score, 0), [0, 1]);
+  assert.equal(M.toLilyPond(score).source, before);
+  assert.ok(M.isCombined(saved, 0), "read back condensed");
+  M.splitStaves(saved, 1);
+  assert.equal(M.toLilyPond(saved).source, before);
+  assert.equal(saved.meta.desks, undefined);
+});
+
+test("condenseStaves: what cannot share a staff is refused, said, and nothing changes", () => {
+  const refused = (src, pattern, s = 0) => {
+    const score = parse(src).score;
+    assert.ok(score, src);
+    const was = JSON.stringify(score);
+    assert.throws(() => M.condenseStaves(score, s), pattern, src);
+    assert.equal(JSON.stringify(score), was, `nothing changed: ${src}`);
+  };
+  const pair = (a, b) => `<<\n  \\new Staff ${a}\n  \\new Staff ${b}\n>>`;
+  refused(pair("{ c''4 d'' e'' f'' }", "{ \\clef bass c4 d e f }"), /different clefs/);
+  refused(pair("{ c''4 d'' e'' f'' | \\clef alto g'1 }", "{ c''4 d'' e'' f'' | g'1 }"), /different clefs/);
+  refused(pair("\\with { midiInstrument = \"clarinet\" } { c''4 d'' e'' f'' }", "\\with { midiInstrument = \"flute\" } { c''4 d'' e'' f'' }"), /same transposition/);
+  refused(pair("\\with { instrumentName = \"Clarinet in A\" midiInstrument = \"clarinet\" } { c''1 }", "\\with { instrumentName = \"Clarinet in B♭\" midiInstrument = \"clarinet\" } { c''1 }"), /same transposition/);
+  refused(pair("{ c''4 d'' e'' f'' } \\addlyrics { la la la la }", "{ c''4 d'' e'' f'' }"), /Words go under a staff of one part/);
+  refused(pair("{ << { c''4 d'' e'' f'' } \\\\ { a'1 } >> }", "{ c''4 d'' e'' f'' }"), /second voice/);
+  refused(pair("{ c''4 d'' e'' f'' }", "{ << { c''4 d'' e'' f'' } \\\\ { a'1 } >> }"), /second voice/);
+  refused(pair("\\with { \\magnifyStaff #2/3 } { c''4 d'' e'' f'' }", "{ c''4 d'' e'' f'' }"), /not set alike/);
+  refused("\\new Staff { c''4 d'' e'' f'' }", /No staff below this one/);
+  refused(pair("{ c''4 d'' e'' f'' }", "{ c''4 d'' e'' f'' }"), /No staff below this one/, 1);
+  refused(pair("{ c''4 d'' e'' f'' }", "{ c''4 d'' e'' f'' }"), /no such staff/, 9);
+  refused("<<\n  \\new Staff { c''4 d'' e'' f'' }\n  \\new DrumStaff \\drummode { sn4 sn sn sn }\n>>", /Only two staves of notes/);
+  refused(pair("\\partCombine { c''4 d'' e'' f'' } { a'4 b' c''2 }", "{ c''4 d'' e'' f'' }"), /two parts at most/);
+  refused(pair("{ c''4 d'' e'' f'' | \\partCombine { c''4 d'' e'' f'' } { a'4 b' c''2 } }", "{ c''4 d'' e'' f'' | c''1 }"), /kept as LilyPond wrote it/);
+  // A group that holds one of the two and not the other.
+  refused("<<\n  \\new Staff { c''1 }\n  \\new StaffGroup <<\n    \\new Staff { c''1 }\n    \\new Staff { c''1 }\n  >>\n>>", /different groups/);
+  // A staff in a key of its own, another metre drawn: set on the model, as the editor does.
+  const keyed = read(pair("{ c''4 d'' e'' f'' }", "{ c''4 d'' e'' f'' }"));
+  keyed.staves[1].key = 2;
+  assert.throws(() => M.condenseStaves(keyed, 0), /different keys/);
+  const timed = read(pair("{ c''4 d'' e'' f'' }", "{ c''4 d'' e'' f'' }"));
+  timed.staves[1].shownTime = [2, 2];
+  assert.throws(() => M.condenseStaves(timed, 0), /same bars/);
+  assert.equal(M.isCombined(keyed, 0) || M.isCombined(timed, 0), false);
+});
+
+test("condenseStaves: names — the same instrument numbered, two instruments, none; variables no other staff uses; a group around both kept", () => {
+  const named = (a, b) => {
+    const score = read(`<<\n  \\new Staff \\with { instrumentName = "${a}" } { c''1 }\n  \\new Staff \\with { instrumentName = "${b}" } { a'1 }\n>>`);
+    M.condenseStaves(score, 0);
+    engrave(score);
+    return [score.staves[0].name, ...score.staves[0].combine.names];
+  };
+  assert.deepEqual(named("Flute 1", "Flute 2"), ["Flute 1.2", "fluteI", "fluteII"]);
+  assert.deepEqual(named("Flûte I", "Flûte II"), ["Flûte I.II", "fluteI", "fluteII"]);
+  assert.deepEqual(named("Horn 3", "Horn 4"), ["Horn 3.4", "hornIII", "hornIV"]);
+  assert.deepEqual(named("Oboe", "Oboe"), ["Oboe 1.2", "oboeI", "oboeII"]);
+  assert.deepEqual(named("Flute", "Piccolo"), ["Flute / Piccolo", "fluteI", "piccoloII"]);
+  // No name: parts I and II; a second pair takes names of its own.
+  const score = read("<<\n  \\new Staff { c''1 }\n  \\new Staff { a'1 }\n  \\new Staff { c''1 }\n  \\new Staff { a'1 }\n>>");
+  M.condenseStaves(score, 2);
+  M.condenseStaves(score, 0);
+  assert.deepEqual([score.staves[0].name, score.staves[0].combine.names, score.staves[2].combine.names], ["", ["partIx", "partIIx"], ["partI", "partII"]]);
+  const { source } = engrave(score);
+  assert.equal(engrave(reread(score)).source, source, "read back and written the same");
+  // Two staves in a group of their own, and a group after them: the group is around the one staff, and both again.
+  const grouped = read("<<\n  \\new StaffGroup <<\n    \\new Staff \\with { instrumentName = \"Horn 1\" } { c''1 }\n    \\new Staff \\with { instrumentName = \"Horn 2\" } { a'1 }\n  >>\n  \\new StaffGroup <<\n    \\new Staff { \\clef bass c1 }\n    \\new Staff { \\clef bass c1 }\n  >>\n>>");
+  const before = M.toLilyPond(grouped).source;
+  assert.deepEqual(grouped.groups.map((g) => [g.first, g.last]), [[0, 1], [2, 3]]);
+  M.condenseStaves(grouped, 0);
+  assert.deepEqual(grouped.groups.map((g) => [g.first, g.last]), [[0, 0], [1, 2]]);
+  const again = reread(grouped);
+  assert.deepEqual(again.groups.map((g) => [g.first, g.last]), [[0, 0], [1, 2]], "the group read back");
+  M.splitStaves(again, 0);
+  assert.equal(M.toLilyPond(again).source, before);
+});
+
+test("splitStaves: a \\partCombine written so splits too, each staff named after it, how the two were set forgotten; a plain staff is refused", () => {
+  const score = read(MODES);
+  assert.deepEqual(M.splitStaves(score, 0), [0, 1]);
+  assert.deepEqual(M.staffLanes(score), [0, 1]);
+  assert.deepEqual([score.staves[0].name, score.staves[1].name], ["Horns 1", "Horns 2"]);
+  const { source } = engrave(score);
+  assert.doesNotMatch(source, /partCombine|hornI/);
+  assert.deepEqual(notes(score, 1), ["a'4", "b'4", "c''2", "g'1", "c''4", "d''4", "e''4", "d''4"]);
+  assert.equal(score.staves[1].clef, "treble");
+  // "Horns 1.2", as condensing names a pair: Horns 1 and Horns 2 again.
+  const pair = read("\\new Staff \\with { instrumentName = \"Horns 1.2\" } \\partCombine { c''1 } { a'1 }");
+  M.splitStaves(pair, 0);
+  assert.deepEqual([pair.staves[0].name, pair.staves[1].name], ["Horns 1", "Horns 2"]);
+  const was = JSON.stringify(score);
+  assert.throws(() => M.splitStaves(score, 0), /only a staff of two parts splits/);
+  assert.equal(JSON.stringify(score), was);
+  const raw = parse("\\new Staff \\partCombineUp { c''4 d'' e'' f'' } { a'4 b' c''2 }").score;
+  assert.throws(() => M.splitStaves(raw, 0), /kept as LilyPond wrote it/);
+});
+
+test("partList and partOf: on a staff of two parts each desk is a part — its notes alone on a plain staff, its rests gathered, its own name and layout", () => {
+  const score = flutes();
+  assert.deepEqual(M.partList(score).map((p) => [p.lane, p.desk, p.name]), [[0, 0, "Flute 1"], [1, 0, "Flute 2"], [2, 0, "Bassoon"]]);
+  const alone = M.toLilyPond(M.partOf(score, 1), { written: true }).source;
+  M.condenseStaves(score, 0);
+  M.setCombineMode(score, 0, 0, 3, "apart");
+  assert.deepEqual(M.partList(score).map((p) => [p.lane, p.desk, p.staff, p.name]), [[0, 1, 0, "Flute 1"], [1, 2, 0, "Flute 2"], [2, 0, 1, "Bassoon"]]);
+  // The second desk's part: what its own staff's part was — its name, its sound, its mixer setting, its own break.
+  const second = M.partOf(score, 1, 2);
+  assert.equal(M.toLilyPond(second, { written: true }).source, alone);
+  assert.match(alone, /\\header \{ instrument = "Flute 2" \}/);
+  assert.match(alone, /midiInstrument = "piccolo"/);
+  assert.match(alone, /c''4 b'4 c''4 d''4 \| \\break R1 \| e''1/);
+  assert.doesNotMatch(alone, /partCombine|fluteI/);
+  assert.deepEqual(second.meta, { mixer: { tracks: { 0: { volume: 0.8 } } } });
+  // The first desk's: part I alone, nothing of how the two were set.
+  const first = M.toLilyPond(M.partOf(score, 0, 1), { written: true }).source;
+  assert.match(first, /\\header \{ instrument = "Flute 1" \}/);
+  assert.match(first, /c''4 d''4 e''4 f''4 \| g''1 \| R1/);
+  assert.doesNotMatch(first, /partCombine|\\break/);
+  engraves(first);
+  engraves(alone);
+  // Each desk's layout is its own, kept by its lane: set on the second, the first's is as it was.
+  M.setPartLayout(score, 1, { staffSize: 16 });
+  M.setPartBreak(score, 0, 1, "page");
+  assert.deepEqual(M.partLayout(score, 1), { breaks: { 0: "line" }, staffSize: 16, systemsPerPage: null, evenPages: null, systemSpacing: null });
+  assert.deepEqual(M.partLayout(score, 0).breaks, { 1: "page" });
+  assert.match(M.toLilyPond(M.partOf(score, 1, 2), { written: true }).source, /set-global-staff-size 16/);
+  assert.doesNotMatch(M.toLilyPond(M.partOf(score, 0, 1), { written: true }).source, /set-global-staff-size/);
+  // Through the saved text, and after Split: each staff keeps its desk's layout.
+  const saved = reread(score);
+  assert.deepEqual(saved.meta.parts, { 0: { breaks: { 1: "page" } }, 1: { breaks: { 0: "line" }, staffSize: 16 } });
+  M.splitStaves(saved, 0);
+  assert.equal(M.partLayout(saved, 1).staffSize, 16);
+  // The whole staff, both desks on it, is still a part for who asks for no desk.
+  assert.match(M.toLilyPond(M.partOf(score, 0), { written: true }).source, /\\partCombine/);
+  // What is no part: a desk of a plain staff, a third desk; a voice of a plain staff has no layout of its own.
+  assert.throws(() => M.partOf(score, 2, 1), /no such part/);
+  assert.throws(() => M.partOf(score, 0, 3), /no such part/);
+  const voices = read("\\new Staff { << { c''1 } \\\\ { a'1 } >> | c''1 }");
+  assert.throws(() => M.setPartBreak(voices, 1, 0, "line"), /no such staff/);
+  // A staff written \partCombine with no desks kept: named after the staff; with no name, the page names them.
+  assert.deepEqual(M.partList(read(MODES)).map((p) => p.name), ["Horns 1", "Horns 2"]);
+  assert.match(M.toLilyPond(M.partOf(read(MODES), 1, 2), { written: true }).source, /instrument = "Horns 2"/);
+  assert.deepEqual(M.partList(read("\\new Staff \\partCombine { c''1 } { a'1 }")).map((p) => [p.lane, p.desk, p.name]), [[0, 1, ""], [1, 2, ""]]);
+  // A desk's rests written in pieces, or as spacers, are whole bars in its part.
+  const spaced = read("\\new Staff \\with { instrumentName = \"Oboes\" } \\partCombine { c''1 | d''1 | e''1 } { s2 s2 | r2 r2 | e''1 }");
+  assert.match(M.toLilyPond(M.partOf(spaced, 0, 2), { written: true }).source, /R1\*2 \| e''1/);
 });
 
 // ---- \autoChange -------------------------------------------------------------------------

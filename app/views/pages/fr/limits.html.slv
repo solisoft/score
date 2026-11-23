@@ -82,9 +82,16 @@
       ses deux parties en deux voix (les variables qu'il nomme conservées), et une portée de piano faite par
       <code>\autoChange</code> comme une seule voix, utilisé directement ou dans une variable ; un <code>\tweak</code>
       sur une articulation, des mots ou une nuance reste avec eux. Toujours conservés tels qu'écrits, leurs notes
-      modifiées dans le texte : <code>\partCombineUp</code> et <code>\partCombineDown</code>, une partie qui dit
-      comment les parties se combinent (<code>\partCombineApart</code> et consorts), et toute autre musique à côté
-      de <code>\partCombine</code> ou <code>\autoChange</code> sur sa portée.
+      modifiées dans le texte : <code>\partCombineUp</code> et <code>\partCombineDown</code>, des voix dans une
+      partie, et toute autre musique à côté de <code>\partCombine</code> ou <code>\autoChange</code> sur sa portée.
+    </p>
+    <p>
+      Deux portées se condensent en une depuis l'éditeur (Format ▸ Condenser avec la portée du dessous), et se
+      séparent de nouveau ; une partie qui dit comment les parties se combinent (<code>\partCombineApart</code>,
+      <code>\partCombineSoloI</code> et consorts) se modifie aussi sur la partition. Les mots que le graveur
+      imprime au-dessus sont les siens, dans toutes les langues : <em>a2</em>, <em>Solo</em> et
+      <em>Solo II</em> — pas encore <em>1.</em>, <em>2.</em> ni <em>à 2</em> — et une portée contient deux
+      parties, pas trois.
     </p>
     <p>
       Depuis sa deuxième série de travaux sur LilyPond, le graveur dessine aussi des portées plus petites

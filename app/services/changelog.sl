@@ -10,17 +10,49 @@
 class Changelog
   static def days
     [
-      {"date": "2026-11-23", "entries": [{
-        "area": "site",
-        "title": "Each part is laid out on its own",
-        "text": "File ▸ Print a part is now File ▸ Parts. Under the instrument, the part has its own layout: a "
-        + "new line or a new page after any bar, its staff size, its systems a page, its lines spread evenly, "
-        + "the space between its systems. It is kept with the score, undone like any edit, and follows its "
-        + "bars and its staff; Reset gives the part back to the score's layout. The score itself is not "
-        + "touched, and its own breaks are no longer put into the parts. The read page's parts are laid out "
-        + "the same.",
-        "link": "playground"
-      }]},
+      {"date": "2026-11-23", "entries": [
+        {
+          "area": "site",
+          "title": "Two desks on one staff: condense, and split again",
+          "text": "On a conductor's score, flutes 1 and 2 share a staff. Select a staff and choose Format ▸ "
+          + "Condense with the staff below: the two become the two parts of one staff, named after both "
+          + "(Flute 1.2), written in the text as \\partCombine \\fluteI \\fluteII. The engraver draws one "
+          + "note where they play together and marks a2, Solo and Solo II itself. Format ▸ Split into two "
+          + "staves gives each its staff back, as it was. Staves in different clefs, keys, metres or "
+          + "transpositions, with words or a second voice, are refused, and the page says why. The condensed "
+          + "staff sounds as its first desk does; each desk's mixer settings come back when it is split.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
+          "title": "Each desk of a shared staff has its own part",
+          "text": "File ▸ Parts, and the read page's parts, now list Flute 1 and Flute 2 instead of the staff "
+          + "they share: each part holds its desk's notes alone on a plain staff, its bars of rest gathered, "
+          + "with its own breaks, staff size and spacing.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
+          "title": "A passage of two parts set apart, a2 or solo; a divisi",
+          "text": "On a staff of two parts, select a passage and choose Format ▸ Two parts: apart, a2, Solo I, "
+          + "Solo II, or as the notes ask. A score that already says so (\\partCombineApart and its kin) is "
+          + "now edited on the score instead of being left to the text. On a plain staff, Format ▸ Divisi over "
+          + "the selected bars splits their chords in two voices, the upper notes above and the lower below, "
+          + "with div. over the first note and unis. after the bars.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
+          "title": "Each part is laid out on its own",
+          "text": "File ▸ Print a part is now File ▸ Parts. Under the instrument, the part has its own layout: a "
+          + "new line or a new page after any bar, its staff size, its systems a page, its lines spread evenly, "
+          + "the space between its systems. It is kept with the score, undone like any edit, and follows its "
+          + "bars and its staff; Reset gives the part back to the score's layout. The score itself is not "
+          + "touched, and its own breaks are no longer put into the parts. The read page's parts are laid out "
+          + "the same.",
+          "link": "playground"
+        }
+      ]},
       {"date": "2026-11-18", "entries": [
         {
           "area": "engine",

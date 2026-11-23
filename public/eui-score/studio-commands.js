@@ -423,6 +423,32 @@ export function install(ctx) {
         M.swapVoices(score, staffOf(), a, b);
         say(a === b ? tr("Voices 1 and 2 swapped in bar {n}", { n: barNo(a) }) : tr("Voices 1 and 2 swapped in bars {a}–{b}", { a: barNo(a), b: barNo(b) }));
       });
+      // Format ▸ Two desks on one staff (#1021): a staff and the one below it condensed as the two parts
+      // of a \\partCombine, split again; how the two are set over the selection; a passage divided.
+      case "condense": return edit((score) => {
+        const lane = M.condenseStaves(score, staffOf());
+        say(tr("Two staves on one: {name}. The engraver marks a2 and Solo itself; Format ▸ Split into two staves puts them back.", { name: score.staves[lane].name || tr("Staff {n}", { n: M.staffNumber(score, lane) + 1 }) }));
+      });
+      case "split-staves": return edit((score) => {
+        M.splitStaves(score, staffOf());
+        say(tr("One staff for each part again"));
+      });
+      case "combine-mode": return edit((score) => {
+        const r = range() ?? (() => { throw new Error(tr("Select the notes of the passage: click the first, Shift+click the last")); })();
+        M.setCombineMode(score, r.s, r.a, r.b, data.mode);
+        say({
+          automatic: tr("The two parts set as their notes ask over the selection"),
+          apart: tr("The two parts set apart, in two voices, over the selection"),
+          unisono: tr("The two parts as one over the selection, marked a2"),
+          soloI: tr("Part I alone over the selection, marked Solo"),
+          soloII: tr("Part II alone over the selection, marked Solo II"),
+        }[data.mode] ?? "");
+      });
+      case "divisi": return edit((score) => {
+        const [a, b] = selectedBars();
+        M.divisi(score, staffOf(), a, b, { div: tr("div."), unis: tr("unis.") });
+        say(a === b ? tr("Bar {n} divided: the lower notes are voice 2's", { n: barNo(a) }) : tr("Bars {a}–{b} divided: the lower notes are voice 2's", { a: barNo(a), b: barNo(b) }));
+      });
       case "repeat": return edit((score) => {
         const [a, b] = selectedBars();
         M.toggleRepeat(score, a, b);

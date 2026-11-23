@@ -81,8 +81,15 @@
       voices (the variables it names kept), and a piano staff made by <code>\autoChange</code> as one voice,
       used directly or inside a variable; a <code>\tweak</code> on an articulation, words or a dynamic stays
       with it. Still kept as written, its notes edited in the text: <code>\partCombineUp</code> and
-      <code>\partCombineDown</code>, a part that says how the parts combine (<code>\partCombineApart</code>
-      and the like), and other music beside <code>\partCombine</code> or <code>\autoChange</code> on its staff.
+      <code>\partCombineDown</code>, voices inside a part, and other music beside <code>\partCombine</code> or
+      <code>\autoChange</code> on its staff.
+    </p>
+    <p>
+      Two staves are condensed on one from the editor (Format ▸ Condense with the staff below), and split again;
+      a part that says how the parts combine (<code>\partCombineApart</code>, <code>\partCombineSoloI</code> and
+      the like) is edited on the score too. The words the engraver prints over them are its own, in every
+      language: <em>a2</em>, <em>Solo</em> and <em>Solo II</em> — not yet <em>1.</em>, <em>2.</em> or
+      <em>à 2</em> — and a staff holds two parts, not three.
     </p>
     <p>
       Since its second round of LilyPond work, the engraver also draws smaller staves

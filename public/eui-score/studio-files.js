@@ -86,7 +86,8 @@ export function install(ctx) {
   const partsStaff = partsDialog?.querySelector("[data-parts-staff]");
   const partsStatus = partsDialog?.querySelector("[data-parts-status]");
   const partLane = () => Number(partsStaff.value);
-  const partSource = () => M.toLilyPond(M.partOf(st.score, partLane()), { written: true }).source;
+  // On a staff of two parts (\\partCombine, #1021) each desk is a part: its lane is the part's.
+  const partSource = () => M.toLilyPond(M.partOf(st.score, partLane(), M.partOfLane(st.score, partLane())), { written: true }).source;
   const partName = () => partsStaff.selectedOptions[0]?.textContent ?? "part";
   async function previewPart() {
     await loaded();
@@ -148,10 +149,11 @@ export function install(ctx) {
   }
   function openParts() {
     if (!st.score) return say(tr("A part needs the score tools: this piece is edited in its text."), true);
-    partsStaff.replaceChildren(...M.staffLanes(st.score).map((s, n) => {
-      const staff = st.score.staves[s];
-      const name = staff.name || (M.INSTRUMENTS[M.instrumentOf(st.score, s)] ? instrumentName(M.INSTRUMENTS[M.instrumentOf(st.score, s)].name) : null) || tr("Staff {n}", { n: n + 1 });
-      return new Option(name, String(s));
+    // One part a staff — and one a desk, where two share a staff.
+    partsStaff.replaceChildren(...M.partList(st.score).map((part) => {
+      const known = M.INSTRUMENTS[M.instrumentOf(st.score, part.lane)];
+      const unnamed = (known ? instrumentName(known.name) : null) || tr("Staff {n}", { n: part.staff + 1 });
+      return new Option(part.name || (part.desk ? `${unnamed} ${part.desk}` : unnamed), String(part.lane));
     }));
     partsStatus.textContent = "";
     showPartLayout();

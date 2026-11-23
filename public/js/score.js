@@ -244,6 +244,19 @@
       .catch(function (error) { say(section, word("musicxmlFailed", { error: errorText(error) })); });
   }
 
+  /**
+   * The page's score with what its settings line says of its parts: each
+   * part's own layout (#1018) and what the desks of a condensed staff are
+   * called (#1021). On a copy, so the page's own score stays as it reads it.
+   */
+  function withSettings(read) {
+    var meta = read.M.readMeta(read.text);
+    var kept = {};
+    if (meta.parts) kept.parts = meta.parts;
+    if (meta.desks) kept.desks = meta.desks;
+    return Object.keys(kept).length ? Object.assign({}, read.score, { meta: kept }) : read.score;
+  }
+
   /** "A part…": the staves offered, each as its player reads it. */
   function openParts(section) {
     readScore(section)
@@ -252,10 +265,11 @@
         var M = read.M;
         var select = section.querySelector("[data-read-part-staff]");
         select.innerHTML = "";
-        M.staffLanes(read.score).forEach(function (s, n) {
-          var staff = read.score.staves[s];
-          var known = M.INSTRUMENTS[M.instrumentOf(read.score, s)];
-          select.appendChild(new Option(staff.name || (known && known.name) || word("staff", { n: n + 1 }), String(s)));
+        // One part a staff, and one a desk where two share a staff (\\partCombine, #1021).
+        M.partList(withSettings(read)).forEach(function (part) {
+          var known = M.INSTRUMENTS[M.instrumentOf(read.score, part.lane)];
+          var unnamed = (known && known.name) || word("staff", { n: part.staff + 1 });
+          select.appendChild(new Option(part.name || (part.desk ? unnamed + " " + part.desk : unnamed), String(part.lane)));
         });
         section.querySelector("[data-read-part]").hidden = false;
         section.querySelector("[data-read-parts]").hidden = true;
@@ -268,11 +282,9 @@
     readScore(section).then(function (read) {
       var select = section.querySelector("[data-read-part-staff]");
       var name = select.selectedOptions[0] ? select.selectedOptions[0].textContent : word("part");
-      // The part's own layout (#1018) is on the text's settings line: read from it, on a copy,
-      // so the page's own score stays as the page reads it.
-      var layouts = read.M.readMeta(read.text).parts;
-      var own = layouts ? Object.assign({}, read.score, { meta: { parts: layouts } }) : read.score;
-      var src = read.M.toLilyPond(read.M.partOf(own, Number(select.value)), { written: true }).source;
+      var own = withSettings(read);
+      var lane = Number(select.value);
+      var src = read.M.toLilyPond(read.M.partOf(own, lane, read.M.partOfLane(own, lane)), { written: true }).source;
       var file = section.getAttribute("data-file") + " - " + name;
       if (!asPdf) return save(src, file + ".ly", "text/x-lilypond");
       return read.E.toPdf(src, section.getAttribute("data-title") + " — " + name).then(function (pdf) {

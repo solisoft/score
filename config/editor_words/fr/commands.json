@@ -549,5 +549,17 @@
   "This part is laid out as the score is.": "Cette partie est mise en page comme la partition.",
   "A new page after bar {n}, in this part alone.": "Une nouvelle page après la mesure {n}, dans cette partie seulement.",
   "A new line after bar {n}, in this part alone.": "Une nouvelle ligne après la mesure {n}, dans cette partie seulement.",
-  "Remove": "Retirer"
+  "Remove": "Retirer",
+  "Two staves on one: {name}. The engraver marks a2 and Solo itself; Format ▸ Split into two staves puts them back.": "Deux portées en une : {name}. Le graveur marque lui-même a2 et Solo ; Format ▸ Séparer en deux portées les remet.",
+  "One staff for each part again": "De nouveau une portée par partie",
+  "Select the notes of the passage: click the first, Shift+click the last": "Sélectionnez les notes du passage : cliquez sur la première, Maj+clic sur la dernière",
+  "The two parts set as their notes ask over the selection": "Les deux parties écrites selon leurs notes sur la sélection",
+  "The two parts set apart, in two voices, over the selection": "Les deux parties séparées, à deux voix, sur la sélection",
+  "The two parts as one over the selection, marked a2": "Les deux parties à l'unisson sur la sélection, marquées a2",
+  "Part I alone over the selection, marked Solo": "La partie I seule sur la sélection, marquée Solo",
+  "Part II alone over the selection, marked Solo II": "La partie II seule sur la sélection, marquée Solo II",
+  "div.": "div.",
+  "unis.": "unis.",
+  "Bar {n} divided: the lower notes are voice 2's": "Mesure {n} divisée : les notes graves sont à la voix 2",
+  "Bars {a}–{b} divided: the lower notes are voice 2's": "Mesures {a}–{b} divisées : les notes graves sont à la voix 2"
 }

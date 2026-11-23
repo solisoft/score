@@ -198,6 +198,8 @@ const SAMPLES = {
   },
   // A part's own layout (#1018): no sound, so no channel; laid out by partOf, it is not in the part's settings.
   parts: { channel: "none", inPart: false, at: (lane) => ({ parts: { [lane]: { breaks: { 0: "line" }, staffSize: 16 } } }), lanes: (meta) => Object.keys(meta?.parts ?? {}) },
+  // What the desks of a condensed staff were (#1021): no sound; said in each desk's part heading, not in its settings.
+  desks: { channel: "none", inPart: false, at: (lane) => ({ desks: { [lane]: { names: ["Flute 1", "Flute 2"], shorts: ["Fl. 1", "Fl. 2"], instruments: ["flute", "flute"] } } }), lanes: (meta) => Object.keys(meta?.desks ?? {}) },
 };
 
 /** A key known only to the registry, added for a test: it must work everywhere with nothing else written. */
