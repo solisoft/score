@@ -13,6 +13,18 @@ class Changelog
       {"date": "2026-11-23", "entries": [
         {
           "area": "site",
+          "title": "Error pages in Score's own hand",
+          "text": "An address that leads nowhere now shows a page of the site, in its language, not a line of "
+          + "plain text: \"This page is taking a rest\", over a bar engraved by Score that ends in a whole rest "
+          + "— « une pause » — with the way home, to your scores or to sign in, to the sections library and a "
+          + "search of it, the guide and what's new (#1034). A score or a read link that does not exist says "
+          + "the same. The other errors have their own words and figure: a score not shared with you is "
+          + "\"Reserved for the section's players\", too many requests ask for \"a little silence between "
+          + "the bars\", a failure on the server is \"a wrong note\" with the error ID to send us, and a "
+          + "maintenance an intermission. None of them is indexed by search engines."
+        },
+        {
+          "area": "site",
           "title": "Move and reshape signs with the mouse",
           "text": "A dynamic, a hairpin, an articulation, a fingering, words, a slur, a phrasing slur or a tie "
           + "is selected by a click on it — a dashed box shows which — and dragged to where it reads best, to "

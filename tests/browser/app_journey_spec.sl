@@ -420,9 +420,10 @@ describe("The app, in a browser") do
     someone_else.save
     login(someone_else.email, JOURNEY_PASSWORD)
     visit(score_path)
-    assert_text("Forbidden")
+    # The error pages (#1034): 403 for the editor, 404 for the read link.
+    assert_text("Reserved for the section")
     visit(read_path)
-    assert_text("No such score")
+    assert_text("This page is taking a rest")
   end
 
   test("an example opened from the editor becomes a new score; the one open stays as it was") do

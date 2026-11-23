@@ -1,0 +1,52 @@
+<%# What an error page says (#1034), in the site's layout (ErrorsController, a
+    404) or in the page of its own the framework renders (errors/_page):
+    the status, a bar engraved by Score, the words of the status, and the
+    ways on. Locals: `status`; `signed` true or false when the request's
+    account is known, nil when it is not looked up (a 5xx leans on nothing
+    that may have failed); `request_id` and `message` when the framework
+    gives them. -%>
+<% key = "error_pages." + error_page_key(status) -%>
+<% code = status.to_i -%>
+<% app_link = app_open?() ? app_home_path() : playground_path() -%>
+<section class="error-page" aria-labelledby="error-title">
+  <div class="error-figure">
+    <%- partial("errors/figure_" + error_page_figure(code), {}) %>
+  </div>
+  <p class="error-code"><span class="error-number"><%= code %></span> <%= t(key + ".name") %></p>
+  <h1 id="error-title"><%= t(key + ".title") %></h1>
+  <p class="lead"><%= t(key + ".lede") %></p>
+  <% if code == 404 -%>
+    <p class="error-caption"><%= t("error_pages.e404.caption") %></p>
+  <% end -%>
+  <% if [409, 422].includes?(code) && !message.blank? -%>
+    <p class="error-message"><%= message %></p>
+  <% end -%>
+  <% if code >= 500 && !request_id.blank? -%>
+    <p class="error-id"><%= t("error_pages.error_id") %> <code><%= request_id %></code></p>
+  <% end -%>
+  <% if code < 500 -%>
+    <form class="error-search" action="<%= sections_path() %>" method="get" role="search">
+      <label for="error-search-q"><%= t("error_pages.search_label") %></label>
+      <div class="error-search-row">
+        <input type="search" id="error-search-q" name="q" placeholder="<%= t("error_pages.search_placeholder") %>">
+        <button type="submit"><%= t("error_pages.search") %></button>
+      </div>
+    </form>
+  <% end -%>
+  <nav class="error-links" aria-label="<%= t("error_pages.links_label") %>">
+    <a class="error-home" href="<%= lp(root_path()) %>"><%= t("error_pages.links.home") %></a>
+    <% if signed == true -%>
+      <a href="<%= app_scores_path() %>"><%= t("error_pages.links.your_scores") %></a>
+    <% elsif signed == false && app_open?() -%>
+      <a href="<%= lp(login_path()) %>"><%= t("error_pages.links.sign_in") %></a>
+    <% else -%>
+      <a href="<%= app_link %>"><%= t("error_pages.links.app") %></a>
+    <% end -%>
+    <% if code == 413 -%>
+      <a href="<%= lp(limits_path()) %>"><%= t("error_pages.links.limits") %></a>
+    <% end -%>
+    <a href="<%= sections_path() %>"><%= t("error_pages.links.sections") %></a>
+    <a href="<%= lp(guide_path()) %>"><%= t("error_pages.links.guide") %></a>
+    <a href="<%= lp(changelog_path()) %>"><%= t("error_pages.links.changelog") %></a>
+  </nav>
+</section>

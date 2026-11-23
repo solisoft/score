@@ -1667,4 +1667,89 @@ en:
     admin_code_label: "Code of your authenticator app"
     admin_code_submit: "Open the admin"
     admin_code_wrong: "That code is not right, or it was already used."
+  # (#1034) the error pages: a block per status (app/helpers/error_page_helper.sl), e4xx and e5xx for any other
+  error_pages:
+    error_id: "Error ID, for support:"
+    search_label: "Search the library of sections"
+    search_placeholder: "A waltz, a bass line, a drum groove…"
+    search: "Search"
+    links_label: "Where to go from here"
+    links:
+      home: "Home page"
+      your_scores: "Your scores"
+      sign_in: "Sign in"
+      app: "Open the app"
+      sections: "Sections library"
+      guide: "Guide"
+      changelog: "What's new"
+      limits: "The engraver's limits"
+    e400:
+      name: "Bad request"
+      title: "A note off the staff"
+      lede: "The request could not be read as it was sent. Check the address, or go back and try again."
+    e401:
+      name: "Sign in"
+      title: "Sign in to play this part"
+      lede: "This page is for signed-in musicians. Sign in, then open it again."
+    e403:
+      name: "Forbidden"
+      title: "Reserved for the section's players"
+      lede: "This is not shared with you. Ask its owner to share it, or sign in with the account it was shared with. A form left open for a long time ends here too: reload it, then send it again."
+    e404:
+      name: "Not found"
+      title: "This page is taking a rest"
+      lede: "Nothing plays at this address: the page has moved, or the link lost a note on the way. Here is where to pick up again."
+      caption: "A whole bar's rest — in French, « une pause »."
+    e405:
+      name: "Method not allowed"
+      title: "Not the right instrument for this part"
+      lede: "This address does not answer that kind of request."
+    e408:
+      name: "Request timeout"
+      title: "A missed entry"
+      lede: "The request took too long to arrive. Try again."
+    e409:
+      name: "Conflict"
+      title: "Two players on the same note"
+      lede: "It changed somewhere else in the meantime. Reload the page to get the latest version, then try again."
+    e410:
+      name: "Gone"
+      title: "Out of the repertoire"
+      lede: "What was here has been taken away for good."
+    e413:
+      name: "Too large"
+      title: "Too many bars for one page"
+      lede: "What you sent is larger than Score takes in. The engraver's limits are on their own page."
+    e422:
+      name: "Cannot be processed"
+      title: "This phrase does not resolve"
+      lede: "What was sent could not be used. Go back, check the form, and send it again."
+    e429:
+      name: "Too many requests"
+      title: "A little silence between the bars"
+      lede: "Too many requests in a short time. Wait a moment, then try again."
+    e4xx:
+      name: "Request refused"
+      title: "Something is off in the score"
+      lede: "The request could not be answered as it was sent. Check the address, or go back and try again."
+    e500:
+      name: "Server error"
+      title: "A wrong note"
+      lede: "Something went wrong on our side, not yours. It has been noted: try again in a moment. If it happens again, send us the error ID below."
+    e502:
+      name: "Bad gateway"
+      title: "The orchestra is tuning"
+      lede: "Score is not answering just now. It is usually back within a minute: try again shortly."
+    e503:
+      name: "Unavailable"
+      title: "Intermission"
+      lede: "Score is away for a moment, for maintenance or a new version. Back soon: try again in a minute."
+    e504:
+      name: "Gateway timeout"
+      title: "The tempo got lost"
+      lede: "Score took too long to answer. Try again in a moment."
+    e5xx:
+      name: "Server error"
+      title: "Out of tune"
+      lede: "Something went wrong on our side, not yours. Try again in a moment. If it happens again, send us the error ID below."
   # ---

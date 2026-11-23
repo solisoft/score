@@ -105,7 +105,7 @@ class SharedScoresController < Controller
 
   def _readable_score
     score = Score.by_token(params["token"])
-    halt(404, "No such score") if score.nil? || !score.readable_by?(current_user())
+    throw PageNotFound.new("No such score") if score.nil? || !score.readable_by?(current_user())
 
     score
   end

@@ -12,7 +12,7 @@ class ExamplesController < Controller
   # GET /examples/:category — one family
   def category
     @category = ScoreLibrary.category(params["category"])
-    halt(404, "Unknown category") if @category.nil?
+    throw PageNotFound.new("Unknown category") if @category.nil?
 
     @examples = ScoreLibrary.examples_in(@category["slug"])
     @categories = ScoreLibrary.categories
@@ -23,7 +23,7 @@ class ExamplesController < Controller
   # GET /examples/:category/:slug — one piece, engraved, with its source
   def show
     @example = ScoreLibrary.example(params["category"], params["slug"])
-    halt(404, "Unknown example") if @example.nil?
+    throw PageNotFound.new("Unknown example") if @example.nil?
 
     @category = ScoreLibrary.category(@example["category"])
     @figure = ScoreSvg.figure(ScoreLibrary.source(@example), 1040, 7)

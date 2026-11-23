@@ -268,3 +268,14 @@ middleware("require_app_database", fn() {
     })
   })
 })
+
+# Last, after every other route (#1034): any GET nothing above answers is
+# the 404 page in the site's layout and language (ErrorsController). The
+# framework's own paths (/__soli/…) and public/'s files are answered first.
+# Before it, in the test environment only, the framework's page of any
+# status in either language, for their specs (ErrorsController#sample).
+if getenv("APP_ENV") == "test"
+  get("/error-pages/:status", "errors#sample")
+  get("/fr/error-pages/:status", "errors#sample")
+end
+get("/*path", "errors#not_found")

@@ -118,7 +118,7 @@ class SectionsController < Controller
   # whose session passed the second step, #687).
   def _visible
     section = SharedSection.find(params["id"])
-    halt(404, "No such section") if section.hidden && !SecondStep.admin?(current_user())
+    throw PageNotFound.new("No such section") if section.hidden && !SecondStep.admin?(current_user())
 
     section
   end

@@ -1,0 +1,55 @@
+<%# The page of an error the framework answers itself (#1034): a `find`
+    miss, `forbidden()`, a DomainError, a failure. It renders these with no
+    layout and no request, only `status`, `message` and `request_id`, so this
+    is a page of its own: the site's look, a header and a footer, and
+    nothing that reads the database or the session — the language is the
+    request's (set by the locale middleware before the action ran, else
+    Soli's guess from the cookie and Accept-Language). A route nothing
+    answers is ErrorsController's, in the site's layout. If this raises, the
+    framework falls back to its built-in page. -%>
+<% locale = I18n.locale() == "fr" ? "fr" : "en" -%>
+<% key = "error_pages." + error_page_key(status) -%>
+<!DOCTYPE html>
+<html lang="<%= locale %>">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#fbf9f4">
+  <meta name="robots" content="noindex">
+  <title><%= status %> · <%= t(key + ".title") %> · Score</title>
+  <link rel="icon" href="<%= public_path("images/favicon.svg") %>" type="image/svg+xml">
+  <link rel="stylesheet" href="<%= public_path("css/application.css") %>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="<%= lp(root_path()) %>" aria-label="<%= t("nav.home_label") %>">
+        <span class="brand-mark" aria-hidden="true">
+          <svg width="16" height="18" viewBox="0 0 16 18" fill="currentColor"><path d="M6 1.5 15 0v12.2a2.8 2.3 0 1 1-1.6-2.1V3.4L7.6 4.3v9.9A2.8 2.3 0 1 1 6 12.1Z"/></svg>
+        </span>
+        <span><em>Score</em></span>
+      </a>
+      <nav class="site-nav" aria-label="<%= t("nav.main_label") %>">
+        <a href="<%= sections_path() %>"><%= t("nav.sections") %></a>
+        <a href="<%= lp(guide_path()) %>"><%= t("nav.guide") %></a>
+        <a href="<%= lp(changelog_path()) %>"><%= t("nav.changelog") %></a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap">
+      <%- partial("errors/card", {"status": status, "signed": nil, "message": message, "request_id": request_id}) %>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <p><%- t("footer.about") %></p>
+    </div>
+  </footer>
+</body>
+</html>

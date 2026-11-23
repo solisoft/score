@@ -1,0 +1,2 @@
+<%# The 405 page the framework renders itself: see errors/_page (#1034). -%>
+<%- partial("errors/page", {"status": 405, "message": message, "request_id": request_id}) %>

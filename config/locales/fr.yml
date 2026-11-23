@@ -1667,4 +1667,89 @@ fr:
     admin_code_label: "Code de votre application d'authentification"
     admin_code_submit: "Ouvrir l'admin"
     admin_code_wrong: "Ce code n'est pas le bon, ou il a déjà servi."
+  # (#1034) les pages d'erreur : un bloc par statut (app/helpers/error_page_helper.sl), e4xx et e5xx pour les autres
+  error_pages:
+    error_id: "Identifiant de l'erreur, pour le support :"
+    search_label: "Chercher dans la bibliothèque de sections"
+    search_placeholder: "Une valse, une ligne de basse…"
+    search: "Chercher"
+    links_label: "Par où reprendre"
+    links:
+      home: "Accueil"
+      your_scores: "Vos partitions"
+      sign_in: "Se connecter"
+      app: "Ouvrir l'app"
+      sections: "Bibliothèque de sections"
+      guide: "Guide"
+      changelog: "Nouveautés"
+      limits: "Les limites du graveur"
+    e400:
+      name: "Requête invalide"
+      title: "Une note hors de la portée"
+      lede: "La demande n'a pas pu être lue telle qu'elle a été envoyée. Vérifiez l'adresse, ou revenez en arrière et réessayez."
+    e401:
+      name: "Connexion"
+      title: "Connectez-vous pour jouer cette partie"
+      lede: "Cette page est réservée aux musiciens connectés. Connectez-vous, puis ouvrez-la à nouveau."
+    e403:
+      name: "Accès refusé"
+      title: "Réservé aux musiciens du pupitre"
+      lede: "Ceci n'est pas partagé avec vous. Demandez à son propriétaire de le partager, ou connectez-vous avec le compte qui l'a reçu. Un formulaire resté ouvert trop longtemps finit ici aussi : rechargez-le, puis envoyez-le à nouveau."
+    e404:
+      name: "Page introuvable"
+      title: "Cette page fait une pause"
+      lede: "Rien ne joue à cette adresse : la page a changé de place, ou le lien a perdu une note en chemin. Voici par où reprendre."
+      caption: "Une pause : le silence d'une mesure entière."
+    e405:
+      name: "Méthode non autorisée"
+      title: "Pas le bon instrument pour cette partie"
+      lede: "Cette adresse ne répond pas à ce genre de demande."
+    e408:
+      name: "Délai dépassé"
+      title: "Une entrée manquée"
+      lede: "La demande a mis trop de temps à arriver. Réessayez."
+    e409:
+      name: "Conflit"
+      title: "Deux musiciens sur la même note"
+      lede: "Cela a changé ailleurs entre-temps. Rechargez la page pour avoir la dernière version, puis réessayez."
+    e410:
+      name: "Disparue"
+      title: "Sortie du répertoire"
+      lede: "Ce qui était ici a été retiré pour de bon."
+    e413:
+      name: "Trop volumineux"
+      title: "Trop de mesures pour une page"
+      lede: "Ce que vous avez envoyé dépasse ce que Score accepte. Les limites du graveur ont leur propre page."
+    e422:
+      name: "Impossible à traiter"
+      title: "Cette phrase ne se résout pas"
+      lede: "Ce qui a été envoyé n'a pas pu servir. Revenez en arrière, vérifiez le formulaire et envoyez-le à nouveau."
+    e429:
+      name: "Trop de demandes"
+      title: "Un peu de silence entre les mesures"
+      lede: "Trop de demandes en peu de temps. Patientez un instant, puis réessayez."
+    e4xx:
+      name: "Demande refusée"
+      title: "Quelque chose cloche dans la partition"
+      lede: "La demande n'a pas pu aboutir telle qu'elle a été envoyée. Vérifiez l'adresse, ou revenez en arrière et réessayez."
+    e500:
+      name: "Erreur du serveur"
+      title: "Une fausse note"
+      lede: "Quelque chose s'est mal passé de notre côté, pas du vôtre. C'est noté : réessayez dans un instant. Si cela se reproduit, envoyez-nous l'identifiant ci-dessous."
+    e502:
+      name: "Passerelle en défaut"
+      title: "L'orchestre s'accorde"
+      lede: "Score ne répond pas pour le moment. Il revient d'habitude en moins d'une minute : réessayez bientôt."
+    e503:
+      name: "Indisponible"
+      title: "Entracte"
+      lede: "Score s'absente un instant, pour une maintenance ou une nouvelle version. De retour très vite : réessayez dans une minute."
+    e504:
+      name: "Délai de passerelle dépassé"
+      title: "Le tempo s'est perdu"
+      lede: "Score a mis trop de temps à répondre. Réessayez dans un instant."
+    e5xx:
+      name: "Erreur du serveur"
+      title: "Ça sonne faux"
+      lede: "Quelque chose s'est mal passé de notre côté, pas du vôtre. Réessayez dans un instant. Si cela se reproduit, envoyez-nous l'identifiant ci-dessous."
   # ---

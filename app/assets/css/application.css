@@ -1578,6 +1578,39 @@
   .admin-empty { color: var(--muted); margin: 0; }
   .admin-note { padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper-deep); color: var(--ink-soft); margin: 0; }
 
+  /* ---- Error pages (#1034) ----------------------------------------------
+     A bar engraved on a sheet, the status as an eyebrow, the words, a search
+     of the sections library and the ways on: ErrorsController's 404 in the
+     layout, and app/views/errors/<status>.html.slv on their own. */
+  .error-page { max-width: 680px; margin: 56px auto 0; text-align: center; }
+  .error-figure { display: inline-block; background: var(--sheet); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px 28px 16px; }
+  .error-figure-svg { display: block; width: min(300px, 68vw); height: auto; }
+  .error-code { display: flex; justify-content: center; align-items: baseline; gap: 10px; margin: 30px 0 0; font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+  .error-number { font-family: var(--font-serif); font-style: italic; font-size: 20px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+  .error-page h1 { font-size: clamp(32px, 5vw, 48px); margin: 8px 0 14px; }
+  .error-page .lead { max-width: 560px; margin: 0 auto; }
+  .error-caption { margin: 10px 0 0; font-family: var(--font-serif); font-style: italic; color: var(--muted); font-size: 15px; }
+  .error-message { max-width: 560px; margin: 18px auto 0; padding: 10px 14px; background: var(--accent-soft); color: var(--accent-ink); border-radius: 10px; }
+  .error-id { margin: 18px 0 0; color: var(--muted); font-size: 14px; }
+  .error-id code { display: inline-block; margin-left: 4px; padding: 2px 8px; background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; color: var(--ink-soft); font-size: 13px; overflow-wrap: anywhere; }
+  .error-search { max-width: 480px; margin: 30px auto 0; text-align: left; }
+  .error-search label { display: block; margin-bottom: 6px; font-size: 14px; font-weight: 500; color: var(--ink-soft); }
+  .error-search-row { display: flex; gap: 8px; }
+  .error-search input { flex: 1; min-width: 0; padding: 9px 14px; font: inherit; font-size: 15px; color: var(--ink); background: var(--sheet); border: 1px solid var(--line-strong); border-radius: 999px; }
+  .error-search input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+  .error-search button { flex: none; padding: 9px 18px; font: 500 15px/1.2 var(--font-sans); color: var(--paper); background: var(--ink); border: 0; border-radius: 999px; cursor: pointer; }
+  .error-search button:hover { background: var(--accent); }
+  .error-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 28px; }
+  .error-links a { padding: 8px 14px; font-size: 15px; font-weight: 500; color: var(--ink-soft); border: 1px solid var(--line-strong); border-radius: 999px; white-space: nowrap; }
+  .error-links a:hover { background: var(--paper-deep); color: var(--ink); text-decoration: none; }
+  .error-links a.error-home { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .error-links a.error-home:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+  @media (max-width: 599px) {
+    .error-page { margin-top: 32px; }
+    .error-figure { padding: 14px 16px 10px; }
+    .error-links a { padding: 7px 12px; font-size: 14px; }
+  }
+
   @media print {
     @page { margin: 14mm 12mm; }
     html, body, .app-body, .studio, .studio-canvas, .studio-sheet, .score-sheet { background: #fff !important; }

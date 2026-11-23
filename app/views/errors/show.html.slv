@@ -1,0 +1,4 @@
+<%# ErrorsController#not_found: the 404 card in the site's layout (#1034). -%>
+<div class="wrap">
+  <%- partial("errors/card", {"status": error_status, "signed": signed, "message": nil, "request_id": nil}) %>
+</div>
