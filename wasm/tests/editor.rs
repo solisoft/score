@@ -272,3 +272,106 @@ fn staves_and_voices_say_their_names() {
     let crossed: Vec<_> = parsed["staves"][1]["events"].as_array().unwrap().iter().filter(|e| e["k"] == "Note").map(|e| e["cross"].clone()).collect();
     assert_eq!(crossed, vec![json!(null), json!("up"), json!("up")]);
 }
+
+/// The signs a pointer takes (#1020): one of each kind, with what the editor
+/// calls it and the note it is written on.
+#[test]
+fn view_lists_the_signs_a_pointer_moves() {
+    let src = "{ c''4\\mf\\<( d''-> e''-2^\"dolce\" f'')\\! | g'2~ g' | a'4\\( b'\\) r2 }";
+    let v = view(src, 600.0, 8.0, -1, -1).unwrap();
+    let signs = v["signs"].as_array().unwrap();
+    let of = |on: &str| signs.iter().find(|s| s["on"] == on).unwrap_or_else(|| panic!("no {on} among {signs:?}"));
+    for (on, kind, grob, item) in [
+        ("dynamic", "dynamic", "DynamicText", 0),
+        ("hairpin", "hairpin", "Hairpin", 0),
+        ("slur", "slur", "Slur", 0),
+        ("art:accent", "script", "Script", 1),
+        ("finger:2", "finger", "Fingering", 2),
+        ("text:dolce", "text", "TextScript", 2),
+        ("tie", "tie", "Tie", 4),
+        ("phrase", "phrase", "PhrasingSlur", 6),
+    ] {
+        let sign = of(on);
+        assert_eq!((sign["kind"].as_str(), sign["grob"].as_str(), sign["item"].as_u64()), (Some(kind), Some(grob), Some(item)), "{on}");
+        let b: Vec<f64> = sign["box"].as_array().unwrap().iter().map(|n| n.as_f64().unwrap()).collect();
+        assert!(b[2] > b[0] && b[3] > b[1] && b[0] > 0.0, "{on}: a box, {b:?}");
+    }
+    // A curve's four control points, a wedge's two ends; a dynamic has none.
+    assert_eq!(of("slur")["handles"].as_array().unwrap().len(), 4);
+    assert_eq!(of("tie")["handles"].as_array().unwrap().len(), 4);
+    let ends = of("hairpin")["handles"].as_array().unwrap();
+    assert!(ends.len() == 2 && ends[0][0].as_f64().unwrap() < ends[1][0].as_f64().unwrap());
+    assert!(of("dynamic")["handles"].is_null());
+    // The words' box is the one a double click opens.
+    let word = v["words"].as_array().unwrap().iter().find(|w| w["kind"] == "text").unwrap();
+    for k in 0..4 {
+        let (sign, drawn) = (of("text:dolce")["box"][k].as_f64().unwrap(), word["box"][k].as_f64().unwrap());
+        assert!((sign - drawn).abs() < 4.0, "the words' box, side {k}: {sign} against {drawn} drawn");
+    }
+    // The accent stands over its own note, inside the staff's width.
+    let (accent, note) = (of("art:accent"), &v["items"][1]);
+    assert!((accent["box"][0].as_f64().unwrap() - note["box"][0].as_f64().unwrap()).abs() < 12.0);
+}
+
+/// A sign's box follows its `\tweak extra-offset`, a curve's handles its
+/// `\shape`, a wedge's ends its `shorten-pair` — by so many staff spaces,
+/// up for a positive y — and none of these is passed over with a warning.
+#[test]
+fn a_tweak_moves_its_sign_by_so_many_staff_spaces() {
+    let sp = 8.0;
+    let n = |v: &serde_json::Value| v.as_f64().unwrap();
+    // Measured from its note's head: a sign moved up or down past the staff's
+    // ink moves the line itself on the page.
+    let sign = |src: &str, on: &str| -> serde_json::Value {
+        assert_eq!(score(src).unwrap()["warnings"], json!([]), "{src}");
+        let v = view(src, 600.0, sp, -1, -1).unwrap();
+        let mut found = v["signs"].as_array().unwrap().iter().find(|s| s["on"] == on).unwrap_or_else(|| panic!("no {on} in {src}")).clone();
+        let head = v["items"][0]["heads"][0]["box"].clone();
+        for k in 0..4 {
+            found["box"][k] = json!(n(&found["box"][k]) - n(&head[k % 2]));
+        }
+        for point in found["handles"].as_array_mut().into_iter().flatten().filter(|p| !p.is_null()) {
+            *point = json!([n(&point[0]) - n(&head[0]), n(&point[1]) - n(&head[1])]);
+        }
+        found
+    };
+    for (plain, moved, on) in [
+        ("{ c''4\\mf d'' e'' f'' }", "{ c''4-\\tweak extra-offset #'(1.5 . -2) \\mf d'' e'' f'' }", "dynamic"),
+        ("{ c''4-> d'' e'' f'' }", "{ c''4-\\tweak extra-offset #'(1.5 . -2) -> d'' e'' f'' }", "art:accent"),
+        ("{ c''4-- d'' e'' f'' }", "{ c''4-\\tweak extra-offset #'(1.5 . -2) \\tenuto d'' e'' f'' }", "art:tenuto"),
+        ("{ c''4-^ d'' e'' f'' }", "{ c''4-\\tweak extra-offset #'(1.5 . -2) ^\\marcato d'' e'' f'' }", "art:marcato"),
+        ("{ c''4\\fermata d'' e'' f'' }", "{ c''4-\\tweak extra-offset #'(1.5 . -2) \\fermata d'' e'' f'' }", "art:fermata"),
+        ("{ c''4-2 d'' e'' f'' }", "{ c''4-\\tweak extra-offset #'(1.5 . -2) -2 d'' e'' f'' }", "finger:2"),
+        ("{ c''4^\"dolce\" d'' e'' f'' }", "{ c''4-\\tweak extra-offset #'(1.5 . -2) ^\"dolce\" d'' e'' f'' }", "text:dolce"),
+        ("{ c''4( d'' e'' f'') }", "{ c''4-\\tweak extra-offset #'(1.5 . -2) ( d'' e'' f'') }", "slur"),
+        ("{ c''4\\( d'' e'' f''\\) }", "{ c''4-\\tweak extra-offset #'(1.5 . -2) \\( d'' e'' f''\\) }", "phrase"),
+        ("{ c''2~ c'' }", "{ c''2-\\tweak extra-offset #'(1.5 . -2) ~ c'' }", "tie"),
+        ("{ c''4\\< d'' e'' f''\\! }", "{ c''4-\\tweak extra-offset #'(1.5 . -2) \\< d'' e'' f''\\! }", "hairpin"),
+    ] {
+        let (a, b) = (sign(plain, on), sign(moved, on));
+        for k in 0..4 {
+            let by = if k % 2 == 0 { 1.5 * sp } else { 2.0 * sp };
+            assert!((n(&b["box"][k]) - n(&a["box"][k]) - by).abs() < 1e-6, "{on}, side {k}: {} then {}", a["box"][k], b["box"][k]);
+        }
+    }
+    // \shape: each control point by its own offset, the others where they were.
+    let (a, b) = (sign("{ c''4( d'' e'' f'') }", "slur"), sign("{ c''4-\\shape #'((0 . 0) (0.5 . 2) (0 . 0) (0 . -1)) ( d'' e'' f'') }", "slur"));
+    let moves: Vec<(f64, f64)> = (0..4).map(|k| (n(&b["handles"][k][0]) - n(&a["handles"][k][0]), n(&b["handles"][k][1]) - n(&a["handles"][k][1]))).collect();
+    for (got, want) in moves.iter().zip([(0.0, 0.0), (0.5 * sp, -2.0 * sp), (0.0, 0.0), (0.0, sp)]) {
+        assert!((got.0 - want.0).abs() < 1e-6 && (got.1 - want.1).abs() < 1e-6, "{moves:?}");
+    }
+    // shorten-pair: the left end in by 1, the right end out by 0.5.
+    let (a, b) = (sign("{ c''4\\< d'' e'' f''\\! }", "hairpin"), sign("{ c''4-\\tweak shorten-pair #'(1 . -0.5) \\< d'' e'' f''\\! }", "hairpin"));
+    assert!((n(&b["handles"][0][0]) - n(&a["handles"][0][0]) - sp).abs() < 1e-6, "the left end");
+    assert!((n(&b["handles"][1][0]) - n(&a["handles"][1][0]) - 0.5 * sp).abs() < 1e-6, "the right end");
+}
+
+/// What a tweak cannot be written before says so: a fingering on a chord's
+/// head, a string's number.
+#[test]
+fn a_sign_no_tweak_reaches_has_no_name() {
+    let v = view("{ <c'-1 e'-3>4 d'\\2 e' f' }", 600.0, 8.0, -1, -1).unwrap();
+    let fingers: Vec<&serde_json::Value> = v["signs"].as_array().unwrap().iter().filter(|s| s["kind"] == "finger").collect();
+    assert_eq!(fingers.len(), 3);
+    assert!(fingers.iter().all(|s| s["on"].is_null()), "{fingers:?}");
+}

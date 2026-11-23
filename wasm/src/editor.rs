@@ -306,12 +306,105 @@ fn base(src: &str, width: f64, sp: f64) -> Result<std::rc::Rc<Base>, String> {
             Some(json!({ "item": item, "kind": kind, "index": index, "box": b, "words": said }))
         })
         .collect();
-    let rest = json!({ "width": w, "height": total, "y0": y0, "items": items, "bars": bar_boxes, "words": words, "editable": not_editable(src).unwrap_or("yes") });
+    // A text's box is its ink's, as drawn: the same a double click opens.
+    let text_boxes: BTreeMap<(usize, usize), [f64; 4]> =
+        word_ranges.iter().filter(|w| w.1 == "text").filter_map(|(item, _, index, range)| Some(((*item, *index), union(range, None)?))).collect();
+    let signs = signs(&eng, &by_item, &text_boxes, sp);
+    let rest = json!({ "width": w, "height": total, "y0": y0, "items": items, "bars": bar_boxes, "words": words, "signs": signs, "editable": not_editable(src).unwrap_or("yes") });
     let rest_json = rest.to_string();
     let pitches = by_item.iter().map(|(i, ev)| (*i, ev.pitches.iter().map(|p| p.d).collect())).collect();
     let made = std::rc::Rc::new(Base { key, paths, ranges, heads, pitches, svg_start, rest_json });
     LAST_VIEW.with(|last| *last.borrow_mut() = Some(made.clone()));
     Ok(made)
+}
+
+/// The signs a pointer takes and moves (#1020): each dynamic, hairpin,
+/// articulation, fingering, text, slur, phrasing slur and tie, with the note
+/// it is written on (`item`), what it is in the editor's words (`on`, as
+/// `ev.tweaks` names it: "dynamic", "hairpin", "art:accent", "finger:2",
+/// "text:dolce", "slur", "phrase", "tie" — null for one a `\\tweak` cannot
+/// be written before), the grob the engraver moves it as (`grob`: two signs
+/// of one grob on a note move together), its box in the SVG's pixels, and
+/// its handles: a curve's four control points, a wedge's two ends (null for
+/// an end on another line), in pixels too. `piece` is which piece of a curve
+/// or a hairpin a line break parts.
+fn signs(eng: &eui_score::Engraved, by_item: &std::collections::HashMap<usize, &parse::Ev>, text_boxes: &BTreeMap<(usize, usize), [f64; 4]>, sp: f64) -> Vec<Value> {
+    use eui_score::cross::CurveKind;
+    let mut out = Vec::new();
+    // Each hairpin's last piece, to know which piece holds its right end.
+    let mut last_piece: BTreeMap<usize, usize> = BTreeMap::new();
+    for line in eng.systems.iter().flat_map(|sys| sys.lines.iter()) {
+        for d in line.dynamics.iter().filter(|d| d.text.is_none()) {
+            let last = last_piece.entry(d.item).or_insert(0);
+            *last = (*last).max(d.piece);
+        }
+    }
+    for line in eng.systems.iter().flat_map(|sys| sys.lines.iter()) {
+        // A staff drawn smaller or larger is laid out at the usual size: its signs are not where these say.
+        if line.hidden || line.scale.is_some() {
+            continue;
+        }
+        let at = |x: f64, y: f64| [x * sp, (line.top + y) * sp];
+        let boxed = |b: [f64; 4]| {
+            let (a, c) = (at(b[0], b[1]), at(b[2], b[3]));
+            [a[0], a[1], c[0], c[1]]
+        };
+        for d in &line.dynamics {
+            let hairpin = d.text.is_none();
+            // A wedge's ends are taken; `\cresc`'s words and dashes are moved whole.
+            let handles = (hairpin && d.words.is_none()).then(|| {
+                let left = (d.piece == 0).then(|| at(d.x0, d.y));
+                let right = (last_piece.get(&d.item) == Some(&d.piece)).then(|| at(d.x1, d.y));
+                json!([left, right])
+            });
+            out.push(json!({
+                "item": d.item, "on": if hairpin { "hairpin" } else { "dynamic" }, "kind": if hairpin { "hairpin" } else { "dynamic" },
+                "grob": if hairpin { "Hairpin" } else { "DynamicText" }, "box": boxed(d.bbox()), "piece": d.piece, "handles": handles,
+            }));
+        }
+        for sc in &line.scripts {
+            let ev = by_item.get(&sc.item);
+            let (kind, grob, on) = if sc.figure.is_some() {
+                // A fingering after its note; a string's number, or one on a chord's head, takes no tweak.
+                let finger = ev.and_then(|ev| ev.fingers.get(sc.index));
+                let loose = finger.is_some_and(|f| !f.circled && !(f.head.is_some() && ev.is_some_and(|ev| ev.pitches.len() > 1)));
+                ("finger", "Fingering", finger.filter(|_| loose).map(|f| format!("finger:{}", f.text)))
+            } else {
+                ("script", "Script", ev.and_then(|ev| ev.scripts.get(sc.index)).map(|s| format!("art:{}", s.name)))
+            };
+            out.push(json!({ "item": sc.item, "on": on, "kind": kind, "grob": grob, "box": boxed(sc.bbox()), "piece": 0, "handles": Value::Null }));
+        }
+        for t in &line.texts {
+            let said = by_item.get(&t.item).and_then(|ev| ev.texts.get(t.index)).map(words_json);
+            // A chord diagram or a sign alone in its markup is not words a tweak is written before.
+            let on = said.as_ref().filter(|w| w["glyph"].is_null()).and_then(|w| w["text"].as_str()).filter(|w| !w.is_empty()).map(|w| format!("text:{w}"));
+            out.push(json!({
+                "item": t.item, "on": on, "kind": "text", "grob": "TextScript", "index": t.index,
+                "box": text_boxes.get(&(t.item, t.index)).copied().unwrap_or_else(|| boxed([t.x0, t.top, t.x1, t.bottom])), "piece": 0, "handles": Value::Null,
+            }));
+        }
+        for c in &line.curve_places {
+            let (kind, grob) = match c.kind {
+                CurveKind::Tie => ("tie", "Tie"),
+                CurveKind::Slur => ("slur", "Slur"),
+                CurveKind::Phrase => ("phrase", "PhrasingSlur"),
+            };
+            // The curve's own box: its middle line, sampled.
+            let mut b = [f64::MAX, f64::MAX, f64::MIN, f64::MIN];
+            for k in 0..=16 {
+                let t = f64::from(k) / 16.0;
+                let u = 1.0 - t;
+                let w = [u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t];
+                let (x, y) = (0..4).fold((0.0, 0.0), |(x, y), i| (x + w[i] * c.points[i].0, y + w[i] * c.points[i].1));
+                b = [b[0].min(x), b[1].min(y), b[2].max(x), b[3].max(y)];
+            }
+            let handles: Vec<[f64; 2]> = c.points.iter().map(|p| at(p.0, p.1)).collect();
+            out.push(json!({
+                "item": c.item, "on": kind, "kind": kind, "grob": grob, "box": boxed(b), "piece": c.piece, "handles": handles, "head": c.head, "up": c.up,
+            }));
+        }
+    }
+    out
 }
 
 /// [`view`] with any number of items and heads lit: `lit` is

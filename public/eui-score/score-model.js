@@ -64,6 +64,8 @@ const SCRIPTS = {
   // A segno or a coda over a note (LilyPond 2.24, #433).
   segno: "\\segno", coda: "\\coda", varcoda: "\\varcoda",
 };
+/** The articulations whose sign (-- -^ -_) the engraver does not read after a \\tweak: written by name there. */
+const NAMED_AFTER_TWEAK = ["tenuto", "marcato", "portato"];
 /** A breath mark after a note or rest: `\\breathe` (a comma) or `\\caesura` (//). */
 export const BREATHS = ["breathe", "caesura"];
 /** A crescendo or diminuendo written as words with a dashed line: `\\cresc`, `\\dim`, `\\decresc`. */
@@ -2827,7 +2829,9 @@ function eventText(ev, beam = "") {
   if (ev.hairpin) out += tw("hairpin", HAIRPIN_WORDS.includes(ev.hairpinWords) ? `\\${ev.hairpinWords}` : ev.hairpin === "<" ? "\\<" : "\\>");
   // Each above (^) or below (_) when it was written so, else where the engraver puts it.
   for (const a of ev.arts) {
-    const text = SCRIPTS[a] ?? "";
+    // After a \\tweak the engraver reads -- -^ and -_ by their names only (#1020).
+    const named = NAMED_AFTER_TWEAK.includes(a) && (ev.tweaks ?? []).some((x) => x.on === `art:${a}`);
+    const text = named ? `\\${a}` : SCRIPTS[a] ?? "";
     const dir = ev.artDirs?.[a];
     out += tw(`art:${a}`, !text || !dir ? text : `${dir < 0 ? "^" : "_"}${text.startsWith("-") ? text.slice(1) : text}`);
   }
@@ -6131,6 +6135,16 @@ const SCRIPT_SIGNS = { ">": "accent", ".": "staccato", "-": "tenuto", "^": "marc
 /** The commands written after a note, by what of the note they are. */
 const POST_COMMANDS = { glissando: "gliss", arpeggio: "arpeggio", laissezVibrer: "lv", repeatTie: "repeatTie", sustainOn: "pedalOn", sustainOff: "pedalOff", startTextSpan: "spanStart" };
 
+/** What is written before a post-event to set how it is drawn: a \\tweak, or a curve's \\shape (#1020). */
+const TWEAKS = ["tweak", "shape"];
+
+/** The \\tweak or the \\shape at `i` (its backslash): { end, text }, or null. */
+function tweakAt(src, i) {
+  if (commandAt(src, i) !== "shape") return keptCommandAt(src, i);
+  const end = valueEnd(src, i + 6);
+  return end > i + 6 ? { end, text: src.slice(i, end).replace(/\s+/g, " ").trim() } : null;
+}
+
 /** What the post-event at `i` is, for a \\tweak before it: { on, end }, or null. */
 function postEventAt(src, i) {
   let k = i;
@@ -6189,13 +6203,16 @@ export function postTweaks(source, spans) {
       if (c === '"') k = stringEnd(source, k);
       else if (c === "%") k = skipBlank(source, k);
       else if (c === "#") k = schemeEnd(source, k);
-      else if ("-^_".includes(c) && commandAt(source, skipBlank(source, k + 1)) === "tweak") {
+      else if ("-^_".includes(c) && TWEAKS.includes(commandAt(source, skipBlank(source, k + 1)))) {
+        // One after another, each with its own sign or not: -\tweak color #red -\tweak Slur.extra-offset #'(1 . 0) -\shape #'(…) (
         const texts = [];
         let j = skipBlank(source, k + 1);
-        while (commandAt(source, j) === "tweak") {
-          const command = keptCommandAt(source, j);
+        for (;;) {
+          const dash = "-^_".includes(source[j] ?? "") && texts.length ? skipBlank(source, j + 1) : j;
+          if (!TWEAKS.includes(commandAt(source, dash))) break;
+          const command = tweakAt(source, dash);
           if (!command) break;
-          texts.push(command.text);
+          texts.push(dash === j ? command.text : `-${command.text}`);
           j = skipBlank(source, command.end);
         }
         const target = texts.length ? postEventAt(source, j) : null;
@@ -6208,6 +6225,146 @@ export function postTweaks(source, spans) {
     if (found.length) out.set(i, found);
   });
   return out;
+}
+
+// ---- Signs moved and reshaped by hand (#1020) -----------------------------------------------
+//
+// A sign dragged on the score is moved as LilyPond moves it: `-\\tweak
+// DynamicText.extra-offset #'(x . y)` before it, in staff spaces, x to the
+// right and y up, from where the engraver put it. A curve's four control
+// points are moved each by its own offset, `-\\shape #'((dx . dy) …)` (a
+// list of such lists when a line break parts the curve), and a hairpin's
+// ends are drawn in, `-\\tweak Hairpin.shorten-pair #'(left . right)`. They
+// are kept in the note's `tweaks`, with what was written there already (a
+// colour): each with its own `-` and its grob named, which is how the
+// engraver reads several before one sign, the \\shape last, next to its curve.
+
+/** The grob a sign is drawn as, by what `ev.tweaks` calls it. */
+const SIGN_GROBS = { dynamic: "DynamicText", hairpin: "Hairpin", slur: "Slur", phrase: "PhrasingSlur", tie: "Tie", art: "Script", finger: "Fingering", text: "TextScript" };
+/** What the editor sets of a sign by hand. */
+const SIGN_SET = ["extra-offset", "shorten-pair", "shape"];
+/** A sign is placed to a tenth of a staff space. */
+export const SIGN_STEP = 0.1;
+/** How far a sign goes from its place, in staff spaces: a slip of the hand does not send it off the page. */
+export const SIGN_REACH = 40;
+
+/** The grob of the sign `on`, or null for what is not one. */
+export const signGrob = (on) => SIGN_GROBS[String(on).split(":")[0]] ?? null;
+
+/** `n` to a tenth, within reach, never -0. */
+function tenth(n) {
+  const r = Math.round(Math.max(-SIGN_REACH, Math.min(SIGN_REACH, Number(n) || 0)) * 10) / 10;
+  return r === 0 ? 0 : r;
+}
+
+/** The commands of a tweak's text one by one: [{ prop, text }], `prop` "extra-offset", "shape", "color"… */
+function tweakParts(text) {
+  const parts = [];
+  let k = skipBlank(text, 0);
+  while (k < text.length) {
+    if ("-^_".includes(text[k])) k = skipBlank(text, k + 1);
+    const command = TWEAKS.includes(commandAt(text, k)) ? tweakAt(text, k) : null;
+    // What does not read is kept whole, as it is.
+    if (!command) {
+      parts.push({ prop: "", text: text.slice(k).trim() });
+      break;
+    }
+    const prop = command.text.startsWith("\\shape") ? "shape" : /^\\tweak\s+(?:[A-Za-z]+\.)*(?:#')?([A-Za-z][A-Za-z-]*)/.exec(command.text)?.[1] ?? "";
+    parts.push({ prop, text: command.text });
+    k = skipBlank(text, command.end);
+  }
+  return parts;
+}
+
+/** Every (x . y) of a Scheme value, as numbers. */
+const pairsIn = (text) => [...text.matchAll(/\(\s*(-?\d*\.?\d+)\s+\.\s+(-?\d*\.?\d+)\s*\)/g)].map((m) => [Number(m[1]), Number(m[2])]);
+
+/** Whether the note has the sign `on` to move: its dynamic, that articulation, those words… */
+export function hasSign(ev, on) {
+  if (!ev || !signGrob(on)) return false;
+  const [kind, ...rest] = String(on).split(":");
+  const name = rest.join(":");
+  if (kind === "dynamic") return Boolean(ev.dynamic);
+  if (kind === "hairpin") return Boolean(ev.hairpin);
+  if (kind === "slur") return Boolean(ev.slurStart);
+  if (kind === "phrase") return Boolean(ev.phraseStart) && !ev.rest;
+  if (kind === "tie") return Boolean(ev.tie) && !ev.rest;
+  if (kind === "art") return Boolean(SCRIPTS[name]) && (ev.arts ?? []).includes(name);
+  if (kind === "finger") {
+    if (ev.rest) return false;
+    const onHead = (f) => ev.pitches.length > 1 && ev.pitches.some((p) => p.d === f.head);
+    return (ev.fingers ?? []).some((f) => f.text === name && !f.circled && !onHead(f));
+  }
+  return ev.chord === name || (ev.texts ?? []).some((t) => t.text === name);
+}
+
+/**
+ * How the sign `on` of a note is set by hand: `{ offset: [x, y], shorten:
+ * [left, right], shape: [[[dx, dy] × 4] a piece] }` — zeros and an empty
+ * list where nothing is set.
+ */
+export function signTweak(ev, on) {
+  const out = { offset: [0, 0], shorten: [0, 0], shape: [] };
+  const entry = (ev?.tweaks ?? []).find((x) => x.on === on);
+  for (const part of entry ? tweakParts(entry.text) : []) {
+    const pairs = pairsIn(part.text);
+    if (part.prop === "extra-offset" && pairs.length === 1) out.offset = pairs[0];
+    else if (part.prop === "shorten-pair" && pairs.length === 1) out.shorten = pairs[0];
+    else if (part.prop === "shape" && pairs.length && pairs.length % 4 === 0) out.shape = Array.from({ length: pairs.length / 4 }, (_, k) => pairs.slice(4 * k, 4 * k + 4));
+  }
+  return out;
+}
+
+/** Whether the sign `on` of a note is moved, reshaped or shortened by hand. */
+export function signIsSet(ev, on) {
+  const set = signTweak(ev, on);
+  return [...set.offset, ...set.shorten, ...set.shape.flat(2)].some((n) => n !== 0);
+}
+
+/**
+ * The sign `on` of the note `i` of staff `s` set by hand: `offset` [x, y]
+ * (staff spaces, y up), `shorten` [left, right] (a hairpin's ends drawn in),
+ * `shape` (a curve's pieces, four [dx, dy] each) — each to a tenth of a
+ * space; what is left out stays as it is, and zeros take the setting away.
+ * What else is written before the sign (a colour) stays. Refused for a sign
+ * the note has not, or a setting the sign does not take.
+ */
+export function setSignTweak(score, s, i, on, { offset, shorten, shape } = {}) {
+  const ev = score.staves[s]?.events[i];
+  const grob = signGrob(on);
+  if (!hasSign(ev, on)) throw new Error(tr("That sign is no longer on its note."));
+  const curve = ["Slur", "PhrasingSlur", "Tie"].includes(grob);
+  if (shape && !curve) throw new Error(tr("Only a slur, a phrasing slur or a tie is reshaped."));
+  if (shorten && grob !== "Hairpin") throw new Error(tr("Only a hairpin's ends are moved."));
+  const now = signTweak(ev, on);
+  const next = {
+    offset: (offset ?? now.offset).map(tenth),
+    shorten: (shorten ?? now.shorten).map(tenth),
+    shape: (shape ?? now.shape).map((piece) => [0, 1, 2, 3].map((k) => [tenth(piece?.[k]?.[0]), tenth(piece?.[k]?.[1])])),
+  };
+  // Pieces left as the engraver draws them, after the last one reshaped, are not written.
+  while (next.shape.length && next.shape.at(-1).flat().every((n) => n === 0)) next.shape.pop();
+  const pair = ([x, y]) => `#'(${x} . ${y})`;
+  const pieces = next.shape.map((piece) => `(${piece.map(([x, y]) => `(${x} . ${y})`).join(" ")})`);
+  const written = [];
+  if (next.offset.some((n) => n !== 0)) written.push(`\\tweak ${grob}.extra-offset ${pair(next.offset)}`);
+  if (next.shorten.some((n) => n !== 0)) written.push(`\\tweak ${grob}.shorten-pair ${pair(next.shorten)}`);
+  // The \\shape last: the engraver reads it right before its curve.
+  if (pieces.length) written.push(`\\shape #'${pieces.length === 1 ? pieces[0] : `(${pieces.join(" ")})`}`);
+  const entry = (ev.tweaks ?? []).find((x) => x.on === on);
+  // What was written there already, its grob named: it no longer stands right before its sign.
+  const kept = (entry ? tweakParts(entry.text) : []).filter((part) => !SIGN_SET.includes(part.prop))
+    .map((part) => (written.length ? part.text.replace(/^\\tweak\s+(?:#')?(?=[a-z][A-Za-z-]*(?:\s|$))/, `\\tweak ${grob}.`) : part.text));
+  const text = [...kept, ...written].join(" -");
+  const others = (ev.tweaks ?? []).filter((x) => x.on !== on);
+  ev.tweaks = text ? [...others, { on, lead: entry?.lead ?? "-", text }] : others;
+  if (!ev.tweaks.length) delete ev.tweaks;
+}
+
+/** The sign `on` back where the engraver puts it, as it draws it: its offset, its shape and its ends let go. */
+export function resetSign(score, s, i, on) {
+  const grob = signGrob(on);
+  setSignTweak(score, s, i, on, { offset: [0, 0], ...(grob === "Hairpin" ? { shorten: [0, 0] } : {}), ...(["Slur", "PhrasingSlur", "Tie"].includes(grob) ? { shape: [] } : {}) });
 }
 
 /** Whether a kept command holds on after its note: not \once, not a \tweak of that note. */
