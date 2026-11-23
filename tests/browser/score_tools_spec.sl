@@ -163,6 +163,14 @@ describe("The tools on many notes at once (#1024)") do
     + " document.querySelector('[data-transpose-key]').value = '2'; })()")
     assert(evaluate("document.querySelector('[data-transpose-interval]').hidden"), "the interval menu steps aside")
     assert_eq(evaluate("document.querySelector('[data-transpose-way]').value"), "0")
+    # The key's two names on a line of their own, as wide as the mode's menu, not cut beside the way.
+    assert_eq(
+      evaluate("(() => { const key = document.querySelector('[data-transpose-key]').getBoundingClientRect();"
+      + " const mode = document.querySelector('[data-transpose-mode]').getBoundingClientRect();"
+      + " const way = document.querySelector('[data-transpose-way]').getBoundingClientRect();"
+      + " return Math.round(key.width - mode.width) === 0 && way.top >= key.bottom; })()"),
+      true
+    )
     steps = tools_steps()
     evaluate("document.querySelector('[data-act=transpose][data-scope=score]').click()")
     sleep(0.5)

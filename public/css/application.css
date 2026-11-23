@@ -4582,6 +4582,10 @@
   .tool-select {
     flex: 1;
   }
+  /* Transpose to a key: the key's two names on a line of their own, the way below (#1024). */
+  .tool-transpose .tool-select[data-transpose-key] {
+    flex-basis: 100%;
+  }
   .studio-keys {
     margin: auto;
     border: 1px solid var(--line-strong);

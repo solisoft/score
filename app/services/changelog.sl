@@ -13,6 +13,13 @@ class Changelog
       {"date": "2026-11-23", "entries": [
         {
           "area": "site",
+          "title": "Transpose to a key: the key's name in full",
+          "text": "In the tools, Transpose ▸ To a key shows the key it goes to on a line of its own, its two "
+          + "names readable (D major / B minor), and up, down or the nearest way under it.",
+          "link": "playground"
+        },
+        {
+          "area": "site",
           "title": "Explode chords over staves, implode staves into chords",
           "text": "Edit ▸ Explode the chords spreads the chords of the first staff selected over the staves "
           + "selected under it: the top note on the top staff, the next on the next, a chord of fewer notes "
