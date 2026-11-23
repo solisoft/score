@@ -80,8 +80,12 @@ def cd_parts
 end
 
 # What the read page saves, caught as its link is clicked: each file's name and text, in window.deskFiles.
+# The page scrolls smoothly (application.css); a click scrolls its button into view and reads its place at
+# once, so the part's button, below the fold, was clicked where it no longer was and nothing was saved
+# (#1033, as in part_layout_spec, #1018). Scrolled at once, the click lands on it.
 const CD_SAVES = """
 (() => {
+  document.documentElement.style.scrollBehavior = "auto";
   window.deskFiles = [];
   HTMLAnchorElement.prototype.click = function () {
     const file = { name: this.download, text: null };

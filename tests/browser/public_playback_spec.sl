@@ -167,6 +167,14 @@ def heard_file(by, n = 1)
   nil
 end
 
+# Opens `path`, its page scrolled at once. The site scrolls smoothly (application.css): a click scrolls
+# its button into view, and the page moving between the press and the release loses the click. The
+# example's Play sits at the fold, so its second click, Stop, went nowhere and the music played on (#1033).
+def heard_visit(path)
+  visit(path)
+  evaluate("document.documentElement.style.scrollBehavior = 'auto'")
+end
+
 describe("Play on the read page and the examples (#682)") do
   before_each() do
     logout()
@@ -174,7 +182,7 @@ describe("Play on the read page and the examples (#682)") do
 
   test("Play gives the synthesizer each note at the velocity the score sets for it") do
     score = heard_shared_score()
-    visit("/s/#{score.share_token}")
+    heard_visit("/s/#{score.share_token}")
     heard_sounds()
     evaluate(HEARD_HOOKS)
     click("[data-score-play]")
@@ -195,7 +203,7 @@ describe("Play on the read page and the examples (#682)") do
 
   test("with no source to read, Play plays the page's own MIDI, as written") do
     score = heard_shared_score()
-    visit("/s/#{score.share_token}")
+    heard_visit("/s/#{score.share_token}")
     heard_sounds()
     evaluate(HEARD_HOOKS)
     # The figure's MIDI is a data: URL, which the page's connect-src lets no fetch reach (#544).
@@ -216,7 +224,7 @@ describe("Play on the read page and the examples (#682)") do
 
   test("the MIDI link saves the file as Play plays it, its velocities in") do
     score = heard_shared_score()
-    visit("/s/#{score.share_token}")
+    heard_visit("/s/#{score.share_token}")
     evaluate(HEARD_HOOKS)
     click("[data-score-midi]")
     saved = heard_file("save")
@@ -233,7 +241,7 @@ describe("Play on the read page and the examples (#682)") do
 
   test("the MIDI link that cannot make its file says so under the buttons") do
     score = heard_shared_score()
-    visit("/s/#{score.share_token}")
+    heard_visit("/s/#{score.share_token}")
     # The browser refuses to make the file.
     evaluate("URL.createObjectURL = () => { throw new Error('no room for it'); }")
     click("[data-score-midi]")
@@ -242,7 +250,7 @@ describe("Play on the read page and the examples (#682)") do
 
   test("a Play that cannot start says so, and closes the sound its click opened") do
     score = heard_shared_score()
-    visit("/s/#{score.share_token}")
+    heard_visit("/s/#{score.share_token}")
     # No source to play in the browser, and the server's file out of reach.
     evaluate("(() => { const button = document.querySelector('[data-score-play]');"
     + " button.removeAttribute('data-src'); button.setAttribute('data-midi', '/no-such.mid');"
@@ -258,7 +266,7 @@ describe("Play on the read page and the examples (#682)") do
   end
 
   test("an example's player speaks French at /fr") do
-    visit("/fr/examples/piano/waltz")
+    heard_visit("/fr/examples/piano/waltz")
     heard_sounds()
     assert_eq(evaluate("document.querySelector('[data-score-play]').textContent.trim()"), "▶ Lecture")
     click("[data-score-play]")
@@ -274,7 +282,7 @@ describe("Play on the read page and the examples (#682)") do
   test("the read page's parts are named in the page's language") do
     # A staff of no name, on an instrument the editor does not list: "Staff 1" in English.
     score = heard_shared_score("\\new Staff \\with { midiInstrument = \"kalimba\" } { c'4 d' }\n")
-    visit("/s/#{score.share_token}")
+    heard_visit("/s/#{score.share_token}")
     evaluate("document.documentElement.lang = 'fr'")
     click("[data-read-parts]")
     wait_for("[data-read-part]:not([hidden])")
