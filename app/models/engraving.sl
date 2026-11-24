@@ -30,8 +30,10 @@ const ENGRAVING_HEAVY = 100000
 # empty staves hidden, \partCombine; 8: eui 354d650, scaled staves, mid-bar \time,
 # polymetre, vertical springs and beam quanting; 9: eui e50f836, Soli 2.29.3,
 # the engraver's own limits on what it reads and draws; 10: eui 88db77e, Soli
-# 2.40.2, the engine of #1019-#1032 on the server, title pages, words between scores).
-const ENGRAVING_FORMAT = 10
+# 2.40.2, the engine of #1019-#1032 on the server, title pages, words between scores;
+# 11: eui 83348e1, the scores the site held and refused (#1036, #1037): beams hold
+# syllables, a lone staff's name, accented letters, figures and ossias in a staff).
+const ENGRAVING_FORMAT = 11
 
 class Engraving < Model
   # The engraving kept under `digest`, as `ScoreSvg.engrave` answers it

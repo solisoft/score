@@ -10,6 +10,34 @@
 class Changelog
   static def days
     [
+      {"date": "2026-11-24", "entries": [
+        {
+          "area": "engine",
+          "title": "A Telemann aria opens as its file is written",
+          "text": "A real LilyPond file of an aria by Telemann — flute, soprano and basso continuo — was refused "
+          + "at its first Scheme comment. It now opens unedited (#1036). The thorough bass written in the "
+          + "continuo's own staff (\\figuremode) is set over it; the ossia, a context the file's \\layout "
+          + "defines and places with alignBelowContext, is a small staff under the bass for the one note it "
+          + "gives, marked \"Orig.\"; a4*1/4 is a quarter that lasts a sixteenth; a rest holds a fermata; "
+          + "\"Da Capo.\" written in the bass stands over the last bar. A syllable is held under a beam "
+          + "written by hand, as LilyPond holds it, so the words fall on their notes; the old print's long s "
+          + "and ligatures are set in plain letters. Page headers are odd or even by the page's number. The "
+          + "custos, baroque note heads and the fonts the file names are passed over with a warning. In the "
+          + "editor and the playground now; on the library's pages and in PDFs with the next Soli release.",
+          "link": "limits"
+        },
+        {
+          "area": "engine",
+          "title": "Every score kept here opens",
+          "text": "Four scores kept on the site were refused by its own engraver; all four open now (#1037). "
+          + "A number after a space in markup (\\fontsize # 4) and \\combine are read; a lone staff's "
+          + "instrumentName is drawn beside it; a set of tunes keeps its own title, each tune's title over "
+          + "its first line; accented letters the text face lacked (ò, á, í…) are drawn, where they left a "
+          + "gap; \\section after a repeat leaves the repeat its sign. A file that defines its music and "
+          + "never prints it — LilyPond would draw nothing — shows the last music it defines, and says so.",
+          "link": "limits"
+        }
+      ]},
       {"date": "2026-11-23", "entries": [
         {
           "area": "site",

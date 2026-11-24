@@ -46,11 +46,15 @@ crate-type = ["cdylib", "rlib"]
 # of different lengths (#1031, #1032); 88db77e a tablature's grace notes,
 # dead notes, ties and harmonics, shape notes, Roman numerals (#1026), page
 # headers that know a book part's pages, \if, and words between scores and
-# title pages as blocks of the page (#1025), as Soli 2.40.2 pins it. Move
+# title pages as blocks of the page (#1025), as Soli 2.40.2 pins it;
+# 83348e1 the four scores the site held and refused, as they are stored
+# (#1036, #1037): figured bass in a staff, an ossia under its staff from a
+# context the layout defines, Scheme comments, multiplied durations, a
+# file that never prints its music. Move
 # this and the server's Soli together. `build.sh` writes the module
 # into public/eui-score/, and that output is committed: deploying the site
 # needs no Rust.
-eui-score = { git = "https://github.com/solisoft/eui", rev = "88db77e" }
+eui-score = { git = "https://github.com/solisoft/eui", rev = "83348e1" }
 wasm-bindgen = "=0.2.126"
 serde_json = "1"
 
