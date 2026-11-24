@@ -10,8 +10,14 @@
 // for: the staves' volume and pan go in the file (as Save as MIDI writes
 // them), and a muted staff — or one left out by a solo — is left out of it.
 //
-//   import { heardMidi } from "/eui-score/heard.js";
-//   const { bytes, turns } = await heardMidi(src, { midi, parse });
+// The built-in orchestra (orchestra.js, #1040) plays here as in the editor:
+// `withOrchestra` gives the player the banks of the instruments the score
+// names and puts them in the MIDI; a bank that has not come keeps its staff
+// on General MIDI.
+//
+//   import { heardMidi, withOrchestra } from "/eui-score/heard.js";
+//   const heard = await heardMidi(src, { midi, parse });       // { bytes, turns, score, passes }
+//   const bytes = await withOrchestra(heard, player);
 //
 // `midi(source, { bpm, beat, unfold })` is eui-score.js `toMidi`; `parse`
 // the engraver's score_json of a source, parsed, its spans in.
@@ -71,7 +77,9 @@ export function withoutChannels(bytes, channels) {
  * ({ bars, time }) plays it over and over (a section, #457), `turnsOf`
  * times; swung and humanized after the loop, no two turns quite alike. A
  * source the model does not read is played as written, its meta line's
- * swing and humanize still heard.
+ * swing and humanize still heard. `score` and `passes` (the score as read,
+ * its bars as played; null and none for a source the model does not read)
+ * are what `withOrchestra` needs.
  */
 export async function heardMidi(src, { midi, parse, loop = null }) {
   const score = scoreOf(src, parse);
@@ -90,8 +98,33 @@ export async function heardMidi(src, { midi, parse, loop = null }) {
   } else {
     bytes = await midi(src, { bpm: M.DEFAULT_BPM, beat: 4 });
   }
-  if (!loop?.bars) return { bytes: F.feel(bytes, { score, passes, ...feel }), turns: 1 };
+  if (!loop?.bars) return { bytes: F.feel(bytes, { score, passes, ...feel }), turns: 1, score, passes };
   const turns = turnsOf(loop.bars);
   const turn = loop.bars * F.barTicks(loop.time || "4/4", F.readSmf(bytes).division);
-  return { bytes: F.feel(F.loopSmf(bytes, turn, turns), feel), turns };
+  return { bytes: F.feel(F.loopSmf(bytes, turn, turns), feel), turns, score, passes };
+}
+
+/**
+ * What `heard` (heardMidi's) plays on player `P` (player.js) with the
+ * built-in orchestra (#1040): its MIDI with each staff on its built-in
+ * instrument — those whose bank is in this browser, or comes while `until`
+ * (a promise: the default sounds loading, on a first Play) is waited for,
+ * and a moment more (`patience`, ms; orchestra.js `PATIENCE` when not given);
+ * the others play General MIDI this time and are there for the next. A
+ * looped section's staves play their instrument's first articulation
+ * throughout: its turns are not the score's bars. The bytes as they were
+ * for a source the model does not read, or when anything fails.
+ */
+export async function withOrchestra(heard, P, { until = null, patience = 0, onProgress = null } = {}) {
+  if (!heard?.score) return heard.bytes;
+  try {
+    const O = await import(`./orchestra.js${V}`);
+    const sound = await O.prepare(P, heard.score, M.channels(heard.score), { until, patience: patience || O.PATIENCE, onProgress });
+    if (!sound.lanes.length) return heard.bytes;
+    if (heard.turns !== 1) return O.apply(null, heard.bytes, sound.lanes);
+    const early = F.humanizeOf(F.feelOf(heard.score.meta).humanize)?.time ?? 0;
+    return O.apply(heard.score, heard.bytes, sound.lanes, { passes: heard.passes, early });
+  } catch (error) {
+    return heard.bytes;
+  }
 }

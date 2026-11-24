@@ -55,7 +55,8 @@ export function install(ctx) {
    */
   async function soundMidi() {
     const bytes = await heardMidi(st.score, undefined, { practice: exportPractice() });
-    const sound = await st.instruments.prepare(st.score);
+    // Every built-in instrument waited for (#1040): a file is made once.
+    const sound = await st.instruments.prepare(st.score, { wait: true });
     const made = st.instruments.forSound(bytes, sound);
     st.offlineNotes = { notes: made.notes, settingsOf: st.instruments.settingsFor(sound) };
     return made.bytes;

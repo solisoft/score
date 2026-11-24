@@ -3,7 +3,9 @@
 // The sounds are MuseScore_General (MIT, ../soundfonts/), a General MIDI
 // SoundFont: a staff's `midiInstrument` picks its program, and the
 // percussion channel its drum kit. SpessaSynth (vendor/, Apache-2.0) is the
-// synthesizer, in an AudioWorklet, with its sequencer.
+// synthesizer, in an AudioWorklet, with its sequencer. Other banks play
+// beside it (`useBank`): the built-in orchestra's instruments
+// (orchestra.js, #1040) and the SoundFonts of your own (soundbank.js).
 //
 // Nothing is fetched before the first Play: the sounds are 38 MB. They are
 // kept in the browser's Cache Storage after that, so the next Play, and the
@@ -78,8 +80,9 @@ function route(ctx, synth, offline, destination = ctx.destination) {
   else synth.connect(destination);
 }
 
-// Your own SoundFonts (soundbank.js, #391): id → { buffer, offset }, each
-// a sound bank beside the default one, its banks moved up by `offset`.
+// The built-in instruments (orchestra.js, #1040) and your own SoundFonts
+// (soundbank.js, #391): id → { buffer, offset }, each a sound bank beside
+// the default one, its banks moved up by `offset`.
 const banks = new Map();
 
 /**
@@ -535,10 +538,11 @@ const PREVIEW = 15;
 
 /**
  * Sounds `keys` (MIDI keys, a chord) briefly with General MIDI `program` —
- * the note just written or selected. Before the sounds have loaded, it
- * starts loading them and stays silent: the next note is heard.
+ * the note just written or selected — or with program `program` of bank
+ * `bank` (a built-in instrument's, orchestra.js). Before the sounds have
+ * loaded, it starts loading them and stays silent: the next note is heard.
  */
-export function preview(keys, program = 0, { drums = false, channel = 0 } = {}) {
+export function preview(keys, program = 0, { drums = false, channel = 0, bank = 0 } = {}) {
   live = drums ? 9 : output ? channel : PREVIEW;
   // To the MIDI device chosen in Sound to, on the staff's channel.
   if (output) {
@@ -565,7 +569,10 @@ export function preview(keys, program = 0, { drums = false, channel = 0 } = {}) 
     ctx.resume().catch(() => {});
     // Drums on the kit's channel, the tenth; the rest on the preview's own.
     const channel = drums ? 9 : PREVIEW;
-    if (!drums) synth.programChange(channel, program);
+    if (!drums) {
+      synth.controllerChange(channel, 0, bank);
+      synth.programChange(channel, program);
+    }
     for (const key of keys) synth.noteOn(channel, key, 90);
     setTimeout(() => {
       for (const key of keys) synth.noteOff(channel, key);
@@ -591,7 +598,11 @@ export function hold(key, on, program = 0, { drums = false, velocity = 100, chan
     ctx.resume().catch(() => {});
     const channel = drums ? 9 : PREVIEW;
     if (!on) return synth.noteOff(channel, key);
-    if (!drums) synth.programChange(channel, program);
+    if (!drums) {
+      // The General MIDI bank: the note heard while writing may have left the channel on another.
+      synth.controllerChange(channel, 0, 0);
+      synth.programChange(channel, program);
+    }
     synth.noteOn(channel, key, velocity);
   });
   return true;

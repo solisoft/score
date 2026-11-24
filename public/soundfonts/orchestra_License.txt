@@ -1,0 +1,50 @@
+# Score's built-in orchestra
+---
+
+The instruments under /soundfonts/orchestra/ (one SF3 file each, listed in
+/soundfonts/orchestra.json) are made from two sample libraries by
+scripts/sounds/build.py of Score's source. Both may be used and passed on
+for any purpose, commercial too.
+
+## VSCO 2 Community Edition 1.1.0
+
+Versilian Studios (Sam Gossner) — https://github.com/sgossner/VSCO-2-CE
+Licence: CC0 1.0 Universal (public domain dedication),
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Every instrument but the piano: the solo violin, the violin, viola and cello
+sections, the double bass, the string orchestra (the four put on one
+keyboard), harp, piccolo, flute, oboe, clarinet, bassoon, French horn,
+trumpet, muted trumpet, trombone, tuba, timpani, glockenspiel, xylophone,
+marimba, tubular bells and the pipe organ.
+
+## Salamander Grand Piano V3
+
+Alexander Holm — https://github.com/sfzinstruments/SalamanderGrandPiano
+(a Yamaha C5, recorded by Alexander Holm; this copy of the samples at commit
+3382bf9496bba2486f5ab0de55a264d1dfc38404)
+Licence: Creative Commons Attribution 3.0 Unported (CC BY 3.0),
+https://creativecommons.org/licenses/by/3.0/
+
+The grand piano (piano.….sf3).
+
+## What was changed
+
+The samples were converted, not re-recorded:
+
+- the silence before each attack removed;
+- held sounds (bowed, blown, the organ, rolls) given a loop with a crossfade,
+  and cut at its end; sounds that die away cut where they are 60 dB down, or
+  after a few seconds (ten for the piano), and faded;
+- samples 4 to 40 cents off their note brought to pitch (not the piano's,
+  nor the timpani's or the bells'); the glockenspiel and the xylophone put
+  at the octave they sound;
+- levels evened out, across each instrument and between its dynamic layers;
+- the first of each note's round robins kept; of the piano, three of its
+  sixteen dynamic layers (4, 9 and 14), without its release, pedal and
+  string-resonance samples;
+- each channel compressed as Ogg Vorbis (quality 5) and put in an SF3
+  SoundFont, an articulation a preset.
+
+The files made are under the licence of the library they come from: CC0 1.0
+for the VSCO 2 instruments, CC BY 3.0 for the piano — credit Alexander Holm.

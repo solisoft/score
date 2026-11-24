@@ -4,7 +4,8 @@
 # directory (#681): a site of the old layout (a real directory), releases,
 # the symlink switch, and every failure — a migration, soli-proxy, the site
 # check, a soli of the wrong version — with soli, soli-proxy, solidb-dump and
-# curl replaced by stubs that log what they were asked.
+# curl replaced by stubs that log what they were asked. And the built-in
+# orchestra's banks (#1040): deploy/sounds-upload.sh, and their links.
 #
 #   bash tests/deploy/release_test.sh
 #
@@ -305,6 +306,62 @@ check "the live .env came along" 'grep -q LATEST_SECRET "$releases/$(live)/.env"
 check "through the proxy" '[ "$(calls "^proxy")" = 1 ]'
 release status
 check "status lists the live release" 'said "$(live)  (live)"'
+
+# --- 13. the built-in orchestra's banks (#1040) -----------------------------------
+echo "the built-in sounds: on the server once, a hard link in each release"
+shared="$server/shared/score.example/sounds"
+dist="$work/dist"
+mkdir -p "$shared" "$dist"
+# Two banks the manifest names (one uploaded already, one not yet) and one it no longer does.
+printf 'flute bank' > "$dist/flute.aaaaaaaaaaaaaaaa.sf3"
+printf 'oboe bank' > "$dist/oboe.bbbbbbbbbbbbbbbb.sf3"
+cp "$dist/flute.aaaaaaaaaaaaaaaa.sf3" "$shared/"
+printf 'an old bank' > "$shared/flute.cccccccccccccccc.sf3"
+sum() { sha256sum "$1" | cut -d' ' -f1; }
+write_manifest() {
+  mkdir -p "$1/public/soundfonts"
+  printf '{ "instruments": [\n { "id": "flute", "file": "flute.aaaaaaaaaaaaaaaa.sf3", "sha256": "%s" },\n { "id": "oboe", "file": "oboe.bbbbbbbbbbbbbbbb.sf3", "sha256": "%s" }\n] }\n' \
+    "$(sum "$dist/flute.aaaaaaaaaaaaaaaa.sf3")" "$(sum "$dist/oboe.bbbbbbbbbbbbbbbb.sf3")" > "$1/public/soundfonts/orchestra.json"
+}
+make_checkout "v13"
+write_manifest "$checkout"
+next_id
+r13="$id"
+upload "$r13"
+check "the banks are not uploaded with a release" '[ ! -e "$releases/$r13/public/soundfonts/orchestra" ]'
+deploy "$r13"
+check "deploy succeeds" '[ $last = 0 ] && [ "$(live)" = "$r13" ]'
+check "the bank on the server is a hard link in the release, inside public/" \
+  '[ "$(inode "$site/public/soundfonts/orchestra/flute.aaaaaaaaaaaaaaaa.sf3")" = "$(inode "$shared/flute.aaaaaaaaaaaaaaaa.sf3")" ] && [ ! -L "$site/public/soundfonts/orchestra/flute.aaaaaaaaaaaaaaaa.sf3" ]'
+check "a bank the manifest does not name is not served" '[ ! -e "$site/public/soundfonts/orchestra/flute.cccccccccccccccc.sf3" ]'
+check "a bank not uploaded yet is said, and stops nothing" 'said "1 banks the manifest names are not in" && [ ! -e "$site/public/soundfonts/orchestra/oboe.bbbbbbbbbbbbbbbb.sf3" ]'
+
+sounds_upload() { (cd "$checkout" && env "${env_common[@]}" LOCAL=1 SCORE_SOUNDS_DIR="$dist" "$@" bash "$repo/deploy/sounds-upload.sh") > "$work/out" 2>&1; }
+sounds_upload
+check "the upload succeeds" '[ $last = 0 ]'
+check "the missing bank is on the server, and served by the live release at once" \
+  'cmp -s "$shared/oboe.bbbbbbbbbbbbbbbb.sf3" "$dist/oboe.bbbbbbbbbbbbbbbb.sf3" && [ "$(inode "$site/public/soundfonts/orchestra/oboe.bbbbbbbbbbbbbbbb.sf3")" = "$(inode "$shared/oboe.bbbbbbbbbbbbbbbb.sf3")" ]'
+check "nothing is deleted on the server" '[ -f "$shared/flute.cccccccccccccccc.sf3" ]'
+flute_before="$(inode "$shared/flute.aaaaaaaaaaaaaaaa.sf3")"
+sounds_upload
+check "run again: nothing sent again, nothing changed" '[ $last = 0 ] && [ "$(inode "$shared/flute.aaaaaaaaaaaaaaaa.sf3")" = "$flute_before" ]'
+printf 'not the oboe' > "$dist/oboe.bbbbbbbbbbbbbbbb.sf3"
+rm "$shared/oboe.bbbbbbbbbbbbbbbb.sf3"
+sounds_upload
+check "a file that is not the one the manifest names stops the upload before anything is sent" \
+  '[ $last != 0 ] && said "not those the manifest names" && [ ! -e "$shared/oboe.bbbbbbbbbbbbbbbb.sf3" ]'
+make_checkout "v14"
+write_manifest "$checkout"
+next_id
+upload "$id"
+deploy "$id"
+check "the next release has its links too" \
+  '[ "$(live)" = "$id" ] && [ "$(inode "$site/public/soundfonts/orchestra/flute.aaaaaaaaaaaaaaaa.sf3")" = "$(inode "$shared/flute.aaaaaaaaaaaaaaaa.sf3")" ]'
+make_checkout "v15"
+next_id
+upload "$id"
+deploy "$id"
+check "a release without a manifest deploys as before" '[ $last = 0 ] && [ "$(live)" = "$id" ] && [ ! -e "$site/public/soundfonts" ]'
 
 echo
 echo "$passed passed, $failed failed"

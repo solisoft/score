@@ -13,6 +13,23 @@ class Changelog
       {"date": "2026-11-24", "entries": [
         {
           "area": "site",
+          "title": "An orchestra built in: sampled instruments, in the browser",
+          "text": "Play now uses sampled instruments where it has them (#1040): a solo violin, the violin, "
+          + "viola and cello sections, double bass, a string orchestra, harp, piccolo, flute, oboe, clarinet, "
+          + "bassoon, French horn, trumpet (and with a mute), trombone, tuba, timpani, glockenspiel, "
+          + "xylophone, marimba, tubular bells, a pipe organ and a grand piano. Nothing to install and no "
+          + "file to provide: each instrument is loaded the first time a score plays it (0.2 to 15 MB) and "
+          + "kept by the browser. They follow what is written — a staccato dot, pizz. until arco, a "
+          + "tremolo, a timpani roll. Saxophones, guitars, voices and the drum kit keep their General MIDI "
+          + "sound, and so does any staff until its samples have come: the music always plays. In the "
+          + "editor, the mixer's Sounds line turns the orchestra off for a score, each staff's Instrument "
+          + "chooses a soloist or a section, and a SoundFont of your own still comes first; Save the sound "
+          + "uses them too. The samples are VSCO 2 Community Edition by Versilian Studios (CC0) and the "
+          + "Salamander Grand Piano by Alexander Holm (CC BY 3.0).",
+          "link": "playground"
+        },
+        {
+          "area": "site",
           "title": "What the editor said it did not keep, it keeps",
           "text": "The editor now names what it would leave out of a text before rewriting it (#1039) — and most "
           + "of what it named is now kept instead. A tablature tuned by its stringTunings (a bass's four "

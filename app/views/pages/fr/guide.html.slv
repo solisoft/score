@@ -137,6 +137,19 @@
           un instrument General MIDI à une portée qui n'en nomme aucun. Chaque partition de ce site a un bouton
           <strong>Lecture</strong> qui joue ce fichier.
         </p>
+        <p>
+          Sur ce site, la lecture utilise l'<strong>orchestre intégré</strong> quand il a l'instrument : des cordes
+          échantillonnées (un violon solo, les quatre pupitres, un orchestre à cordes), harpe, flûte, piccolo,
+          hautbois, clarinette, basson, cor, trompette, trombone, tuba, timbales, claviers de percussion, cloches,
+          un orgue à tuyaux et un piano à queue. Chacun est chargé la première fois qu'une partition le joue (0,2 à
+          15 Mo, gardés par le navigateur), et suit ce qui est écrit : un point de staccato, <code>pizz.</code>
+          jusqu'à <code>arco</code>, un trémolo. Les autres instruments — saxophones, guitares, voix, batterie —
+          jouent leur son General MIDI, comme tout instrument tant que ses échantillons ne sont pas arrivés. Dans
+          l'éditeur, la ligne <strong>Sons</strong> de la table de mixage coupe l'orchestre pour une partition, et
+          l'<strong>Instrument</strong> de chaque portée choisit entre un soliste et un pupitre. Les échantillons
+          sont ceux de VSCO 2 Community Edition, de Versilian Studios (CC0), et du Salamander Grand Piano
+          d'Alexander Holm (CC BY 3.0).
+        </p>
       </section>
 
       <section class="doc-section" id="pdf">

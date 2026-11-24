@@ -20,7 +20,7 @@ fr:
   footer:
     label: "Le site"
     about: "<strong>Score</strong> écrit, joue et partage des partitions dans le navigateur. Son graveur, <strong>eui-score</strong>, est celui d'<a href=\"https://eui.solisoft.net\">EUI</a> : la part de LilyPond qu'il lit est gravée en tracés, jouée en MIDI et imprimée en PDF. Chaque partition de ce site est gravée à la volée par lui — sur le serveur, ou dans votre navigateur."
-    credits: "Glyphes musicaux : Emmentaler (OFL). Texte des partitions : TeX Gyre Schola (GUST Font License). Sons : <a href=\"/soundfonts/MuseScore_General_License.txt\">MuseScore_General</a> (MIT), joués par <a href=\"https://github.com/spessasus/spessasynth_lib\">SpessaSynth</a> (Apache 2.0). Fait avec <a href=\"https://solisoft.net\">Soli</a>."
+    credits: "Glyphes musicaux : Emmentaler (OFL). Texte des partitions : TeX Gyre Schola (GUST Font License). Sons : <a href=\"/soundfonts/MuseScore_General_License.txt\">MuseScore_General</a> (MIT) et l'<a href=\"/soundfonts/orchestra_License.txt\">orchestre intégré</a>, fait à partir de VSCO 2 Community Edition de Versilian Studios (CC0) et du Salamander Grand Piano d'Alexander Holm (<a href=\"https://creativecommons.org/licenses/by/3.0/\">CC BY 3.0</a>), joués par <a href=\"https://github.com/spessasus/spessasynth_lib\">SpessaSynth</a> (Apache 2.0). Fait avec <a href=\"https://solisoft.net\">Soli</a>."
   pages:
     home:
       title: "Score"
@@ -139,8 +139,9 @@ fr:
         label: "Écrire ensemble"
       sound:
         eyebrow: "Le son"
-        title: "Une table de mixage, un synthé, vos propres sons."
-        l1: "Volume, panoramique, muet, solo et effets sur chaque portée ; un synthétiseur, ou une SoundFont à vous."
+        title: "Un orchestre intégré, une table de mixage, vos propres sons."
+        l1: "Cordes, bois, cuivres, percussions et piano à queue échantillonnés, dans le navigateur ; staccato, pizzicato et trémolo suivent ce qui est écrit."
+        l3: "Volume, panoramique, muet, solo et effets sur chaque portée ; un synthétiseur, ou une SoundFont à vous."
         l2: "Jouez et enregistrez depuis un clavier MIDI : horloge MIDI, MIDI learn et MPE compris."
         alt: "La table de mixage : une tranche par portée du quatuor, avec volume, panoramique, instrument et effets."
         label: "Écouter"

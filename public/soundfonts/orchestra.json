@@ -1,0 +1,574 @@
+{
+ "version": 1,
+ "base": "/soundfonts/orchestra/",
+ "made": {
+  "by": "scripts/sounds/build.py",
+  "quality": 0.5,
+  "numpy": "2.5.5",
+  "libsndfile": "1.2.2"
+ },
+ "articulations": [
+  "sustain",
+  "staccato",
+  "pizzicato",
+  "tremolo"
+ ],
+ "sources": {
+  "vsco2ce": {
+   "name": "VSCO 2 Community Edition",
+   "version": "1.1.0",
+   "url": "https://github.com/sgossner/VSCO-2-CE/archive/refs/tags/1.1.0.tar.gz",
+   "sha256": "ac577fd3bc9171560087c8182ef6072f11ae0b63b3c3af9a5f752b91e26d3b96",
+   "home": "https://vis.versilstudios.com/vsco-community.html",
+   "license": "CC0-1.0",
+   "credit": "Versilian Studios (Sam Gossner)"
+  },
+  "salamander": {
+   "name": "Salamander Grand Piano V3",
+   "version": "3382bf9496bba2486f5ab0de55a264d1dfc38404",
+   "url": "https://github.com/sfzinstruments/SalamanderGrandPiano/archive/3382bf9496bba2486f5ab0de55a264d1dfc38404.tar.gz",
+   "sha256": "f36bef84632067387909ba03064daee6e81afdea3f93526c4ee56a22e12613ba",
+   "home": "https://github.com/sfzinstruments/SalamanderGrandPiano",
+   "license": "CC-BY-3.0",
+   "credit": "Alexander Holm"
+  }
+ },
+ "instruments": [
+  {
+   "id": "piano",
+   "name": "Grand piano",
+   "source": "salamander",
+   "file": "piano.6121ebdc0b0948ca.sf3",
+   "sha256": "6121ebdc0b0948ca31bcc450c82b0a3fa4a4456f1744e98259d7fbba21255615",
+   "size": 11341492,
+   "sounds": {
+    "acoustic grand": "sustain",
+    "bright acoustic": "sustain"
+   },
+   "articulations": [
+    "sustain"
+   ],
+   "keys": [
+    21,
+    108
+   ],
+   "seconds": 763,
+   "samples": 180,
+   "license": "CC-BY-3.0"
+  },
+  {
+   "id": "violin",
+   "name": "Solo violin",
+   "source": "vsco2ce",
+   "file": "violin.950be59290a0ce22.sf3",
+   "sha256": "950be59290a0ce22ab50309498f164e99234ba1c9eafc87a2c2b8da191dfb3be",
+   "size": 10101490,
+   "sounds": {
+    "violin": "sustain"
+   },
+   "articulations": [
+    "sustain",
+    "staccato",
+    "pizzicato",
+    "tremolo"
+   ],
+   "keys": [
+    55,
+    96
+   ],
+   "seconds": 413,
+   "samples": 218,
+   "license": "CC0-1.0"
+  },
+  {
+   "id": "violin-section",
+   "name": "Violin section",
+   "source": "vsco2ce",
+   "file": "violin-section.f6479a50b75b54e8.sf3",
+   "sha256": "f6479a50b75b54e8b84649aa14530b6ed481f3f319ac35eb0468e5dc340b1521",
+   "size": 7630710,
+   "sounds": {
+    "violin": "sustain"
+   },
+   "articulations": [
+    "sustain",
+    "staccato",
+    "pizzicato",
+    "tremolo"
+   ],
+   "keys": [
+    55,
+    86
+   ],
+   "seconds": 325,
+   "samples": 174,
+   "license": "CC0-1.0"
+  },
+  {
+   "id": "viola-section",
+   "name": "Viola section",
+   "source": "vsco2ce",
+   "file": "viola-section.d4b9c8d4fe6cb7ff.sf3",
+   "sha256": "d4b9c8d4fe6cb7ffd95f4fd15f926ffde859dfe62d5025752474e64f3b36c3f4",
+   "size": 8511780,
+   "sounds": {
+    "viola": "sustain"
+   },
+   "articulations": [
+    "sustain",
+    "staccato",
+    "pizzicato",
+    "tremolo"
+   ],
+   "keys": [
+    48,
+    86
+   ],
+   "seconds": 374,
+   "samples": 194,
+   "license": "CC0-1.0"
+  },
+  {
+   "id": "cello-section",
+   "name": "Cello section",
+   "source": "vsco2ce",
+   "file": "cello-section.d5d30c89f1da5aa5.sf3",
+   "sha256": "d5d30c89f1da5aa54df586661aa6eeb89364c371f3deb99ff0c0ebfdc7a3da34",
+   "size": 8735692,
+   "sounds": {
+    "cello": "sustain"
+   },
+   "articulations": [
+    "sustain",
+    "staccato",
+    "pizzicato",
+    "tremolo"
+   ],
+   "keys": [
+    36,
+    77
+   ],
+   "seconds": 418,
+   "samples": 208,
+   "license": "CC0-1.0"
+  },
+  {
+   "id": "contrabass",
+   "name": "Double bass",
+   "source": "vsco2ce",
+   "file": "contrabass.835752577a2ea334.sf3",
+   "sha256": "835752577a2ea334b1c77eaa9fac192dc2fbcd3ddc1a2326874390e0a7090584",
+   "size": 6767962,
+   "sounds": {
+    "contrabass": "sustain"
+   },
+   "articulations": [
+    "sustain",
+    "staccato",
+    "pizzicato",
+    "tremolo"
+   ],
+   "keys": [
+    30,
+    59
+   ],
+   "seconds": 344,
+   "samples": 166,
+   "license": "CC0-1.0"
+  },
+  {
+   "id": "strings",
+   "name": "String orchestra",
+   "source": "vsco2ce",
+   "file": "strings.03045631d6e35e7b.sf3",
+   "sha256": "03045631d6e35e7bd5f303bb133d784f6ef1ddddda921d9c847a03c380ea89e5",
+   "size": 14577994,
+   "sounds": {
+    "string ensemble 1": "sustain",
+    "string ensemble 2": "sustain",
+    "tremolo strings": "tremolo",
+    "pizzicato strings": "pizzicato"
+   },
+   "articulations": [
+    "sustain",
+    "staccato",
+    "pizzicato",
+    "tremolo"
+   ],
+   "keys": [
+    30,
+    86
+   ],
+   "seconds": 683,
+   "samples": 352,
+   "license": "CC0-1.0"
+  },
+  {
+   "id": "harp",
+   "name": "Harp",
+   "source": "vsco2ce",
+   "file": "harp.62cbddfbe2ec2a7d.sf3",
+   "sha256": "62cbddfbe2ec2a7d27e87a4a65036fbba8912653fb2bd26178869b040b547bb0",
+   "size": 2624642,
+   "sounds": {
+    "orchestral harp": "sustain"
+   },
+   "articulations": [
+    "sustain"
+   ],
+   "keys": [
+    28,
+    101
+   ],
+   "seconds": 137,
+   "samples": 46,
+   "license": "CC0-1.0"
+  },
+  {
+   "id": "piccolo",
+   "name": "Piccolo",
+   "source": "vsco2ce",
+   "file": "piccolo.a72d3e21612384cc.sf3",
+   "sha256": "a72d3e21612384cca08573826735d9adfdce27101c5e057169739ff50e92d475",
+   "size": 793560,
+   "sounds": {
+    "piccolo": "sustain"
+   },
+   "articulations": [
+    "sustain",
+    "staccato"
+   ],
+   "keys": [
+    67,
+    91
+   ],
+   "seconds": 34,
+   "samples": 20,
+   "license": "CC0-1.0"
+  },
+  {
+   "id": "flute",
+   "name": "Flute",
+   "source": "vsco2ce",
+   "file": "flute.c03ee29947e984eb.sf3",
+   "sha256": "c03ee29947e984eb798a9aea850750f7ff85c63b1da5d38fe8ae1498311dc355",
+   "size": 2122274,
+   "sounds": {
+    "flute": "sustain"
+   },
+   "articulations": [
+    "sustain",
+    "staccato"
+   ],
+   "keys": [
+    60,
+    96
+   ],
+   "seconds": 91,
+   "samples": 74,
+   "license": "CC0-1.0"
+  },
+  {
+   "id": "oboe",
+   "name": "Oboe",
+   "source": "vsco2ce",
+   "file": "oboe.6f8ce8c7ac6e7345.sf3",
+   "sha256": "6f8ce8c7ac6e7345b56468bff6632fb1a71857223bd8fcda5983c3ce6052bc5b",
+   "size": 3103934,
+   "sounds": {
+    "oboe": "sustain"
+   },
+   "articulations": [
+    "sustain",
+    "staccato"
+   ],
+   "keys": [
+    58,
+    89
+   ],
+   "seconds": 132,
+   "samples": 88,
+   "license": "CC0-1.0"
+  },
+  {
+   "id": "clarinet",
+   "name": "Clarinet",
+   "source": "vsco2ce",
+   "file": "clarinet.3cf81076f3195e25.sf3",
+   "sha256": "3cf81076f3195e253fe2051e6b76dabbbe7c88bfd5537cab7ed959d4f5bfa1b6",
+   "size": 5148312,
+   "sounds": {
+    "clarinet": "sustain"
+   },
+   "articulations": [
+    "sustain",
+    "staccato"
+   ],
+   "keys": [
+    50,
+    89
+   ],
+   "seconds": 227,
+   "samples": 130,
+   "license": "CC0-1.0"
+  },
+  {
+   "id": "bassoon",
+   "name": "Bassoon",
+   "source": "vsco2ce",
+   "file": "bassoon.71070c84577ac4c9.sf3",
+   "sha256": "71070c84577ac4c9da3080ce6cddae24d1767bd6e9ed51a792b228eabe7bd7c5",
+   "size": 3285508,
+   "sounds": {
+    "bassoon": "sustain"
+   },
+   "articulations": [
+    "sustain",
+    "staccato"
+   ],
+   "keys": [
+    34,
+    75
+   ],
+   "seconds": 170,
+   "samples": 96,
+   "license": "CC0-1.0"
+  },
+  {
+   "id": "horn",
+   "name": "French horn",
+   "source": "vsco2ce",
+   "file": "horn.d8bcfefc9a032354.sf3",
+   "sha256": "d8bcfefc9a032354992186b280d019107cb830e6048f2143d583e1b5cde062d7",
+   "size": 3577902,
+   "sounds": {
+    "french horn": "sustain"
+   },
+   "articulations": [
+    "sustain",
+    "staccato"
+   ],
+   "keys": [
+    33,
+    77
+   ],
+   "seconds": 200,
+   "samples": 114,
+   "license": "CC0-1.0"
+  },
+  {
+   "id": "trumpet",
+   "name": "Trumpet",
+   "source": "vsco2ce",
+   "file": "trumpet.a8494bb4530f67e4.sf3",
+   "sha256": "a8494bb4530f67e479f547f61de252667453388b898b87f1f7fb1834c807e98c",
+   "size": 3689892,
+   "sounds": {
+    "trumpet": "sustain"
+   },
+   "articulations": [
+    "sustain",
+    "staccato"
+   ],
+   "keys": [
+    53,
+    84
+   ],
+   "seconds": 165,
+   "samples": 106,
+   "license": "CC0-1.0"
+  },
+  {
+   "id": "trumpet-muted",
+   "name": "Muted trumpet",
+   "source": "vsco2ce",
+   "file": "trumpet-muted.1e52e16c6805e2c4.sf3",
+   "sha256": "1e52e16c6805e2c4d0f048f9d4284ca2d73fc4d9c5d3d00e0d371d8badb8d890",
+   "size": 2355456,
+   "sounds": {
+    "muted trumpet": "sustain"
+   },
+   "articulations": [
+    "sustain"
+   ],
+   "keys": [
+    58,
+    81
+   ],
+   "seconds": 101,
+   "samples": 32,
+   "license": "CC0-1.0"
+  },
+  {
+   "id": "trombone",
+   "name": "Trombone",
+   "source": "vsco2ce",
+   "file": "trombone.bc24a2e7161b226d.sf3",
+   "sha256": "bc24a2e7161b226d3812b421cae3eb3941a2e49ca587c1887870954ba4feee5c",
+   "size": 4583618,
+   "sounds": {
+    "trombone": "sustain"
+   },
+   "articulations": [
+    "sustain",
+    "staccato"
+   ],
+   "keys": [
+    34,
+    65
+   ],
+   "seconds": 209,
+   "samples": 118,
+   "license": "CC0-1.0"
+  },
+  {
+   "id": "tuba",
+   "name": "Tuba",
+   "source": "vsco2ce",
+   "file": "tuba.7df12ca07b2e3756.sf3",
+   "sha256": "7df12ca07b2e375670d2a1124c358e1b0193629aab071bdbc32c15e5233ad797",
+   "size": 2265448,
+   "sounds": {
+    "tuba": "sustain"
+   },
+   "articulations": [
+    "sustain",
+    "staccato"
+   ],
+   "keys": [
+    29,
+    62
+   ],
+   "seconds": 118,
+   "samples": 76,
+   "license": "CC0-1.0"
+  },
+  {
+   "id": "timpani",
+   "name": "Timpani",
+   "source": "vsco2ce",
+   "file": "timpani.c8d605b8e300ca0d.sf3",
+   "sha256": "c8d605b8e300ca0d32c95b9bd689b63b984857b34d7fa2e69c93b953c1572ae2",
+   "size": 2266638,
+   "sounds": {
+    "timpani": "sustain"
+   },
+   "articulations": [
+    "sustain",
+    "tremolo"
+   ],
+   "keys": [
+    42,
+    54
+   ],
+   "seconds": 118,
+   "samples": 48,
+   "license": "CC0-1.0"
+  },
+  {
+   "id": "glockenspiel",
+   "name": "Glockenspiel",
+   "source": "vsco2ce",
+   "file": "glockenspiel.0521b55feb042882.sf3",
+   "sha256": "0521b55feb042882f05218f588d8b9494cb259c345d61df91bf25288b82ae020",
+   "size": 485550,
+   "sounds": {
+    "glockenspiel": "sustain"
+   },
+   "articulations": [
+    "sustain"
+   ],
+   "keys": [
+    79,
+    108
+   ],
+   "seconds": 26,
+   "samples": 12,
+   "license": "CC0-1.0"
+  },
+  {
+   "id": "xylophone",
+   "name": "Xylophone",
+   "source": "vsco2ce",
+   "file": "xylophone.b56eae12fac0d7b5.sf3",
+   "sha256": "b56eae12fac0d7b5a8ef7f4835ac4347da0e762d3bda44cbb46c420fd3c3eeb4",
+   "size": 153710,
+   "sounds": {
+    "xylophone": "sustain"
+   },
+   "articulations": [
+    "sustain"
+   ],
+   "keys": [
+    67,
+    108
+   ],
+   "seconds": 9,
+   "samples": 16,
+   "license": "CC0-1.0"
+  },
+  {
+   "id": "marimba",
+   "name": "Marimba",
+   "source": "vsco2ce",
+   "file": "marimba.84fb209bba806cc8.sf3",
+   "sha256": "84fb209bba806cc8c5ee0c9b323d3fa2b31be4762ad28967593d53546d020dfa",
+   "size": 228268,
+   "sounds": {
+    "marimba": "sustain"
+   },
+   "articulations": [
+    "sustain"
+   ],
+   "keys": [
+    41,
+    96
+   ],
+   "seconds": 29,
+   "samples": 20,
+   "license": "CC0-1.0"
+  },
+  {
+   "id": "tubular-bells",
+   "name": "Tubular bells",
+   "source": "vsco2ce",
+   "file": "tubular-bells.8d20eecc78176038.sf3",
+   "sha256": "8d20eecc7817603815220703b98e7527d98af94fc642d98ce43b547dff38dd51",
+   "size": 619352,
+   "sounds": {
+    "tubular bells": "sustain"
+   },
+   "articulations": [
+    "sustain"
+   ],
+   "keys": [
+    60,
+    77
+   ],
+   "seconds": 40,
+   "samples": 8,
+   "license": "CC0-1.0"
+  },
+  {
+   "id": "organ",
+   "name": "Pipe organ",
+   "source": "vsco2ce",
+   "file": "organ.b140ecc100648b7b.sf3",
+   "sha256": "b140ecc100648b7bfa0a5e50c8768010f6cb6df4af32b9f965636e1d6a08d050",
+   "size": 2883466,
+   "sounds": {
+    "church organ": "sustain"
+   },
+   "articulations": [
+    "sustain"
+   ],
+   "keys": [
+    36,
+    96
+   ],
+   "seconds": 137,
+   "samples": 42,
+   "license": "CC0-1.0"
+  }
+ ]
+}

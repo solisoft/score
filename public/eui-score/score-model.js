@@ -3465,6 +3465,15 @@ export const META_KEYS = {
   // A staff's synthesizer and its own SoundFont's preset (#391); only a staff plays one.
   synth: { label: () => tr("Synthesizer"), clean: (x) => keptEntries(x, isPlain), lanes: metaByLane("synth", { others: "skip" }) },
   soundfont: { label: () => tr("Own SoundFont"), clean: (x) => keptEntries(x, isPlain), lanes: metaByLane("soundfont", { others: "skip" }) },
+  // The built-in orchestra (orchestra.js, #1040): "gm" when the score plays General MIDI throughout, and a
+  // staff's own instrument — an id of the manifest's, or "gm" — where it is not what its sound gives it.
+  sounds: { label: () => tr("Sounds"), clean: (x) => (x === "gm" ? x : undefined) },
+  orchestra: {
+    label: () => tr("Built-in instrument"),
+    clean: (x) => keptEntries(x, (id, lane) => isLane(lane) && typeof id === "string" && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(id)),
+    // Two staves that chose the same instrument may share a channel past the fifteenth.
+    lanes: metaByLane("orchestra", { others: "skip", channel: "same" }),
+  },
   // Each part's own layout (#1018), by its staff's lane: { breaks: { bar: "line" | "page" }, staffSize,
   // systemsPerPage, evenPages, systemSpacing } — what partOf lays the part out with, the score's left as it is.
   parts: {

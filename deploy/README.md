@@ -258,6 +258,59 @@ these are set (`<set>` / `<unset>`, never their values).
   are not in git: the workflow fetches them with `deploy/soundfont.sh`
   before its rsync. A local checkout runs that script once.
 
+## The built-in orchestra (#1040)
+
+Twenty-four sampled instruments, one SF3 bank each (108 MB in all), made from
+VSCO 2 Community Edition (CC0) and the Salamander Grand Piano (CC BY 3.0) by
+`scripts/sounds/build.py`. They are **not in git and not in a release's
+upload**: they are on the server once, in
+`/home/rocky/shared/score.solisoft.net/sounds/`, and every release gets them
+as hard links in `public/soundfonts/orchestra/` (`release.sh` `link_sounds`)
+— links, because the static server reads nothing outside `public/`, and a
+link costs no disk.
+
+```
+/home/rocky/shared/score.solisoft.net/sounds/flute.e8ad2a5d3024f0b7.sf3   uploaded once
+/home/rocky/releases/score.solisoft.net/<id>/public/soundfonts/orchestra/flute.e8ad2a5d3024f0b7.sf3   the same file
+```
+
+What is in git is the manifest, `public/soundfonts/orchestra.json`: each
+instrument's file, digest and size, the sounds it plays, and the two
+libraries' versions, checksums and licences. A file's name carries its
+digest and the players ask for it with `?v=<digest>`, so it is served
+`Cache-Control: public, max-age=31536000, immutable`; a bank made again is
+another address, and the old one stays for the releases that still name it.
+
+To make them, and to put them on the server (by hand, when the manifest
+changes — a deploy stops for nothing here: without a bank, its instrument
+plays the General MIDI sounds, and the deploy's log says how many are
+missing):
+
+```bash
+scripts/sounds/fetch.sh          # the two libraries (3 GB) and a Python with numpy + soundfile, in ~/.cache/score-sounds
+scripts/sounds/build.py          # the 24 banks into ~/.cache/score-sounds/dist, and the manifest
+scripts/sounds/link.sh           # into this checkout's public/soundfonts/orchestra/, for `soli serve`
+git add public/soundfonts/orchestra.json && git commit …
+HOST=<the server> deploy/sounds-upload.sh    # checks the digests, rsyncs what is not there, links the live release
+```
+
+`build.py --only flute,oboe` makes those again and keeps the others' entries;
+the same samples make the same bytes, so an instrument that did not change
+keeps its address. `SCORE_SOUNDS_SRC` and `SCORE_SOUNDS_DIR` move the
+libraries and the banks elsewhere than `~/.cache/score-sounds`. The upload
+may run before or after the deploy that brings a new manifest.
+
+- **Cloudflare** caches by file extension, and `.sf3` is not one it knows:
+  until a Cache Rule says "eligible for cache" for `/soundfonts/*`
+  (Caching › Cache Rules; edge TTL: respect origin), every first download
+  comes from the server. The browsers keep the files either way (Cache
+  Storage, `eui-score-sounds`).
+- The Salamander piano's licence asks for its credit: it is in the mixer
+  (the Sounds line, and the piano's strip) and on the site's credits line.
+  `tests/js/orchestra.test.mjs` holds the manifest to it.
+- CI and the specs need none of the banks: `tests/fixtures/sounds/` holds a
+  9 kB instrument (`build.py --fixture tests/fixtures/sounds`).
+
 ## On GitHub (once)
 
 | Name | Kind | Value |

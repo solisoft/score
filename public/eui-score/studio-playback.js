@@ -4,6 +4,7 @@
 // The editor's words in the page's language (#508).
 const V = new URL(import.meta.url).search;
 const { tr } = await import(`./words.js${V}`);
+const O = await import(`./orchestra.js${V}`);
 
 /** The Playback section set up; answers Play, Stop, the loop, and the MIDI heard. */
 export function install(ctx) {
@@ -184,7 +185,12 @@ export function install(ctx) {
       bytes = await heardMidi(played, passes, { practice: { transpose: transposeNow() }, sound: Boolean(P.outputPort()) });
       // The synthesizer's staves and the own SoundFonts' (#391): in this browser only, not to a MIDI device.
       if (!P.outputPort()) {
-        sound = await st.instruments.prepare(played);
+        // The built-in instruments too (#1040): those not in the browser yet are waited for while the default
+        // sounds load (a first Play) and a moment more; after that their staves play General MIDI until
+        // they have come.
+        const loading = (f) => say(tr("Loading the sounds… {percent} % (38 MB, once)", { percent: Math.round(100 * f) }));
+        if (!P.isReady()) say(tr("Loading the sounds…"));
+        sound = await st.instruments.prepare(played, { passes, until: P.isReady() ? null : P.prepare(loading).catch(() => {}), patience: O.PATIENCE });
         ({ bytes, notes } = st.instruments.forSound(bytes, sound));
       }
     } catch (error) {
@@ -243,7 +249,14 @@ export function install(ctx) {
       state.padChannel = M.channels(played).at(-1).channel;
       P.mute(state.padChannel, true);
     }
-    if (state.unramped) say(tr("Faster each pass plays a loop: set one first (Play ▸ Loop, or the MIDI view's ruler). Playing from the start — Space to pause"));
+    // Built-in instruments still on their way (#1040): said, and said again once they have come.
+    const coming = sound?.orchestra?.pending ?? [];
+    if (coming.length) {
+      sound.orchestra.done.then((came) => came && st.playing === state && say(tr("The built-in sounds are loaded: the next Play uses them.")));
+    }
+    if (coming.length && !st.recording && !st.taking && !state.unramped) {
+      say(tr("Playing with the General MIDI sounds while the built-in ones load ({size} MB, once) — Space to pause", { size: O.megabytes(coming.reduce((sum, i) => sum + i.size, 0)) }));
+    } else if (state.unramped) say(tr("Faster each pass plays a loop: set one first (Play ▸ Loop, or the MIDI view's ruler). Playing from the start — Space to pause"));
     else if (!st.recording && !st.taking) say(loop ? tr("Looping the selected bars — Space to pause") : tr("Playing — Space to pause"));
     showState();
     state.timer = setInterval(showProgress, 200);

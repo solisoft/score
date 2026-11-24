@@ -1,10 +1,13 @@
-// What each staff plays, in the mixer (#391): its General MIDI instrument
-// from the default sounds, the subtractive synthesizer (synth.js) with its
-// knobs, or a preset of a SoundFont of your own (soundbank.js). And the
-// MPE keyboard (mpe.js): its per-note bend and pressure heard live.
+// What each staff plays, in the mixer (#391): its built-in instrument
+// (orchestra.js, #1040) where the site has one for its sound, its General
+// MIDI instrument from the default sounds, the subtractive synthesizer
+// (synth.js) with its knobs, or a preset of a SoundFont of your own
+// (soundbank.js). And the MPE keyboard (mpe.js): its per-note bend and
+// pressure heard live.
 //
 //   const inst = installInstruments({ root, st, M, P, edit, say });
 //   inst.html(lane);                     // the strip's Instrument part (mixer-ui.js)
+//   inst.head();                         // the mixer's Sounds line: built-in or General MIDI, and the credits
 //   const sound = await inst.prepare(score);   // before Play or Save the sound
 //   const { bytes, notes } = inst.forSound(midi, sound);
 //
@@ -16,6 +19,8 @@ const V = SEARCH;
 const { tr } = await import(`./words.js${V}`);
 const Sy = await import(`./synth.js${SEARCH}`);
 const Sb = await import(`./soundbank.js${SEARCH}`);
+const O = await import(`./orchestra.js${SEARCH}`);
+const F = await import(`./feel.js${SEARCH}`);
 const { MpeInput } = await import(`./mpe.js${SEARCH}`);
 
 const escape = (text) => String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -76,6 +81,18 @@ export function installInstruments({ root, st, M, P, edit, say }) {
     }));
   refreshKept();
 
+  // The built-in orchestra's manifest (#1040), once read: null where the site has none.
+  // Asked for again on each Play: a site out of reach when the editor opened has it once it is back.
+  let orchestra = null;
+  const readOrchestra = () =>
+    O.manifest().then((read) => {
+      if (read === orchestra) return read;
+      orchestra = read;
+      st.mixer?.refresh();
+      return read;
+    });
+  readOrchestra();
+
   const fontInfo = (hash) => loaded.get(hash) ?? kept.find((k) => k.hash === hash) ?? null;
   const fontsKnown = () => {
     const out = new Map();
@@ -101,8 +118,12 @@ export function installInstruments({ root, st, M, P, edit, say }) {
     if (!score?.staves?.[lane] || score.staves[lane].drums) return "";
     const synth = Sy.synthOf(score, lane);
     const font = Sb.soundfontOf(score, lane);
-    const kind = synth ? "synth" : font ? "sf" : "gm";
+    // The built-in instruments its sound may play, unless the score plays General MIDI throughout.
+    const builtIn = orchestra && O.choiceOf(score) === "orchestra" ? O.candidates(orchestra, O.soundOf(score, lane)) : [];
+    const played = synth || font ? null : O.instrumentFor(orchestra, score, lane);
+    const kind = synth ? "synth" : font ? "sf" : played ? "orchestra" : "gm";
     const choose = `<label class="mixer-field"><span>${tr("Sound")}</span><select data-inst="kind" data-inst-lane="${lane}" aria-label="${tr("What this staff plays")}">
+      ${builtIn.map((i) => `<option value="orchestra:${i.id}"${played?.instrument.id === i.id ? " selected" : ""}>${escape(tr("Built-in · {name}", { name: O.instrumentName(i) }))}</option>`).join("")}
       <option value="gm"${kind === "gm" ? " selected" : ""}>General MIDI</option>
       <option value="synth"${kind === "synth" ? " selected" : ""}>${tr("Synthesizer")}</option>
       <option value="sf"${kind === "sf" ? " selected" : ""}>${tr("Own SoundFont")}</option></select></label>`;
@@ -120,7 +141,32 @@ export function installInstruments({ root, st, M, P, edit, say }) {
         <label class="mixer-field"><span>${tr("Preset")}</span><select data-inst="sf-preset" data-inst-lane="${lane}" aria-label="${tr("SoundFont preset")}">${presets}</select></label>
         ${info ? "" : `<p class="mixer-inst-missing" role="note">${tr("{name} is not in this browser: the default sounds play this staff. Load the file to hear it.", { name: escape(font.name) })}</p>`}`;
     }
-    return `<details class="mixer-fx mixer-inst" data-inst-part="${lane}"${kind !== "gm" ? " open" : ""}><summary>${kind === "synth" ? tr("Instrument · Synthesizer") : kind === "sf" ? tr("Instrument · SoundFont") : tr("Instrument")}</summary>${choose}${body}</details>`;
+    else if (played) {
+      const { instrument } = played;
+      const marks = instrument.articulations.filter((a) => a !== "sustain").map(O.articulationName);
+      const owed = O.credits(orchestra).find((c) => c.required && orchestra.sources[instrument.source]?.name === c.name);
+      body = `<p class="mixer-inst-note" data-inst-builtin="${instrument.id}">${escape(
+        marks.length
+          ? tr("{size} MB, loaded on Play. Follows the marks written: {marks}.", { size: O.megabytes(instrument.size), marks: marks.join(", ") })
+          : tr("{size} MB, loaded on Play.", { size: O.megabytes(instrument.size) })
+      )}${owed ? ` ${escape(tr("{name} by {credit} ({license})", { name: owed.name, credit: owed.credit, license: owed.license.replace(/^CC-BY-/, "CC BY ") }))}.` : ""}</p>`;
+    }
+    const title = kind === "synth" ? tr("Instrument · Synthesizer") : kind === "sf" ? tr("Instrument · SoundFont") : played ? tr("Instrument · {name}", { name: O.instrumentName(played.instrument) }) : tr("Instrument");
+    return `<details class="mixer-fx mixer-inst" data-inst-part="${lane}"${kind === "synth" || kind === "sf" ? " open" : ""}><summary>${escape(title)}</summary>${choose}${body}</details>`;
+  }
+
+  /**
+   * The mixer's Sounds line (#1040): what the score plays with — the built-in
+   * sounds, or General MIDI throughout — and whom the built-in sounds are
+   * owed to. Nothing where the site has none.
+   */
+  function head() {
+    if (!orchestra || !st.score) return "";
+    const choice = O.choiceOf(st.score);
+    return `<label class="mixer-field mixer-sounds-choice"><span>${tr("Sounds")}</span><select data-inst="sounds" aria-label="${tr("What the score plays with")}">
+      <option value="orchestra"${choice === "orchestra" ? " selected" : ""}>${tr("Built-in orchestra")}</option>
+      <option value="gm"${choice === "gm" ? " selected" : ""}>General MIDI</option></select></label>
+      <p class="mixer-sounds-credit" data-sounds-credit>${escape(O.creditText(orchestra))}</p>`;
   }
 
   // ---- Choosing ------------------------------------------------------------------------
@@ -130,7 +176,31 @@ export function installInstruments({ root, st, M, P, edit, say }) {
   root.append(picker);
   let pickFor = null;
 
+  /** The score plays the built-in sounds, or General MIDI throughout. */
+  function setSounds(choice) {
+    edit((score) => O.setChoice(score, choice));
+    say(
+      choice === "gm"
+        ? tr("Every staff plays its General MIDI sound.")
+        : tr("The staves play the built-in sounds where there is one for their instrument: each is loaded the first time it plays.")
+    );
+    st.mixer?.refresh();
+  }
+
   function setKind(lane, kind) {
+    if (kind.startsWith("orchestra:")) {
+      const id = kind.slice("orchestra:".length);
+      edit((score) => {
+        Sb.setSoundfont(score, lane, null);
+        Sy.setSynth(score, lane, null);
+        // Kept only when it is not what the staff's sound gives it anyway.
+        O.setLaneChoice(score, lane, null);
+        if (O.instrumentFor(orchestra, score, lane)?.instrument.id !== id) O.setLaneChoice(score, lane, id);
+      });
+      const now = O.instrumentFor(orchestra, st.score, lane);
+      if (now) say(tr("This staff plays the built-in {name}.", { name: O.instrumentName(now.instrument) }));
+      return st.mixer?.refresh();
+    }
     if (kind === "sf") {
       const first = fontsKnown()[0];
       if (!first) return pick(lane);
@@ -139,6 +209,9 @@ export function installInstruments({ root, st, M, P, edit, say }) {
     edit((score) => {
       Sb.setSoundfont(score, lane, null);
       Sy.setSynth(score, lane, kind === "synth" ? { preset: Sy.DEFAULT_PRESET } : null);
+      // General MIDI, where the staff would play a built-in instrument: said on the staff.
+      O.setLaneChoice(score, lane, null);
+      if (kind === "gm" && O.instrumentFor(orchestra, score, lane)) O.setLaneChoice(score, lane, "gm");
     });
     say(kind === "synth" ? tr("This staff plays the synthesizer: its preset and knobs are in the mixer, kept with the score.") : tr("This staff plays its General MIDI instrument again."));
     st.mixer?.refresh();
@@ -211,6 +284,7 @@ export function installInstruments({ root, st, M, P, edit, say }) {
       const lane = laneOf(control);
       const field = control.dataset.inst;
       moving.delete(lane);
+      if (field === "sounds") return setSounds(control.value);
       if (field === "kind") return setKind(lane, control.value);
       if (field === "font") return control.value === "load" ? pick(lane) : useFont(lane, control.value);
       if (field === "sf-preset") {
@@ -252,13 +326,27 @@ export function installInstruments({ root, st, M, P, edit, say }) {
   /**
    * What `score` needs to be heard (Play, Save the sound): its SoundFonts
    * given to the synthesizer, the presets its staves play, the channels the
-   * synthesizer plays. Says which files this browser does not have.
+   * synthesizer plays, and its built-in instruments (#1040) — those loaded,
+   * those still on their way (`orchestra.pending`: their staves play General
+   * MIDI this time; none with `wait`, Save the sound's). Says which files
+   * this browser does not have. `passes`: the bars as played, for the
+   * articulations' program changes.
    */
-  async function prepare(score) {
+  async function prepare(score, { passes = null, wait = false, until = null, patience = 0 } = {}) {
     const channels = score ? M.channels(score) : [];
     const synth = new Map();
     for (const { lane, channel } of channels) if (Sy.synthOf(score, lane)) synth.set(channel, lane);
-    if (!score?.meta?.soundfont) return { presets: [], synth };
+    await readOrchestra();
+    const built = await O.prepare(P, score, channels, {
+      wait,
+      until,
+      patience,
+      // While the default sounds load too (`until`, a first Play), theirs is the progress shown.
+      onProgress: ({ received, total, count }) =>
+        total && (!until || P.isReady()) && say(tr("Loading the built-in sounds… {percent} % ({count} instruments, {size} MB, once)", { percent: Math.min(100, Math.round((100 * received) / total)), count, size: O.megabytes(total) })),
+    });
+    const sound = { presets: [], synth, orchestra: built, score, passes };
+    if (!score?.meta?.soundfont) return sound;
     await (keptRead ?? refreshKept());
     const available = new Set([...loaded.keys(), ...kept.map((k) => k.hash)]);
     const plan = Sb.plan(score, channels, available);
@@ -268,14 +356,34 @@ export function installInstruments({ root, st, M, P, edit, say }) {
       else plan.missing.push({ lane: -1, name: font.name });
     }
     tellMissing(plan.missing.filter((m) => m.lane >= 0));
-    return { presets: plan.presets, synth };
+    sound.presets = plan.presets;
+    return sound;
   }
 
-  /** `bytes` (the heard MIDI) as SpessaSynth plays it — the synthesizer's notes taken out, own presets put in — and those notes. */
+  /**
+   * `bytes` (the heard MIDI) as SpessaSynth plays it — the synthesizer's
+   * notes taken out, own presets and built-in instruments put in — and
+   * those notes.
+   */
   function forSound(bytes, sound) {
     const channels = new Set(sound.synth.keys());
     const notes = Sy.notesOf(bytes, channels);
-    return { bytes: Sb.applyPresets(Sy.stripNotes(bytes, channels), sound.presets), notes };
+    const own = Sb.applyPresets(Sy.stripNotes(bytes, channels), sound.presets);
+    const lanes = sound.orchestra?.lanes ?? [];
+    if (!lanes.length) return { bytes: own, notes };
+    const early = F.humanizeOf(F.feelOf(sound.score?.meta ?? {}).humanize)?.time ?? 0;
+    return { bytes: O.apply(sound.score, own, lanes, { passes: sound.passes, early }), notes };
+  }
+
+  /**
+   * What a note written on lane `lane` is heard with (player.js `preview`):
+   * { bank, program } of its built-in instrument once a Play has loaded it,
+   * null for its General MIDI sound.
+   */
+  function patchFor(lane) {
+    const found = st.score ? O.instrumentFor(orchestra, st.score, lane) : null;
+    if (!found || !O.isLoaded(found.instrument) || !P.hasBank(`orchestra:${found.instrument.id}`)) return null;
+    return { bank: found.instrument.offset, program: O.ARTICULATIONS.indexOf(found.start) };
   }
 
   /** The synthesizer of the staff on `channel` while `sound` plays. */
@@ -344,10 +452,12 @@ export function installInstruments({ root, st, M, P, edit, say }) {
 
   return {
     html,
+    head,
     bind,
     check,
     prepare,
     forSound,
+    patchFor,
     settingsFor,
     loadFile,
     /** The editor is gone (instant navigation): the keyboard's messages and keys no longer come here. */

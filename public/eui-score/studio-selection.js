@@ -189,7 +189,9 @@ export function install(ctx) {
     const sound = st.score.staves[M.upperOf(st.score, t.s)]?.instrument;
     const drums = M.isDrums(st.score, t.s);
     const keys = heads.map((p) => (drums ? M.drumKey(p.drum) : M.midiKey(p.d, p.alter)));
-    if (!P.preview(keys, M.programOf(sound), { drums, channel: laneChannel(t.s) }) && !P.isReady()) {
+    // Its built-in instrument (#1040) once a Play has loaded it, else its General MIDI sound.
+    const builtIn = drums ? null : st.instruments?.patchFor(t.s);
+    if (!P.preview(keys, builtIn?.program ?? M.programOf(sound), { drums, channel: laneChannel(t.s), bank: builtIn?.bank ?? 0 }) && !P.isReady()) {
       say(tr("Loading the sounds, to hear the notes… (38 MB, once)"));
       P.prepare().then(() => say(tr("The notes sound as you write them; Hear the notes turns it off."))).catch(() => {});
     }

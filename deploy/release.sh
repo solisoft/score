@@ -14,6 +14,10 @@
 #                                                  copy of app.infos and .env*
 #   $BACKUP_DIR/<id>.jsonl.gz                     the database, just before
 #                                                  that release's migrations
+#   $SOUNDS_DIR/<instrument>.<digest>.sf3         the built-in orchestra's banks
+#                                                  (#1040), uploaded once by
+#                                                  deploy/sounds-upload.sh; each
+#                                                  release gets hard links
 #
 #   <id> is <UTC yyyymmddHHMMSS>-<commit>. The site of the old layout (a
 #   real directory) becomes the release 00000000000000-before-releases on the
@@ -21,7 +25,8 @@
 #
 # Commands:
 #   deploy <id>        carry app.infos/.env* from the live site into the
-#                      release, check the server's soli, snapshot the
+#                      release, link the built-in orchestra's banks into it,
+#                      check the server's soli, snapshot the
 #                      database, run the migrations in the release, switch the
 #                      symlink, `soli-proxy deploy` (idle slot started on the
 #                      new release, health-checked, traffic moved, old slot
@@ -45,6 +50,7 @@ APP="${APP:-score}"
 PROXY_CONF="${PROXY_CONF:-/home/rocky/proxy.conf}"
 RELEASES_DIR="${RELEASES_DIR:-$(dirname "$SITES_DIR")/releases/$DOMAIN}"
 BACKUP_DIR="${BACKUP_DIR:-$(dirname "$SITES_DIR")/backups/$DOMAIN}"
+SOUNDS_DIR="${SOUNDS_DIR:-$(dirname "$SITES_DIR")/shared/$DOMAIN/sounds}"
 KEEP_RELEASES="${KEEP_RELEASES:-5}"
 KEEP_BACKUPS="${KEEP_BACKUPS:-10}"
 MIN_FREE_MB="${MIN_FREE_MB:-1024}"
@@ -94,6 +100,33 @@ release_ids() {
 all_but_last() { awk -v keep="$1" '{ line[NR] = $0 } END { for (i = 1; i <= NR - keep; i++) print line[i] }'; }
 
 has_database() { grep -qE '^SOLIDB_HOST=.+' "$1/.env"; }
+
+# The built-in orchestra's banks (#1040) into release directory $1: a hard
+# link for each file its manifest (public/soundfonts/orchestra.json) names
+# and $SOUNDS_DIR holds. A hundred megabytes that are neither in git nor
+# uploaded with a release: they are on the server once, and a link costs
+# nothing — and is a file inside public/, which is all the static server
+# reads (it follows no symlink out of it). A bank that is not there is said,
+# and stops nothing: its instrument plays the General MIDI sounds.
+link_sounds() {
+  local release="$1" manifest="$1/public/soundfonts/orchestra.json" to="$1/public/soundfonts/orchestra"
+  local file linked=0 missing=0
+  [ -f "$manifest" ] || return 0
+  while IFS= read -r file; do
+    if [ -f "$SOUNDS_DIR/$file" ]; then
+      run mkdir -p "$to"
+      # Another filesystem: a copy, once a release.
+      [ -f "$to/$file" ] || run ln "$SOUNDS_DIR/$file" "$to/$file" 2>/dev/null || run cp -p "$SOUNDS_DIR/$file" "$to/$file"
+      linked=$((linked + 1))
+    else
+      missing=$((missing + 1))
+    fi
+  done < <(grep -oE '"file": *"[a-z0-9-]+\.[0-9a-f]{16}\.sf3"' "$manifest" | grep -oE '[a-z0-9-]+\.[0-9a-f]{16}\.sf3')
+  say "built-in sounds: $linked banks linked from $SOUNDS_DIR"
+  if [ "$missing" -gt 0 ]; then
+    say "::warning::$missing banks the manifest names are not in $SOUNDS_DIR: their instruments play the General MIDI sounds until deploy/sounds-upload.sh has run"
+  fi
+}
 
 # Point $SITE at the release directory $1 in one rename: the symlink is
 # replaced, or — the first time — swapped with the old layout's directory
@@ -316,6 +349,7 @@ cmd_deploy() {
     carried+=("$(basename "$f")")
   done
   say "carried from the live site: ${carried[*]}"
+  link_sounds "$release"
   run rm -f "$release/public/js/CLAUDE.md"
 
   SNAPSHOT=""

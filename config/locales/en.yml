@@ -20,7 +20,7 @@ en:
   footer:
     label: "The site"
     about: "<strong>Score</strong> writes, plays and shares scores in the browser. Its engraver, <strong>eui-score</strong>, is the engraver of <a href=\"https://eui.solisoft.net\">EUI</a>: the LilyPond subset it reads is engraved into paths, played as MIDI and printed as PDF. Every score on this site is engraved on the fly by it — on the server, or in your browser."
-    credits: "Music glyphs: Emmentaler (OFL). Score text: TeX Gyre Schola (GUST Font License). Sounds: <a href=\"/soundfonts/MuseScore_General_License.txt\">MuseScore_General</a> (MIT), played by <a href=\"https://github.com/spessasus/spessasynth_lib\">SpessaSynth</a> (Apache 2.0). Built with <a href=\"https://solisoft.net\">Soli</a>."
+    credits: "Music glyphs: Emmentaler (OFL). Score text: TeX Gyre Schola (GUST Font License). Sounds: <a href=\"/soundfonts/MuseScore_General_License.txt\">MuseScore_General</a> (MIT) and the <a href=\"/soundfonts/orchestra_License.txt\">built-in orchestra</a>, made from VSCO 2 Community Edition by Versilian Studios (CC0) and the Salamander Grand Piano by Alexander Holm (<a href=\"https://creativecommons.org/licenses/by/3.0/\">CC BY 3.0</a>), played by <a href=\"https://github.com/spessasus/spessasynth_lib\">SpessaSynth</a> (Apache 2.0). Built with <a href=\"https://solisoft.net\">Soli</a>."
   pages:
     home:
       title: "Score"
@@ -139,8 +139,9 @@ en:
         label: "Write together"
       sound:
         eyebrow: "Sound"
-        title: "A mixer, a synth, your own sounds."
-        l1: "Volume, pan, mute, solo and effects on each staff; a synthesizer, or a SoundFont of your own."
+        title: "An orchestra built in, a mixer, your own sounds."
+        l1: "Sampled strings, winds, brass, percussion and a grand piano, in the browser; staccato, pizzicato and tremolo follow what is written."
+        l3: "Volume, pan, mute, solo and effects on each staff; a synthesizer, or a SoundFont of your own."
         l2: "Play and record from a MIDI keyboard: MIDI clock, MIDI learn and MPE included."
         alt: "The mixer: a strip for each staff of the quartet, with volume, pan, instrument and effects."
         label: "Hear it"

@@ -109,6 +109,10 @@
             return withSpans(E.engine, text);
           },
           loop: looped ? { bars: bars, time: button.getAttribute("data-time") || "4/4" } : null,
+        }).then(function (heard) {
+          // For the built-in orchestra (#1040): the module that made it puts the instruments in.
+          heard.H = H;
+          return heard;
         });
       })
       .catch(function () {
@@ -503,7 +507,7 @@
     Promise.all([loadPlayer(), midiOf(button, true)])
       .then(function (both) {
         state.turns = both[1].turns;
-        both[1] = both[1].bytes;
+        var heard = both[1];
         var p = both[0];
         if (playing !== state) {
           dropContext(state);
@@ -511,12 +515,19 @@
         }
         p.unlock(state.context || undefined);
         state.context = null;
+        var progress = function (f) {
+          if (playing === state) slot.innerHTML = '<span class="score-player-note">' + word("sounds") + " " + Math.round(100 * f) + " % " + word("once") + "</span>";
+        };
         if (!p.isReady()) slot.innerHTML = '<span class="score-player-note">' + word("sounds") + " " + word("once") + "</span>";
-        return p.play(both[1], {
-          onStop: function () { reset(state); },
-          onProgress: function (f) {
-            if (playing === state) slot.innerHTML = '<span class="score-player-note">' + word("sounds") + " " + Math.round(100 * f) + " % " + word("once") + "</span>";
-          },
+        // The built-in orchestra (#1040): the instruments the score names, those that have come by the
+        // time the default sounds have (a first Play waits for these anyway) — the others play General
+        // MIDI this time, and are in the browser for the next.
+        var withSounds = heard.H && heard.H.withOrchestra
+          ? heard.H.withOrchestra(heard, p, { until: p.isReady() ? null : p.prepare(progress).catch(function () {}) }).catch(function () { return heard.bytes; })
+          : Promise.resolve(heard.bytes);
+        return withSounds.then(function (bytes) {
+          if (playing !== state) return null;
+          return p.play(bytes, { onStop: function () { reset(state); }, onProgress: progress });
         });
       })
       .then(function (handle) {

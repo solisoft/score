@@ -27,6 +27,7 @@ const SCORE_STUDIO_MODULES = [
   "practice.js",
   "synth.js",
   "soundbank.js",
+  "orchestra.js",
   "mpe.js",
   "instruments-ui.js",
   "feel.js",
@@ -79,16 +80,24 @@ const SCORE_STUDIO_MODULES = [
 class ScoreAssets
   static cached: String = ""
 
-  static def version
-    return ScoreAssets.cached unless ScoreAssets.cached.blank?
+  # The files the version is a digest of, by their path from public/eui-score/.
+  static def parts
 
     # Every module of the set, whatever its name (heard.js, #682, was missing
     # from a list kept by hand: a change to it alone kept the old version).
     modules = File.glob("public/eui-score/*.js").map do |path|
       path.split("/").last
     end.sort
-    parts = modules + ["vendor/README.md", "wasm.version"]
-    text = parts.map do |name|
+    # The built-in orchestra's manifest too (#1040): the modules ask for it
+    # under this version, and it is served immutable — a bank made again must
+    # be another address.
+    modules + ["vendor/README.md", "wasm.version", "../soundfonts/orchestra.json"]
+  end
+
+  static def version
+    return ScoreAssets.cached unless ScoreAssets.cached.blank?
+
+    text = ScoreAssets.parts.map do |name|
       File.read("public/eui-score/#{name}") rescue name
     end.join("\n")
     digest = Crypto.sha256(text).substring(0, 12)

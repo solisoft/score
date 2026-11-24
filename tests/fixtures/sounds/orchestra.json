@@ -1,0 +1,61 @@
+{
+ "version": 1,
+ "base": "/soundfonts/orchestra/",
+ "made": {
+  "by": "scripts/sounds/build.py",
+  "quality": 0.5,
+  "numpy": "2.5.5",
+  "libsndfile": "1.2.2"
+ },
+ "articulations": [
+  "sustain",
+  "staccato",
+  "pizzicato",
+  "tremolo"
+ ],
+ "sources": {
+  "vsco2ce": {
+   "name": "VSCO 2 Community Edition",
+   "version": "1.1.0",
+   "url": "https://github.com/sgossner/VSCO-2-CE/archive/refs/tags/1.1.0.tar.gz",
+   "sha256": "ac577fd3bc9171560087c8182ef6072f11ae0b63b3c3af9a5f752b91e26d3b96",
+   "home": "https://vis.versilstudios.com/vsco-community.html",
+   "license": "CC0-1.0",
+   "credit": "Versilian Studios (Sam Gossner)"
+  },
+  "salamander": {
+   "name": "Salamander Grand Piano V3",
+   "version": "3382bf9496bba2486f5ab0de55a264d1dfc38404",
+   "url": "https://github.com/sfzinstruments/SalamanderGrandPiano/archive/3382bf9496bba2486f5ab0de55a264d1dfc38404.tar.gz",
+   "sha256": "f36bef84632067387909ba03064daee6e81afdea3f93526c4ee56a22e12613ba",
+   "home": "https://github.com/sfzinstruments/SalamanderGrandPiano",
+   "license": "CC-BY-3.0",
+   "credit": "Alexander Holm"
+  }
+ },
+ "instruments": [
+  {
+   "id": "test-tone",
+   "name": "Test tone",
+   "source": "vsco2ce",
+   "file": "test-tone.9569d6d2c3f4c78f.sf3",
+   "sha256": "9569d6d2c3f4c78f920d34515c571251117787676385c7c2fd9472bde4bf5792",
+   "size": 9338,
+   "sounds": {
+    "acoustic grand": "sustain",
+    "violin": "sustain"
+   },
+   "articulations": [
+    "sustain",
+    "staccato"
+   ],
+   "keys": [
+    21,
+    108
+   ],
+   "seconds": 1,
+   "samples": 2,
+   "license": "CC0-1.0"
+  }
+ ]
+}

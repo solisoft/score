@@ -43,3 +43,8 @@ config/eui_publisher.pkcs8
 
 # The players' sounds: fetched by deploy/soundfont.sh, too heavy for git
 /public/soundfonts/*.sf3
+
+# The built-in orchestra (#1040): made by scripts/sounds/build.py, linked by
+# scripts/sounds/link.sh, uploaded by deploy/sounds-upload.sh
+/public/soundfonts/orchestra/
+__pycache__/

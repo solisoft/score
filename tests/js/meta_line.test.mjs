@@ -196,6 +196,8 @@ const SAMPLES = {
     at: (lane) => ({ soundfont: { [lane]: { name: "x.sf2", hash: "0123456789abcdef", bank: 0, program: 1, preset: "p" } } }),
     lanes: (meta) => Object.keys(meta?.soundfont ?? {}),
   },
+  // A staff's own built-in instrument (#1040): staves that chose the same may share a channel.
+  orchestra: { channel: "same", at: (lane) => ({ orchestra: { [lane]: "violin-section" } }), lanes: (meta) => Object.keys(meta?.orchestra ?? {}) },
   // A part's own layout (#1018): no sound, so no channel; laid out by partOf, it is not in the part's settings.
   parts: { channel: "none", inPart: false, at: (lane) => ({ parts: { [lane]: { breaks: { 0: "line" }, staffSize: 16 } } }), lanes: (meta) => Object.keys(meta?.parts ?? {}) },
   // What the desks of a condensed staff were (#1021): no sound; said in each desk's part heading, not in its settings.

@@ -132,6 +132,18 @@
           General MIDI instrument to a staff that names none. Every score on this site has a <strong>Play</strong>
           button that plays this file.
         </p>
+        <p>
+          On this site Play uses the <strong>built-in orchestra</strong> where it has the instrument: sampled
+          strings (a solo violin, the four sections, a full string orchestra), harp, flute, piccolo, oboe, clarinet,
+          bassoon, horn, trumpet, trombone, tuba, timpani, mallets, bells, a pipe organ and a grand piano. Each is
+          loaded the first time a score plays it (0.2 to 15 MB, kept by the browser), and follows what is written:
+          a staccato dot, <code>pizz.</code> until <code>arco</code>, a tremolo. The other instruments — saxophones,
+          guitars, voices, the drum kit — play their General MIDI sound, and so does everything until its samples
+          have come. In the editor, the mixer's <strong>Sounds</strong> line turns the orchestra off for a score,
+          and each staff's <strong>Instrument</strong> chooses between a soloist and a section. The samples are
+          VSCO 2 Community Edition by Versilian Studios (CC0) and the Salamander Grand Piano by Alexander Holm
+          (CC BY 3.0).
+        </p>
       </section>
 
       <section class="doc-section" id="pdf">

@@ -109,10 +109,12 @@ function shown(field, value) {
 export function mixerPanel({ root, tracks, mix, preview, commit, level, instrument = null, signal = undefined }) {
   const panel = Object.assign(document.createElement("dialog"), { className: "studio-mixer" });
   panel.setAttribute("aria-label", tr("Mixer"));
-  panel.innerHTML = `<div class="mixer-head"><h3>${tr("Mixer")}</h3><span class="mixer-note">${tr("Kept with the score; heard on Play and in Save the sound.")}</span><button type="button" class="tool" data-mixer-close aria-label="${tr("Close the mixer")}">✕</button></div><div class="mixer-strips" data-mixer-strips></div>`;
+  panel.innerHTML = `<div class="mixer-head"><h3>${tr("Mixer")}</h3><span class="mixer-note">${tr("Kept with the score; heard on Play and in Save the sound.")}</span><button type="button" class="tool" data-mixer-close aria-label="${tr("Close the mixer")}">✕</button></div><div class="mixer-sounds" data-mixer-sounds hidden></div><div class="mixer-strips" data-mixer-strips></div>`;
   root.append(panel);
   instrument?.bind(panel);
   const strips = panel.querySelector("[data-mixer-strips]");
+  // What the score plays with (instruments-ui.js `head`, #1040): shown where the site has built-in sounds.
+  const sounds = panel.querySelector("[data-mixer-sounds]");
   let key = "";
   let frame = 0;
   let held = false;
@@ -124,9 +126,12 @@ export function mixerPanel({ root, tracks, mix, preview, commit, level, instrume
     const rows = tracks();
     const now = mix() ?? {};
     const parts = rows.map((t) => instrument?.html(t.lane) ?? "");
-    const next = JSON.stringify([rows, now, parts]);
+    const head = instrument?.head?.() ?? "";
+    const next = JSON.stringify([rows, now, parts, head]);
     if (next === key) return;
     key = next;
+    sounds.hidden = !head;
+    sounds.innerHTML = head;
     strips.innerHTML = rows.map((t, k) => trackHtml(t, X.trackOf(now, t.lane), parts[k])).join("") + masterHtml(X.masterOf(now));
   }
 
