@@ -357,7 +357,7 @@ export function install(ctx) {
       case "art": return edit((score) => {
         if (multiLane()) return T.toggleArticulationRanges(score, ranges(), data.name);
         const r = range() ?? (() => { throw new Error(tr("Select a note first")); })();
-        for (let i = r.a; i <= r.b; i++) if (!r.staff.events[i].rest || data.name === "fermata") M.toggleArticulation(score, r.s, i, data.name);
+        for (let i = r.a; i <= r.b; i++) if (!r.staff.events[i].rest || M.FERMATAS.includes(data.name)) M.toggleArticulation(score, r.s, i, data.name);
       });
       case "breath": return edit((score) => {
         const r = range() ?? (() => { throw new Error(tr("Select a note first")); })();
@@ -386,7 +386,8 @@ export function install(ctx) {
       });
       case "arpeggio": return edit((score) => {
         const t = need();
-        M.toggleArpeggio(score, t.s, t.i);
+        // The wavy line, or drawn another way (#1039): a bracket, a parenthesis, an arrow up or down.
+        M.toggleArpeggio(score, t.s, t.i, data.style || null);
       });
       case "gliss": return edit((score) => {
         const t = need();
@@ -395,6 +396,11 @@ export function install(ctx) {
       case "tremolo": return edit((score) => {
         const t = need();
         M.setTremolo(score, t.s, t.i, Number(data.value));
+      });
+      // A tremolo between the selected note and the next (#1039).
+      case "tremolo-pair": return edit((score) => {
+        const t = need();
+        M.setTremoloPair(score, t.s, t.i, Number(data.value));
       });
       case "dynamic": return edit((score) => {
         if (!st.input.on && multiLane()) return T.dynamicOnRanges(score, ranges(), data.name);
@@ -435,7 +441,9 @@ export function install(ctx) {
       });
       case "pedal": return edit((score) => {
         const t = need();
-        M.setPedal(score, t.s, t.i, data.how);
+        // The sustain pedal, or the sostenuto and the soft pedal (#1039).
+        if (data.pedal) M.setOtherPedal(score, t.s, t.i, data.pedal, data.how);
+        else M.setPedal(score, t.s, t.i, data.how);
       });
       // Edit ▸ Swap voices 1 and 2: crossed voices put back, high notes in voice 1 (#417).
       case "swap-voices": return edit((score) => {

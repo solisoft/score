@@ -50,11 +50,15 @@ crate-type = ["cdylib", "rlib"]
 # 83348e1 the four scores the site held and refused, as they are stored
 # (#1036, #1037): figured bass in a staff, an ossia under its staff from a
 # context the layout defines, Scheme comments, multiplied durations, a
-# file that never prints its music. Move
+# file that never prints its music; c5be3df a coda sign and a section's
+# name after an ending as one mark beside the bracket (5623f33, #939), and
+# the rest of LilyPond's scripts — the ornaments with a hook, Haydn's turn,
+# heels and toes, the thumb, the ancient signs — in Emmentaler's signs, and
+# played (#1039). Move
 # this and the server's Soli together. `build.sh` writes the module
 # into public/eui-score/, and that output is committed: deploying the site
 # needs no Rust.
-eui-score = { git = "https://github.com/solisoft/eui", rev = "83348e1" }
+eui-score = { git = "https://github.com/solisoft/eui", rev = "c5be3df" }
 wasm-bindgen = "=0.2.126"
 serde_json = "1"
 

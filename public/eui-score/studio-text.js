@@ -40,7 +40,9 @@ export function install(ctx) {
       // A line that does not read is kept as it is, and said (#683).
       st.metaNotice = st.score ? M.metaNotice(M.attachMeta(st.score, text)) : "";
       st.unsupported = result.unsupported ?? [];
-      st.lost = result.lost ?? [];
+      // …and what the engraver reads in the text that the model would not write back (#1039):
+      // every sign, whatever the engraver has learned since this model was written.
+      st.lost = [...(result.lost ?? []), ...(st.score && ctx.engine?.reading ? M.unkept(st.score, text, ctx.engine.reading) : [])];
       // The bars the text wrote too short or too long (#1022): the Review says them until the score is edited.
       st.uneven = result.uneven ?? [];
       // What the engraver read and passed over (\\override, \\set …): said when the text is opened.

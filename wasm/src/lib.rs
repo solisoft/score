@@ -21,6 +21,7 @@ use wasm_bindgen::prelude::*;
 pub mod describe;
 pub mod editor;
 pub mod perform;
+pub mod reading;
 
 /// Distinguishes the `<defs>` ids of two scores on one page.
 static ENGRAVINGS: AtomicU32 = AtomicU32::new(0);
@@ -254,4 +255,11 @@ pub fn source_spans(src: &str) -> Result<String, JsError> {
 #[wasm_bindgen]
 pub fn score_json(src: &str) -> Result<String, JsError> {
     editor::score(src).map(|v| v.to_string()).map_err(|e| JsError::new(&e))
+}
+
+/// Everything the engraver read in `src`, sign by sign, as JSON: what a
+/// text rewritten from an editor's model must still say (#1039).
+#[wasm_bindgen]
+pub fn reading(src: &str) -> Result<String, JsError> {
+    reading::reading(src).map(|v| v.to_string()).map_err(|e| JsError::new(&e))
 }

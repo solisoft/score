@@ -516,6 +516,7 @@ export function install(ctx) {
     set("staff-short", staff.short);
     set("staff-clef", staff.clef);
     set("staff-key", staff.key == null ? "" : String(staff.key));
+    set("staff-heads", M.shapeNotesOf(st.score, staffOf()));
     fillChanges(set);
     // An instrument the menu does not offer (from a source) shows as itself.
     const instrument = root.querySelector('[data-field="staff-instrument"]');
@@ -611,6 +612,7 @@ export function install(ctx) {
         case "staff-name": staff.name = value; break;
         case "staff-short": staff.short = value; break;
         case "staff-clef": staff.clef = value; break;
+        case "staff-heads": M.setShapeNotes(score, staffOf(), value); break;
         case "staff-key": M.setStaffKey(score, staffOf(), value === "" ? score.key : Number(value)); break;
         case "change-key": M.setKeyAt(score, changeBar(), value === "" ? null : Number(value)); break;
         case "change-time": {

@@ -1453,7 +1453,8 @@ function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, 
   }
 
   const ticks = M.ticksOf(ev);
-  const wholeBar = ev.rest && !ev.tuplet && Math.abs(ticks - barLength) < 1e-6;
+  // A bar's rest: one written so (R2., #1039), or a whole note's, which is drawn the same either way.
+  const wholeBar = ev.rest && !ev.tuplet && Math.abs(ticks - barLength) < 1e-6 && (ev.fullBar || Math.abs(ticks - M.notated(1)) < 1e-6);
   const type = `<type>${TYPE_OF[ev.base] ?? "quarter"}</type>${"<dot/>".repeat(ev.dots)}`;
   // A tuplet in a tuplet: the two ratios multiplied.
   const tm = ev.tuplet ? `<time-modification><actual-notes>${ev.tuplet.n * (ev.tuplet.outer?.n ?? 1)}</actual-notes><normal-notes>${ev.tuplet.d * (ev.tuplet.outer?.d ?? 1)}</normal-notes></time-modification>` : "";

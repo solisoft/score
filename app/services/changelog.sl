@@ -26,6 +26,44 @@ class Changelog
           "link": "playground"
         },
         {
+          "area": "site",
+          "title": "The editor keeps every sign the engraver draws",
+          "text": "Opened in the editor, an arpeggio's bracket became a wavy line, a tremolo between two notes "
+          + "two plain notes, a sostenuto pedal a line of words, and shape notes round heads — with nothing "
+          + "said (#1039). The editor keeps them all now, and its palette offers them: every fermata from "
+          + "very short to very long, the turns, trills and mordents with a hook, an arpeggio as a bracket, "
+          + "a parenthesis or an arrow up or down, a tremolo between two notes, the sostenuto and the soft "
+          + "pedal (una corda, tre corde), bowing and organ signs, and shape notes for a staff (This staff ▸ "
+          + "Note heads). A rhythmic staff, a bar's rest written R2. and a Roman numeral under a note open "
+          + "and stay as they are written. And for what the editor still does not keep: it now compares "
+          + "what the engraver reads in a text with what it would write back, and names what is missing "
+          + "before the first rewrite — one Undo puts the text back — instead of dropping it in silence.",
+          "link": "playground"
+        },
+        {
+          "area": "engine",
+          "title": "The rest of LilyPond's ornaments and signs",
+          "text": "Nineteen signs LilyPond writes after a note were refused (#1039): the mordents and short "
+          + "trills come to from below or above (\\upmordent, \\downmordent, \\downprall) or left upward or "
+          + "downward (\\prallup, \\pralldown), Haydn's turn and the turn struck through, the half-open "
+          + "signs, the thumb, an organist's heels and toes (the left foot under the staff, the right over "
+          + "it), and the signs of early music: signum congruentiae, accentus, circulus, ictus, "
+          + "semicirculus. Each is drawn in LilyPond's own sign, where LilyPond puts it, and the ornaments "
+          + "are played written out. \\varcoda has its own square sign. In the editor and the playground "
+          + "now; on the library's pages and in PDFs with the next Soli release.",
+          "link": "limits"
+        },
+        {
+          "area": "engine",
+          "title": "A coda and a section's name on one line",
+          "text": "A coda sign and a word — \"Trio\", \"Coda\" — written at the same bar after a second ending "
+          + "were stacked high above the bracket (#939). They now sit side by side on one line, the sign "
+          + "then the word, starting after the bracket, and closer to their own staff than to the one above. "
+          + "In the editor and the playground now; on the library's pages and in PDFs with the next Soli "
+          + "release.",
+          "link": "limits"
+        },
+        {
           "area": "engine",
           "title": "A Telemann aria opens as its file is written",
           "text": "A real LilyPond file of an aria by Telemann — flute, soprano and basso continuo — was refused "

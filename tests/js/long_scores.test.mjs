@@ -55,7 +55,8 @@ const FEATURES = `\\score { << \\new Staff { \\tempo 4 = 90 \\time 3/4 \\repeat 
 // Taken from the model as it was before #689 (origin/main 7a268fb): the same text, the same answers.
 const GOLDEN = {
   "scores/piano/fur-elise.ly": { from: "f646d4f7d820d237", playback: "072e11313f702cb3", heard: "f0fe54b95606240e", ly: "7028ff2b95a3adb6" },
-  "scores/ensembles/symphony-5.ly": { from: "0788fe2454d2f159", playback: "deed4f247fb7ab86", heard: "3a850a5bfe455ca1", ly: "775a4bf2fd733f06" },
+  // Its bars of rest written R2 are kept so since #1039 (`fullBar`): the model and its text say it; what is played and heard did not move.
+  "scores/ensembles/symphony-5.ly": { from: "cd0192d6b8a2ae3c", playback: "deed4f247fb7ab86", heard: "3a850a5bfe455ca1", ly: "826d7d02f3f83745" },
   "scores/ensembles/string-quartet.ly": { from: "4bc8d5f9fe97cf2b", playback: "6ce5164878ea8622", heard: "5c1d440117319507", ly: "81a59158a6816d62" },
   "scores/ensembles/jazz-trio.ly": { from: "755aaf1e41224f65", playback: "e848479378955a5c", heard: "74cc70366cf8bff0", ly: "d91cf3426c0319f2" },
   "scores/changelog/endings.ly": { from: "fa8916e8df057b0c", playback: "58acec7cb55e0289", heard: "b59ee02da1f4cb4d", ly: "19c032d3d1da1753" },

@@ -63,7 +63,52 @@ const SCRIPTS = {
   open: "\\open", stopped: "\\stopped",
   // A segno or a coda over a note (LilyPond 2.24, #433).
   segno: "\\segno", coda: "\\coda", varcoda: "\\varcoda",
+  // The rest of LilyPond's script.ly, which the engraver draws (#1026, #1039) — each written by its name.
+  ...Object.fromEntries(
+    [
+      "veryshortfermata", "shortfermata", "longfermata", "verylongfermata", "henzeshortfermata", "henzelongfermata",
+      "reverseturn", "prallprall", "prallmordent", "upprall", "downprall", "upmordent", "downmordent", "lineprall", "prallup", "pralldown", "haydnturn", "slashturn",
+      "snappizzicato", "halfopen", "halfopenvertical", "thumb", "lheel", "rheel", "ltoe", "rtoe",
+      "signumcongruentiae", "accentus", "circulus", "ictus", "semicirculus",
+    ].map((name) => [name, `\\${name}`]),
+  ),
 };
+/**
+ * The articulations by what they are, as the tools lay them out (#1039):
+ * each family in the order a musician looks for them.
+ */
+export const ARTICULATION_FAMILIES = {
+  articulations: ["staccato", "staccatissimo", "tenuto", "portato", "accent", "marcato", "espressivo"],
+  fermatas: ["fermata", "veryshortfermata", "shortfermata", "longfermata", "verylongfermata", "henzeshortfermata", "henzelongfermata"],
+  ornaments: ["trill", "prall", "prallprall", "mordent", "prallmordent", "upprall", "downprall", "upmordent", "downmordent", "lineprall", "prallup", "pralldown", "turn", "reverseturn", "haydnturn", "slashturn"],
+  instruments: ["upbow", "downbow", "flageolet", "snappizzicato", "thumb", "halfopen", "halfopenvertical", "lheel", "rheel", "ltoe", "rtoe"],
+  marks: ["segno", "coda", "varcoda"],
+  ancient: ["signumcongruentiae", "accentus", "circulus", "ictus", "semicirculus"],
+};
+/** The fermatas: the one sign a rest takes too. */
+export const FERMATAS = ARTICULATION_FAMILIES.fermatas;
+/** How an arpeggio is drawn, beside the wavy line: the command that says so, and the engraver's name for it. */
+export const ARPEGGIO_STYLES = { bracket: "arpeggioBracket", parenthesis: "arpeggioParenthesis", up: "arpeggioArrowUp", down: "arpeggioArrowDown" };
+const ARPEGGIO_READ = { Bracket: "bracket", Paren: "parenthesis", ArrowUp: "up", ArrowDown: "down" };
+/**
+ * The other pedals of a piano (#1039), each by its name: the fields that
+ * say it is pressed and let go with a note, the commands, the engraver's
+ * controller. The sustain pedal is `pedalOn` / `pedalOff` (see setPedal).
+ */
+export const PEDALS = {
+  sostenuto: { on: "sostOn", off: "sostOff", press: "sostenutoOn", release: "sostenutoOff", controller: 66 },
+  corda: { on: "cordaOn", off: "cordaOff", press: "unaCorda", release: "treCorde", controller: 67 },
+};
+/** Whether a note or rest presses or lets go of a pedal. */
+function pedalled(ev) {
+  return Boolean(ev.pedalOn || ev.pedalOff || ev.sostOn || ev.sostOff || ev.cordaOn || ev.cordaOff);
+}
+/** An event's signs of the other pedals and of a two-note tremolo, taken off (a copy cut in pieces, a note made a rest). */
+function dropPedals(ev) {
+  for (const field of ["sostOn", "sostOff", "cordaOn", "cordaOff"]) delete ev[field];
+}
+/** The strokes of a tremolo between two notes: sixteenths, thirty-seconds, or eighths. */
+export const TREMOLO_PAIRS = [16, 32, 8];
 /** The articulations whose sign (-- -^ -_) the engraver does not read after a \\tweak: written by name there. */
 const NAMED_AFTER_TWEAK = ["tenuto", "marcato", "portato"];
 /** A breath mark after a note or rest: `\\breathe` (a comma) or `\\caesura` (//). */
@@ -826,6 +871,10 @@ function pieces(score, ev, at, ticks, role) {
     }
     if (!(k === 0 && keepsStart)) delete p.slurDir;
     if (!(k === 0 && keepsStart)) Object.assign(p, { slurStart: false, dynamic: null, hairpin: null, arts: [], chord: "", texts: [], lyric: null, verses: [], graces: [], grace: null, arpeggio: false, pedalOn: false, pedalOff: false });
+    if (!(k === 0 && keepsStart)) dropPedals(p);
+    if (!(k === 0 && keepsStart)) delete p.arpStyle;
+    // A note cut in pieces is no longer one of a tremolo's two.
+    if (out.length > 1) delete p.tremPair;
     if (!(last && keepsEnd)) Object.assign(p, { slurEnd: false, hairpinEnd: false, gliss: false });
     // A tremolo's strokes are shorter than the note they repeat.
     if (p.tremolo && p.tremolo <= p.base) p.tremolo = 0;
@@ -898,7 +947,7 @@ const sameNote = (a, b) => Boolean(a && b && !a.rest && !b.rest && a.pitches.len
 /** A rest with nothing on it (a spacer may be one): what tidy merges, and a bar of rest gathers. */
 export function isBareRest(ev) {
   const marked = ev.before?.length || ev.cue || ev.ottava != null || ev.stemDir != null || ev.noAutoBeam != null || ev.combineMode != null || ev.breath || ev.spanStart != null || ev.spanEnd || ev.cross != null || ev.figure || ev.figureRaw || ev.fret;
-  return ev.rest && !ev.tuplet && !ev.scale && !ev.dynamic && !ev.hairpin && !ev.hairpinEnd && !ev.texts.length && !ev.chord && !ev.arts.length && !ev.pedalOn && !ev.pedalOff && !ev.beamStart && !ev.beamEnd && !marked;
+  return ev.rest && !ev.tuplet && !ev.scale && !ev.dynamic && !ev.hairpin && !ev.hairpinEnd && !ev.texts.length && !ev.chord && !ev.arts.length && !pedalled(ev) && !ev.beamStart && !ev.beamEnd && !marked;
 }
 
 /** Rests side by side in a bar, with nothing on them, written as few as can be. */
@@ -1035,6 +1084,8 @@ export function remove(score, s, i, head = -1) {
     return;
   }
   Object.assign(ev, { rest: true, pitches: [], tie: false, slurStart: false, slurEnd: false, arts: [], lyric: null, graces: [], grace: null, arpeggio: false, gliss: false, tremolo: 0 });
+  delete ev.arpStyle;
+  delete ev.tremPair;
   // A rest takes no fingering, and no phrasing slur starts or ends on it; no accidental, no tie let ring.
   delete ev.fingers;
   delete ev.afterGraces;
@@ -1503,7 +1554,10 @@ export function setHairpin(score, s, a, b, kind) {
 
 export function toggleArticulation(score, s, i, name) {
   const ev = noteOf(score, s, i);
-  if (ev.rest && name !== "fermata") throw new Error(tr("select a note"));
+  if (!SCRIPTS[name]) throw new Error(tr("no such articulation"));
+  if (ev.rest && !FERMATAS.includes(name)) throw new Error(tr("select a note"));
+  // One fermata on a note: another takes its place.
+  if (FERMATAS.includes(name) && !ev.arts.includes(name)) for (const other of FERMATAS.filter((f) => ev.arts.includes(f))) toggleArticulation(score, s, i, other);
   ev.arts = ev.arts.includes(name) ? ev.arts.filter((a) => a !== name) : [...ev.arts, name];
   if (ev.artDirs?.[name] != null && !ev.arts.includes(name)) {
     delete ev.artDirs[name];
@@ -1629,11 +1683,82 @@ export function removeGraces(score, s, i) {
   Object.assign(ev, { graces: [], grace: null });
 }
 
-/** A chord rolled — its notes played from the lowest up, a wavy line before it — or not. */
-export function toggleArpeggio(score, s, i) {
+/**
+ * A chord rolled — its notes played from the lowest up, a wavy line before
+ * it — or not. `style` draws it another way (#1039): "bracket" (a bracket:
+ * the chord played together), "parenthesis" (a curve), "up" or "down" (the
+ * wavy line with an arrow; a down arrow rolls from the highest note). The
+ * same style again takes the arpeggio away; another one changes it.
+ */
+export function toggleArpeggio(score, s, i, style = null) {
+  if (style != null && !ARPEGGIO_STYLES[style]) throw new Error(tr("an arpeggio is a wavy line, a bracket, a parenthesis or an arrow up or down"));
   const ev = pitchedNote(score, s, i);
   if (ev.pitches.length < 2 && !ev.arpeggio) throw new Error(tr("an arpeggio rolls a chord: add notes to it first"));
-  ev.arpeggio = !ev.arpeggio;
+  const same = ev.arpeggio && (ev.arpStyle ?? null) === style;
+  ev.arpeggio = !same;
+  if (style && !same) ev.arpStyle = style;
+  else delete ev.arpStyle;
+}
+
+/** How note `i`'s arpeggio is drawn: "wave", "bracket", "parenthesis", "up", "down" — or null with none. */
+export function arpeggioAt(score, s, i) {
+  const ev = score.staves[s]?.events[i];
+  return ev?.arpeggio && !ev.rest ? ev.arpStyle ?? "wave" : null;
+}
+
+/**
+ * Whether events `i` and `i + 1` of `staff` are a tremolo between two
+ * notes (`\\repeat tremolo 4 { c16 e }`, #1039): the first says the strokes
+ * (`tremPair`: 8, 16 or 32), the second that it ends one ("end"), and they
+ * are two notes of the same plain value, longer than a stroke.
+ */
+function tremoloPairAt(staff, i) {
+  const [a, b] = [staff.events[i], staff.events[i + 1]];
+  if (!a || !b || !TREMOLO_PAIRS.includes(a.tremPair) || b.tremPair !== "end") return false;
+  if (a.rest || b.rest || a.tuplet || b.tuplet || a.scale || b.scale || a.dots || b.dots || a.base !== b.base) return false;
+  if (a.graces.length || b.graces.length || a.afterGraces?.length || b.afterGraces?.length || a.tremolo || b.tremolo || a.tie) return false;
+  return a.tremPair > a.base && a.base >= 2;
+}
+
+/** The strokes of the tremolo between note `i` and the next (or the one before and it), or 0. */
+export function tremoloPairOf(score, s, i) {
+  const staff = score.staves[s];
+  if (!staff) return 0;
+  if (tremoloPairAt(staff, i)) return staff.events[i].tremPair;
+  return tremoloPairAt(staff, i - 1) ? staff.events[i - 1].tremPair : 0;
+}
+
+/**
+ * A tremolo between note `i` and the next note, in strokes of `value` (8,
+ * 16 or 32): the two alternate for as long as they last together, each
+ * drawn as long as the two (#1039). The same again takes it away. The two
+ * are notes of the same value, with no dot, in one bar.
+ */
+export function setTremoloPair(score, s, i, value) {
+  if (!TREMOLO_PAIRS.includes(value)) throw new Error(tr("a tremolo is in eighths, sixteenths or thirty-seconds"));
+  const staff = score.staves[s];
+  const first = tremoloPairAt(staff, i) ? i : tremoloPairAt(staff, i - 1) ? i - 1 : -1;
+  if (first >= 0) {
+    const was = staff.events[first].tremPair;
+    delete staff.events[first].tremPair;
+    delete staff.events[first + 1].tremPair;
+    if (was === value) return;
+    i = first;
+  }
+  const a = pitchedNote(score, s, i);
+  const b = staff.events[i + 1];
+  if (!b || b.rest) throw new Error(tr("a tremolo between two notes wants a note after this one"));
+  if (a.base !== b.base || a.dots || b.dots || a.tuplet || b.tuplet || a.scale || b.scale) throw new Error(tr("a tremolo between two notes wants two notes of the same value, with no dot and outside a tuplet"));
+  if (a.base < 2) throw new Error(tr("a tremolo between two notes lasts a whole note at most: two half notes"));
+  if (value <= a.base) throw new Error(tr("a tremolo's strokes are shorter than the note: 1/{value} on a 1/{base} is not one", { value, base: a.base }));
+  if (a.graces.length || b.graces.length || a.afterGraces?.length || b.afterGraces?.length) throw new Error(tr("a tremolo between two notes takes no grace note"));
+  const at = starts(staff)[i];
+  if (barAt(score, at) !== barAt(score, at + ticksOf(a))) throw new Error(tr("a tremolo between two notes stays in its bar"));
+  a.tremolo = 0;
+  b.tremolo = 0;
+  a.tie = false;
+  a.tremPair = value;
+  b.tremPair = "end";
 }
 
 /** A glissando from note `i` to the next note, or none. */
@@ -2425,7 +2550,7 @@ export function removeVoice(score, s, voice = null) {
 
 /** A bar of another voice is written when something in it is: a note, or a rest with a mark. */
 function sounding(events) {
-  return events.some((ev) => !ev.rest || ev.dynamic || ev.hairpin || ev.hairpinEnd || ev.texts.length || ev.chord || ev.arts.length || ev.pedalOn || ev.pedalOff);
+  return events.some((ev) => !ev.rest || ev.dynamic || ev.hairpin || ev.hairpinEnd || ev.texts.length || ev.chord || ev.arts.length || pedalled(ev));
 }
 
 /** A new time signature for the whole piece's first metre. */
@@ -2562,7 +2687,7 @@ function retime(score, b, num, den) {
     const after = staff.events.filter((_, i) => at[i] >= to);
     staff.events = [...before, ...rests(score, from, to - from + grown), ...after];
     for (const { ev, t } of inside) {
-      if (ev.rest && !ev.dynamic && !ev.texts.length && !ev.chord && !ev.hairpin && !ev.hairpinEnd && !ev.pedalOn && !ev.pedalOff && !ev.before?.length) continue;
+      if (ev.rest && !ev.dynamic && !ev.texts.length && !ev.chord && !ev.hairpin && !ev.hairpinEnd && !pedalled(ev) && !ev.before?.length) continue;
       const { id, base, dots, ...content } = ev;
       write(score, k, t, ticksOf(ev), content);
     }
@@ -2607,6 +2732,7 @@ export function setClefAt(score, s, b, clef) {
   const staff = score.staves[upperOf(score, s)];
   if (!staff) throw new Error(tr("no such staff"));
   if (staff.tab) throw new Error(tr("a tablature has no clef: its lines are the strings"));
+  if (staff.rhythmic) throw new Error(tr("a rhythmic staff has no clef: its one line takes every note"));
   refuseRaw(score, s);
   if (staff.autoChange) throw new Error(AUTO_CLEFS());
   if (clef != null && !CLEFS.includes(clef)) throw new Error(tr("no such clef"));
@@ -2797,7 +2923,7 @@ function wordsText(t) {
   return styles ? `\\markup ${styles}${quote(t.text)}` : quote(t.text);
 }
 
-function eventText(ev, beam = "") {
+function eventText(ev, beam = "", pair = 0, wholeBar = false) {
   // cis! and cis?: the accidental printed whatever the key says, or in parentheses.
   const reminder = (p) => (p.drum ? "" : (ev.forced ?? []).includes(p.d) ? "!" : (ev.cautionary ?? []).includes(p.d) ? "?" : "");
   const bare = (p) => p.drum ?? spellPitch(p.d, p.alter);
@@ -2805,6 +2931,9 @@ function eventText(ev, beam = "") {
   const notes = (pitches, at = head) => (pitches.length === 1 ? at(pitches[0]) : `<${pitches.map(at).join(" ")}>`);
   // What is kept as written (\\override …), then the stems and the beaming switched, a text span's words.
   let out = ev.before?.length ? `${ev.before.join(" ")} ` : "";
+  // An arpeggio drawn another way: said before its chord, and unsaid after it (see below).
+  const arpeggio = ev.arpeggio && !ev.rest && ARPEGGIO_STYLES[ev.arpStyle] ? ARPEGGIO_STYLES[ev.arpStyle] : null;
+  if (arpeggio) out += `\\${arpeggio} `;
   out += ev.stemDir != null ? `${["\\stemDown", "\\stemNeutral", "\\stemUp"][Math.sign(ev.stemDir) + 1]} ` : "";
   if (ev.noAutoBeam != null) out += ev.noAutoBeam ? "\\autoBeamOff " : "\\autoBeamOn ";
   if (ev.spanStart) out += `\\override TextSpanner.bound-details.left.text = ${quote(ev.spanStart)} `;
@@ -2841,9 +2970,10 @@ function eventText(ev, beam = "") {
   if (COMBINE_MODES[ev.combineMode]) out += `\\partCombine${COMBINE_MODES[ev.combineMode]} `;
   const after = !ev.rest && ev.afterGraces?.length ? ev.afterGraces.map(graceText) : null;
   if (after) out += `\\afterGrace ${ev.afterAt != null && ev.afterAt !== AFTER_GRACE_AT ? `${afterFraction(ev.afterAt)} ` : ""}`;
-  out += ev.rest ? (ev.spacer ? "s" : "r") : ev.pitches.length > 1 ? `<${ev.pitches.map((p) => head(p) + headMarks(p)).join(" ")}>` : notes(ev.pitches);
-  out += ev.base + ".".repeat(ev.dots);
-  if (ev.tremolo && !ev.rest) out += `:${ev.tremolo}`;
+  out += ev.rest ? (ev.spacer ? "s" : wholeBar ? "R" : "r") : ev.pitches.length > 1 ? `<${ev.pitches.map((p) => head(p) + headMarks(p)).join(" ")}>` : notes(ev.pitches);
+  // One of a tremolo's two notes is written as a stroke: \\repeat tremolo 4 { c16 e16 } (see barTexts).
+  out += pair ? String(pair) : ev.base + ".".repeat(ev.dots);
+  if (ev.tremolo && !ev.rest && !pair) out += `:${ev.tremolo}`;
   out += beam;
   if (ev.pitches.length === 1 && harmonic(ev.pitches[0])) out += "\\harmonic";
   if (ev.tie && !ev.rest) out += tw("tie", "~");
@@ -2872,6 +3002,11 @@ function eventText(ev, beam = "") {
   // Let go before pressed again, when a note has both.
   if (ev.pedalOff) out += tw("pedalOff", "\\sustainOff");
   if (ev.pedalOn) out += tw("pedalOn", "\\sustainOn");
+  // The sostenuto and the soft pedal, each let go before it is pressed again.
+  for (const pedal of Object.values(PEDALS)) {
+    if (ev[pedal.off]) out += `\\${pedal.release}`;
+    if (ev[pedal.on]) out += `\\${pedal.press}`;
+  }
   // What LilyPond reads as commands after the note: a tie let ring or repeated, a text span, a breath.
   if (ev.lv && !ev.rest) out += tw("lv", "\\laissezVibrer");
   if (ev.repeatTie && !ev.rest) out += tw("repeatTie", "\\repeatTie");
@@ -2879,6 +3014,8 @@ function eventText(ev, beam = "") {
   if (ev.spanStart != null) out += tw("spanStart", "\\startTextSpan");
   if (after) out += ` { ${after.join(" ")} }`;
   if (BREATHS.includes(ev.breath)) out += ` \\${ev.breath}`;
+  // The style holds until another is said: the chords after this one are rolled as usual again.
+  if (arpeggio) out += " \\arpeggioNormal";
   return out;
 }
 
@@ -2910,7 +3047,8 @@ function lyricText(staff, verse = 1) {
     if (!skip[i]) {
       const l = syllableOf(ev, verse);
       if (l) {
-        const text = /^[\p{L}\p{N}'’.,!?;:]+$/u.test(l.text) ? l.text : quote(l.text);
+        // A syllable written as markup (a Roman numeral's \\rN { V 6 5 }, #1039): as the text wrote it.
+        const text = l.markup ? l.markup : /^[\p{L}\p{N}'’.,!?;:]+$/u.test(l.text) ? l.text : quote(l.text);
         words.push(text + (l.hyphen ? " --" : "") + (l.extend ? " __" : ""));
       } else {
         words.push("_");
@@ -3066,7 +3204,7 @@ export function toLilyPond(score, { open = [], unfold = false, written = null, s
       ? `${piano}\\autoChange ${auto.split ? `${auto.split} ` : ""}{\n  \\key ${keyText(keyOf(score, s), staffKeyAt(score, s, 0).mode)} \\time ${timeText(score, time)}${partial}${tempo}`
       : staff.drums
       ? `\\new DrumStaff ${settings ? `\\with { ${settings}} ` : ""}\\drummode {\n  \\time ${timeText(score, time)}${partial}${tempo}`
-      : `\\new ${staff.tab ? "TabStaff" : "Staff"} ${staff.id ? `= ${quote(staff.id)} ` : ""}${settings ? `\\with { ${settings}} ` : ""}${brace}\n  ${staff.tab ? "" : `\\clef ${clef} `}\\key ${keyText(keyOf(score, s), staffKeyAt(score, s, 0).mode)} \\time ${timeText(score, time)}${partial}${tempo}`;
+      : `\\new ${staff.tab ? "TabStaff" : staff.rhythmic ? "RhythmicStaff" : "Staff"} ${staff.id ? `= ${quote(staff.id)} ` : ""}${settings ? `\\with { ${settings}} ` : ""}${brace}\n  ${staff.tab || staff.rhythmic ? "" : `\\clef ${clef} `}\\key ${keyText(keyOf(score, s), staffKeyAt(score, s, 0).mode)} \\time ${timeText(score, time)}${partial}${tempo}`;
     let out = `${opening}\n  ${music.replace(/\n {4}/g, "\n  ")}${ending}\n}`;
     // Each verse a line under the one before; sung to a lower voice, a Lyrics line that follows it.
     if (toVoice) {
@@ -3656,6 +3794,24 @@ export function setPedal(score, s, i, how) {
   [ev.pedalOn, ev.pedalOff] = same ? [false, false] : want;
 }
 
+/**
+ * Another pedal at event `i` (#1039) — `pedal` "sostenuto" (\\sostenutoOn,
+ * \\sostenutoOff) or "corda" (\\unaCorda, \\treCorde) — `how` "on" pressed,
+ * "off" let go, "change" both, toggled; null takes it away.
+ */
+export function setOtherPedal(score, s, i, pedal, how) {
+  const fields = PEDALS[pedal];
+  if (!fields) throw new Error(tr("no such pedal"));
+  const ev = noteOf(score, s, i);
+  const want = { on: [true, false], off: [false, true], change: [true, true] }[how] ?? [false, false];
+  const same = Boolean(ev[fields.on]) === want[0] && Boolean(ev[fields.off]) === want[1];
+  const [on, off] = same ? [false, false] : want;
+  if (on) ev[fields.on] = true;
+  else delete ev[fields.on];
+  if (off) ev[fields.off] = true;
+  else delete ev[fields.off];
+}
+
 /** Event `i`'s words of `style`: "staff" text above it, upright, or "expression" below, in italics; empty takes them away. */
 export function setText(score, s, i, style, text) {
   const ev = noteOf(score, s, i);
@@ -3677,7 +3833,7 @@ function changesText(score, s, b) {
   const parts = [];
   const drums = isDrums(score, s);
   const clef = (score.staves[s].clefs ?? []).find((c) => c.bar === b);
-  if (clef && !drums && !score.staves[s].tab) parts.push(`\\clef ${clefText(clef.clef)}`);
+  if (clef && !drums && !score.staves[s].tab && !score.staves[s].rhythmic) parts.push(`\\clef ${clefText(clef.clef)}`);
   const c = changeAt(score, b);
   const key = drums ? null : keyChanges(score, s).find((m) => m.bar === b && m.pos === 0);
   if (key) parts.push(`\\key ${keyText(key.key, key.mode)}`);
@@ -3738,7 +3894,7 @@ function midChanges(score, s) {
   const marks = top ? (score.midMarks ?? []).map((m) => ({ bar: m.bar, pos: m.pos, order: 3, text: midMarkText(m) })) : [];
   if (staff.drums) return [...odds, ...tempos, ...marks].sort((x, y) => x.bar - y.bar || x.pos - y.pos || x.order - y.order);
   const keys = keyChanges(score, s).filter((m) => m.pos > 0).map((m) => ({ bar: m.bar, pos: m.pos, order: 1, text: `\\key ${keyText(m.key, m.mode)}` }));
-  const clefs = staff.tab ? [] : (staff.midClefs ?? []).map((c) => ({ bar: c.bar, pos: c.pos, order: 0, text: `\\clef ${clefText(c.clef)}` }));
+  const clefs = staff.tab || staff.rhythmic ? [] : (staff.midClefs ?? []).map((c) => ({ bar: c.bar, pos: c.pos, order: 0, text: `\\clef ${clefText(c.clef)}` }));
   return [...odds, ...clefs, ...keys, ...tempos, ...marks].sort((x, y) => x.bar - y.bar || x.pos - y.pos || x.order - y.order);
 }
 
@@ -3868,7 +4024,15 @@ function staffBars(score, staff, s) {
     const on = crossOf(score, s, ev);
     if (on !== drawnOn) change(on);
     drawnOn = on;
-    current.parts.push(staff.chords ? chordText(ev) : staff.figures ? figureText(ev) : eventText(ev, beams[i]));
+    // A tremolo between two notes: the two written as strokes, as many times as they last.
+    const pairStarts = !staff.chords && !staff.figures && tremoloPairAt(staff, i);
+    const pairEnds = !staff.chords && !staff.figures && tremoloPairAt(staff, i - 1);
+    const stroke = pairStarts ? ev.tremPair : pairEnds ? staff.events[i - 1].tremPair : 0;
+    // A bar's rest the text wrote as one (R2.), while it is the bar's only rest.
+    const wholeBar = Boolean(ev.rest && ev.fullBar && !isOddBar(score, bars.length) && !ev.spacer && !ev.tuplet && !ev.scale && Math.abs(t - barStart(score, bars.length)) < 1e-6 && Math.abs(t + ticksOf(ev) - barStart(score, bars.length + 1)) < 1e-6);
+    if (pairStarts) current.parts.push(`\\repeat tremolo ${stroke / ev.base} {`);
+    current.parts.push(staff.chords ? chordText(ev) : staff.figures ? figureText(ev) : eventText(ev, stroke ? "" : beams[i], stroke, wholeBar));
+    if (pairEnds) current.parts.push("}");
     t += ticksOf(ev);
     if (Math.abs(t - barStart(score, bars.length + 1)) < 1e-6) close();
   });
@@ -6321,6 +6485,61 @@ const KEPT_COMMANDS = ["override", "revert", "set", "unset", "tweak", "hide", "o
 const KEPT_PREFIXES = ["once", "temporary", "undo", "single"];
 /** The sizes notes are set in, from there on: kept as written too. */
 const KEPT_SIZES = ["teeny", "tiny", "small", "normalsize", "large", "huge"];
+/**
+ * The commands that switch how things are drawn from there on, with nothing
+ * after them (#1039): the engraver reads them (shape notes, the sides of
+ * slurs and ties, numbered metres…) or passes them over, and the model keeps
+ * each as written, before the note it is written before. An arpeggio's
+ * style is not among them: the model keeps it on the chord (`ev.arpStyle`).
+ */
+export const SHAPE_NOTES = ["aikenHeads", "aikenThinHeads", "sacredHarpHeads", "southernHarmonyHeads", "funkHeads", "walkerHeads"];
+const KEPT_SWITCHES = [
+  ...SHAPE_NOTES.flatMap((name) => [name, `${name}Minor`]),
+  "slurUp", "slurDown", "slurNeutral", "slurDashed", "slurDotted", "slurSolid", "slurHalfDashed", "slurHalfSolid",
+  "phrasingSlurUp", "phrasingSlurDown", "phrasingSlurNeutral", "phrasingSlurDashed", "phrasingSlurDotted", "phrasingSlurSolid",
+  "tieUp", "tieDown", "tieNeutral", "tieDashed", "tieDotted", "tieSolid", "dynamicUp", "dynamicDown", "dynamicNeutral",
+  "tupletUp", "tupletDown", "tupletNeutral", "textSpannerUp", "textSpannerDown", "textSpannerNeutral", "dotsUp", "dotsDown", "dotsNeutral",
+  "textLengthOn", "textLengthOff", "markLengthOn", "markLengthOff", "hideNotes", "unHideNotes", "shiftOn", "shiftOnn", "shiftOnnn", "shiftOff",
+  "mergeDifferentlyHeadedOn", "mergeDifferentlyHeadedOff", "mergeDifferentlyDottedOn", "mergeDifferentlyDottedOff",
+  "numericTimeSignature", "defaultTimeSignature", "crescTextCresc", "dimTextDecresc", "dimTextDecr", "dimTextDim", "crescHairpin", "dimHairpin",
+  "harmonicsOn", "harmonicsOff", "easyHeadsOn", "easyHeadsOff", "improvisationOn", "improvisationOff", "xNotesOn", "xNotesOff", "deadNotesOn", "deadNotesOff",
+  "showStaffSwitch", "hideStaffSwitch",
+];
+/** The shape notes a switch at `text` (a kept command) sets: its family ("aikenHeads"…), or null. */
+function shapeNotesIn(text) {
+  const name = String(text).slice(1).replace(/Minor$/, "");
+  return String(text).startsWith("\\") && SHAPE_NOTES.includes(name) ? name : null;
+}
+
+/** The shape notes lane `s`'s staff is written in from its first note: "aikenHeads", "sacredHarpHeads"… or "" for the usual heads. */
+export function shapeNotesOf(score, s) {
+  const first = score.staves[upperOf(score, s)]?.events[0];
+  return (first?.before ?? []).map(shapeNotesIn).find(Boolean) ?? "";
+}
+
+/**
+ * Lane `s`'s staff in shape notes (#1039) — `name` one of SHAPE_NOTES, each
+ * degree of the key its own head — or in the usual heads (""). The set
+ * for a minor key is taken when the staff's key is minor. Said before the
+ * staff's first note; the switches written further on are taken away.
+ */
+export function setShapeNotes(score, s, name) {
+  if (name && !SHAPE_NOTES.includes(name)) throw new Error(tr("no such note heads"));
+  const upper = upperOf(score, s);
+  const staff = score.staves[upper];
+  if (!staff || staff.drums || staff.tab || staff.chords || staff.figures) throw new Error(tr("shape notes are for a staff of notes"));
+  for (const lane of voiceLanes(score, upper)) {
+    for (const ev of score.staves[lane].events) {
+      if (!ev.before) continue;
+      ev.before = ev.before.filter((text) => !shapeNotesIn(text));
+      if (!ev.before.length) delete ev.before;
+    }
+  }
+  if (!name || !staff.events.length) return;
+  const minor = staffKeyAt(score, upper, 0).mode === "minor";
+  staff.events[0].before = [`\\${name}${minor ? "Minor" : ""}`, ...(staff.events[0].before ?? [])];
+}
+
 /** What the model writes itself, so does not keep: a text span's words. */
 const WRITTEN_BY_MODEL = /^\\override TextSpanner\.bound-details\.left\.text\b|^\\set (Staff\.)?timeSignatureFraction\b/;
 
@@ -6386,6 +6605,35 @@ function commandAt(src, i) {
   return src[i] === "\\" ? /^\\([A-Za-z]+(?:-[A-Za-z]+)*)/.exec(src.slice(i, i + 64))?.[1] ?? null : null;
 }
 
+/**
+ * The syllables `source` writes as markup (`\\markup \\rN { V 6 5 }`), in
+ * its order, each as written: what is in the braces of \\addlyrics,
+ * \\lyricmode, \\lyrics and \\lyricsto.
+ */
+function lyricMarkups(source) {
+  const out = [];
+  if (!source) return out;
+  const re = /\\(?:addlyrics|lyricmode|lyrics|lyricsto\s+(?:"[^"]*"|[A-Za-z]+))\s*\{/g;
+  let past = 0;
+  for (const m of source.matchAll(re)) {
+    const open = m.index + m[0].length - 1;
+    if (open < past) continue;
+    const end = balancedEnd(source, open, "{", "}");
+    past = end;
+    let k = open + 1;
+    while (k < end) {
+      if (source[k] === '"') k = stringEnd(source, k);
+      else if (source[k] === "%") k = Math.max(k + 1, skipBlank(source, k));
+      else if (commandAt(source, k) === "markup") {
+        const to = markupEnd(source, k + 7);
+        out.push(source.slice(k, to).replace(/\s+/g, " ").trim());
+        k = to;
+      } else k++;
+    }
+  }
+  return out;
+}
+
 /** Where a markup at `i` ends: its commands, their Scheme, then a braced list, a string or a word. */
 function markupEnd(src, i) {
   let k = skipBlank(src, i);
@@ -6447,7 +6695,7 @@ function keptCommandAt(src, i) {
     const inner = keptCommandAt(src, skipBlank(src, k));
     return inner ? { end: inner.end, text: `\\${name} ${inner.text}`, tweak: inner.tweak } : null;
   }
-  if (KEPT_SIZES.includes(name)) return { end: k, text: `\\${name}`, tweak: false };
+  if (KEPT_SIZES.includes(name) || KEPT_SWITCHES.includes(name)) return { end: k, text: `\\${name}`, tweak: false };
   if (!KEPT_COMMANDS.includes(name)) return null;
   // \\transposition bes: the pitch its written c' sounds (#1023).
   if (name === "transposition") {
@@ -8239,6 +8487,13 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
   // The \\tweak written on what follows a note (an articulation, words…), with it.
   const tweaked = postTweaks(source, spans);
   // Sizes set by a command the model keeps (\\tiny, \\small …): the notes after it are kept as they are.
+  // The syllables written as markup, in the text's order — when it writes as many as the engraver read.
+  const markupSyllables = (parsed.staves ?? []).flatMap((st) => [st.lyrics ?? [], ...(st.verses ?? [])]).flat().filter((syl) => syl.markup).length;
+  let markups = markupSyllables ? lyricMarkups(source) : null;
+  if (markupSyllables && markups.length !== markupSyllables) {
+    markups = null;
+    lost.add("the words under the notes written as markup");
+  }
   const keptSizes = [...before.values()].flat().some((text) => KEPT_SIZES.includes(text.slice(1)));
   if ((parsed.warnings ?? []).some((w) => /^movement \d/.test(w))) unsupported.add(MOVEMENTS);
   const score = { header: { ...parsed.header }, key: 0, time: [4, 4], tempo: null, group: "none", groups: [], staves: [], repeats: [], changes: [] };
@@ -8303,11 +8558,14 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
     // A tablature (\\new TabStaff): a staff of notes, drawn as frets on strings.
     const tab = staff.kind === "Tab";
     const ossia = staff.kind === "Ossia";
+    // A rhythmic staff (\\new RhythmicStaff, #1039): a staff of notes, all drawn on its one line.
+    const rhythmic = staff.kind === "Rhythmic";
     const kinds = { FretBoards: "guitar chord diagrams" };
-    if (staff.kind !== "Notes" && !drums && !tab && !ossia) unsupported.add(kinds[staff.kind] ?? "a staff of another kind");
+    if (staff.kind !== "Notes" && !drums && !tab && !ossia && !rhythmic) unsupported.add(kinds[staff.kind] ?? "a staff of another kind");
     const out = { name: staff.name ?? "", short: staff.short ?? "", instrument: drums ? "" : staff.instrument ?? "", clef: drums ? "percussion" : "treble", events: [] };
     if (drums) out.drums = true;
     if (tab) out.tab = true;
+    if (rhythmic) out.rhythmic = true;
     // `\new Staff = "down"`: the name \change Staff goes to.
     if (staff.id) out.id = staff.id;
     // Voices 2 to 4, `<< { … } \\ { … } \\ { … } >>`: each its own lane, rests where it is silent.
@@ -8388,7 +8646,7 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
         } else cadenzaAt = null;
         continue;
       }
-      if (k === "Clef" && (drums || tab)) continue;
+      if (k === "Clef" && (drums || tab || rhythmic)) continue;
       if (k === "Clef") {
         const name = CLEF_NAMES[ev.clef.join(",")];
         if (!name) unsupported.add("this clef");
@@ -8566,6 +8824,11 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
         if (k === "Rest" && ev.full) {
           const whole = rests(score, laneLength(lane), ev.ticks * Math.max(1, ev.count));
           if (ottava != null && whole.length) whole[0].ottava = ottava;
+          // Written as a bar's rest (R2., drawn in the middle of its bar): written so again while it fills its bar (#1039).
+          // (A whole note's rest is drawn the same either way: it stays as the model writes it.)
+          if (ev.ticks !== notated(1)) for (const r of whole) r.fullBar = true;
+          // Words over the bars of rest ("Solo", "tacet"): on the first.
+          if (whole.length && ev.texts.length) whole[0].texts = ev.texts.map(([text, dir, italic, bold]) => ({ text, dir, ...(italic ? { italic: true } : {}), ...(bold ? { bold: true } : {}) }));
           // A breath or a text span on a bar's rest: on its first rest, or its last.
           if (whole.length && ev.span_start != null) whole[0].spanStart = ev.span_start;
           if (whole.length && ev.span_stop) whole[whole.length - 1].spanEnd = true;
@@ -8608,13 +8871,27 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
         const scripts = drums ? ev.scripts.filter(([name]) => !["open", "stopped"].includes(name)) : ev.scripts;
         const arts = scripts.map(([name]) => name).filter((n) => SCRIPTS[n]);
         if (scripts.some(([name]) => !SCRIPTS[name])) unsupported.add("some articulations");
+        // The other pedals (#1039): the sostenuto's and the soft pedal's, pressed and let go.
+        const otherPedals = {};
+        for (const [controller, on] of ev.pedals ?? []) {
+          const pedal = Object.values(PEDALS).find((x) => x.controller === controller);
+          if (pedal) otherPedals[on ? pedal.on : pedal.off] = true;
+          else unsupported.add("a pedal this editor does not name");
+        }
+        // A tremolo between two notes: each is drawn as long as the two, and lasts half of that.
+        const paired = (ev.trem_beams ?? 0) > 0 && k === "Note";
+        const stroke = paired ? 4 * 2 ** ev.trem_beams : 0;
+        if (paired && (!TREMOLO_PAIRS.includes(stroke) || ev.dots || ev.base * 2 >= stroke)) unsupported.add("a tremolo between two notes this editor does not write");
         const signs = ev.scripts.map(([name]) => name);
         const byKey = (key) => (key === 42 && signs.includes("stopped") ? "hhc" : key === 46 && !signs.includes("open") ? "hhho" : (DRUMS.find((x) => x.key === key) ?? MORE_DRUMS.find((x) => x.key === key))?.name);
         if (drums && ev.drums.some(([, key]) => !byKey(key))) unsupported.add("a drum this editor does not name");
         const read = makeEvent({
           rest: k === "Rest",
           pitches: drums ? ev.drums.map(([, key]) => drumPitch(byKey(key) ?? "sn")) : ev.pitches.map(([d, alter]) => ({ d, alter })),
-          base: ev.base, dots: ev.dots, tuplet,
+          base: paired ? ev.base * 2 : ev.base, dots: ev.dots, tuplet,
+          ...(paired ? { tremPair: ev.trem_first ? stroke : "end" } : {}),
+          ...otherPedals,
+          ...(ev.arpeggio && ARPEGGIO_READ[ev.arp_style] ? { arpStyle: ARPEGGIO_READ[ev.arp_style] } : {}),
           tie: ev.tie, slurStart: ev.slur_on, slurEnd: ev.slur_off, dynamic: ev.dynamic ?? null,
           hairpin: ev.hairpin ?? null, hairpinEnd: ev.hairpin_end, arts, chord, texts,
           // An articulation written above (^) or below (_): -1 or 1, by its name.
@@ -8699,11 +8976,17 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
       const skip = melismata(sung);
       [staff.lyrics, ...(staff.verses ?? [])].forEach((words, v) => {
         let k = 0;
+        // A syllable written as markup: its text, as written (see lyricMarkups).
+        const raw = (syl) => (syl.markup ? markups?.shift() : null);
         sung.events.forEach((ev, i) => {
           if (skip[i]) return;
           const syl = words[k++];
-          if (syl && syl.text && syl.text !== "_") putSyllable(ev, v + 1, { text: syl.text, hyphen: syl.hyphen, extend: syl.extend });
+          if (!syl) return;
+          const markup = raw(syl);
+          if (syl.text && syl.text !== "_") putSyllable(ev, v + 1, { text: syl.text, hyphen: syl.hyphen, extend: syl.extend, ...(markup ? { markup } : {}) });
         });
+        // The syllables past the last note are not sung: their markups are passed.
+        for (const syl of words.slice(k)) raw(syl);
       });
     }
     // The voices up to the last that sounds: one before it that is silent stays, as rests.
@@ -9064,4 +9347,110 @@ export function writeSwing(score, s, from, to, { unit = 8, feel = "triplet" } = 
     i++;
   }
   return count;
+}
+
+// ---- Nothing is lost in silence (#1039) --------------------------------------------------
+//
+// The engraver says every sign it reads in a text (`reading`, wasm/src/reading.rs).
+// Asked for the text as it was opened and for the text the model writes back
+// from it, the difference is what the model does not keep: said before the
+// first rewrite (`lost`), whatever the engraver learns after this model.
+
+/** What a sign's word is called when the page says the editor does not keep it. */
+const SIGN_NAMES = [
+  [/^(?:grace[^:]*: )*script (\w+)/, (m) => `\\${m[1]}`],
+  [/^(?:staff )?set (\S+)/, (m) => m[1]],
+  [/^(?:grace[^:]*: )+/, () => tr("grace notes")],
+  [/^words /, () => tr("words over or under a note")],
+  [/^(?:lyric|verse)/, () => tr("words under the notes")],
+  [/^pitches/, () => tr("notes")],
+  [/^(?:voice|spacer)/, () => tr("voices as they are written")],
+  [/^a whole bar's rest/, () => tr("a whole bar's rest")],
+  [/^(?:Bar|repeat)/, () => tr("a bar line")],
+  [/^group/, () => tr("a group of staves' name")],
+  [/^span stem/, () => "\\crossStaff"],
+  [/^follow/, () => "\\showStaffSwitch"],
+  [/^arpeggio/, () => tr("an arpeggio's style")],
+  [/^tremolo/, () => tr("a tremolo")],
+  [/^pedal/, () => tr("a pedal")],
+  [/^(?:tab|string)/, () => tr("a tablature's strings")],
+  [/^(?:names|sound|tuning|transposition|placed|staff)/, () => tr("a staff's settings")],
+  [/^(?:header|paper|spacing|part paper)/, () => tr("the page's settings")],
+  [/^(?:clef|key|time|tempo|ottava|under ottava|Mark|Break)/, () => tr("a clef, a key, a metre or a mark")],
+];
+
+/** A sign as it is compared: what the model writes another way without changing what is drawn is one sign. */
+function signKey(word) {
+  if (/^Bar \.\|:/.test(word) || word.startsWith("RepeatStart")) return "repeat start";
+  if (/^Bar :\|\./.test(word) || word.startsWith("RepeatEnd")) return "repeat end";
+  return word;
+}
+
+/** A staff's signs as they are compared: without its last bar line, which the model always writes as the final one. */
+function comparedSigns(signs) {
+  const list = signs.map(signKey);
+  const last = list.findLastIndex((w) => w.startsWith("Bar "));
+  if (last >= 0) list.splice(last, 1);
+  return list;
+}
+
+function signCounts(list) {
+  const counts = new Map();
+  for (const word of list) counts.set(word, (counts.get(word) ?? 0) + 1);
+  return counts;
+}
+
+/**
+ * The signs the engraver read in a text (`read`, its `reading`) and not in
+ * the text written back from the model (`written`): `[{ where, sign, times
+ * }]`, `where` "piece" or a staff's number from 1. Empty when nothing is lost.
+ */
+export function signsLost(read, written) {
+  const gone = [];
+  const compare = (a, b, where) => {
+    const have = signCounts(b);
+    for (const [sign, n] of signCounts(a)) if ((have.get(sign) ?? 0) < n) gone.push({ where, sign, times: n - (have.get(sign) ?? 0) });
+  };
+  // A staff alone is a group of one with no name: nothing drawn.
+  const piece = (r) => (r.piece ?? []).filter((w) => !w.startsWith("group Group { kind: None"));
+  compare(piece(read), piece(written), "piece");
+  (read.staves ?? []).forEach((staff, k) => compare(comparedSigns(staff.signs), comparedSigns(written.staves?.[k]?.signs ?? []), k + 1));
+  return gone;
+}
+
+/** What `signsLost` found, as the page names it: a few words each, the same thing said once. */
+export function namesOfLost(gone) {
+  const names = new Set();
+  for (const { sign } of gone) {
+    let name = sign.split(" ")[0];
+    for (const [re, say] of SIGN_NAMES) {
+      const m = re.exec(sign);
+      if (m) {
+        name = say(m);
+        break;
+      }
+    }
+    names.add(name);
+  }
+  return shortList([...names]);
+}
+
+/**
+ * What the model does not keep of `source`, beside what `fromParsed` said:
+ * the engraver's `reading` (a function of a text, answering JSON) of the
+ * text and of the text written back, compared. `[name…]`, for `lost`.
+ */
+export function unkept(score, source, reading) {
+  if (!score || !source || typeof reading !== "function") return [];
+  let written;
+  try {
+    written = JSON.parse(reading(toLilyPond(score).source));
+  } catch {
+    return [tr("what the engraver does not read back from the score editor")];
+  }
+  try {
+    return namesOfLost(signsLost(JSON.parse(reading(source)), written));
+  } catch {
+    return [];
+  }
 }

@@ -173,6 +173,8 @@
             <button type="button" role="menuitem" data-act="repeat"><%= t("app.editor.repeat_the_selected_bars") %></button>
             <button type="button" role="menuitem" data-act="ending"><%= t("app.editor.ending_1_2") %></button>
             <button type="button" role="menuitem" data-act="pedal" data-how="on"><%= t("app.editor.sustain_pedal") %></button>
+            <button type="button" role="menuitem" data-act="pedal" data-pedal="sostenuto" data-how="on"><%= t("app.editor.sostenuto_pedal") %></button>
+            <button type="button" role="menuitem" data-act="pedal" data-pedal="corda" data-how="on"><%= t("app.editor.soft_pedal_una_corda") %></button>
             <div class="studio-dropdown-head" role="presentation"><%= t("app.editor.staves_voices") %></div>
             <button type="button" role="menuitem" data-act="add-staff"><%= t("app.editor.a_staff") %></button>
             <button type="button" role="menuitem" data-act="instrument-change"><%= t("app.editor.change_instrument") %></button>
@@ -517,6 +519,21 @@
           <button type="button" class="tool" data-act="art" data-name="staccatissimo" title="Staccatissimo">▾</button>
           <button type="button" class="tool" data-act="art" data-name="fermata" title="<%- t("app.editor.fermata") %>">𝄐</button>
         </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="art" data-name="portato" title="<%= t("app.editor.sign_portato_title") %>"><%= t("app.editor.sign_portato") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="espressivo" title="<%= t("app.editor.sign_espressivo_title") %>"><%= t("app.editor.sign_espressivo") %></button>
+        </div>
+        <p class="tool-sub"><%= t("app.editor.more_fermatas") %></p>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="art" data-name="veryshortfermata" title="<%= t("app.editor.sign_veryshortfermata_title") %>"><%= t("app.editor.sign_veryshortfermata") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="shortfermata" title="<%= t("app.editor.sign_shortfermata_title") %>"><%= t("app.editor.sign_shortfermata") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="longfermata" title="<%= t("app.editor.sign_longfermata_title") %>"><%= t("app.editor.sign_longfermata") %></button>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="art" data-name="verylongfermata" title="<%= t("app.editor.sign_verylongfermata_title") %>"><%= t("app.editor.sign_verylongfermata") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="henzeshortfermata" title="<%= t("app.editor.sign_henzeshortfermata_title") %>"><%= t("app.editor.sign_henzeshortfermata") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="henzelongfermata" title="<%= t("app.editor.sign_henzelongfermata_title") %>"><%= t("app.editor.sign_henzelongfermata") %></button>
+        </div>
         <p class="tool-sub"><%= t("app.editor.breaths") %></p>
         <div class="tool-row" aria-label="<%= t("app.editor.breaths") %>">
           <button type="button" class="tool" data-act="breath" data-kind="breathe" title="<%= t("app.editor.breath_mark_after_the_note_breathe_again") %>">,</button>
@@ -613,14 +630,66 @@
           <button type="button" class="tool tool-wide" data-act="art" data-name="mordent" title="<%= t("app.editor.mordent_the_note_the_one_below_the_note") %>"><%= t("app.editor.mordent") %></button>
           <button type="button" class="tool tool-wide" data-act="art" data-name="turn" title="<%= t("app.editor.turn_above_the_note_below_the_note") %>"><%= t("app.editor.turn") %></button>
         </div>
+        <p class="tool-sub"><%= t("app.editor.more_ornaments") %></p>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="art" data-name="reverseturn" title="<%= t("app.editor.sign_reverseturn_title") %>"><%= t("app.editor.sign_reverseturn") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="haydnturn" title="<%= t("app.editor.sign_haydnturn_title") %>"><%= t("app.editor.sign_haydnturn") %></button>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="art" data-name="slashturn" title="<%= t("app.editor.sign_slashturn_title") %>"><%= t("app.editor.sign_slashturn") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="prallprall" title="<%= t("app.editor.sign_prallprall_title") %>"><%= t("app.editor.sign_prallprall") %></button>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="art" data-name="prallmordent" title="<%= t("app.editor.sign_prallmordent_title") %>"><%= t("app.editor.sign_prallmordent") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="upprall" title="<%= t("app.editor.sign_upprall_title") %>"><%= t("app.editor.sign_upprall") %></button>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="art" data-name="downprall" title="<%= t("app.editor.sign_downprall_title") %>"><%= t("app.editor.sign_downprall") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="lineprall" title="<%= t("app.editor.sign_lineprall_title") %>"><%= t("app.editor.sign_lineprall") %></button>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="art" data-name="prallup" title="<%= t("app.editor.sign_prallup_title") %>"><%= t("app.editor.sign_prallup") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="pralldown" title="<%= t("app.editor.sign_pralldown_title") %>"><%= t("app.editor.sign_pralldown") %></button>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="art" data-name="upmordent" title="<%= t("app.editor.sign_upmordent_title") %>"><%= t("app.editor.sign_upmordent") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="downmordent" title="<%= t("app.editor.sign_downmordent_title") %>"><%= t("app.editor.sign_downmordent") %></button>
+        </div>
         <div class="tool-row">
           <button type="button" class="tool tool-wide" data-act="arpeggio" title="<%- t("app.editor.arpeggio_the_chord_rolled_from_its") %>"><%= t("app.editor.arpeggio") %></button>
           <button type="button" class="tool tool-wide" data-act="gliss" title="<%= t("app.editor.glissando_slide_from_this_note_to_the") %>">Glissando</button>
+        </div>
+        <div class="tool-row" aria-label="<%= t("app.editor.arpeggio") %>">
+          <button type="button" class="tool tool-wide" data-act="arpeggio" data-style="bracket" title="<%= t("app.editor.arpeggio_bracket_title") %>"><%= t("app.editor.arpeggio_bracket") %></button>
+          <button type="button" class="tool tool-wide" data-act="arpeggio" data-style="parenthesis" title="<%= t("app.editor.arpeggio_parenthesis_title") %>"><%= t("app.editor.arpeggio_parenthesis") %></button>
+          <button type="button" class="tool tool-wide" data-act="arpeggio" data-style="up" title="<%= t("app.editor.arpeggio_up_title") %>"><%= t("app.editor.arpeggio_up") %></button>
+          <button type="button" class="tool tool-wide" data-act="arpeggio" data-style="down" title="<%= t("app.editor.arpeggio_down_title") %>"><%= t("app.editor.arpeggio_down") %></button>
         </div>
         <div class="tool-row" aria-label="<%= t("app.editor.tremolo") %>">
           <button type="button" class="tool tool-wide" data-act="tremolo" data-value="8" title="<%= t("app.editor.tremolo_the_note_repeated_in_eighths") %>"><%= t("app.editor.trem_8") %></button>
           <button type="button" class="tool tool-wide" data-act="tremolo" data-value="16" title="<%= t("app.editor.tremolo_the_note_repeated_in_sixteenths") %>">16</button>
           <button type="button" class="tool tool-wide" data-act="tremolo" data-value="32" title="<%= t("app.editor.tremolo_the_note_repeated_in_thirty") %>">32</button>
+        </div>
+        <div class="tool-row" aria-label="<%= t("app.editor.tremolo_between_two_notes") %>">
+          <button type="button" class="tool tool-wide" data-act="tremolo-pair" data-value="8" title="<%= t("app.editor.tremolo_pair_8") %>"><%= t("app.editor.trem_pair_8") %></button>
+          <button type="button" class="tool tool-wide" data-act="tremolo-pair" data-value="16" title="<%= t("app.editor.tremolo_pair_16") %>">16</button>
+          <button type="button" class="tool tool-wide" data-act="tremolo-pair" data-value="32" title="<%= t("app.editor.tremolo_pair_32") %>">32</button>
+        </div>
+        <p class="tool-sub"><%= t("app.editor.signs_over_a_note") %></p>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="art" data-name="segno" title="<%= t("app.editor.sign_segno_title") %>"><%= t("app.editor.sign_segno") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="coda" title="<%= t("app.editor.sign_coda_title") %>"><%= t("app.editor.sign_coda") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="varcoda" title="<%= t("app.editor.sign_varcoda_title") %>"><%= t("app.editor.sign_varcoda") %></button>
+        </div>
+        <p class="tool-sub"><%= t("app.editor.ancient_signs") %></p>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="art" data-name="signumcongruentiae" title="<%= t("app.editor.sign_signumcongruentiae_title") %>"><%= t("app.editor.sign_signumcongruentiae") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="accentus" title="<%= t("app.editor.sign_accentus_title") %>"><%= t("app.editor.sign_accentus") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="circulus" title="<%= t("app.editor.sign_circulus_title") %>"><%= t("app.editor.sign_circulus") %></button>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="art" data-name="ictus" title="<%= t("app.editor.sign_ictus_title") %>"><%= t("app.editor.sign_ictus") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="semicirculus" title="<%= t("app.editor.sign_semicirculus_title") %>"><%= t("app.editor.sign_semicirculus") %></button>
         </div>
       </details>
 
@@ -674,6 +743,28 @@
           <button type="button" class="tool tool-wide" data-act="pedal" data-how="on" title="<%= t("app.editor.press_the_sustain_pedal_on_this_note") %>">Ped.</button>
           <button type="button" class="tool" data-act="pedal" data-how="off" title="<%= t("app.editor.let_the_pedal_go_on_this_note") %>">*</button>
           <button type="button" class="tool tool-wide" data-act="pedal" data-how="change" title="<%= t("app.editor.let_go_and_press_again_on_this_note") %>">* Ped.</button>
+        </div>
+        <div class="tool-row" aria-label="<%= t("app.editor.other_pedals") %>">
+          <button type="button" class="tool tool-wide" data-act="pedal" data-pedal="sostenuto" data-how="on" title="<%= t("app.editor.pedal_sostenuto_on") %>">Sost. Ped.</button>
+          <button type="button" class="tool tool-wide" data-act="pedal" data-pedal="sostenuto" data-how="off" title="<%= t("app.editor.pedal_sostenuto_off") %>">Sost. *</button>
+          <button type="button" class="tool tool-wide" data-act="pedal" data-pedal="corda" data-how="on" title="<%= t("app.editor.pedal_corda_on") %>">una corda</button>
+          <button type="button" class="tool tool-wide" data-act="pedal" data-pedal="corda" data-how="off" title="<%= t("app.editor.pedal_corda_off") %>">tre corde</button>
+        </div>
+        <p class="tool-sub"><%= t("app.editor.playing_techniques") %></p>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="art" data-name="flageolet" title="<%= t("app.editor.sign_flageolet_title") %>"><%= t("app.editor.sign_flageolet") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="snappizzicato" title="<%= t("app.editor.sign_snappizzicato_title") %>"><%= t("app.editor.sign_snappizzicato") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="thumb" title="<%= t("app.editor.sign_thumb_title") %>"><%= t("app.editor.sign_thumb") %></button>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="art" data-name="halfopen" title="<%= t("app.editor.sign_halfopen_title") %>"><%= t("app.editor.sign_halfopen") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="halfopenvertical" title="<%= t("app.editor.sign_halfopenvertical_title") %>"><%= t("app.editor.sign_halfopenvertical") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="lheel" title="<%= t("app.editor.sign_lheel_title") %>"><%= t("app.editor.sign_lheel") %></button>
+        </div>
+        <div class="tool-row">
+          <button type="button" class="tool tool-wide" data-act="art" data-name="ltoe" title="<%= t("app.editor.sign_ltoe_title") %>"><%= t("app.editor.sign_ltoe") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="rheel" title="<%= t("app.editor.sign_rheel_title") %>"><%= t("app.editor.sign_rheel") %></button>
+          <button type="button" class="tool tool-wide" data-act="art" data-name="rtoe" title="<%= t("app.editor.sign_rtoe_title") %>"><%= t("app.editor.sign_rtoe") %></button>
         </div>
       </details>
 
@@ -768,6 +859,11 @@
             <option value="treble_15"><%= t("app.editor.treble_15_below") %></option><option value="treble^15"><%= t("app.editor.treble_15_above") %></option><option value="bass_15"><%= t("app.editor.bass_15_below") %></option>
             <option value="soprano"><%= t("app.editor.soprano_c_first_line") %></option><option value="mezzosoprano"><%= t("app.editor.mezzo_soprano_c_second_line") %></option><option value="baritone"><%= t("app.editor.baritone_c_fifth_line") %></option>
             <option value="varbaritone"><%= t("app.editor.baritone_f_third_line") %></option><option value="subbass"><%= t("app.editor.sub_bass_f_fifth_line") %></option><option value="french"><%= t("app.editor.french_violin_g_first_line") %></option>
+          </select>
+        </label>
+        <label class="tool-field"><%= t("app.editor.note_heads") %>
+          <select data-field="staff-heads" title="<%= t("app.editor.note_heads_title") %>">
+            <option value=""><%= t("app.editor.heads_usual") %></option><option value="aikenHeads"><%= t("app.editor.heads_aiken") %></option><option value="aikenThinHeads"><%= t("app.editor.heads_aiken_thin") %></option><option value="sacredHarpHeads"><%= t("app.editor.heads_sacred_harp") %></option><option value="southernHarmonyHeads"><%= t("app.editor.heads_southern_harmony") %></option><option value="funkHeads"><%= t("app.editor.heads_funk") %></option><option value="walkerHeads"><%= t("app.editor.heads_walker") %></option>
           </select>
         </label>
         <label class="tool-field"><%= t("app.editor.key") %>

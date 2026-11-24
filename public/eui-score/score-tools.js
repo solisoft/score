@@ -151,7 +151,7 @@ export function moveRanges(score, ranges, how, by) {
 /** Articulation `name` on every note of the ranges (a fermata on rests too); again takes it away. */
 export function toggleArticulationRanges(score, ranges, name) {
   const marked = pitchedRanges(score, ranges).concat(ranges.filter((r) => M.isDrums(score, r.s)));
-  const fits = (ev) => !ev.rest || name === "fermata";
+  const fits = (ev) => !ev.rest || M.FERMATAS.includes(name);
   if (!marked.some((r) => score.staves[r.s].events.slice(r.a, r.b + 1).some(fits))) throw new Error(NO_NOTE());
   for (const r of marked) {
     for (let i = r.a; i <= r.b; i++) if (fits(score.staves[r.s].events[i])) M.toggleArticulation(score, r.s, i, name);
@@ -546,7 +546,7 @@ export const PASTE_FILTERS = ["notes", "rhythm", "marks"];
 /** A copied event's content with its marks taken off: what "the notes only" pastes. */
 function unmarked(content) {
   const out = { ...structuredClone(content), dynamic: null, hairpin: null, hairpinEnd: false, arts: [], lyric: null, verses: [], texts: [], chord: "", slurStart: false, slurEnd: false, pedalOn: false, pedalOff: false };
-  for (const field of ["hairpinWords", "artDirs", "slurDir", "phraseStart", "phraseEnd", "phraseDir", "fingers", "breath", "spanStart", "spanEnd", "tweaks", "fret", "fretBelow"]) delete out[field];
+  for (const field of ["hairpinWords", "artDirs", "slurDir", "phraseStart", "phraseEnd", "phraseDir", "fingers", "breath", "spanStart", "spanEnd", "tweaks", "fret", "fretBelow", "sostOn", "sostOff", "cordaOn", "cordaOff"]) delete out[field];
   return out;
 }
 

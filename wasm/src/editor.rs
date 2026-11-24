@@ -850,7 +850,7 @@ pub fn score(src: &str) -> Result<Value, String> {
             let texts: Vec<Value> = ev
                 .texts
                 .iter()
-                .filter(|w| !w.runs.iter().any(|r| r.glyph && r.text.starts_with("keyboardPedal")))
+                .filter(|w| w.pedal == 0 && !w.runs.iter().any(|r| r.glyph && r.text.starts_with("keyboardPedal")))
                 .map(|w| {
                     let shown = words_json(w);
                     json!([shown["text"], w.dir, shown["italic"], shown["bold"]])
@@ -911,6 +911,14 @@ pub fn score(src: &str) -> Result<Value, String> {
                 "tremolo": ev.tremolo,
                 "unsupported": unsupported,
             });
+            // How its arpeggio is drawn (#1039): "Wave", "Bracket", "Paren", "ArrowUp", "ArrowDown".
+            event["arp_style"] = json!(format!("{:?}", ev.arp_style));
+            // The other pedals with it, `[controller, pressed]`: 66 the sostenuto, 67 the soft pedal.
+            event["pedals"] = json!(ev.pedals.iter().map(|(pedal, on)| json!([pedal, on])).collect::<Vec<_>>());
+            // One of the two notes of `\repeat tremolo 4 { c16 e }`: the beams between them
+            // (2 for sixteenths) and whether it is the first; its value is half the tremolo's.
+            event["trem_beams"] = json!(ev.trem_beams);
+            event["trem_first"] = json!(ev.trem_first);
             // `s`: a rest that takes its time and is not drawn.
             event["spacer"] = json!(ev.spacer);
             // A beam written by hand, `c8[ d e f]`.
@@ -965,7 +973,7 @@ pub fn score(src: &str) -> Result<Value, String> {
             event["scale"] = json!(ev.scale.map(|(n, d)| [n, d]));
             events.push(event);
         }
-        let words = |syl: &[parse::Syllable]| syl.iter().map(|s| json!({ "text": s.text, "hyphen": s.hyphen, "extend": s.extend })).collect::<Vec<_>>();
+        let words = |syl: &[parse::Syllable]| syl.iter().map(|s| json!({ "text": s.text, "hyphen": s.hyphen, "extend": s.extend, "markup": !s.runs.is_empty() })).collect::<Vec<_>>();
         let lyrics = staff.lyrics.as_deref().map(words);
         // The verses after the first.
         let verses: Vec<_> = staff.verses.iter().map(|v| words(v)).collect();
