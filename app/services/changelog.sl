@@ -13,6 +13,42 @@ class Changelog
       {"date": "2026-11-24", "entries": [
         {
           "area": "site",
+          "title": "What the editor said it did not keep, it keeps",
+          "text": "The editor now names what it would leave out of a text before rewriting it (#1039) — and most "
+          + "of what it named is now kept instead. A tablature tuned by its stringTunings (a bass's four "
+          + "strings, a ukulele) opens on the score and is edited like any tablature. A stem across two "
+          + "staves (\\crossStaff), a grace note before a rest, \\deadNote on one note or over several, a bar "
+          + "where one voice only waits (s1) with the other's stems as they were, a piano's name beside its "
+          + "brace, a mark over the last bar line, words set in several faces, the words written past the "
+          + "last note, and a setting written before a metre or a rehearsal mark all come back as written. "
+          + "Still left to the text: \\repeat percent, a line of chord diagrams, several \\score in one file.",
+          "link": "limits"
+        },
+        {
+          "area": "site",
+          "title": "MusicXML carries the new signs out and in",
+          "text": "A MusicXML file saved from the editor now holds what #1039 added, as MusicXML names it, and "
+          + "the editor reads it back — from its own files and from other programs': an arpeggio's arrow "
+          + "(arpeggiate direction) and bracket (non-arpeggiate), a tremolo between two notes (tremolo "
+          + "start and stop), the sostenuto pedal, the soft pedal as its words with the sound it makes, "
+          + "every ornament with its hooks (approach, departure, long), each fermata by its shape, bowings, "
+          + "harmonics and an organist's heels and toes as technical signs, and shape notes as noteheads "
+          + "(do, re, mi…). An arpeggio in a parenthesis, which MusicXML has no sign for, goes out as a "
+          + "rolled chord.",
+          "link": "playground"
+        },
+        {
+          "area": "engine",
+          "title": "A voice beside one that only waits keeps its stems",
+          "text": "In << { c''4 d'' e'' f'' } \\\\ { s1 } >> the second voice says nothing for the bar. The "
+          + "engraver read the first as a voice alone and let its stems fall where they would; they now go "
+          + "up, as LilyPond draws a first voice, so such a bar is drawn like the bars around it (#1039). "
+          + "In the editor and the playground now; on the library's pages and in PDFs with the next Soli "
+          + "release.",
+          "link": "limits"
+        },
+        {
+          "area": "site",
           "title": "A rectangle drawn round the notes selects them",
           "text": "In the editor, press on an empty part of the score and drag: a rectangle follows the pointer, "
           + "and the notes and rests whose heads are in it are selected as it grows — from the middle of a bar "

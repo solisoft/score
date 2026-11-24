@@ -853,7 +853,11 @@ pub fn score(src: &str) -> Result<Value, String> {
                 .filter(|w| w.pedal == 0 && !w.runs.iter().any(|r| r.glyph && r.text.starts_with("keyboardPedal")))
                 .map(|w| {
                     let shown = words_json(w);
-                    json!([shown["text"], w.dir, shown["italic"], shown["bold"]])
+                    // Words in more than one face, raised or sized, or a sign among them: more than
+                    // "upright, italic or bold" says (#1039). The page keeps their markup as written.
+                    let first = w.runs.first().map(|r| r.weight);
+                    let rich = w.runs.iter().any(|r| r.glyph || r.sup || r.sub || r.stack || (r.size - 1.0).abs() > 1e-9 || Some(r.weight) != first);
+                    json!([shown["text"], w.dir, shown["italic"], shown["bold"], rich])
                 })
                 .collect();
             let chord_name: String = ev.chord_name.iter().map(|r| r.text.as_str()).collect();
@@ -911,6 +915,8 @@ pub fn score(src: &str) -> Result<Value, String> {
                 "tremolo": ev.tremolo,
                 "unsupported": unsupported,
             });
+            // `\\crossStaff { … }`: its stem joins the note's on the staff beside it.
+            event["span_stem"] = json!(ev.span_stem);
             // How its arpeggio is drawn (#1039): "Wave", "Bracket", "Paren", "ArrowUp", "ArrowDown".
             event["arp_style"] = json!(format!("{:?}", ev.arp_style));
             // The other pedals with it, `[controller, pressed]`: 66 the sostenuto, 67 the soft pedal.

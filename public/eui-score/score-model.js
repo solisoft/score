@@ -947,7 +947,7 @@ const sameNote = (a, b) => Boolean(a && b && !a.rest && !b.rest && a.pitches.len
 /** A rest with nothing on it (a spacer may be one): what tidy merges, and a bar of rest gathers. */
 export function isBareRest(ev) {
   const marked = ev.before?.length || ev.cue || ev.ottava != null || ev.stemDir != null || ev.noAutoBeam != null || ev.combineMode != null || ev.breath || ev.spanStart != null || ev.spanEnd || ev.cross != null || ev.figure || ev.figureRaw || ev.fret;
-  return ev.rest && !ev.tuplet && !ev.scale && !ev.dynamic && !ev.hairpin && !ev.hairpinEnd && !ev.texts.length && !ev.chord && !ev.arts.length && !pedalled(ev) && !ev.beamStart && !ev.beamEnd && !marked;
+  return ev.rest && !ev.tuplet && !ev.scale && !ev.dynamic && !ev.hairpin && !ev.hairpinEnd && !ev.texts.length && !ev.chord && !ev.arts.length && !ev.graces?.length && !pedalled(ev) && !ev.beamStart && !ev.beamEnd && !marked;
 }
 
 /** Rests side by side in a bar, with nothing on them, written as few as can be. */
@@ -2550,7 +2550,7 @@ export function removeVoice(score, s, voice = null) {
 
 /** A bar of another voice is written when something in it is: a note, or a rest with a mark. */
 function sounding(events) {
-  return events.some((ev) => !ev.rest || ev.dynamic || ev.hairpin || ev.hairpinEnd || ev.texts.length || ev.chord || ev.arts.length || pedalled(ev));
+  return events.some((ev) => !ev.rest || ev.dynamic || ev.hairpin || ev.hairpinEnd || ev.texts.length || ev.chord || ev.arts.length || ev.graces?.length || pedalled(ev) || (ev.spacer && ev.voiced));
 }
 
 /** A new time signature for the whole piece's first metre. */
@@ -2919,6 +2919,8 @@ const quote = (text) => `"${String(text).replace(/\\/g, "\\\\").replace(/"/g, '\
 
 /** Words above or below a note: a plain string, or \\markup in italics, bold, or both. */
 function wordsText(t) {
+  // Words in several faces, or with a sign among them: their markup as the text wrote it (#1039).
+  if (t.markup) return t.markup;
   const styles = (t.bold ? "\\bold " : "") + (t.italic ? "\\italic " : "");
   return styles ? `\\markup ${styles}${quote(t.text)}` : quote(t.text);
 }
@@ -2962,12 +2964,15 @@ function eventText(ev, beam = "", pair = 0, wholeBar = false) {
     const loose = marks.filter((f) => g.pitches.length === 1 || !g.pitches.some((p) => p.d === f.head));
     return heads + g.base + ".".repeat(g.dots) + loose.map(fingerText).join("");
   };
-  if (ev.graces.length && !ev.rest) {
+  // (Before a rest too, as a text may write them: \\grace c''8 r4.)
+  if (ev.graces.length) {
     const graces = ev.graces.map(graceText);
     out += `\\${ev.grace ?? "grace"} ${graces.length === 1 && !ev.graces[0].fingers?.length ? graces[0] : `{ ${graces.join(" ")} }`} `;
   }
   // How the two parts of a \\partCombine are set from this note on: right before it, after its grace notes.
   if (COMBINE_MODES[ev.combineMode]) out += `\\partCombine${COMBINE_MODES[ev.combineMode]} `;
+  // Where the note itself starts in what is written.
+  const noteAt = out.length;
   const after = !ev.rest && ev.afterGraces?.length ? ev.afterGraces.map(graceText) : null;
   if (after) out += `\\afterGrace ${ev.afterAt != null && ev.afterAt !== AFTER_GRACE_AT ? `${afterFraction(ev.afterAt)} ` : ""}`;
   out += ev.rest ? (ev.spacer ? "s" : wholeBar ? "R" : "r") : ev.pitches.length > 1 ? `<${ev.pitches.map((p) => head(p) + headMarks(p)).join(" ")}>` : notes(ev.pitches);
@@ -3013,6 +3018,10 @@ function eventText(ev, beam = "", pair = 0, wholeBar = false) {
   if (ev.spanEnd) out += "\\stopTextSpan";
   if (ev.spanStart != null) out += tw("spanStart", "\\startTextSpan");
   if (after) out += ` { ${after.join(" ")} }`;
+  // \\crossStaff takes its note in braces: what is written before the note stays outside them.
+  if (ev.crossStem && !ev.rest) {
+    out = `${out.slice(0, noteAt)}\\crossStaff { ${out.slice(noteAt)} }`;
+  }
   if (BREATHS.includes(ev.breath)) out += ` \\${ev.breath}`;
   // The style holds until another is said: the chords after this one are rolled as usual again.
   if (arpeggio) out += " \\arpeggioNormal";
@@ -3043,19 +3052,25 @@ export function melismata(staff) {
 function lyricText(staff, verse = 1) {
   const words = [];
   const skip = melismata(staff);
+  const written = (l) => {
+    // A syllable written as markup (a Roman numeral's \\rN { V 6 5 }, #1039): as the text wrote it.
+    const text = l.markup ? l.markup : /^[\p{L}\p{N}'’.,!?;:]+$/u.test(l.text) ? l.text : quote(l.text);
+    return text + (l.hyphen ? " --" : "") + (l.extend ? " __" : "");
+  };
   for (const [i, ev] of staff.events.entries()) {
     if (!skip[i]) {
       const l = syllableOf(ev, verse);
       if (l) {
-        // A syllable written as markup (a Roman numeral's \\rN { V 6 5 }, #1039): as the text wrote it.
-        const text = l.markup ? l.markup : /^[\p{L}\p{N}'’.,!?;:]+$/u.test(l.text) ? l.text : quote(l.text);
-        words.push(text + (l.hyphen ? " --" : "") + (l.extend ? " __" : ""));
+        words.push(written(l));
       } else {
         words.push("_");
       }
     }
   }
+  // The words written past the last note follow the last one sung, where the text had them.
+  const tail = staff.lyricTails?.[verse] ?? [];
   while (words.length && words[words.length - 1] === "_") words.pop();
+  words.push(...tail.map(written));
   // A verse with no words before one that has some keeps its line.
   return words.length ? words.join(" ") : "_";
 }
@@ -3128,7 +3143,7 @@ export function toLilyPond(score, { open = [], unfold = false, written = null, s
       if (run) {
         // One item: the run's first rest.
         items.push(bar.items[0]);
-        return broken + changesText(score, s, b) + (top ? markText(score, b) : "") + run.text + (top ? jumpText(score, b + run.bars - 1) : "");
+        return broken + (b > 0 ? bar.lead : "") + changesText(score, s, b) + (top ? markText(score, b) : "") + run.text + (top ? jumpText(score, b + run.bars - 1) : "");
       }
       const voices = toVoice ? [] : voicesIn(b);
       items.push(...bar.items, ...voices.flatMap((v) => v.items));
@@ -3144,7 +3159,7 @@ export function toLilyPond(score, { open = [], unfold = false, written = null, s
       const cueOnly = (v) => v.events.every((ev) => ev.cue) && /^\\new CueVoice \{[^{}]*\}$/.test(v.text);
       const besideCue = voices.length === 1 && (cueOnly(voices[0]) || cueOnly(bar));
       const music = besideCue ? `<< ${[bar, voices[0]].map((v) => (cueOnly(v) ? v.text : `{ ${v.text} }`)).join(" ")} >>` : voices.length ? `<< ${parts.join(" \\\\ ")} >>` : bar.text;
-      const bodyText = changesText(score, s, b) + (top ? markText(score, b) : "") + oddStart(score, b, voices.length > 0) + music + (top ? jumpText(score, b) : "") + oddEnd(score, b, b === upper.length - 1);
+      const bodyText = (b > 0 ? bar.lead : "") + changesText(score, s, b) + (top ? markText(score, b) : "") + oddStart(score, b, voices.length > 0) + music + (top ? jumpText(score, b) : "") + oddEnd(score, b, b === upper.length - 1);
       return broken + ossiaStarts.map(() => "<< { ").join("") + bodyText + ossiaEnds.map((o) => ` } ${ossiaText(o)} >>`).join("");
     });
     let music = unfold ? playedOut(score, s, bars) : withRepeats(bars, repeats);
@@ -3192,18 +3207,23 @@ export function toLilyPond(score, { open = [], unfold = false, written = null, s
     // What its \\with says more, kept as written.
     const settings = name + short + midi + (staff.withMore ? `${staff.withMore} ` : "");
     // A piece that ends on a repeat's end keeps its :|. sign, not a final bar.
-    const ending = lastRepeat ? "" : ' \\bar "|."';
+    // A mark over the piece's last bar line (a segno, a coda, words): the first staff's, before that bar line (#1039).
+    const endMark = s === music0 && score.endMark ? ` ${midMarkText(score.endMark)}` : "";
+    const ending = endMark + (lastRepeat ? "" : ' \\bar "|."');
     // Written pitch: a transposing instrument's staff, key and all, where it is read.
     // (A staff with a \\transposition of its own is written so already: see textScore.)
     const moved = written && !transpositionMarks(score, s).length ? transpositionOf(staff) : null;
-    const brace = moved ? `\\transpose c ${moved} {` : "{";
+    // What the first note keeps for the staff's first metre, key and clef: before them.
+    const lead0 = upper[0]?.lead ?? "";
+    const leadLine = lead0 ? `\n  ${lead0.trim()}` : "";
+    const brace = (moved ? `\\transpose c ${moved} {` : "{") + leadLine;
     // A drum staff: its strokes in \\drummode, with no clef and no key.
     const auto = staff.autoChange;
     const piano = auto && (auto.piano || settings) ? `\\new PianoStaff ${settings ? `\\with { ${settings}} ` : ""}` : "";
     const opening = auto
-      ? `${piano}\\autoChange ${auto.split ? `${auto.split} ` : ""}{\n  \\key ${keyText(keyOf(score, s), staffKeyAt(score, s, 0).mode)} \\time ${timeText(score, time)}${partial}${tempo}`
+      ? `${piano}\\autoChange ${auto.split ? `${auto.split} ` : ""}{${leadLine}\n  \\key ${keyText(keyOf(score, s), staffKeyAt(score, s, 0).mode)} \\time ${timeText(score, time)}${partial}${tempo}`
       : staff.drums
-      ? `\\new DrumStaff ${settings ? `\\with { ${settings}} ` : ""}\\drummode {\n  \\time ${timeText(score, time)}${partial}${tempo}`
+      ? `\\new DrumStaff ${settings ? `\\with { ${settings}} ` : ""}\\drummode {${leadLine}\n  \\time ${timeText(score, time)}${partial}${tempo}`
       : `\\new ${staff.tab ? "TabStaff" : staff.rhythmic ? "RhythmicStaff" : "Staff"} ${staff.id ? `= ${quote(staff.id)} ` : ""}${settings ? `\\with { ${settings}} ` : ""}${brace}\n  ${staff.tab || staff.rhythmic ? "" : `\\clef ${clef} `}\\key ${keyText(keyOf(score, s), staffKeyAt(score, s, 0).mode)} \\time ${timeText(score, time)}${partial}${tempo}`;
     let out = `${opening}\n  ${music.replace(/\n {4}/g, "\n  ")}${ending}\n}`;
     // Each verse a line under the one before; sung to a lower voice, a Lyrics line that follows it.
@@ -3236,7 +3256,8 @@ export function toLilyPond(score, { open = [], unfold = false, written = null, s
     return out.join("\n");
   };
   const groups = (score.groups ?? []).filter((g) => kinds[g.kind] && g.first <= g.last && g.last < staves.length);
-  const group = kinds[score.group] ?? "";
+  const outerNames = score.groupNames && kinds[score.group] ? (score.groupNames.name ? `instrumentName = ${quote(score.groupNames.name)} ` : "") + (score.groupNames.short ? `shortInstrumentName = ${quote(score.groupNames.short)} ` : "") : "";
+  const group = kinds[score.group] ? `${kinds[score.group]}${outerNames ? ` \\with { ${outerNames}}` : ""}` : "";
   const shownStaves = staves.filter(Boolean);
   const body = shownStaves.length > 1 || group || lyricsTo ? `${group ? group + " " : ""}<<\n${indent(nest(0, staves.length - 1, groups))}\n>>` : shownStaves[0];
   // Bars of rest gathered on every staff: a part's long rests, as one bar.
@@ -3923,6 +3944,15 @@ function oddEnd(score, b, final = false) {
   return final && !line ? "" : ` \\bar "${line ?? "|"}"`;
 }
 
+/**
+ * Whether a command kept before a note sets how what stands at the bar line
+ * is drawn — a rehearsal mark, the metre, the key, the clef, the bar line —
+ * rather than the note: it is written before those, where the text had it,
+ * or it comes too late (\\numericTimeSignature after its \\time, #1039).
+ */
+const barLead = (text) => /^(?:\\(?:once|temporary|undo|single)\s+)*\\(?:numericTimeSignature|defaultTimeSignature)\b/.test(text)
+  || (/^(?:\\(?:once|temporary|undo|single)\s+)*\\(?:override|revert|set|unset|omit|hide)\b/.test(text) && /\b(?:RehearsalMark|TimeSignature|KeySignature|KeyCancellation|Clef|BarLine|MetronomeMark|rehearsalMarkFormatter|markFormatter)\b/.test(text));
+
 /** A lane's music, a string per bar, with its events and items; a tuplet never leaves its bar. */
 function staffBars(score, staff, s) {
   const beams = handBeams(score, staff);
@@ -3956,12 +3986,17 @@ function staffBars(score, staff, s) {
     scaled = null;
     if (cue) current.parts.push("}");
     cue = false;
-    bars.push({ text: current.parts.join(" "), items: current.items, events: current.events });
+    bars.push({ text: current.parts.join(" "), items: current.items, events: current.events, lead: current.lead ?? "" });
     current = { parts: [], items: [], events: [] };
   };
   staff.events.forEach((ev, i) => {
     current.items.push({ staff: s, index: i });
     current.events.push(ev);
+    // What is kept before the bar's first note and sets how the bar line's own signs are drawn (its mark, its
+    // metre, its key): written before them (see barLead), not after.
+    const leading = current.events.length === 1 ? (ev.before ?? []).filter(barLead) : [];
+    if (leading.length) current.lead = `${leading.join(" ")} `;
+    const shown = leading.length ? { ...ev, before: ev.before.filter((text) => !barLead(text)) } : ev;
     // The tuplet it is in (the outer one, when they nest), and the one inside that.
     const tid = tupletGroup(ev);
     const iid = ev.tuplet?.outer ? ev.tuplet.id : null;
@@ -4031,7 +4066,7 @@ function staffBars(score, staff, s) {
     // A bar's rest the text wrote as one (R2.), while it is the bar's only rest.
     const wholeBar = Boolean(ev.rest && ev.fullBar && !isOddBar(score, bars.length) && !ev.spacer && !ev.tuplet && !ev.scale && Math.abs(t - barStart(score, bars.length)) < 1e-6 && Math.abs(t + ticksOf(ev) - barStart(score, bars.length + 1)) < 1e-6);
     if (pairStarts) current.parts.push(`\\repeat tremolo ${stroke / ev.base} {`);
-    current.parts.push(staff.chords ? chordText(ev) : staff.figures ? figureText(ev) : eventText(ev, stroke ? "" : beams[i], stroke, wholeBar));
+    current.parts.push(staff.chords ? chordText(ev) : staff.figures ? figureText(ev) : eventText(shown, stroke ? "" : beams[i], stroke, wholeBar));
     if (pairEnds) current.parts.push("}");
     t += ticksOf(ev);
     if (Math.abs(t - barStart(score, bars.length + 1)) < 1e-6) close();
@@ -6540,6 +6575,8 @@ export function setShapeNotes(score, s, name) {
   staff.events[0].before = [`\\${name}${minor ? "Minor" : ""}`, ...(staff.events[0].before ?? [])];
 }
 
+/** The commands that draw the one note written after them another way (#1039). */
+const KEPT_ONE_NOTE = ["deadNote", "xNote"];
 /** What the model writes itself, so does not keep: a text span's words. */
 const WRITTEN_BY_MODEL = /^\\override TextSpanner\.bound-details\.left\.text\b|^\\set (Staff\.)?timeSignatureFraction\b/;
 
@@ -6695,6 +6732,8 @@ function keptCommandAt(src, i) {
     const inner = keptCommandAt(src, skipBlank(src, k));
     return inner ? { end: inner.end, text: `\\${name} ${inner.text}`, tweak: inner.tweak } : null;
   }
+  // \\deadNote e4, \\xNote e4: the one note after it, drawn as a cross — its own, as a \\tweak is.
+  if (KEPT_ONE_NOTE.includes(name)) return { end: k, text: `\\${name}`, tweak: true };
   if (KEPT_SIZES.includes(name) || KEPT_SWITCHES.includes(name)) return { end: k, text: `\\${name}`, tweak: false };
   if (!KEPT_COMMANDS.includes(name)) return null;
   // \\transposition bes: the pitch its written c' sounds (#1023).
@@ -6778,6 +6817,14 @@ export function keptCommands(source, spans) {
     }
     if (kept.length) out.set(i, kept);
   });
+  // \\deadNote { e4 a }: each note in the braces is one of them.
+  for (const m of source.matchAll(new RegExp(`\\\\(${KEPT_ONE_NOTE.join("|")})\\s*\\{`, "g"))) {
+    const open = m.index + m[0].length - 1;
+    const end = balancedEnd(source, open, "{", "}");
+    spans.forEach((span, i) => {
+      if (span && span[0] > open && span[0] < end && !(out.get(i) ?? []).includes(`\\${m[1]}`)) out.set(i, [`\\${m[1]}`, ...(out.get(i) ?? [])]);
+    });
+  }
   return out;
 }
 
@@ -6844,6 +6891,44 @@ function postEventAt(src, i) {
  * engraver's number for the note: Map i → [{ on, lead, text }]. `spans` are
  * `source_spans`.
  */
+/**
+ * The words written as \\markup after each note of `source`, as written,
+ * by the engraver's number for the note: Map i → [{ words, raw }], `words`
+ * what they say (letters and figures only), `raw` the markup. What the
+ * model keeps of words — their text, italic or bold — does not say a
+ * markup of several faces; this does.
+ */
+export function postMarkups(source, spans) {
+  const out = new Map();
+  if (!source || !Array.isArray(spans) || !source.includes("\\markup")) return out;
+  const order = spans.map((sp, i) => (sp ? i : -1)).filter((i) => i >= 0).sort((x, y) => spans[x][0] - spans[y][0] || x - y);
+  order.forEach((i, n) => {
+    if (n > 0 && spans[order[n - 1]][0] === spans[i][0]) return;
+    const next = order.slice(n + 1).find((j) => spans[j][0] > spans[i][0]);
+    const to = next == null ? source.length : spans[next][0];
+    const found = [];
+    let k = spans[i][1];
+    while (k < to) {
+      const c = source[k];
+      if (c === '"') k = stringEnd(source, k);
+      else if (c === "%") k = Math.max(k + 1, skipBlank(source, k));
+      else if (c === "#") k = schemeEnd(source, k);
+      else if (commandAt(source, k) === "markup" && "-^_".includes(source[k - 1] ?? "")) {
+        const end = markupEnd(source, k + 7);
+        if (end > to) break;
+        const raw = source.slice(k, end).replace(/\s+/g, " ").trim();
+        found.push({ words: lettersOf(raw.replace(/\\[A-Za-z-]+/g, " ")), raw });
+        k = end;
+      } else k++;
+    }
+    if (found.length) out.set(i, found);
+  });
+  return out;
+}
+
+/** The letters and figures of `text`, nothing else: how words read and words written are told to be the same. */
+const lettersOf = (text) => String(text).replace(/[^\p{L}\p{N}]/gu, "");
+
 export function postTweaks(source, spans) {
   const out = new Map();
   if (!source || !Array.isArray(spans)) return out;
@@ -7026,7 +7111,7 @@ export function resetSign(score, s, i, on) {
 }
 
 /** Whether a kept command holds on after its note: not \once, not a \tweak of that note. */
-const holdsOn = (text) => !/^\\(once|tweak|single)\b/.test(text);
+const holdsOn = (text) => !/^\\(once|tweak|single|deadNote|xNote)\b/.test(text);
 
 /** The kept commands of `events` that hold on, in order. */
 function heldCommands(events) {
@@ -8486,6 +8571,8 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
   const before = keptCommands(source, spans);
   // The \\tweak written on what follows a note (an articulation, words…), with it.
   const tweaked = postTweaks(source, spans);
+  // The words written as markup after a note, as written: kept so when they are more than upright, italic or bold.
+  const marked = postMarkups(source, spans);
   // Sizes set by a command the model keeps (\\tiny, \\small …): the notes after it are kept as they are.
   // The syllables written as markup, in the text's order — when it writes as many as the engraver read.
   const markupSyllables = (parsed.staves ?? []).flatMap((st) => [st.lyrics ?? [], ...(st.verses ?? [])]).flat().filter((syl) => syl.markup).length;
@@ -8512,6 +8599,8 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
   // The group around every staff is the score's; the others are kept as they nest.
   const outer = parsed.groups.find((g) => g.depth === 0 && g.first === 0 && g.last === parsed.staves.length - 1);
   if (outer) score.group = kinds[outer.kind] ?? "none";
+  // Its own name, beside its brace or bracket (a piano's "Piano", #1039).
+  if (outer && kinds[outer.kind] && (outer.name || outer.short)) score.groupNames = { name: outer.name ?? "", short: outer.short ?? "" };
   score.groups = parsed.groups
     .filter((g) => g !== outer && kinds[g.kind])
     .map((g) => ({ kind: kinds[g.kind], first: g.first, last: g.last, name: g.name ?? "", short: g.short ?? "" }));
@@ -8549,6 +8638,10 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
   for (const k of order) {
     const staff = parsed.staves[k];
     if (staff.kind === "ChordNames" || staff.kind === "Figures") {
+      // A chord is kept as its text writes it (bes:7), and written again in Dutch note names — the only ones
+      // this model writes: one written "bf:7" (\\language "english") would come back as another chord (#1039).
+      const language = /\\language\s+"([a-z]+)"/.exec(source ?? "")?.[1];
+      if (staff.kind === "ChordNames" && language && language !== "nederlands") unsupported.add("chord names written in another language of note names");
       placed[k] = [(staff.kind === "Figures" ? figureLine : chordLine)(score, staff, unsupported)];
       continue;
     }
@@ -8556,7 +8649,8 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
     // Where this staff's last note or rest written ends in the text: a bar check after it is the next one's.
     let textAt = null;
     // A tablature (\\new TabStaff): a staff of notes, drawn as frets on strings.
-    const tab = staff.kind === "Tab";
+    // (With the strings its \\with tunes — a bass's four, a ukulele's — it is "TabStrings(4)": the tuning is kept in its \\with.)
+    const tab = staff.kind === "Tab" || /^TabStrings\(\d+\)$/.test(staff.kind);
     const ossia = staff.kind === "Ossia";
     // A rhythmic staff (\\new RhythmicStaff, #1039): a staff of notes, all drawn on its one line.
     const rhythmic = staff.kind === "Rhythmic";
@@ -8860,13 +8954,27 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
             tuplet.outer = { id: tuplets.get(oid), n: on, d: od };
           }
         }
-        const all = ev.texts.map(([text, dir, italic, bold]) => ({ text, dir, ...(italic ? { italic: true } : {}), ...(bold ? { bold: true } : {}) }));
+        const all = ev.texts.map(([text, dir, italic, bold, rich]) => {
+          const words = { text, dir, ...(italic ? { italic: true } : {}), ...(bold ? { bold: true } : {}) };
+          if (!rich) return words;
+          // The markup that says these words — or, when a sign says none (\\musicglyph), the first that is no other words of the note.
+          const free = (marked.get(ev.i) ?? []).filter((m) => !m.used);
+          const others = ev.texts.filter((t) => !t[4]).map((t) => lettersOf(t[0]));
+          const written = free.find((m) => m.words === lettersOf(text)) ?? free.find((m) => !others.includes(m.words));
+          if (!written) {
+            lost.add("words set in several faces");
+            return words;
+          }
+          written.used = true;
+          return { ...words, markup: written.raw };
+        });
         // A chord diagram (\fret-diagram) is its shape, not words.
         const diagram = all.find((w) => w.text.startsWith(FRET_MARK));
         const texts = all.filter((w) => w !== diagram);
         // A short word above a note that reads as a chord is its chord symbol.
         const chordAt = texts.findIndex((w) => w.dir < 0 && !w.bold && isChordSymbol(w.text));
-        const chord = chordAt >= 0 ? texts.splice(chordAt, 1)[0].text : ev.chord_name || "";
+        // (A chord written in \\chordmode in a staff of notes is its notes: its name is a line of chord names' to print, #1039.)
+        const chord = chordAt >= 0 ? texts.splice(chordAt, 1)[0].text : "";
         // An open or a stopped hi-hat's sign comes with its drum.
         const scripts = drums ? ev.scripts.filter(([name]) => !["open", "stopped"].includes(name)) : ev.scripts;
         const arts = scripts.map(([name]) => name).filter((n) => SCRIPTS[n]);
@@ -8903,7 +9011,11 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
             : {}),
           pedalOn: Boolean(ev.pedal_on), pedalOff: Boolean(ev.pedal_off),
           // A spacer, `s`: takes its time, drawn as nothing. Beams written by hand.
+          // \\crossStaff { c4 }: its stem joins the one of the note sounding with it on the staff beside it (#1039).
+          ...(k === "Note" && ev.span_stem ? { crossStem: true } : {}),
           ...(k === "Rest" && ev.spacer ? { spacer: true } : {}),
+          // …written in a voice of several (`<< { c4 } \\\\ { s4 } >>`): its bar stays in voices, the stems as they were (#1039).
+          ...(k === "Rest" && ev.spacer && ev.voice != null ? { voiced: true } : {}),
           ...(ev.beam_on ? { beamStart: true } : {}),
           ...(ev.beam_off ? { beamEnd: true } : {}),
           ...(ottava != null ? { ottava } : {}),
@@ -8985,8 +9097,9 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
           const markup = raw(syl);
           if (syl.text && syl.text !== "_") putSyllable(ev, v + 1, { text: syl.text, hyphen: syl.hyphen, extend: syl.extend, ...(markup ? { markup } : {}) });
         });
-        // The syllables past the last note are not sung: their markups are passed.
-        for (const syl of words.slice(k)) raw(syl);
+        // The syllables past the last note are not sung yet: kept after the others, for the notes to come (#1039).
+        const tail = words.slice(k).map((syl) => ({ syl, markup: raw(syl) })).filter(({ syl }) => syl.text && syl.text !== "_");
+        if (tail.length) sung.lyricTails = { ...(sung.lyricTails ?? {}), [v + 1]: tail.map(({ syl, markup }) => ({ text: syl.text, hyphen: syl.hyphen, extend: syl.extend, ...(markup ? { markup } : {}) })) };
       });
     }
     // The voices up to the last that sounds: one before it that is silent stays, as rests.
@@ -9056,6 +9169,9 @@ export function fromParsed(parsed, source = null, { spans = parsed?.spans ?? nul
   if (score.staves.some((st) => !isBarLine(score, lengthOf(st)))) return { unsupported: ["a bar left unfinished"] };
   // A double bar at the very end is the final bar line, written anyway.
   const bars = barsOf(score);
+  // …and a mark over it is the piece's last (`endMark`): a segno, a coda, a letter or words.
+  const atEnd = score.changes.find((c) => c.bar === bars && (c.mark || c.words));
+  if (atEnd) score.endMark = atEnd.mark ? { mark: atEnd.mark } : { words: atEnd.words };
   score.changes = score.changes.filter((c) => c.bar < bars);
   // A beam written by hand that does not close in its bar is not written again.
   for (const staff of score.staves) {
@@ -9376,7 +9492,7 @@ const SIGN_NAMES = [
   [/^(?:tab|string)/, () => tr("a tablature's strings")],
   [/^(?:names|sound|tuning|transposition|placed|staff)/, () => tr("a staff's settings")],
   [/^(?:header|paper|spacing|part paper)/, () => tr("the page's settings")],
-  [/^(?:clef|key|time|tempo|ottava|under ottava|Mark|Break)/, () => tr("a clef, a key, a metre or a mark")],
+  [/^(?:clef|key|time|tempo|Tempo|ottava|under ottava|Mark|Break|Partial|Compress|Cadenza|Movement)/, () => tr("a clef, a key, a metre or a mark")],
 ];
 
 /** A sign as it is compared: what the model writes another way without changing what is drawn is one sign. */
@@ -9389,6 +9505,8 @@ function signKey(word) {
 /** A staff's signs as they are compared: without its last bar line, which the model always writes as the final one. */
 function comparedSigns(signs) {
   const list = signs.map(signKey);
+  // (Grace notes are beamed as they come: a beam written by hand over them says nothing more.)
+  for (let k = list.length - 1; k >= 0; k--) if (/^grace [^:]*: beam (on|off)$/.test(list[k])) list.splice(k, 1);
   const last = list.findLastIndex((w) => w.startsWith("Bar "));
   if (last >= 0) list.splice(last, 1);
   return list;
@@ -9413,8 +9531,15 @@ export function signsLost(read, written) {
   };
   // A staff alone is a group of one with no name: nothing drawn.
   const piece = (r) => (r.piece ?? []).filter((w) => !w.startsWith("group Group { kind: None"));
-  compare(piece(read), piece(written), "piece");
-  (read.staves ?? []).forEach((staff, k) => compare(comparedSigns(staff.signs), comparedSigns(written.staves?.[k]?.signs ?? []), k + 1));
+  // A line or a page broken is the piece's, whichever staff says it — and every staff may: counted once.
+  const isBreak = (w) => w.startsWith("Break ");
+  const breaks = (r) => {
+    const most = new Map();
+    for (const staff of r.staves ?? []) for (const [w, n] of signCounts(staff.signs.filter(isBreak))) most.set(w, Math.max(most.get(w) ?? 0, n));
+    return [...most].flatMap(([w, n]) => Array(n).fill(w));
+  };
+  compare([...piece(read), ...breaks(read)], [...piece(written), ...breaks(written)], "piece");
+  (read.staves ?? []).forEach((staff, k) => compare(comparedSigns(staff.signs.filter((w) => !isBreak(w))), comparedSigns((written.staves?.[k]?.signs ?? []).filter((w) => !isBreak(w))), k + 1));
   return gone;
 }
 

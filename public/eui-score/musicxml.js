@@ -147,6 +147,57 @@ function quoted(text) {
   return `"${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\s*(\r\n|\r|\n)\s*/g, " ")}"`;
 }
 
+// ---- The signs MusicXML names (#1039) ----------------------------------------------
+//
+// Each of the model's scripts as MusicXML writes it, and back. An ornament
+// with a hook is the plain one with what MusicXML says of its start and end
+// (`approach`, `departure`, `long`); a fermata is its shape; a bowing, a
+// harmonic, a heel or a toe a <technical>. What MusicXML has no element for
+// (espressivo's little hairpin, a segno over a note, the early-music signs)
+// is an <other-articulation> holding LilyPond's name: any reader shows the
+// note, and this one reads the sign back.
+
+/** <ornaments>: the element, then its attributes. */
+const ORNAMENTS_OUT = {
+  trill: ["trill-mark", ""],
+  prall: ["inverted-mordent", ""],
+  mordent: ["mordent", ""],
+  turn: ["turn", ""],
+  reverseturn: ["inverted-turn", ""],
+  haydnturn: ["haydn", ""],
+  slashturn: ["turn", ' slash="yes"'],
+  prallprall: ["inverted-mordent", ' long="yes"'],
+  prallmordent: ["mordent", ' long="yes"'],
+  upprall: ["inverted-mordent", ' long="yes" approach="below"'],
+  downprall: ["inverted-mordent", ' long="yes" approach="above"'],
+  lineprall: ["inverted-mordent", ' approach="above"'],
+  prallup: ["inverted-mordent", ' long="yes" departure="above"'],
+  pralldown: ["inverted-mordent", ' long="yes" departure="below"'],
+  upmordent: ["mordent", ' approach="below"'],
+  downmordent: ["mordent", ' approach="above"'],
+};
+/** An ornament element as it is told from its kin: its name and what it says of its length, its start, its end, its slash. */
+const ornamentKey = (name, attrs) => [name, attrs.long === "yes" ? "long" : "", attrs.approach ?? "", attrs.departure ?? "", attrs.slash === "yes" ? "slash" : ""].join("|");
+const ORNAMENT_NAMES = Object.fromEntries(
+  Object.entries(ORNAMENTS_OUT).map(([name, [element, attrs]]) => [ornamentKey(element, Object.fromEntries([...attrs.matchAll(/(\w+)="(\w+)"/g)].map((m) => [m[1], m[2]]))), name]),
+);
+/** <fermata>'s shapes. */
+const FERMATAS_OUT = { fermata: "", veryshortfermata: "double-angled", shortfermata: "angled", longfermata: "square", verylongfermata: "double-square", henzeshortfermata: "half-curve", henzelongfermata: "double-dot" };
+const FERMATA_NAMES = { ...Object.fromEntries(Object.entries(FERMATAS_OUT).map(([name, shape]) => [shape, name])), normal: "fermata" };
+/** <technical>: the element, then its attributes. An organist's left foot is written under the staff, the right over it. */
+const TECHNICAL_OUT = {
+  upbow: ["up-bow", ""], downbow: ["down-bow", ""], flageolet: ["harmonic", ""], open: ["open-string", ""], stopped: ["stopped", ""],
+  snappizzicato: ["snap-pizzicato", ""], thumb: ["thumb-position", ""], halfopen: ["half-muted", ""],
+  lheel: ["heel", ' placement="below"'], rheel: ["heel", ' placement="above"'], ltoe: ["toe", ' placement="below"'], rtoe: ["toe", ' placement="above"'],
+};
+const TECHNICAL_NAMES = { "up-bow": "upbow", "down-bow": "downbow", harmonic: "flageolet", "open-string": "open", stopped: "stopped", "snap-pizzicato": "snappizzicato", "thumb-position": "thumb", "half-muted": "halfopen" };
+/** An arpeggio's style and how <arpeggiate> or <non-arpeggiate> says it; a parenthesis, which MusicXML has not, in <other-notation>. */
+const ARPEGGIO_PARENTHESIS = "arpeggio-parenthesis";
+/** Shape notes: <notehead>'s name for each degree of the key, from its major tonic — seven shapes, or the four of the Sacred Harp. */
+const SHAPES_SEVEN = ["do", "re", "mi", "fa", "so", "la", "ti"];
+const SHAPES_FOUR = ["fa", "so", "la", "fa", "so", "la", "mi"];
+const FOUR_SHAPES = ["sacredHarpHeads", "southernHarmonyHeads"];
+
 // ---- MusicXML → LilyPond ------------------------------------------------------------
 
 const CLEFS_IN = { G2: "treble", F4: "bass", C3: "alto", C4: "tenor", C1: "soprano", F3: "varbaritone", G1: "french", C2: "mezzosoprano", C5: "baritone", F5: "subbass" };
@@ -156,7 +207,6 @@ function placed(text, placement) {
   return (placement === "above" ? "^" : "_") + (text.startsWith("-") ? text.slice(1) : text);
 }
 const ARTICULATIONS_IN = { staccato: "-.", accent: "->", tenuto: "--", "strong-accent": "-^", staccatissimo: "-!", "detached-legato": "-_", spiccato: "-!" };
-const ORNAMENTS_IN = { "trill-mark": "\\trill", mordent: "\\mordent", "inverted-mordent": "\\prall", turn: "\\turn" };
 const DYNAMICS_IN = ["ppp", "pp", "p", "mp", "mf", "f", "ff", "fff", "sf", "sfz", "fp", "rfz", "sfp", "fz"];
 
 /**
@@ -233,7 +283,12 @@ export function fromMusicXML(text) {
   const taken = new Set();
   // A file this editor wrote: its <stem> are the stems \\stemUp and \\stemDown turned (others write every note's).
   const ours = kids(kid(kid(root, "identification"), "encoding"), "software").some((s) => s.text.trim() === "eui-score");
-  const blocks = parts.map((part, p) => readPart(part, { ...(partInfo.get(part.attrs.id) ?? { name: "", short: "", sound: null, drums: new Map() }), taken, index: p, ours }, p === 0, warnings));
+  // The shape notes of each staff, as this editor named them (see writing): "P1:1" → "funkHeadsMinor".
+  let headSets = {};
+  try {
+    headSets = JSON.parse(kids(kid(kid(root, "identification"), "miscellaneous"), "miscellaneous-field").find((f) => f.attrs.name === "lilypond-heads")?.text ?? "{}");
+  } catch {}
+  const blocks = parts.map((part, p) => readPart(part, { ...(partInfo.get(part.attrs.id) ?? { name: "", short: "", sound: null, drums: new Map() }), taken, index: p, ours, id: part.attrs.id, headSets }, p === 0, warnings));
   const head = header.length ? `\\header {\n  ${header.join("\n  ")}\n}\n` : "";
   const indent = (text) => text.replace(/^/gm, "  ");
   // Parts `from`…`to`, each group that starts there around its parts.
@@ -282,7 +337,7 @@ function readPart(part, info, first, warnings) {
   const staffOf = (n) => {
     while (lanes.length < n) {
       const counts = [0, 1, 2, 3].map(() => ({ sung: 0, tiedOver: false }));
-      lanes.push({ drums: false, voices: [], lanes: [[], [], [], []], pos: [0, 0, 0, 0], lyrics: new Map(), lyricLane: null, counts, queue: [[], [], [], []], pending: [], timed: [], measureFrom: 0 });
+      lanes.push({ drums: false, voices: [], lanes: [[], [], [], []], pos: [0, 0, 0, 0], lyrics: new Map(), lyricLane: null, shapes: new Set(), counts, queue: [[], [], [], []], pending: [], timed: [], measureFrom: 0 });
     }
     return lanes[n - 1];
   };
@@ -489,6 +544,11 @@ function readPart(part, info, first, warnings) {
           continue;
         }
         // A jump, D.S. al Coda or Fine, over the bar line it stands against.
+        // The soft pedal has no <pedal> of its own: its words, and what it sounds (<sound soft-pedal>).
+        if (sound?.attrs["soft-pedal"]) {
+          later(at(s), sound.attrs["soft-pedal"] === "yes" ? "\\unaCorda" : "\\treCorde");
+          continue;
+        }
         const jump = Object.values(M.JUMPS).find((j) => j.toLowerCase() === words.toLowerCase());
         if (jump) {
           if (first) put(at(1), 0, cursor, jump === "Fine" ? "\\fine" : `\\jump ${quoted(jump)}`);
@@ -509,7 +569,10 @@ function readPart(part, info, first, warnings) {
               later(at(s), `${above ? "^" : "_"}${styles ? `\\markup ${styles}${quoted(words)}` : quoted(words)}`);
             } else if (d.name === "pedal") {
               const type = d.attrs.type;
-              if (type === "start") later(at(s), "\\sustainOn");
+              // The sostenuto pedal is the second pedal (number="2"): its start says its name, its stop its number.
+              const sostenuto = type === "sostenuto" || d.attrs.number === "2";
+              if (sostenuto) later(at(s), type === "stop" ? "\\sostenutoOff" : type === "change" ? "\\sostenutoOff\\sostenutoOn" : "\\sostenutoOn");
+              else if (type === "start") later(at(s), "\\sustainOn");
               else if (type === "stop") later(at(s), "\\sustainOff");
               else if (type === "change") later(at(s), "\\sustainOff\\sustainOn");
             } else if (d.name === "octave-shift") {
@@ -729,9 +792,14 @@ function readPart(part, info, first, warnings) {
       const type = textIn(note, "type");
       const dots = kids(note, "dot").length;
       const tm = kid(note, "time-modification");
-      const ratio = tm ? { n: numberIn(tm, "actual-notes"), d: numberIn(tm, "normal-notes") } : null;
+      // One of a tremolo's two notes (<tremolo type="start"> … "stop"): each is written as long as the two last,
+      // "two in the time of one"; in LilyPond they are strokes, \\repeat tremolo 4 { c16 e16 }.
+      const tremoloOf = kids(note, "notations").flatMap((n) => kids(n, "ornaments")).flatMap((o) => kids(o, "tremolo")).find((t) => t.attrs.type === "start" || t.attrs.type === "stop");
+      const stroke = tremoloOf && !rest && !isGrace ? 8 * 2 ** (Math.max(1, Math.min(3, Number(tremoloOf.text.trim() || 2))) - 1) : 0;
+      const ratio = tm && !stroke ? { n: numberIn(tm, "actual-notes"), d: numberIn(tm, "normal-notes") } : null;
       let values;
-      if (type && TYPES[type] >= 1 && TYPES[type] <= 128) values = [{ base: TYPES[type], dots }];
+      if (stroke) values = [{ base: stroke, dots: 0 }];
+      else if (type && TYPES[type] >= 1 && TYPES[type] <= 128) values = [{ base: TYPES[type], dots }];
       else if (type && TYPES[type] < 1) {
         warnings.add(tr("a breve or longer note, cut into tied whole notes"));
         values = spell((4 / TYPES[type]) * (2 - 1 / 2 ** dots));
@@ -757,11 +825,14 @@ function readPart(part, info, first, warnings) {
         if (last && !rest) {
           last.pitches.push(pitch);
           last.marks.push(fingeringText(kids(note, "notations")));
+          // A bracket is said on the chord's lowest and highest notes: on any of them, it is the chord's.
+          if (kids(note, "notations").some((n) => kids(n, "non-arpeggiate").length)) last.arpeggio = "bracket";
           last.render();
         }
         return;
       }
       fill(staff, v, start);
+      if (!rest && textIn(note, "notehead")) staff.shapes.add(textIn(note, "notehead").trim());
       // A stem turned by hand, in a file this editor wrote: \\stemUp, \\stemDown, \\stemNeutral where it changes.
       if (info.ours && !rest) {
         const dir = { up: 1, down: -1 }[textIn(note, "stem")] ?? 0;
@@ -804,18 +875,33 @@ function readPart(part, info, first, warnings) {
       slurDepth.set(key, open);
       for (const art of notations.flatMap((n) => kids(n, "articulations")).flatMap((a) => a.children)) {
         if (ARTICULATIONS_IN[art.name]) suffix += placed(ARTICULATIONS_IN[art.name], art.attrs.placement);
-        else if (art.name !== "breath-mark") warnings.add(tr("some articulations"));
+        else if (art.name !== "breath-mark" && !(art.name === "other-articulation" && M.ARTICULATIONS.includes(art.text.trim()))) warnings.add(tr("some articulations"));
+      }
+      for (const art of notations.flatMap((n) => kids(n, "articulations")).flatMap((a) => kids(a, "other-articulation"))) {
+        // A sign MusicXML has no element for, by LilyPond's name (see ORNAMENTS_OUT).
+        if (M.ARTICULATIONS.includes(art.text.trim())) suffix += placed(`\\${art.text.trim()}`, art.attrs.placement);
       }
       for (const orn of notations.flatMap((n) => kids(n, "ornaments")).flatMap((a) => a.children)) {
-        if (ORNAMENTS_IN[orn.name]) suffix += placed(ORNAMENTS_IN[orn.name], orn.attrs.placement);
-        else if (orn.name === "tremolo" && orn.attrs.type !== "start" && orn.attrs.type !== "stop") suffix = `:${8 * 2 ** (Number(orn.text.trim() || 1) - 1)}${suffix}`;
+        // The plain ornament when what it says of its start or its end is not one LilyPond draws.
+        const named = ORNAMENT_NAMES[ornamentKey(orn.name, orn.attrs)] ?? ORNAMENT_NAMES[ornamentKey(orn.name, {})];
+        if (named) suffix += placed(`\\${named}`, orn.attrs.placement);
+        else if (orn.name === "tremolo" && (orn.attrs.type === "start" || orn.attrs.type === "stop")) continue;
+        else if (orn.name === "tremolo") suffix = `:${8 * 2 ** (Number(orn.text.trim() || 1) - 1)}${suffix}`;
         else if (orn.name !== "accidental-mark") warnings.add(tr("some ornaments"));
       }
-      // A fermata turned over is below the note; one said upright, above it.
+      // Bowings, a harmonic, a thumb, an organist's heel and toe (the left foot under the staff).
+      for (const tech of rest ? [] : notations.flatMap((n) => kids(n, "technical")).flatMap((t) => t.children)) {
+        const foot = tech.name === "heel" || tech.name === "toe" ? `${tech.attrs.placement === "below" ? "l" : "r"}${tech.name}` : null;
+        const named = foot ?? TECHNICAL_NAMES[tech.name];
+        if (named) suffix += foot ? `\\${named}` : placed(`\\${named}`, tech.attrs.placement);
+      }
+      // A fermata turned over is below the note; one said upright, above it. Its shape is its length.
       const fermata = each("fermata")[0];
-      if (fermata) suffix += placed("\\fermata", { inverted: "below", upright: fermata.attrs.type ? "above" : null }[fermata.attrs.type]);
+      if (fermata) suffix += placed(`\\${FERMATA_NAMES[fermata.text.trim()] ?? "fermata"}`, { inverted: "below", upright: fermata.attrs.type ? "above" : null }[fermata.attrs.type]);
       const marks = rest ? "" : fingeringText(notations);
-      if (has("arpeggiate") && !rest) suffix += "\\arpeggio";
+      // A rolled chord: as a wavy line, with an arrow, in a parenthesis — or a bracket, the chord not rolled.
+      const arpeggiate = each("arpeggiate")[0];
+      const arpeggio = rest ? null : has("non-arpeggiate") ? "bracket" : !arpeggiate ? null : each("other-notation").some((o) => o.text.trim() === ARPEGGIO_PARENTHESIS) ? "parenthesis" : { up: "up", down: "down" }[arpeggiate.attrs.direction] ?? "wave";
       if (each("glissando").some((g) => g.attrs.type === "start") || each("slide").some((g) => g.attrs.type === "start")) suffix += "\\glissando";
       for (const dyn of notations.flatMap((n) => kids(n, "dynamics"))) {
         const mark = dyn.children[0]?.name;
@@ -870,7 +956,10 @@ function readPart(part, info, first, warnings) {
         });
       }
       const extra = v === 0 ? staff.pending.splice(0).join("") : "";
-      const entry = { pitches: rest ? [] : [pitch], marks: [marks], start, index: lane.length, rest: Boolean(rest), render: null, after: null };
+      const entry = { pitches: rest ? [] : [pitch], marks: [marks], start, index: lane.length, rest: Boolean(rest), render: null, after: null, arpeggio };
+      // A tremolo between two notes: opened before the first, counted by how long it lasts, closed after the second.
+      const pairOpen = stroke && tremoloOf.attrs.type === "start" ? `\\repeat tremolo ${Math.max(1, Math.round((duration / divisions) * (stroke / 4)))} { ` : "";
+      const pairClose = stroke && tremoloOf.attrs.type === "stop" ? " }" : "";
       if (drawnOn) crossing.add(s).add(drawnOn);
       // Drawn on the other staff: there for this note, back after it.
       const there = drawnOn ? `\\change Staff = "${staffName(drawnOn)}" ` : "";
@@ -892,7 +981,9 @@ function readPart(part, info, first, warnings) {
           const fraction = Math.abs(entry.after.at - M.AFTER_GRACE_AT) > 1e-9 ? `${M.afterFraction(entry.after.at)} ` : "";
           pieces[last] = `\\afterGrace ${fraction}${pieces[last]}${tremolo} { ${entry.after.written.join(" ")} }`;
         }
-        lane[entry.index] = there + pieces.join(" ") + tail + (entry.beam ?? "") + extra + back;
+        const style = M.ARPEGGIO_STYLES[entry.arpeggio];
+        if (entry.arpeggio) tail += "\\arpeggio";
+        lane[entry.index] = pairOpen + (style ? `\\${style} ` : "") + there + pieces.join(" ") + tail + (entry.beam ?? "") + extra + back + (style ? " \\arpeggioNormal" : "") + pairClose;
       };
       lane.push("");
       // Kept within its measure, as the editor keeps it.
@@ -980,7 +1071,10 @@ function readPart(part, info, first, warnings) {
     if (st.drums) return `\\new DrumStaff${withBlock} \\drummode { ${music.replace(/\\clef [^ ]+ /g, "").replace(/\\key [a-z]+ \\[a-z]+ ?/g, "")} }`;
     const id = crossing.has(k + 1) ? ` = "${staffName(k + 1)}"` : "";
     if (st.tab) return [`\\new TabStaff${id}${withBlock} { ${music.replace(/\\clef [^ ]+ /g, "")} }`, ...verses].join("\n");
-    return [`\\new Staff${id}${withBlock} { ${music} }`, ...verses].join("\n");
+    // Shape notes: the set this editor named, or the one the heads' names say (do, re… seven shapes; fa, so, la, mi four).
+    const hinted = info.headSets?.[`${info.id}:${k + 1}`];
+    const shapes = M.SHAPE_NOTES.includes(String(hinted ?? "").replace(/Minor$/, "")) ? hinted : ["do", "re", "ti"].some((x) => st.shapes.has(x)) ? "aikenHeads" : ["fa", "so", "la", "mi"].some((x) => st.shapes.has(x)) ? "sacredHarpHeads" : "";
+    return [`\\new Staff${id}${withBlock} { ${shapes ? `\\${shapes} ` : ""}${music} }`, ...verses].join("\n");
   };
   const blocks = lanes.map(staffText);
   // The figured bass, under the part: each figure until the next, spacers between.
@@ -1026,7 +1120,6 @@ function chordName(el) {
 
 const xml = (text) => String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const ARTICULATIONS_OUT = { staccato: "staccato", accent: "accent", tenuto: "tenuto", marcato: "strong-accent", staccatissimo: "staccatissimo", portato: "detached-legato" };
-const ORNAMENTS_OUT = { trill: "trill-mark", prall: "inverted-mordent", mordent: "mordent", turn: "turn" };
 // Every clef the model knows, as <clef> writes it: sign, line, octaves.
 const CLEFS_OUT = Object.fromEntries(M.CLEFS.map((clef) => [clef, M.clefShape(clef)]));
 const KIND_OF_CHORD = [
@@ -1077,7 +1170,7 @@ export function toMusicXML(score) {
   // A piano alone, its brace the score's own, is one too.
   // A line of chord names is no part: its chords go out as the chord symbols of the part under it.
   const music = uppers.filter((u) => !score.staves[u].chords && !score.staves[u].figures);
-  const pianoAlone = score.group === "brace" && music.length === 2 && uppers.length === 2 ? [{ kind: "brace", first: 0, last: 1, name: "", short: "" }] : [];
+  const pianoAlone = score.group === "brace" && music.length === 2 && uppers.length === 2 ? [{ kind: "brace", first: 0, last: 1, name: score.groupNames?.name ?? "", short: score.groupNames?.short ?? "" }] : [];
   for (const g of [...pianoAlone, ...(score.groups ?? [])]) {
     if (g.kind === "brace" && g.last === g.first + 1 && !braced.has(g.first) && !braced.has(g.last)) {
       parts.push({ staves: [uppers[g.first], uppers[g.last]], name: g.name || "", short: g.short || "" });
@@ -1118,7 +1211,12 @@ export function toMusicXML(score) {
   out.push("<encoding><software>eui-score</software></encoding>");
   // The page as this editor sets it, its \\paper and \\layout as written: read back by this editor (the others read <defaults>).
   const page = M.pageSettings(score).trim();
-  if (page) out.push(`<miscellaneous><miscellaneous-field name="lilypond-page">${xml(page)}</miscellaneous-field></miscellaneous>`);
+  // The shape notes of each staff, by LilyPond's name for them (\\funkHeadsMinor): <notehead> says each note's
+  // shape to every reader, not which of the six sets draws it.
+  const headsOf = (u) => (score.staves[u].events[0]?.before ?? []).map((text) => /^\\((?:aiken|aikenThin|sacredHarp|southernHarmony|funk|walker)Heads(?:Minor)?)$/.exec(text)?.[1]).find(Boolean) ?? null;
+  const heads = Object.fromEntries(parts.flatMap((p) => p.staves.map((u, k) => [`${p.id}:${k + 1}`, headsOf(u)])).filter(([, name]) => name));
+  const fields = [page ? `<miscellaneous-field name="lilypond-page">${xml(page)}</miscellaneous-field>` : "", Object.keys(heads).length ? `<miscellaneous-field name="lilypond-heads">${xml(JSON.stringify(heads))}</miscellaneous-field>` : ""].join("");
+  if (fields) out.push(`<miscellaneous>${fields}</miscellaneous>`);
   out.push("</identification>");
   out.push(...defaultsXml(score.paper ?? {}));
   if (h.subtitle) out.push(`<credit page="1"><credit-type>subtitle</credit-type><credit-words>${xml(h.subtitle)}</credit-words></credit>`);
@@ -1126,7 +1224,7 @@ export function toMusicXML(score) {
   const partOfStaff = (k) => parts.findIndex((p) => p.staves.includes(uppers[k]));
   const symbols = { brace: ["brace", "yes"], bracket: ["bracket", "yes"], choir: ["bracket", "no"] };
   const partGroups = [];
-  if (symbols[score.group] && parts.length > 1) partGroups.push({ kind: score.group, first: 0, last: parts.length - 1, name: "", short: "" });
+  if (symbols[score.group] && parts.length > 1) partGroups.push({ kind: score.group, first: 0, last: parts.length - 1, name: score.groupNames?.name ?? "", short: score.groupNames?.short ?? "" });
   for (const g of score.groups ?? []) {
     const first = partOfStaff(g.first);
     const last = partOfStaff(g.last);
@@ -1315,7 +1413,11 @@ export function toMusicXML(score) {
             const sung = M.lyricsLane(score, item.lane) === item.lane;
             // The name of the voice the words are sung to (\\lyricsto "alto"), on its <lyric>s.
             const sungName = sung && M.isLower(score, item.lane) ? score.staves[M.upperOf(score, item.lane)].lyricsName ?? null : null;
-            out.push(...noteXml(lane, item, { voice, staffNo: crossed >= 0 ? crossed + 1 : staffNo, dur, barLength, interval, drums, firstLane: v === 0, sung, sungName, part: p.id }));
+            // In shape notes, each head's shape: its degree of the key, from the major tonic of its signature.
+            const set = drums ? "" : M.shapeNotesOf(score, item.lane);
+            const tonic = set ? (((M.keyOf(score, item.lane, item.t) * 4) % 7) + 7) % 7 : 0;
+            const shape = set ? (head) => (FOUR_SHAPES.includes(set) ? SHAPES_FOUR : SHAPES_SEVEN)[(((head.d - tonic) % 7) + 7) % 7] : null;
+            out.push(...noteXml(lane, item, { voice, staffNo: crossed >= 0 ? crossed + 1 : staffNo, dur, barLength, interval, drums, firstLane: v === 0, sung, sungName, part: p.id, shape }));
           }
           // What falls at the bar's very end (a \\time that ends it): after its last note.
           const late = mids.filter((m) => !m.done);
@@ -1397,7 +1499,7 @@ function fingeringText(notations) {
 }
 
 /** One event of a lane as <note> elements (a chord's heads one after the other), with its directions before. */
-function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, firstLane, sung, sungName = null, part }) {
+function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, firstLane, sung, sungName = null, part, shape = null }) {
   const { ev, i } = item;
   const before = lane[i - 1]?.ev;
   const after = lane[i + 1]?.ev;
@@ -1414,6 +1516,13 @@ function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, 
   for (const t of ev.texts) out.push(direction(`<words${t.italic ? ' font-style="italic"' : ""}${t.bold ? ' font-weight="bold"' : ""}>${xml(t.text)}</words>`, t.dir > 0 ? "below" : "above"));
   if (ev.pedalOff) out.push(direction('<pedal type="stop"/>'));
   if (ev.pedalOn) out.push(direction('<pedal type="start" line="no" sign="yes"/>'));
+  // The sostenuto pedal, MusicXML's second: let go before it is pressed again.
+  if (ev.sostOff) out.push(direction('<pedal type="stop" number="2"/>'));
+  if (ev.sostOn) out.push(direction('<pedal type="sostenuto" number="2" line="yes"/>'));
+  // The soft pedal has no <pedal> type: its words, and <sound soft-pedal> for what plays it.
+  const soft = (words, on) => `<direction placement="below"><direction-type><words font-style="italic">${words}</words></direction-type>${staffTag}<sound soft-pedal="${on ? "yes" : "no"}"/></direction>`;
+  if (ev.cordaOff) out.push(soft("tre corde", false));
+  if (ev.cordaOn) out.push(soft("una corda", true));
   if (ev.ottava != null) {
     // The line before it ends, and this one starts: 8va is a shift "down".
     const was = M.ottavaAt({ events: lane.slice(0, i).map((x) => x.ev) }, i - 1);
@@ -1455,9 +1564,12 @@ function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, 
   const ticks = M.ticksOf(ev);
   // A bar's rest: one written so (R2., #1039), or a whole note's, which is drawn the same either way.
   const wholeBar = ev.rest && !ev.tuplet && Math.abs(ticks - barLength) < 1e-6 && (ev.fullBar || Math.abs(ticks - M.notated(1)) < 1e-6);
-  const type = `<type>${TYPE_OF[ev.base] ?? "quarter"}</type>${"<dot/>".repeat(ev.dots)}`;
+  // One of a tremolo's two notes: drawn as long as the two last (a quarter each is two half notes), two in the time of one.
+  const pairStroke = M.TREMOLO_PAIRS.includes(ev.tremPair) && after?.tremPair === "end" ? ev.tremPair : ev.tremPair === "end" && M.TREMOLO_PAIRS.includes(before?.tremPair) ? before.tremPair : 0;
+  const paired = Boolean(pairStroke) && !ev.rest && !ev.tuplet && ev.base >= 2;
+  const type = `<type>${TYPE_OF[paired ? ev.base / 2 : ev.base] ?? "quarter"}</type>${"<dot/>".repeat(ev.dots)}`;
   // A tuplet in a tuplet: the two ratios multiplied.
-  const tm = ev.tuplet ? `<time-modification><actual-notes>${ev.tuplet.n * (ev.tuplet.outer?.n ?? 1)}</actual-notes><normal-notes>${ev.tuplet.d * (ev.tuplet.outer?.d ?? 1)}</normal-notes></time-modification>` : "";
+  const tm = paired ? "<time-modification><actual-notes>2</actual-notes><normal-notes>1</normal-notes></time-modification>" : ev.tuplet ? `<time-modification><actual-notes>${ev.tuplet.n * (ev.tuplet.outer?.n ?? 1)}</actual-notes><normal-notes>${ev.tuplet.d * (ev.tuplet.outer?.d ?? 1)}</normal-notes></time-modification>` : "";
   const tiedFrom = before && before.tie && !before.rest && !ev.rest;
   const heads = ev.rest ? [null] : ev.pitches;
   // Fingerings and strings: a chord's on its note, the others on the first.
@@ -1482,6 +1594,7 @@ function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, 
     // A stem turned by \\stemUp or \\stemDown; the others as the reader draws them.
     const stem = lane.slice(0, i + 1).findLast((x) => x.ev.stemDir != null)?.ev.stemDir ?? 0;
     if (p && stem) n.push(`<stem>${stem > 0 ? "up" : "down"}</stem>`);
+    if (p && shape && !p.drum) n.push(`<notehead>${shape(p)}</notehead>`);
     if (staffNo) n.push(staffTag);
     if (item.beam && p) n.push(`<beam number="1">${item.beam}</beam>`);
     // Notations go on the first head only, but ties on each.
@@ -1509,16 +1622,30 @@ function noteXml(lane, item, { voice, staffNo, dur, barLength, interval, drums, 
       // An articulation written above or below the note says so.
       const where = (a) => (ev.artDirs?.[a] ? ` placement="${ev.artDirs[a] < 0 ? "above" : "below"}"` : "");
       const arts = ev.arts.filter((a) => ARTICULATIONS_OUT[a]).map((a) => `<${ARTICULATIONS_OUT[a]}${where(a)}/>`);
-      if (arts.length) notations.push(`<articulations>${arts.join("")}</articulations>`);
-      const orns = ev.arts.filter((a) => ORNAMENTS_OUT[a]).map((a) => `<${ORNAMENTS_OUT[a]}${where(a)}/>`);
-      if (ev.tremolo && p) orns.push(`<tremolo type="single">${Math.max(1, Math.log2(ev.tremolo / 4))}</tremolo>`);
+      // What MusicXML has no element for goes by LilyPond's name (see ORNAMENTS_OUT).
+      const others = ev.arts.filter((a) => !ARTICULATIONS_OUT[a] && !ORNAMENTS_OUT[a] && !TECHNICAL_OUT[a] && FERMATAS_OUT[a] == null).map((a) => `<other-articulation${where(a)}>${a}</other-articulation>`);
+      if (arts.length || others.length) notations.push(`<articulations>${[...arts, ...others].join("")}</articulations>`);
+      const orns = ev.arts.filter((a) => ORNAMENTS_OUT[a]).map((a) => `<${ORNAMENTS_OUT[a][0]}${where(a)}${ORNAMENTS_OUT[a][1]}/>`);
+      if (ev.tremolo && p && !paired) orns.push(`<tremolo type="single">${Math.max(1, Math.log2(ev.tremolo / 4))}</tremolo>`);
+      if (paired && p) orns.push(`<tremolo type="${ev.tremPair === "end" ? "stop" : "start"}">${Math.max(1, Math.log2(pairStroke / 4))}</tremolo>`);
       if (orns.length) notations.push(`<ornaments>${orns.join("")}</ornaments>`);
-      if (ev.arts.includes("fermata")) notations.push(ev.artDirs?.fermata ? `<fermata type="${ev.artDirs.fermata < 0 ? "upright" : "inverted"}"/>` : "<fermata/>");
+      // A fermata's shape is its length; turned over, it is under the note.
+      for (const f of ev.arts.filter((a) => FERMATAS_OUT[a] != null)) notations.push(`<fermata${ev.artDirs?.[f] ? ` type="${ev.artDirs[f] < 0 ? "upright" : "inverted"}"` : ""}${FERMATAS_OUT[f] ? `>${FERMATAS_OUT[f]}</fermata>` : "/>"}`);
       if (before?.gliss && !ev.rest) notations.push('<glissando type="stop"/>');
       if (ev.gliss && p) notations.push('<glissando type="start"/>');
     }
-    if (ev.arpeggio && p) notations.push("<arpeggiate/>");
-    if (p && technical(k)) notations.push(`<technical>${technical(k)}</technical>`);
+    // A rolled chord, on each of its notes: with its arrow; a bracket (not rolled) on its lowest and highest;
+    // a parenthesis, which MusicXML has not, as a rolled chord and a word of this editor's.
+    if (ev.arpeggio && p) {
+      if (ev.arpStyle === "bracket") {
+        if (k === 0) notations.push('<non-arpeggiate type="bottom"/>');
+        if (k === heads.length - 1) notations.push('<non-arpeggiate type="top"/>');
+      } else notations.push(`<arpeggiate${ev.arpStyle === "up" ? ' direction="up"' : ev.arpStyle === "down" ? ' direction="down"' : ""}/>`);
+    }
+    // Bowings, a harmonic, a heel, a toe: on the first note, with the fingerings.
+    const techniques = k === 0 && p ? ev.arts.filter((a) => TECHNICAL_OUT[a]).map((a) => `<${TECHNICAL_OUT[a][0]}${TECHNICAL_OUT[a][1] || (ev.artDirs?.[a] ? ` placement="${ev.artDirs[a] < 0 ? "above" : "below"}"` : "")}/>`).join("") : "";
+    if (p && (technical(k) || techniques)) notations.push(`<technical>${techniques}${technical(k)}</technical>`);
+    if (ev.arpeggio && p && ev.arpStyle === "parenthesis" && k === 0) notations.push(`<other-notation type="single">${ARPEGGIO_PARENTHESIS}</other-notation>`);
     if (notations.length) n.push(`<notations>${notations.join("")}</notations>`);
     // The words, under the voice the staff sings them to.
     if (k === 0 && p && sung) n.push(...lyricsXml(lane, i, sungName));

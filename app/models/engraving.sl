@@ -34,8 +34,9 @@ const ENGRAVING_HEAVY = 100000
 # 11: eui 83348e1, the scores the site held and refused (#1036, #1037): beams hold
 # syllables, a lone staff's name, accented letters, figures and ossias in a staff);
 # 12: eui c5be3df, a coda and a word on one line after an ending (#939), \varcoda's
-# own sign and the rest of LilyPond's scripts (#1039)).
-const ENGRAVING_FORMAT = 12
+# own sign and the rest of LilyPond's scripts (#1039); 13: eui 019fc24, a voice
+# beside one that only waits keeps its stems (#1039)).
+const ENGRAVING_FORMAT = 13
 
 class Engraving < Model
   # The engraving kept under `digest`, as `ScoreSvg.engrave` answers it

@@ -25,7 +25,7 @@ fn pitches(ev: &Ev) -> String {
 /// The signs of one event onto `out`, each a word that says what it is and
 /// not where: what a rewrite must still hold.
 #[allow(clippy::too_many_lines)]
-fn signs(ev: &Ev, prefix: &str, out: &mut Vec<String>) {
+fn signs(ev: &Ev, prefix: &str, named: bool, out: &mut Vec<String>) {
     let Ev {
         k,
         // Where it is written, and its numbers: a rewrite moves them.
@@ -248,15 +248,17 @@ fn signs(ev: &Ev, prefix: &str, out: &mut Vec<String>) {
         say(format!("tremolo of two {trem_beams} {trem_first}"));
     }
     for g in graces {
-        signs(g, &format!("{prefix}grace {:?}: ", g.grace), out);
+        signs(g, &format!("{prefix}grace {:?}: ", g.grace), named, out);
     }
     for g in after_graces {
-        signs(g, &format!("{prefix}grace after {after_at}: "), out);
+        signs(g, &format!("{prefix}grace after {after_at}: "), named, out);
     }
     let mut say = |word: String| out.push(format!("{prefix}{word}"));
     // On a grace note itself, its kind is said by the note it is before.
     let _ = grace;
-    if !chord_name.is_empty() {
+    // A chord's name is printed by a line of chord names; in a staff of
+    // notes (`\new Staff \chordmode { … }`) its notes are all there is.
+    if named && !chord_name.is_empty() {
         say(format!("chord {}", chord_name.iter().map(|r| r.text.as_str()).collect::<String>()));
     }
     if !figures.is_empty() {
@@ -380,7 +382,7 @@ pub fn reading(src: &str) -> Result<Value, String> {
                 syllables(line, &format!("verse {}", n + 2), &mut out);
             }
             for ev in &staff.events {
-                signs(ev, "", &mut out);
+                signs(ev, "", staff.kind == parse::StaffKind::ChordNames, &mut out);
             }
             json!({ "kind": format!("{:?}", staff.kind), "signs": out })
         })

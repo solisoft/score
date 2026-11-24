@@ -61,15 +61,10 @@ const show = (r) => `${(r.gone ?? []).map((g) => `${g.where}: ${g.sign} ×${g.ti
 
 // The pieces of the corpus the editor does not keep whole, and says so.
 const SAID = {
-  // \\deadNote sets one note's head: the model keeps the settings that hold on, not this one.
-  "a tablature's dead note and harmonic": /NoteHead\.style/,
-  "a named piano": /a group of staves' name/,
-  "a cross-staff stem and a switch line": /crossStaff/,
-  "a grace note before a rest": /grace notes/,
+  // A tempo with no note after it draws nothing; the model keeps a tempo on the bar it starts.
+  "a tempo after the last note": /a clef, a key, a metre or a mark/,
 };
-const TEXT = {
-  "a tablature in another tuning": /a staff of another kind/,
-};
+const TEXT = {};
 
 test("every sign of the corpus comes back from the editor, or the page says which does not", () => {
   const seen = { kept: [], said: [], text: [] };
@@ -88,7 +83,7 @@ test("every sign of the corpus comes back from the editor, or the page says whic
       assert.deepEqual(r.why, [], `${name}: nothing is said to be lost when nothing is`);
     }
   }
-  assert.ok(seen.kept.length >= 110, `${seen.kept.length} pieces kept`);
+  assert.equal(seen.kept.length, Object.keys(PIECES).length - Object.keys(SAID).length - Object.keys(TEXT).length);
 });
 
 test("what the editor wrote reads back as the same score, and loses nothing a second time", () => {
@@ -148,28 +143,17 @@ function lilyFiles(dir) {
 // held, corpus/, written/), copied here as they were at eui 83348e1 — but the bombs, written to be refused.
 // What the editor does not keep whole of them, and says — or leaves to the text.
 const NOT_WHOLE = [
-  "corpus/piano.ly", // a group of staves' name
-  "corpus/voices_crossed.ly", // voices as they are written
-  "corpus/voices_spacers.ly", // voices as they are written
-  "lilypond/d05_marks.ly", // a clef, a key, a metre or a mark, words over or under a note
-  "lilypond/d07_repeats.ly", // left to the text: percent repeats
-  "lilypond/d08_chords.ly", // chord
-  "lilypond/d12_frets.ly", // left to the text: guitar chord diagrams
-  "lilypond/d16_real_files.ly", // left to the text: several movements (one \score after another): edit them one at a time in the text
-  "lilypond/d17_cross_staff.ly", // \crossStaff
-  "lilypond/d20_overrides.ly", // a clef, a key, a metre or a mark, TimeSignature.style, words over or under a note, RehearsalMark.self-alignment-X
-  "lilypond/d21_remove_empty.ly", // a clef, a key, a metre or a mark
-  "lilypond/grace.ly", // grace notes
-  "lilypond/marks.ly", // words over or under a note
-  "lilypond/real/blues-en-sib.ly", // left to the text: a staff of another kind, this clef
-  "lilypond/real/grand-cerf.ly", // the settings the engraver passes over (the header field 'img' is not one a title page prints, \epsfile, \override MetronomeMark.ste…
-  "lilypond/real/set-2-antiquities.ly", // left to the text: several movements (one \score after another): edit them one at a time in the text
-  "lilypond/real/telemann-prod.ly", // left to the text: an ossia
-  "lilypond/real/telemann.ly", // left to the text: an ossia
-  "lilypond/unfold.ly", // left to the text: percent repeats
-  "lilypond/vars.ly", // words under the notes
-  "written/pieces/chord-diagrams.ly", // left to the text: guitar chord diagrams
-  "written/pieces/empty-staves.ly", // a clef, a key, a metre or a mark
+  // Each of these wants a thing the model has no place for yet — a feature of its own, not a sign:
+  "lilypond/d07_repeats.ly", // left to the text: \repeat percent (bars that are copies of one, drawn as %)
+  "lilypond/unfold.ly", // left to the text: \repeat percent
+  "lilypond/d12_frets.ly", // left to the text: \new FretBoards, a line of guitar chord diagrams
+  "written/pieces/chord-diagrams.ly", // left to the text: \new FretBoards
+  "lilypond/d16_real_files.ly", // left to the text: several movements, one \score after another
+  "lilypond/real/set-2-antiquities.ly", // left to the text: several movements
+  "lilypond/real/telemann-prod.ly", // left to the text: an ossia in a context its \layout defines
+  "lilypond/real/telemann.ly", // left to the text: the same
+  "lilypond/real/blues-en-sib.ly", // left to the text: chord names in \language "english" (the model writes Dutch names)
+  "lilypond/real/grand-cerf.ly", // said: the settings the engraver passes over (an \epsfile, fonts), and a file that never prints its music
 ];
 const CORPUS = new URL("./fixtures/engraver-corpus", import.meta.url).pathname;
 

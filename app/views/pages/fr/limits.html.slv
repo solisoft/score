@@ -150,6 +150,21 @@
       marges, en-têtes, pieds de page et numéros de page, et les en-têtes lisent <code>\if</code> et
       <code>\unless</code> de LilyPond 2.24.
     </p>
+    <p>
+      L'éditeur de partitions garde tous les signes que le graveur dessine. Ouverts dans l'éditeur, le crochet,
+      la parenthèse ou la flèche d'un arpège, un trémolo entre deux notes, les pédales tonale et douce, les
+      notes à formes, tous les points d'orgue et ornements (les mordants et pincés à crochet,
+      <code>\haydnturn</code>, <code>\slashturn</code>), les signes d'archet et de pédalier d'orgue, une pause
+      de mesure écrite <code>R2.</code>, un chiffrage romain sous une note, des mots en plusieurs styles, un
+      repère sur la dernière barre de mesure, une petite note avant un silence, <code>\deadNote</code> sur
+      une note, une hampe commune à deux portées (<code>\crossStaff</code>), une mesure où une voix ne fait
+      qu'attendre (<code>s1</code>), le nom d'un piano à côté de son accolade et les paroles écrites après la
+      dernière note reviennent comme ils ont été écrits ; la palette propose ces signes, et MusicXML les
+      emporte et les rapporte. Une tablature accordée par ses <code>stringTunings</code> et une
+      <code>\new RhythmicStaff</code> se modifient sur la partition. Pour ce qu'il ne garde pas encore,
+      l'éditeur compare ce que le graveur lit dans un texte avec ce qu'il réécrirait, et nomme ce qui manque
+      avant la première réécriture — un Annuler remet le texte — au lieu de le laisser tomber.
+    </p>
     <ul>
       <li><strong>Mesure</strong> : les portées dont les mesures ont des durées différentes (polymétrie à mesures de
         longueurs différentes) sont refusées : alignez-les avec <code>\scaleDurations</code> ou <code>timeSignatureFraction</code>.</li>
@@ -157,9 +172,11 @@
         leurs durées sur la partition (leurs hauteurs, marques et silences se modifient ; la saisie de notes, les
         durées, le collage et un nouveau chiffrage y sont refusés et se modifient dans le texte), une mesure
         dessinée qui change après le début d'une portée (<code>timeSignatureFraction</code>) est laissée au texte,
-        et les portées dont les mesures ont des durées différentes restent l'affaire du seul graveur, tout comme
-        une tablature d'un autre nombre de cordes que les six d'une guitare et un <code>\new RhythmicStaff</code>
-        (leurs notes se modifient dans le texte).</li>
+        et les portées dont les mesures ont des durées différentes restent l'affaire du seul graveur. Laissés au
+        texte, et gravés tout de même : <code>\repeat percent</code>, une ligne de diagrammes d'accords
+        (<code>\new FretBoards</code>), plusieurs <code>\score</code> dans un fichier, un ossia dans un contexte
+        que définit le <code>\layout</code> du fichier, et une ligne de noms d'accords écrite dans une autre
+        <code>\language</code> de noms de notes.</li>
       <li><strong>Réglages</strong> : un <code>\override</code> absent des listes ci-dessus est toujours ignoré, avec
         un avertissement.</li>
     </ul>

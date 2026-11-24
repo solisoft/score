@@ -54,11 +54,12 @@ crate-type = ["cdylib", "rlib"]
 # name after an ending as one mark beside the bracket (5623f33, #939), and
 # the rest of LilyPond's scripts — the ornaments with a hook, Haydn's turn,
 # heels and toes, the thumb, the ancient signs — in Emmentaler's signs, and
-# played (#1039). Move
+# played (#1039); 019fc24 a part that only waits between \\ is a
+# voice all the same, the voice beside it stems up (#1039). Move
 # this and the server's Soli together. `build.sh` writes the module
 # into public/eui-score/, and that output is committed: deploying the site
 # needs no Rust.
-eui-score = { git = "https://github.com/solisoft/eui", rev = "c5be3df" }
+eui-score = { git = "https://github.com/solisoft/eui", rev = "019fc24" }
 wasm-bindgen = "=0.2.126"
 serde_json = "1"
 
