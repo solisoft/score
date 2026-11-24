@@ -12,6 +12,20 @@ class Changelog
     [
       {"date": "2026-11-24", "entries": [
         {
+          "area": "site",
+          "title": "A rectangle drawn round the notes selects them",
+          "text": "In the editor, press on an empty part of the score and drag: a rectangle follows the pointer, "
+          + "and the notes and rests whose heads are in it are selected as it grows — from the middle of a bar "
+          + "to the middle of another if that is where they are (#1038). Drawn over several staves, it selects "
+          + "the same stretch of each, and Delete, the arrows, Transpose, articulations, dynamics, Copy and "
+          + "Paste act on exactly those notes; pasted, each staff's notes keep their distance. A drag sideways "
+          + "from a note draws the rectangle too; up or down, it still moves the note. With Shift the notes "
+          + "are added to the selection, Escape puts back what was selected, and a click still selects its "
+          + "bar. Notes that fill their bars whole are those bars, selected as before. With a mouse or a pen: "
+          + "a finger still scrolls the score.",
+          "link": "playground"
+        },
+        {
           "area": "engine",
           "title": "A Telemann aria opens as its file is written",
           "text": "A real LilyPond file of an aria by Telemann — flute, soprano and basso continuo — was refused "

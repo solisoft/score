@@ -187,6 +187,8 @@ export function drawRoll(score, { layout = "tracks", zoom = 1, sel = null, lit =
       return inLanes && n.t0 >= M.barStart(score, sel.bars[0]) && n.t0 < M.barStart(score, sel.bars[1] + 1);
     }
     const [t0, t1] = [Math.min(sel.t0, sel.t1), Math.max(sel.t0, sel.t1)];
+    // Notes of several staves drawn round on the score (#1038): every lane of it, from the first to the last note's start.
+    if (sel.lanes) return sel.lanes.includes(n.lane) && n.t0 >= t0 && n.t0 <= t1;
     return n.lane === sel.staff && n.t0 <= t1 && n.t1 > t0;
   };
   for (const n of geo.notes) {

@@ -49,9 +49,9 @@ export function install(ctx) {
     return a < 0 ? null : { s: st.sel.staff, a: Math.min(a, b), b: Math.max(a, b), staff };
   }
 
-  /** Whether the selection spans several lanes: bars of several staves (or voices). */
+  /** Whether the selection spans several lanes: bars of several staves (or voices), or notes of them drawn round (#1038). */
   function multiLane() {
-    return Boolean(st.sel?.bars && st.sel.lanes?.length > 1);
+    return Boolean(st.sel?.lanes?.length > 1);
   }
 
   /** The selected events, lane by lane: [{ s, a, b, staff }], one for a selection on one staff; [] for none. */
@@ -61,7 +61,8 @@ export function install(ctx) {
       const r = range();
       return r ? [r] : [];
     }
-    return T.barRanges(st.score, st.sel.lanes, ...st.sel.bars).map((r) => ({ ...r, staff: st.score.staves[r.s] }));
+    const found = st.sel.bars ? T.barRanges(st.score, st.sel.lanes, ...st.sel.bars) : T.spanRanges(st.score, st.sel.lanes, st.sel.t0, st.sel.t1);
+    return found.map((r) => ({ ...r, staff: st.score.staves[r.s] }));
   }
 
   /**
@@ -85,6 +86,41 @@ export function install(ctx) {
         : tr("{bars} of {n} staves: Delete, the arrows, Transpose, articulations, dynamics and Ctrl+C act on them all.", { bars, n: staves }));
     } else say("");
     draw();
+  }
+
+  /**
+   * The events of `lanes` that start from `t0` to `t1` selected (#1038):
+   * what a rectangle drawn over the score takes, even from the middle of a
+   * bar to the middle of another. When they fill their bars whole, those
+   * bars are selected, as a drag across them selects them.
+   */
+  function selectSpan(lanes, t0, t1) {
+    const [from, to] = [Math.min(t0, t1), Math.max(t0, t1)];
+    const bars = T.wholeBars(st.score, lanes, from, to);
+    if (bars && lanes.length === 1) {
+      st.sel = { staff: lanes[0], t0: from, t1: to, head: -1, bars };
+      say("");
+      return draw();
+    }
+    if (bars) return selectStavesOf(lanes, bars[0], bars[1]);
+    st.sel = { staff: lanes[0], t0: from, t1: to, head: -1 };
+    if (lanes.length > 1) {
+      st.sel.lanes = lanes;
+      const staves = new Set(lanes.map((s) => M.upperOf(st.score, s))).size;
+      const notes = T.spanRanges(st.score, lanes, from, to).reduce((n, r) => n + r.b - r.a + 1, 0);
+      say(staves === 1
+        ? tr("{n} notes and rests, every voice: Delete, the arrows, Transpose, articulations, dynamics and Ctrl+C act on them all.", { n: notes })
+        : tr("{n} notes and rests of {staves} staves: Delete, the arrows, Transpose, articulations, dynamics and Ctrl+C act on them all.", { n: notes, staves }));
+    } else say("");
+    draw();
+  }
+
+  /** Bars `a`…`b` of exactly `lanes` selected (several), said as selectStaves says them. */
+  function selectStavesOf(lanes, a, b) {
+    selectStaves(lanes[0], lanes.at(-1), a, b);
+    st.sel.lanes = lanes;
+    delete st.sel.anchor;
+    if (lanes.length === 1) delete st.sel.lanes;
   }
 
   /** Where a Shift+click across staves extends the selection from: its anchor, or its first lane and bar. */
@@ -194,5 +230,5 @@ export function install(ctx) {
     st.sel = { staff: s, t0: t, t1: t, head: st.sel?.head ?? -1 };
   }
 
-  return { barNo, changeBar, staffOf, range, ranges, multiLane, selectStaves, anchorOf, select, hear, target, need, keepOn, selectedBarsOrNull, selectedBars };
+  return { barNo, changeBar, staffOf, range, ranges, multiLane, selectStaves, selectSpan, anchorOf, select, hear, target, need, keepOn, selectedBarsOrNull, selectedBars };
 }

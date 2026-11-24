@@ -73,6 +73,13 @@ export function install(studio) {
       const lanes = st.sel.lanes?.length ? st.sel.lanes : all;
       return { lanes, from: M.barStart(st.score, a), to: M.barStart(st.score, b + 1), words: tr("bars {a}–{b}", { a: studio.barNo(a), b: studio.barNo(b) }) };
     }
+    // Notes of several staves (#1038): their lanes, from the first note's start to the last's end.
+    if (st.sel.lanes?.length > 1) {
+      const chosen = studio.ranges();
+      if (!chosen.length) return { lanes: all, from: 0, to: end, words: tr("the whole score") };
+      const ends = chosen.map((r) => M.starts(r.staff)[r.b] + M.ticksOf(r.staff.events[r.b]));
+      return { lanes: st.sel.lanes, from: Math.min(st.sel.t0, st.sel.t1), to: Math.max(...ends), words: tr("the selected notes") };
+    }
     const r = studio.range();
     if (!r) return { lanes: all, from: 0, to: end, words: tr("the whole score") };
     const at = M.starts(r.staff);

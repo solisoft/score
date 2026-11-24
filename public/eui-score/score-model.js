@@ -2110,6 +2110,30 @@ export function copySection(score, lanes, a, b) {
   return { bars: to - from + 1, parts };
 }
 
+/**
+ * The events of `lanes` that start from `t0` to `t1` (ticks, both kept),
+ * copied as a section that begins at `t0` rather than at a bar line (#1038):
+ * each part `at` ticks after it, as far as its first note was. `bars` counts
+ * the bars it touches.
+ */
+export function copySpan(score, lanes, t0, t1) {
+  const [from, to] = [Math.min(t0, t1), Math.max(t0, t1)];
+  if (!lanes.length) throw new Error(tr("choose a staff to copy"));
+  const first = Math.min(...lanes.map((s) => staffNumber(score, s)));
+  const parts = [...lanes].sort((x, y) => x - y).map((s) => {
+    const staff = score.staves[s];
+    const at = starts(staff);
+    const inside = staff.events.map((_, i) => i).filter((i) => at[i] >= from && at[i] <= to);
+    return {
+      offset: staffNumber(score, s) - first,
+      voice: voiceOf(score, s),
+      at: inside.length ? at[inside[0]] - from : 0,
+      pieces: inside.length ? copy(score, s, inside[0], inside[inside.length - 1]) : [],
+    };
+  });
+  return { bars: barAt(score, to) - barAt(score, from) + 1, span: true, parts };
+}
+
 /** The lane part `part` of `section` goes to when pasted on lane `lane`: −1 when the score has no staff there, null when its voice is still to be made. */
 function partLane(score, lane, section, part) {
   if (section.parts.length === 1) return lane;
@@ -2129,8 +2153,12 @@ export function sectionLanes(score, lane, section) {
  * voice (see above): answers how many parts found no staff there.
  */
 export function pasteSection(score, lane, bar, section) {
+  return pasteSectionAt(score, lane, barStart(score, bar), section);
+}
+
+/** A section written from time `t` (ticks) on, each part `at` ticks after it (a copySpan's, #1038): answers how many parts found no staff. */
+export function pasteSectionAt(score, lane, t, section) {
   refuseScaled(score, lane);
-  const t = barStart(score, bar);
   let skipped = 0;
   for (const part of section.parts) {
     // Lanes after the staff move as voices are made: each part's place is found again
@@ -2145,7 +2173,7 @@ export function pasteSection(score, lane, bar, section) {
       if (part.pieces.every((p) => p.content.rest)) continue;
       s = addVoice(score, staffLanes(score)[staffNumber(score, lane) + part.offset], part.voice);
     }
-    paste(score, s, t, part.pieces);
+    paste(score, s, t + (part.at ?? 0), part.pieces);
   }
   return skipped;
 }

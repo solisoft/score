@@ -1,10 +1,15 @@
 // The studio's pointer on the score (studio.js): a note or bars selected, a
-// note dragged up or down, a repeat's edge dragged to another bar line.
+// note dragged up or down, a repeat's edge dragged to another bar line, a
+// rectangle drawn round the notes to select (#1038).
+
+// A selection over several staves, a rectangle's notes (#1024, #1038).
+const V = new URL(import.meta.url).search;
+const T = await import(`./score-tools.js${V}`);
 
 /** The score's pointer wired: notes and bars selected, notes and repeats dragged. */
 export function install(ctx) {
   const { root, sheet, st, M } = ctx;
-  const { writeText, snapshot, saveDraft, select, geometry, draw, say, ghostAt, writeAtGhost, selectStaves, anchorOf } = ctx.call;
+  const { writeText, snapshot, saveDraft, select, geometry, draw, say, ghostAt, writeAtGhost, selectStaves, selectSpan, anchorOf } = ctx.call;
 
   // ---- Pointer ------------------------------------------------------------------
 
@@ -102,6 +107,111 @@ export function install(ctx) {
     return true;
   }
 
+  // ---- The rectangle (#1038) --------------------------------------------------------
+  //
+  // A press on the score that does not take a note to move, a sign or a
+  // repeat's edge, then a drag: a rectangle follows the pointer, and the notes
+  // and rests whose heads are in it are selected as it grows — from the middle
+  // of a bar if that is where they are, on every staff it crosses. With Shift,
+  // added to what was selected; Escape puts back what was. A drag whose
+  // rectangle takes no note selects the bars it crosses, as before. A mouse's
+  // or a pen's: a finger scrolls the score (#454).
+
+  /** The rectangle drawn: an element of the sheet's, over the drawing, in its pixels. */
+  const band = Object.assign(document.createElement("div"), { className: "studio-marquee", hidden: true });
+  band.setAttribute("aria-hidden", "true");
+  sheet.appendChild(band);
+  /** How far (in pixels) a press moves before it is a drag rather than a click. */
+  const MARQUEE_SLOP = 4;
+
+  /** The selection as it is, a copy to put back. */
+  const selCopy = () => (st.sel ? structuredClone(st.sel) : null);
+
+  /** A rectangle begun at a press: shown once the pointer moves away. `before`, what was selected before the press. */
+  function startMarquee(event, p, before) {
+    if (!p || event.pointerType === "touch" || st.input.on || event.button !== 0) return;
+    st.marquee = { from: p, to: p, x: event.clientX, y: event.clientY, before, pressed: selCopy(), shift: event.shiftKey, shown: false, took: false, key: null };
+  }
+
+  /** The rectangle placed over the drawing, from its first corner to its second. */
+  function placeMarquee() {
+    const m = st.marquee;
+    const g = m?.shown && geometry();
+    if (!g) {
+      band.hidden = true;
+      return;
+    }
+    const a = g.at(Math.min(m.from.x, m.to.x), Math.min(m.from.y, m.to.y));
+    const b = g.at(Math.max(m.from.x, m.to.x), Math.max(m.from.y, m.to.y));
+    Object.assign(band.style, { left: `${a.x}px`, top: `${a.y}px`, width: `${Math.max(1, b.x - a.x)}px`, height: `${Math.max(1, b.y - a.y)}px` });
+    band.hidden = false;
+  }
+
+  /** The rectangle followed to `event`'s point; whether it is shown (the pointer has moved off the press). */
+  function moveMarquee(event) {
+    const m = st.marquee;
+    const p = point(event);
+    if (!m || !p) return false;
+    if (!m.shown && Math.hypot(event.clientX - m.x, event.clientY - m.y) < MARQUEE_SLOP) return false;
+    m.shown = true;
+    m.to = p;
+    m.last = { clientX: event.clientX, clientY: event.clientY };
+    placeMarquee();
+    const caught = T.caughtIn(st.score, [m.from.x, m.from.y, p.x, p.y], st.view.items, st.items);
+    if (!caught) {
+      if (m.took) {
+        // Nothing in it any more: what the press had selected, until the bars it crosses (below) take over.
+        m.took = false;
+        m.key = null;
+        st.sel = m.pressed ? structuredClone(m.pressed) : null;
+        if (st.barDrag) Object.assign(st.barDrag, { moved: false, last: null });
+        draw();
+      }
+      return true;
+    }
+    let { lanes, t0, t1 } = caught;
+    // Shift: what was selected before, and the notes in the rectangle, together.
+    const base = m.shift ? m.before : null;
+    if (base && st.score.staves[base.staff]) {
+      lanes = [...new Set([...lanes, ...(base.lanes ?? [base.staff])])].sort((x, y) => x - y);
+      t0 = Math.min(t0, base.t0, base.t1);
+      t1 = Math.max(t1, base.t0, base.t1);
+    }
+    m.took = true;
+    const key = `${lanes.join(",")}:${t0}:${t1}`;
+    if (key === m.key) return true;
+    m.key = key;
+    selectSpan(lanes, t0, t1);
+    return true;
+  }
+
+  /** The rectangle put away; `back`, what was selected before the press put back (Escape). */
+  function dropMarquee(back = false) {
+    const m = st.marquee;
+    st.marquee = null;
+    band.hidden = true;
+    if (!m || !back) return;
+    st.barDrag = null;
+    st.drag = null;
+    sheet.classList.remove("studio-dragging");
+    st.sel = m.before;
+    say("");
+    draw();
+  }
+
+  // Escape while the rectangle is drawn: it is put away, and the selection as it was.
+  root.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !st.marquee) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    dropMarquee(true);
+  }, true);
+  // The sheet or the page scrolled under a still pointer (a wheel, the keys): the rectangle's corner stays under it.
+  const followScroll = () => {
+    if (st.marquee?.shown && st.marquee.last) moveMarquee(st.marquee.last);
+  };
+  sheet.addEventListener("scroll", followScroll);
+  window.addEventListener("scroll", followScroll, { passive: true, signal: ctx.signal });
   // A double press, told apart here: the first press draws the score again, and
   // a browser sends no dblclick once the drawing under the pointer is replaced (#438).
   // Caught on the way down, before the note's palette, drawn over the word once
@@ -137,6 +247,8 @@ export function install(ctx) {
     sheet.focus({ preventScroll: true });
     if (!st.score || !st.view) return;
     const p = point(event);
+    const before = selCopy();
+    dropMarquee();
     // A repeat's edge, taken to be moved.
     const grip = event.target.closest(".studio-grip");
     if (grip) {
@@ -173,6 +285,7 @@ export function install(ctx) {
         if (anchor && (st.sel.lanes || M.upperOf(st.score, anchor.lane) !== on.staff)) {
           selectStaves(anchor.lane, on.staff, anchor.bar, on.bar);
           st.barDrag = { s: anchor.lane, a: anchor.bar, at: on.bar, moved: true, deselect: false, across: true };
+          startMarquee(event, p, before);
           sheet.setPointerCapture(event.pointerId);
           return;
         }
@@ -183,12 +296,19 @@ export function install(ctx) {
         const from = keep ? st.sel.bars[0] : on.bar;
         st.barDrag = { s: on.staff, a: from, at: on.bar, moved: Boolean(keep), deselect: !keep && Boolean(st.sel), across: event.shiftKey };
         if (keep) selectBars(on.staff, from, on.bar);
+        startMarquee(event, p, before);
         sheet.setPointerCapture(event.pointerId);
         return;
       }
+      // Between the systems, in the margins: a click takes the selection away
+      // (not with Shift), a drag draws the rectangle from there.
       if (!st.input.on) {
-        st.sel = null;
-        draw();
+        if (!event.shiftKey) {
+          st.sel = null;
+          draw();
+        }
+        startMarquee(event, p, before);
+        if (st.marquee) sheet.setPointerCapture(event.pointerId);
       }
       return;
     }
@@ -210,13 +330,21 @@ export function install(ctx) {
     select(s, i, chord ? found.head : -1, event.shiftKey);
     if (!ev.rest && !event.shiftKey) {
       const head = found.head >= 0 ? found.head : 0;
-      st.drag = { x: event.clientX, y: event.clientY, at: p, scale: p.scale, s, t: M.starts(st.score.staves[s])[i], head: chord ? head : -1, by: 0, chromatic: event.shiftKey, base: snapshot() };
+      st.drag = { x: event.clientX, y: event.clientY, at: p, scale: p.scale, s, t: M.starts(st.score.staves[s])[i], head: chord ? head : -1, by: 0, chromatic: event.shiftKey, base: snapshot(), before, pointerType: event.pointerType };
       sheet.setPointerCapture(event.pointerId);
+      return;
     }
+    // A rest, or a note with Shift: nothing to move up or down, a drag draws the rectangle from there.
+    startMarquee(event, p, before);
+    if (st.marquee) sheet.setPointerCapture(event.pointerId);
   });
 
   sheet.addEventListener("pointermove", (event) => {
     if (st.signDrag) return ctx.call.signMove(event);
+    // The rectangle: the notes in it selected; until it holds one, the bars it crosses, below.
+    if (st.marquee) {
+      if (!moveMarquee(event) || st.marquee.took) return;
+    }
     if (st.barDrag) {
       const on = point(event) && barHit(point(event));
       if (!on) return;
@@ -239,16 +367,29 @@ export function install(ctx) {
     }
     if (st.grip) return moveGrip(event);
     if (!st.drag) return;
-    // Sideways from a note, not up or down: the drag selects bars instead.
+    // Sideways from a note, not up or down: the drag draws the rectangle from the press instead (#1038).
     const across = Math.abs(event.clientX - st.drag.x);
     if (st.drag.by === 0 && across > 14 && across > 2 * Math.abs(event.clientY - st.drag.y)) {
-      const on = barHit(st.drag.at);
-      if (on) {
+      const drag = st.drag;
+      // A finger (where the score does not scroll under it): the bars it crosses, as before.
+      if (drag.pointerType === "touch") {
+        const on = barHit(drag.at);
+        if (!on) return;
         st.drag = null;
         st.barDrag = { s: on.staff, a: on.bar };
         const now = barHit(point(event)) ?? on;
         return selectBars(on.staff, on.bar, now.bar);
       }
+      st.drag = null;
+      st.marquee = { from: drag.at, to: drag.at, x: drag.x, y: drag.y, before: drag.before, pressed: selCopy(), shift: false, shown: false, took: false, key: null };
+      const on = barHit(drag.at);
+      if (on) st.barDrag = { s: on.staff, a: on.bar, at: on.bar, moved: false, deselect: false };
+      if (moveMarquee(event) && !st.marquee.took && st.barDrag) {
+        const now = barHit(point(event)) ?? on;
+        st.barDrag.moved = true;
+        selectBars(on.staff, on.bar, now.bar);
+      }
+      return;
     }
     const half = 4 * st.zoom * st.drag.scale;
     const by = Math.round((st.drag.y - event.clientY) / half);
@@ -299,6 +440,13 @@ export function install(ctx) {
 
   const endDrag = () => {
     if (st.signDrag) return ctx.call.signEnd();
+    const marquee = st.marquee;
+    dropMarquee();
+    // The rectangle took notes: they are the selection, nothing else to do.
+    if (marquee?.took) {
+      st.barDrag = null;
+      return;
+    }
     if (st.barDrag) {
       const drag = st.barDrag;
       st.barDrag = null;
@@ -334,7 +482,11 @@ export function install(ctx) {
   // was begun is left, never ended as a click would be — no bar selected by a scroll.
   sheet.addEventListener("pointercancel", () => {
     if (st.signDrag) return ctx.call.signEnd({ cancelled: true });
+    if (st.marquee) dropMarquee(st.marquee.shown);
     if (st.barDrag && !st.barDrag.moved) st.barDrag = null;
     endDrag();
   });
+
+  // Drawn again (the zoom, an edit from someone else): the rectangle over the drawing as it now is.
+  return { placeMarquee };
 }

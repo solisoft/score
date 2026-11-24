@@ -120,7 +120,7 @@ export function install(ctx) {
         return patterns.then((tools) => tools.open(name));
       // Edit ▸ Quantize…, Play ▸ Swing and humanize…: feel-tools.js's dialogs.
       case "quantize": case "swing":
-        feel ??= feelTools().then((T) => T.install({ root, st, M, edit, say, range, barNo }));
+        feel ??= feelTools().then((T) => T.install({ root, st, M, edit, say, range, ranges, barNo }));
         return feel.then((tools) => tools.open(name));
       case "break": {
         let bar;

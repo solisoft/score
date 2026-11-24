@@ -314,6 +314,8 @@ export function install(ctx) {
     placePeers(g, add);
     placeMarkers(g, add);
     placeGhost();
+    // The rectangle being drawn round notes to select (#1038), where the drawing now is.
+    ctx.placeMarquee?.();
     // The sign selected to be moved: its box, its handles (#1020).
     placeSign(g, add);
     if (st.input.on) return;

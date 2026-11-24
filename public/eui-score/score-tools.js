@@ -35,7 +35,74 @@ export function barRanges(score, lanes, a, b) {
   return out;
 }
 
-/** The ranges whose lanes hold pitched notes: not a drum staff, a line of chord names or a figured bass. */
+/**
+ * Each lane of `lanes`'s events that start from `t0` to `t1` (ticks, both
+ * kept): [{ s, a, b }], the lanes with none left out — a selection over
+ * several staves that begins or ends in the middle of a bar (#1038).
+ */
+export function spanRanges(score, lanes, t0, t1) {
+  const [from, to] = [Math.min(t0, t1), Math.max(t0, t1)];
+  const out = [];
+  for (const s of lanes) {
+    const staff = score.staves[s];
+    if (!staff) continue;
+    const inside = M.starts(staff).map((t, i) => (t >= from && t <= to ? i : -1)).filter((i) => i >= 0);
+    if (inside.length) out.push({ s, a: inside[0], b: inside.at(-1) });
+  }
+  return out;
+}
+
+/**
+ * What a rectangle drawn over the score takes (#1038): the events whose head
+ * — a rest's glyph, a note without heads its box — has its middle inside
+ * `rect` ([x0, y0, x1, y1], the drawing's coordinates, any two corners).
+ * `drawn` is the drawing's items ({ item, box, heads: [{ box }] }), `items`
+ * what each item is ({ staff, index }). Answers { lanes, t0, t1 } — the lanes
+ * top to bottom, the first and the last event's start — or null for none.
+ */
+export function caughtIn(score, rect, drawn, items) {
+  const [x0, x1] = [Math.min(rect[0], rect[2]), Math.max(rect[0], rect[2])];
+  const [y0, y1] = [Math.min(rect[1], rect[3]), Math.max(rect[1], rect[3])];
+  const inside = (box) => {
+    const [x, y] = [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2];
+    return x >= x0 && x <= x1 && y >= y0 && y <= y1;
+  };
+  const lanes = new Set();
+  let [t0, t1] = [Infinity, -Infinity];
+  for (const it of drawn ?? []) {
+    const at = items[it.item];
+    const staff = at && score.staves[at.staff];
+    if (!staff?.events[at.index]) continue;
+    const boxes = it.heads?.length ? it.heads.map((h) => h.box) : [it.box];
+    if (!boxes.some(inside)) continue;
+    const t = M.starts(staff)[at.index];
+    lanes.add(at.staff);
+    t0 = Math.min(t0, t);
+    t1 = Math.max(t1, t);
+  }
+  return lanes.size ? { lanes: [...lanes].sort((a, b) => a - b), t0, t1 } : null;
+}
+
+/**
+ * The bars `lanes`' events from `t0` to `t1` (their starts) fill, whole —
+ * every event of each lane in them, none more — as [a, b]; null when the
+ * span begins or ends inside a bar (#1038).
+ */
+export function wholeBars(score, lanes, t0, t1) {
+  const [from, to] = [Math.min(t0, t1), Math.max(t0, t1)];
+  const a = M.barAt(score, from);
+  const b = M.barAt(score, to);
+  const [start, end] = [M.barStart(score, a), M.barStart(score, b + 1)];
+  if (from !== start) return null;
+  for (const s of lanes) {
+    const staff = score.staves[s];
+    if (!staff) return null;
+    if (M.starts(staff).some((t) => t >= start && t < end && (t < from || t > to))) return null;
+  }
+  return [a, b];
+}
+
+/** The ranges whose lanes hold pitched notes:not a drum staff, a line of chord names or a figured bass. */
 function pitchedRanges(score, ranges) {
   return ranges.filter((r) => !M.isDrums(score, r.s) && !M.isChords(score, r.s) && !M.isFigures(score, r.s));
 }
@@ -572,7 +639,8 @@ export function pasteSpecial(score, s, t, clip, filter) {
     return 0;
   }
   const { section } = clip;
-  const from = M.barStart(score, M.barAt(score, t));
+  // Bars go from the bar's start; notes of several staves (#1038) from `t`, each part as far after it as it was.
+  const from = section.span ? t : M.barStart(score, M.barAt(score, t));
   let skipped = 0;
   let took = 0;
   for (const part of section.parts) {
@@ -582,7 +650,7 @@ export function pasteSpecial(score, s, t, clip, filter) {
       skipped++;
       continue;
     }
-    took += pasteLane(score, lane, from, part.pieces, filter);
+    took += pasteLane(score, lane, from + (part.at ?? 0), part.pieces, filter);
   }
   if (!took) throw new Error(filter === "marks" ? NO_MARKS() : tr("There is no staff there to paste on"));
   return skipped;
