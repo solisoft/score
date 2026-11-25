@@ -35,8 +35,10 @@ const ENGRAVING_HEAVY = 100000
 # syllables, a lone staff's name, accented letters, figures and ossias in a staff);
 # 12: eui c5be3df, a coda and a word on one line after an ending (#939), \varcoda's
 # own sign and the rest of LilyPond's scripts (#1039); 13: eui 019fc24, a voice
-# beside one that only waits keeps its stems (#1039)).
-const ENGRAVING_FORMAT = 13
+# beside one that only waits keeps its stems (#1039); 14: eui 1d46731, Soli
+# 2.41.2, slurs over grace notes and tuplet numbers, a tempo mark kept on its
+# line by the line breaks (#1060)).
+const ENGRAVING_FORMAT = 14
 
 class Engraving < Model
   # The engraving kept under `digest`, as `ScoreSvg.engrave` answers it

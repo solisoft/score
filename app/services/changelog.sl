@@ -10,6 +10,32 @@
 class Changelog
   static def days
     [
+      {"date": "2026-11-25", "entries": [
+        {
+          "area": "engine",
+          "title": "A slur goes over grace notes and a tuplet's number",
+          "sample": "slurs-over-small-notes",
+          "text": "A slur went round the notes under it and nothing else: over a phrase with an acciaccatura "
+          + "it was drawn through the small note's head and stem, and over a sextuplet beamed on its side it "
+          + "struck the 6 through (#1060). It now passes over the grace notes it spans — head, stem and "
+          + "flag — and over the number of a tuplet under it, as LilyPond's does. An acciaccatura's own "
+          + "little slur also stops before the stem of its note when that stem comes down; it ran through "
+          + "the stem to the middle of the head.",
+          "link": "playground"
+        },
+        {
+          "area": "engine",
+          "title": "A tempo mark stays on its line",
+          "text": "Words such as Poco più mosso take no room in their bar, so when that bar closed a "
+          + "line they ran on past the end of the staff — into the margin of a PDF, off the picture on a "
+          + "screen (#1060). The lines are now cut with the mark's width in mind: its bar opens a line, or "
+          + "enough bars follow it for the words to end on the staff. Where no cut can do it — a \\break "
+          + "after the bar, a mark wider than the line — the words start a little earlier and end where the "
+          + "line ends. A score with a long mark may be laid on other lines than before; nothing moves where "
+          + "the mark already fitted.",
+          "link": "playground"
+        }
+      ]},
       {"date": "2026-11-24", "entries": [
         {
           "area": "site",

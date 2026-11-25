@@ -56,7 +56,7 @@ ENV
   checking the other sites, with the release's own checksum:
 
   ```bash
-  v=2.40.4; cd "$(mktemp -d)"
+  v=2.41.2; cd "$(mktemp -d)"
   curl -fsSLO "https://github.com/solisoft/soli_lang/releases/download/v$v/soli-linux-amd64.tar.gz"
   curl -fsSL "https://github.com/solisoft/soli_lang/releases/download/v$v/soli-linux-amd64.tar.gz.sha256" \
     | grep -oE '^[0-9a-f]{64}' | sed 's/$/  soli-linux-amd64.tar.gz/' | sha256sum -c -

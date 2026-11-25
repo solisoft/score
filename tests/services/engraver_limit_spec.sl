@@ -131,7 +131,7 @@ describe("EngraverLimit") do
 
   test("every piece the site ships, and every section of the library's own, stays within the limits") do
     shipped = el_shipped()
-    assert_eq(shipped.length, 90)
+    assert_eq(shipped.length, 91)
     shipped.each do |path|
       src = File.read(path)
       assert_null(EngraverLimit.of(src), path)
